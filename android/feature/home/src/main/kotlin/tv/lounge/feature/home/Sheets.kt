@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -110,7 +111,11 @@ fun RightSheet(
                         .fillMaxSize()
                         .background(colors.curtain)
                         .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
-                        .focusProperties { canFocus = !leaving }
+                        .focusProperties {
+                            canFocus = !leaving
+                            // The d-pad never walks out of the sheet onto the home behind it.
+                            onExit = { if (!leaving && requestedFocusDirection in Directional) cancelFocusChange() }
+                        }
                         .focusGroup()
                         // Half the side padding sits outside the scroll, so a focused row's glow has room.
                         .padding(horizontal = 24.dp, vertical = Dimens.safeY)
@@ -127,6 +132,8 @@ fun RightSheet(
         }
     }
 }
+
+private val Directional = setOf(FocusDirection.Up, FocusDirection.Down, FocusDirection.Left, FocusDirection.Right, FocusDirection.Next, FocusDirection.Previous)
 
 /**
  * A 72 dp sheet row: glyph, title, optional trailing value. Focus is a lifted `curtainEdge` surface
