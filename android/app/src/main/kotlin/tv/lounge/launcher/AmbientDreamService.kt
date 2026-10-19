@@ -18,7 +18,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LoungeThemeVariant
 import tv.lounge.design.LoungeVisuals
-import tv.lounge.feature.home.AmbientScreen
+import tv.lounge.feature.home.Screensaver
 import tv.lounge.platform.Prefs
 
 /** The system screensaver, drawn with Compose from the same snapshot as the home screen. */
@@ -52,7 +52,7 @@ class AmbientDreamService : DreamService(), LifecycleOwner, SavedStateRegistryOw
                     reducedMotion = uiPrefs.reducedMotion ?: false,
                     visuals = LoungeVisuals.Lite,
                 ) {
-                    AmbientScreen(app.awaitCore())
+                    Screensaver(app.awaitCore(), prefs)
                 }
             }
         }

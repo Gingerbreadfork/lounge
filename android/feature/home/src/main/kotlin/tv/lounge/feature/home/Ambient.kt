@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,9 +45,11 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import java.util.Date
 import kotlin.random.Random
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tv.lounge.core.CoreClient
 import tv.lounge.core.HomeSnapshot
 import tv.lounge.core.TileKind
@@ -53,6 +57,7 @@ import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LoungeVisuals
 import tv.lounge.design.lightsFilter
+import tv.lounge.design.sounds
 import tv.lounge.platform.Prefs
 import tv.lounge.power.PowerSetup
 import tv.lounge.power.PowerStatus
@@ -60,9 +65,9 @@ import tv.lounge.power.PrivilegedException
 
 private const val SLIDE_MS = 45_000L
 private const val DRIFT_MS = 60_000L
-private const val LATE_AFTER_MS = 30 * 60_000L
-private const val LATE_DIM_MS = 60_000L
-private const val LATE_DIM_STEPS = 20
+internal const val LATE_AFTER_MS = 30 * 60_000L
+internal const val LATE_DIM_MS = 60_000L
+internal const val LATE_DIM_STEPS = 20
 
 /** One picture for the screensaver and the two lines under the clock that say what it is. */
 data class AmbientSlide(val art: String, val title: String, val category: String)
@@ -101,9 +106,9 @@ fun AmbientScreen(core: CoreClient) {
     val snapshot by core.snapshots.collectAsStateWithLifecycle()
     val slides = remember(snapshot) { ambientSlides(snapshot) }
     var index by remember { mutableIntStateOf(0) }
-    var drift by remember { mutableStateOf(IntOffset.Zero) }
+    val drift = rememberAmbientDrift()
     var brightness by remember { mutableFloatStateOf(0.6f) }
-    var clock by remember { mutableStateOf(android.text.format.DateFormat.getTimeFormat(context).format(Date())) }
+    val clock = rememberAmbientClock()
     val startedAt = remember { System.currentTimeMillis() }
     val filter = remember(brightness) { lightsFilter(brightness, 0.95f) }
 
@@ -115,22 +120,10 @@ fun AmbientScreen(core: CoreClient) {
         }
     }
     LaunchedEffect(Unit) {
-        while (true) {
-            delay(DRIFT_MS)
-            drift = IntOffset(Random.nextInt(-2, 3), Random.nextInt(-2, 3))
-        }
-    }
-    LaunchedEffect(Unit) {
         delay(LATE_AFTER_MS - (System.currentTimeMillis() - startedAt).coerceAtLeast(0))
         repeat(LATE_DIM_STEPS) { i ->
             brightness = 0.6f - 0.12f * (i + 1) / LATE_DIM_STEPS
             delay(LATE_DIM_MS / LATE_DIM_STEPS)
-        }
-    }
-    LaunchedEffect(Unit) {
-        while (true) {
-            clock = android.text.format.DateFormat.getTimeFormat(context).format(Date())
-            delay(1_000L * (61 - (System.currentTimeMillis() / 1_000 % 60)))
         }
     }
 
@@ -172,28 +165,90 @@ fun AmbientScreen(core: CoreClient) {
                     )
                 }
             }
-            Box(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .height(300.dp)
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))),
-            )
-            Column(Modifier.align(Alignment.BottomStart).padding(start = 96.dp, bottom = 72.dp)) {
-                Text(clock, style = LoungeTheme.typography.clock, color = colors.limelight)
-                if (slide != null) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(slide.title, style = LoungeTheme.typography.meta, color = colors.limelight, maxLines = 1)
-                    Text(slide.category, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1)
-                }
+            AmbientCaption(clock, slide?.title, slide?.category, IntOffset.Zero)
+        }
+    }
+}
+
+/** The time, updated on the minute. */
+@Composable
+internal fun rememberAmbientClock(): String {
+    val context = LocalContext.current
+    var clock by remember { mutableStateOf(android.text.format.DateFormat.getTimeFormat(context).format(Date())) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            clock = android.text.format.DateFormat.getTimeFormat(context).format(Date())
+            delay(1_000L * (61 - (System.currentTimeMillis() / 1_000 % 60)))
+        }
+    }
+    return clock
+}
+
+/** Two pixels of drift a minute, so nothing sits still on an OLED panel. */
+@Composable
+internal fun rememberAmbientDrift(): IntOffset {
+    var drift by remember { mutableStateOf(IntOffset.Zero) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(DRIFT_MS)
+            drift = IntOffset(Random.nextInt(-2, 3), Random.nextInt(-2, 3))
+        }
+    }
+    return drift
+}
+
+/** The clock bottom-left with two lines saying what is on screen, over a scrim that keeps it readable. */
+@Composable
+internal fun AmbientCaption(clock: String, title: String?, line: String?, drift: IntOffset) {
+    val colors = LoungeTheme.colors
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .height(300.dp)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))),
+        )
+        Column(Modifier.align(Alignment.BottomStart).offset { drift }.padding(start = 96.dp, bottom = 72.dp)) {
+            Text(clock, style = LoungeTheme.typography.clock, color = colors.limelight)
+            if (title != null) {
+                Spacer(Modifier.height(10.dp))
+                Text(title, style = LoungeTheme.typography.meta, color = colors.limelight, maxLines = 1)
+                if (line != null) Text(line, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1)
             }
         }
     }
 }
 
+/** The screensaver chosen in Settings: Lounge's pictures, or an abstract scene drawn on the GPU. */
+@Composable
+fun Screensaver(core: CoreClient, prefs: Prefs, preview: Boolean = false) {
+    val context = LocalContext.current
+    val chosen by prefs.ambientStyle.collectAsState(initial = null)
+    val id = chosen
+    if (id == null) {
+        Box(Modifier.fillMaxSize().background(Color.Black))
+        return
+    }
+    val style = remember(id) { if (id == ShaderStyles.PICTURES) null else ShaderStyles.find(context, core, id) }
+    var unusable by remember(id) { mutableStateOf(false) }
+    if (style == null || unusable) {
+        AmbientScreen(core)
+    } else {
+        ShaderScreensaver(
+            style,
+            onUnusable = { why ->
+                android.util.Log.w("Lounge", "screensaver: ${style.id} falls back to pictures: $why")
+                unusable = true
+            },
+            preview = preview,
+        )
+    }
+}
+
 /** The screensaver shown in-app for a look; the first key press closes it. */
 @Composable
-fun AmbientPreview(core: CoreClient, onClose: () -> Unit) {
+fun AmbientPreview(core: CoreClient, prefs: Prefs, onClose: () -> Unit) {
     val focus = remember { FocusRequester() }
     Box(
         Modifier
@@ -202,17 +257,28 @@ fun AmbientPreview(core: CoreClient, onClose: () -> Unit) {
             .focusRequester(focus)
             .focusable(),
     ) {
-        AmbientScreen(core)
+        Screensaver(core, prefs, preview = true)
     }
     LaunchedEffect(Unit) { focus.requestWhenReady() }
 }
 
 /** Settings → Screensaver: make Lounge the system screensaver (through Power Setup) or go back. */
 @Composable
-fun AmbientSheet(power: PowerSetup, prefs: Prefs, onPowerSetup: () -> Unit, onPreview: () -> Unit, firstFocus: FocusRequester) {
+fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup: () -> Unit, onPreview: () -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
+    val sounds = LoungeTheme.sounds
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val styles by produceState(emptyList<ShaderStyle>()) { value = withContext(Dispatchers.IO) { ShaderStyles.all(context, core) } }
+    val chosen by prefs.ambientStyle.collectAsState(initial = ShaderStyles.PICTURES)
+    val choices = listOf(Triple(ShaderStyles.PICTURES, "Pictures", "Artwork from your home screen")) +
+        styles.map { Triple(it.id, it.name, it.description ?: it.origin) }
+    val at = choices.indexOfFirst { it.first == chosen }.coerceAtLeast(0)
+    fun step(by: Int) {
+        sounds?.tick()
+        val next = choices[(at + by).mod(choices.size)].first
+        scope.launch { prefs.setAmbientStyle(next) }
+    }
     val status by power.status.collectAsStateWithLifecycle()
     var current by remember { mutableStateOf(power.currentScreensaver) }
     var busy by remember { mutableStateOf<String?>(null) }
@@ -239,8 +305,8 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, onPowerSetup: () -> Unit, onPr
 
     SheetHeading(
         "Screensaver",
-        if (ours) "Lounge's artwork, a clock and what each picture is; it drifts and dims to be kind to OLED panels."
-        else "Show the home screen's artwork with a clock when the TV idles.",
+        if (ours) "Your artwork or a slow abstract scene, with a clock; it drifts and dims to be kind to OLED panels."
+        else "Show your artwork or a slow abstract scene with a clock when the TV idles.",
     )
     Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
         SheetRow(
@@ -254,6 +320,14 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, onPowerSetup: () -> Unit, onPr
             accent = if (ours) colors.signal else colors.dust,
             onClick = {},
             focusRequester = firstFocus,
+        )
+        SheetRow(
+            icon = LoungeIcons.Theme,
+            title = "Style",
+            value = choices[at].second,
+            subtitle = choices[at].third,
+            onClick = { step(1) },
+            onCycle = { step(it) },
         )
         if (!ours) {
             SheetRow(
@@ -296,7 +370,7 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, onPowerSetup: () -> Unit, onPr
         if (error != null) Text(error!!, style = LoungeTheme.typography.caption, color = colors.ember)
     }
     SheetFootnote(
-        "Pictures come from what is already on your home screen; nothing is downloaded for this.",
+        "Pictures come from what is already on your home screen and abstract scenes are drawn on the TV; nothing is downloaded for this.",
         "The system decides when the screensaver starts: Settings → System → Screensaver on most devices.",
     )
 }

@@ -1,0 +1,6 @@
+[
+  { "id": "ink", "name": "Ink", "description": "Light moving through ink in water", "file": "ink.agsl" },
+  { "id": "lava", "name": "Lava", "description": "A lava lamp, slowly", "file": "lava.agsl" },
+  { "id": "aurora", "name": "Aurora", "description": "Northern lights over the hills", "file": "aurora.agsl" },
+  { "id": "silk", "name": "Silk", "description": "Folds of satin turning under the lamp", "file": "silk.agsl" }
+]

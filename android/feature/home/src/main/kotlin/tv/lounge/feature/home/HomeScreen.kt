@@ -450,7 +450,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
 
         Presence(if (overlay == Overlay.AmbientPreview) Unit else null) { _, visibleState ->
             AnimatedVisibility(visibleState, enter = fadeIn(motion.curtain()), exit = fadeOut(motion.settle())) {
-                AmbientPreview(core = core, onClose = { close(); state.overlay = Overlay.Ambient })
+                AmbientPreview(core = core, prefs = prefs, onClose = { close(); state.overlay = Overlay.Ambient })
             }
         }
 
@@ -607,6 +607,7 @@ private fun SheetContent(
         Overlay.Ambient -> AmbientSheet(
             power = power,
             prefs = prefs,
+            core = core,
             onPowerSetup = { open(Overlay.PowerSetup) },
             onPreview = { open(Overlay.AmbientPreview) },
             firstFocus = first,

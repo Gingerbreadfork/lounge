@@ -38,5 +38,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.coil.compose)
+    testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
     debugImplementation(libs.compose.ui.tooling)
 }

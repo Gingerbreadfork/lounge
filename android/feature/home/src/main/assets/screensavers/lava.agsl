@@ -1,0 +1,45 @@
+// Lava: a lava lamp, slowly. Wax rises and falls through warm oil and merges where it meets.
+uniform float2 resolution;
+uniform float time;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+
+float field(float2 p, float t) {
+    float v = 0.0;
+    for (int i = 0; i < 7; i++) {
+        float fi = float(i);
+        float2 c = float2(0.62 * sin(fi * 2.4 + t * 0.045 * (1.0 + 0.21 * fi)),
+                          0.44 * sin(t * (0.10 + 0.021 * fi) + fi * 1.9));
+        float r = 0.11 + 0.035 * fract(fi * 0.618);
+        float2 d = p - c;
+        d.y *= 0.8;
+        d.x += 0.015 * sin(p.y * 14.0 + t * 0.6 + fi);
+        v += exp(-dot(d, d) / (r * r));
+    }
+    float bottom = p.y + 0.56;
+    float top = p.y - 0.57;
+    return v + exp(-bottom * bottom / 0.006) + 0.8 * exp(-top * top / 0.003);
+}
+
+half4 main(float2 coord) {
+    float2 p = float2(coord.x - 0.5 * resolution.x, 0.5 * resolution.y - coord.y) / resolution.y;
+    float v = field(p, time);
+    float e = 1.5 / resolution.y;
+    float2 g = float2(field(p + float2(e, 0.0), time) - v, field(p + float2(0.0, e), time) - v) / e;
+
+    float heat = exp(-(p.y + 0.5) * 2.6);
+    half3 oil = mix(velvet.rgb * 0.8, horizon.rgb * 1.5, half(clamp(0.6 - p.y, 0.0, 1.0)));
+    oil += ember.rgb * half(0.12 * heat + 0.10 * smoothstep(0.15, 0.5, v));
+
+    float3 n = normalize(float3(-g * 0.03, 1.0));
+    float below = clamp(-n.y * 1.2 + 0.2, 0.0, 1.0);
+    float thick = smoothstep(0.5, 1.4, v);
+    float skin = smoothstep(0.5, 0.58, v) * (1.0 - smoothstep(0.58, 0.85, v));
+    half3 wax = mix(ember.rgb * 0.55, houselight.rgb * 0.95, half(thick));
+    float gloss = pow(clamp(dot(n, normalize(float3(-0.3, 0.4, 0.85))), 0.0, 1.0), 30.0);
+    wax += houselight.rgb * half(0.35 * skin + 0.25 * below * heat + 0.22 * gloss);
+    wax *= half(0.7 + 0.5 * heat);
+    return half4(mix(oil, wax, half(smoothstep(0.46, 0.54, v))), 1.0);
+}

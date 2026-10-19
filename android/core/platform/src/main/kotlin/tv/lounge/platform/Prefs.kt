@@ -56,6 +56,10 @@ class Prefs(private val context: Context) {
 
     /** The system screensaver component that was set before Lounge took over, to give back. */
     val previousScreensaver: Flow<String?> = context.dataStore.data.map { it[PREVIOUS_SCREENSAVER] }
+
+    /** The screensaver's style: "pictures", or the id of an abstract scene. */
+    val ambientStyle: Flow<String> = context.dataStore.data.map { it[AMBIENT_STYLE] ?: "pictures" }
+    suspend fun setAmbientStyle(id: String) { context.dataStore.edit { it[AMBIENT_STYLE] = id } }
     suspend fun setPreviousScreensaver(component: String?) {
         context.dataStore.edit { if (component.isNullOrBlank()) it.remove(PREVIOUS_SCREENSAVER) else it[PREVIOUS_SCREENSAVER] = component }
     }
@@ -82,5 +86,6 @@ class Prefs(private val context: Context) {
         val BUNDLED_PLUGINS_STAMP = longPreferencesKey("bundled_plugins_stamp")
         val COMPANION_ENABLED = booleanPreferencesKey("companion_enabled")
         val PREVIOUS_SCREENSAVER = stringPreferencesKey("previous_screensaver")
+        val AMBIENT_STYLE = stringPreferencesKey("ambient_style")
     }
 }

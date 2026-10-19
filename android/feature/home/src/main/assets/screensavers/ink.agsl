@@ -1,0 +1,47 @@
+// Ink: light moving through ink in water. Noise fed through noise, after Inigo Quilez's warping.
+uniform float2 resolution;
+uniform float time;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+
+float hash(float2 p) {
+    float3 p3 = fract(float3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+float noise(float2 p) {
+    float2 i = floor(p);
+    float2 f = fract(p);
+    float2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + float2(1.0, 0.0)), u.x),
+               mix(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), u.x), u.y);
+}
+
+float fbm(float2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 4; i++) {
+        v += a * noise(p);
+        p = float2(1.6 * p.x + 1.2 * p.y, -1.2 * p.x + 1.6 * p.y) + float2(17.0, 7.0);
+        a *= 0.5;
+    }
+    return v;
+}
+
+half4 main(float2 coord) {
+    float2 p = (coord - 0.5 * resolution) / resolution.y * 2.0;
+    float t = time * 0.02;
+    float2 q = float2(fbm(p + t), fbm(p + float2(5.2, 1.3) - t));
+    float2 r = float2(fbm(p + 3.2 * q + float2(1.7, 9.2) + 1.5 * t), fbm(p + 3.2 * q + float2(8.3, 2.8) - 1.2 * t));
+    float f = fbm(p + 3.2 * r);
+
+    half3 col = mix(velvet.rgb * 0.6, horizon.rgb * 2.4, half(clamp(f * f * 2.4, 0.0, 1.0)));
+    half3 light = mix(houselight.rgb, ember.rgb, half(clamp(q.x * 1.6 - 0.4, 0.0, 1.0)));
+    float lit = clamp(dot(r, r) - 0.3, 0.0, 1.0) * smoothstep(0.5, 0.85, f);
+    col = mix(col, light, half(lit * 0.85));
+    col *= half(0.45 + f * f);
+    return half4(col, 1.0);
+}
