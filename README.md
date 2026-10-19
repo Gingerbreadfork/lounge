@@ -13,6 +13,51 @@
   <img src="docs/screenshots/home.png" width="920" alt="The Lounge home screen: a still from Charade large on the right, the title, year, director and a Continue button on the left, and a strip of what to watch next along the bottom">
 </p>
 
+## At a glance
+
+**On the screen**
+
+- **The Stage.** One thing at a time: the episode to continue with how much is left, the channel that is on, the app you open at this hour. It lowers to a band when you move into the rows and rises again, as one continuous picture.
+- **Continue watching from everywhere.** Every app that publishes Watch Next, the TV's own listings, your media server through a plugin, and what is playing in the background, folded into one row with one entry per title.
+- **Rows you own.** Pin, reorder and hide. Your apps in your order, sorted by recency until you pin them. Games get a row with a badge when a controller is connected. Other apps' preview channels can be rows too.
+- **Live TV.** Tuner channels and plugin channels in Live now, with a guide laid out to the minute that refreshes while it is open. OK on a programme tunes it.
+- **The whole TV.** HDMI inputs with the names their devices announce over CEC and whether anything is plugged in. On a streamer, a TV controls card turns the TV on and switches to the right input, sends sound to a soundbar, changes the volume, or turns everything off.
+- **Now playing.** Music or a podcast in the background becomes a chip in the top bar and a card with play, pause and skip.
+- **Search** across apps, what you have been watching and whatever the plugins can find, with recently watched shown before you type.
+- **A menu on every tile.** Hold OK: pin, move, hide, pin to the Stage, app info, the store page, uninstall.
+
+**The look**
+
+- **Light, not chrome.** The focused tile's own artwork colour glows around it and spills onto the wall; the tiles beside it lift as if lit from the side. The lamp warms up on a cold start and the lights go down after a minute without the remote.
+- **Ten themes** that change the walls and the lamp and nothing else, including Blackout for OLED panels and High contrast.
+- **Three sounds**, rendered rather than sampled, for moving, opening and going back. Off while music plays, off entirely if you like.
+- **Artwork done once.** Every picture is decoded once at index time and cut to every size the screen needs, with its colour palette, a baked vignette for the hero and the slice the Stage lowers onto.
+- **Type and a mark of its own.** Bricolage Grotesque and Figtree, both bundled, and the plush coral sofa.
+- **Fits the TV it is on.** Reduced motion follows the system or your choice, Lite mode turns the shader and the spill off, and two device tiers set the budgets.
+
+**From your phone**
+
+- **A page the TV serves.** Pair by QR code or six digits on the same network, add it to the phone's home screen, no account and no server.
+- **What's on**, mirrored. Tap a tile and it opens on the TV.
+- **A remote** with a d-pad, media keys, a field that types into whatever the TV has focused, voice through the phone's own recogniser, and a place to paste a link that opens on the TV. Sharing a link to Lounge from any app does the same.
+- **Arrange the home screen** from the phone: rows, pinned apps, what is on the Stage.
+- **Plugins**, configured and installed from a file or a link. **Backups** of your layout and settings as one file, restored in one tap. **Paired phones** and the TV's diagnostics.
+
+**Plugins**
+
+- **WebAssembly in a sandbox.** A plugin runs inside the core with a fuel budget, a memory cap, no file system, no sockets, and reaches only the hosts its manifest names.
+- **Signed bundles.** Ed25519-signed `.lgp` files; the TV pins the publisher's key on first install and refuses an update from anyone else.
+- **Jellyfin and IPTV built in**, a sample library to try things with, an SDK, and a command-line tool that bundles, signs and runs a plugin on your computer against fixtures.
+- **Any language** that targets core WebAssembly: the interface is eight imports and six exports with JSON in between.
+
+**Setting up and staying out of the way**
+
+- **Five screens on first run**, with a live preview of the home screen while you choose a theme.
+- **Power Setup.** Lounge talks to the TV's own debugging service after you allow it once on screen, or to Shizuku, to take the home role, grant its own accesses, drive HDMI-CEC, set the screensaver and compile itself ahead of time. Every command is shown before it runs and logged after.
+- **A screensaver of its own.** The artwork from the Stage and the rows, a slow push-in, the clock, and a line naming the picture.
+- **Nothing leaves the house.** No accounts, no analytics, no update checks, no network at all unless you gave it an address.
+- **Built for old TVs too.** Android 9 and up, arm64 and 32-bit ARM, a Rust core behind a Kotlin and Compose shell.
+
 ## Why
 
 The home screen that comes with a TV works for the company that made it. It is slow on the
