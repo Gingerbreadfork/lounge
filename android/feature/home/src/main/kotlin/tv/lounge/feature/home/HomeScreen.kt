@@ -137,6 +137,12 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     // The rows the lowered Stage reveals are composed in idle frames while it is still up, so
     // the proscenium never composes a row in the middle of a frame.
     val listState = rememberLazyListState(prefetchStrategy = remember(tierA) { RowsAheadPrefetch(rowsAhead = if (tierA) 3 else 2, tilesPerRow = 8) })
+    // A row that arrives at the top while the Stage is up (an update notice) must show at the
+    // top: the list would otherwise keep its first row in place and hide the new one above it.
+    val firstRowId = snapshot.rows.firstOrNull()?.id
+    LaunchedEffect(firstRowId) {
+        if (firstRowId != null && state.region != FocusRegion.Rows && listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
+    }
 
     fun say(text: String) = toasts.show(text)
 
