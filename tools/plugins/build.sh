@@ -15,9 +15,11 @@ if [ ! -f "$KEY" ]; then
   mkdir -p "$(dirname "$KEY")"
   "$TOOL" keygen "$KEY"
 fi
-cargo build -q --release --target wasm32-unknown-unknown -p lounge-plugin-iptv -p lounge-plugin-jellyfin -p lounge-plugin-sample
+SHIPPED="iptv jellyfin emby plex youtube archive immich hdhomerun tvheadend channels nextpvr"
+# shellcheck disable=SC2086
+cargo build -q --release --target wasm32-unknown-unknown $(for n in $SHIPPED sample; do printf -- '-p lounge-plugin-%s ' "$n"; done)
 mkdir -p "$OUT"
-for name in iptv jellyfin; do
+for name in $SHIPPED; do
   "$TOOL" bundle "target/wasm32-unknown-unknown/release/lounge_plugin_$name.wasm" "$KEY" "$OUT/$name.lgp"
 done
 # The sample library is not shipped in the APK; install it from the phone when you want it.

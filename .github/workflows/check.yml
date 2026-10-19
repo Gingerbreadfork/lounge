@@ -41,7 +41,7 @@ jobs:
           workspaces: plugins
       - run: cargo test --workspace
         working-directory: plugins
-      - run: cargo build --release --target wasm32-unknown-unknown -p lounge-plugin-iptv -p lounge-plugin-jellyfin -p lounge-plugin-sample
+      - run: cargo build --release --target wasm32-unknown-unknown --workspace --exclude lgp-tool --exclude lounge-plugin-sdk
         working-directory: plugins
 
   companion:
