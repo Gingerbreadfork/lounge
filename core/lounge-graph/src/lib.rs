@@ -19,6 +19,8 @@ pub enum ItemKind {
     MediaSession,
     Resume,
     Game,
+    /// A picture for the screensaver; never a tile.
+    Wallpaper,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -34,6 +36,8 @@ pub enum DeepLink {
     SwitchInput(String),
     Tune(String),
     Control(String),
+    /// Nothing happens on select: wallpapers.
+    None,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -49,6 +53,9 @@ pub struct Artwork {
     /// The lowered Stage's slice of the key art (1728×200), cut around `focal_y`.
     #[serde(default)]
     pub band: Option<String>,
+    /// The full-screen picture of a wallpaper item.
+    #[serde(default)]
+    pub wallpaper: Option<String>,
     /// Where the picture's interest sits vertically within its 16:9 frame (0 top, 1 bottom).
     #[serde(default = "half")]
     pub focal_y: f32,
@@ -486,6 +493,13 @@ impl Graph {
         v
     }
 
+    /// Pictures plugins published for the screensaver, by weight then recency.
+    pub fn wallpapers(&self) -> Vec<&Item> {
+        let mut v: Vec<&Item> = self.items.values().filter(|it| it.kind == ItemKind::Wallpaper && !self.is_hidden(&it.id)).collect();
+        v.sort_by(|a, b| b.weight.cmp(&a.weight).then_with(|| b.added_ms.cmp(&a.added_ms)).then_with(|| a.id.cmp(&b.id)));
+        v
+    }
+
     pub fn count_source(&self, source: &str) -> usize {
         self.items.values().filter(|it| it.source == source).count()
     }
@@ -592,6 +606,19 @@ mod tests {
         it.last_used_ms = used;
         it.flags.has_banner = true;
         it
+    }
+
+    #[test]
+    fn wallpapers_are_listed_by_weight_and_hidden_ones_skipped() {
+        let mut g = Graph::new(Layout::default());
+        for (id, weight) in [("plugin:x:a", 1), ("plugin:x:b", 5), ("plugin:x:c", 3)] {
+            let mut it = Item::content(id, ItemKind::Wallpaper, "plugin:x", "Summer", DeepLink::None);
+            it.weight = weight;
+            g.upsert(it);
+        }
+        g.hide("plugin:x:c");
+        let ids: Vec<&str> = g.wallpapers().iter().map(|it| it.id.as_str()).collect();
+        assert_eq!(ids, vec!["plugin:x:b", "plugin:x:a"]);
     }
 
     #[test]

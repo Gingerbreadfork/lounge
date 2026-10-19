@@ -94,6 +94,16 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
         stage: build_stage(graph, &index, now, hour_local, config),
         rows,
         now_playing: state.now_playing.clone(),
+        wallpapers: graph
+            .wallpapers()
+            .into_iter()
+            .filter_map(|it| {
+                let path = it.artwork.wallpaper.clone().or_else(|| it.artwork.hero.clone()).or_else(|| it.artwork.landscape.clone())?;
+                let source = it.source.strip_prefix("plugin:").map(|id| index.plugin_name(id)).unwrap_or_else(|| it.source.clone());
+                Some(crate::Wallpaper { artwork_path: path, title: it.title.clone(), source })
+            })
+            .take(80)
+            .collect(),
     }
 }
 
@@ -435,6 +445,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
         ItemKind::Resume | ItemKind::MediaSession => ("Continue watching", "Continue"),
         ItemKind::Channel => ("Live now", "Watch"),
         ItemKind::Game => ("Games", "Play"),
+        ItemKind::Wallpaper => ("Pictures", "Open"),
         ItemKind::Input | ItemKind::Device => ("Inputs", "Switch"),
         ItemKind::Program => {
             if it.flags.watch_next {
@@ -485,7 +496,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
                 }
             }
         }
-        ItemKind::Resume | ItemKind::Program => {
+        ItemKind::Resume | ItemKind::Program | ItemKind::Wallpaper => {
             match (season_episode_long(it), &it.subtitle) {
                 (Some(se), Some(sub)) => lines.push(format!("{se}: {sub}")),
                 (Some(se), None) => lines.push(se),
@@ -542,7 +553,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
         ItemKind::Game => crate::SpotlightKind::Game,
         ItemKind::Channel => crate::SpotlightKind::Channel,
         ItemKind::Input | ItemKind::Device => crate::SpotlightKind::Device,
-        ItemKind::Program | ItemKind::Resume | ItemKind::MediaSession => crate::SpotlightKind::Content,
+        ItemKind::Program | ItemKind::Resume | ItemKind::MediaSession | ItemKind::Wallpaper => crate::SpotlightKind::Content,
     };
     let framed = matches!(it.kind, ItemKind::App | ItemKind::Game | ItemKind::Input | ItemKind::Device) || it.framed_art();
     StageSpotlight {
@@ -707,6 +718,7 @@ fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
             };
             dispatch(inner, link)
         }
+        DeepLink::None => Ok(()),
         DeepLink::SwitchInput(id) => inner.platform.switch_input(id).map_err(platform_err),
         DeepLink::Tune(uri) => inner.platform.tune(uri).map_err(platform_err),
         DeepLink::Control(cmd) => inner.platform.control(cmd).map_err(platform_err),

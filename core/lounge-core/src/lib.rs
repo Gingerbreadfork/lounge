@@ -402,6 +402,18 @@ pub struct HomeSnapshot {
     pub rows: Vec<Row>,
     #[serde(default)]
     pub now_playing: Option<NowPlaying>,
+    /// Pictures plugins published for the screensaver, prepared like any artwork.
+    #[serde(default)]
+    pub wallpapers: Vec<Wallpaper>,
+}
+
+/// One screensaver picture from a plugin: the prepared file, what it shows and who sent it.
+#[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Wallpaper {
+    pub artwork_path: String,
+    pub title: String,
+    pub source: String,
 }
 
 impl HomeSnapshot {
@@ -415,6 +427,7 @@ impl HomeSnapshot {
             },
             rows: Vec::new(),
             now_playing: None,
+            wallpapers: Vec::new(),
         }
     }
 }

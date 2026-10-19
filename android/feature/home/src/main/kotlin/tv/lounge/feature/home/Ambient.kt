@@ -70,6 +70,8 @@ data class AmbientSlide(val art: String, val title: String, val category: String
 /** The Stage's artwork first, then landscape tiles, without repeats: what the home screen already knows. */
 fun ambientSlides(snapshot: HomeSnapshot): List<AmbientSlide> {
     val out = LinkedHashMap<String, AmbientSlide>()
+    for (w in snapshot.wallpapers) out.putIfAbsent(w.artworkPath, AmbientSlide(w.artworkPath, w.title, w.source))
+    if (out.size >= 12) return out.values.toList()
     for (s in snapshot.stage.spotlights) {
         val art = s.artworkPath ?: continue
         out.putIfAbsent(art, AmbientSlide(art, s.title, s.category))

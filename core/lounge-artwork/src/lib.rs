@@ -48,6 +48,8 @@ pub enum Style {
     Icon,
     /// A channel or publisher logo fitted inside 160×160 with its alpha kept: never cropped.
     Logo,
+    /// A screensaver picture at the full 1920×1080, nothing baked in.
+    Wallpaper,
 }
 
 impl Style {
@@ -64,6 +66,7 @@ impl Style {
             Style::Band => (1728, 200),
             Style::Icon => (160, 160),
             Style::Logo => (160, 160),
+            Style::Wallpaper => (1920, 1080),
         }
     }
 
@@ -85,6 +88,7 @@ impl Style {
             Style::Band => "band",
             Style::Icon => "icon",
             Style::Logo => "logo",
+            Style::Wallpaper => "wall",
         }
     }
 

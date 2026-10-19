@@ -296,6 +296,7 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
             poster: None,
             palette: banner.or(icon).map(|p| p.palette),
             band: None,
+            wallpaper: None,
             focal_y: 0.5,
         };
         items.push(it);
@@ -315,6 +316,7 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
 // TV provider: Watch Next, preview programmes, channels, schedule
 // ---------------------------------------------------------------------------
 
+#[derive(Default)]
 struct ProgramArt {
     poster: Option<usize>,
     landscape: Option<usize>,
@@ -323,6 +325,7 @@ struct ProgramArt {
     backdrop: Option<usize>,
     band: Option<usize>,
     logo: Option<usize>,
+    wallpaper: Option<usize>,
 }
 
 fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lounge_store::StoreError> {
@@ -342,6 +345,7 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
                 backdrop: plan.want(wide.or(portrait), Style::Backdrop),
                 band: plan.want(wide, Style::Band),
                 logo: plan.want(p.logo_path.as_deref(), Style::Logo),
+                wallpaper: None,
             }
         })
         .collect();
@@ -363,6 +367,7 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
             logo: logo.map(|x| x.path.clone()),
             palette: landscape.or(poster).or(logo).map(|x| x.palette),
             band: band.map(|x| x.path.clone()),
+            wallpaper: None,
             focal_y: band.or(hero).map(|x| x.focal_y).unwrap_or(0.5),
         };
         let art_aspect = aspect(hero.or(landscape).or(poster));
@@ -454,6 +459,9 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             // `poster` is portrait art, `thumbnail` is 16:9; whichever exists feeds the other size.
             let wide = r.thumbnail.as_deref();
             let portrait = r.poster.as_deref();
+            if r.item.kind == PluginItemKind::Wallpaper {
+                return ProgramArt { wallpaper: plan.want(wide.or(portrait), Style::Wallpaper), ..Default::default() };
+            }
             ProgramArt {
                 poster: plan.want(portrait, Style::Poster),
                 landscape: plan.want(wide.or(portrait), Style::Landscape),
@@ -462,6 +470,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
                 backdrop: plan.want(wide.or(portrait), Style::Backdrop),
                 band: plan.want(wide, Style::Band),
                 logo: plan.want(r.logo.as_deref(), Style::Logo),
+                wallpaper: None,
             }
         })
         .collect();
@@ -489,13 +498,16 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             DeepLink::LaunchApp { package: pkg.clone(), activity: String::new() }
         } else if let Some(action) = &a.resolve {
             DeepLink::PluginResolve { plugin: plugin.to_string(), action: action.clone() }
+        } else if p.kind == PluginItemKind::Wallpaper {
+            DeepLink::None
         } else {
             continue;
         };
         let kind = match p.kind {
             PluginItemKind::Resume => ItemKind::Resume,
             PluginItemKind::Channel => ItemKind::Channel,
-            PluginItemKind::Program | PluginItemKind::Schedule | PluginItemKind::Wallpaper => ItemKind::Program,
+            PluginItemKind::Wallpaper => ItemKind::Wallpaper,
+            PluginItemKind::Program | PluginItemKind::Schedule => ItemKind::Program,
         };
         let mut it = Item::content(&format!("plugin:{plugin}:{}", p.id), kind, &source, &p.title, deep_link);
         it.owner = a.fallback_launch.clone().or_else(|| a.launch.clone());
@@ -521,6 +533,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             logo: logo.map(|x| x.path.clone()),
             palette: landscape.or(poster).or(logo).map(|x| x.palette),
             band: band.map(|x| x.path.clone()),
+            wallpaper: pick(&art, w.wallpaper).map(|x| x.path.clone()),
             focal_y: band.or(hero).map(|x| x.focal_y).unwrap_or(0.5),
         };
         match p.kind {
@@ -648,6 +661,7 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
             poster: None,
             palette: landscape.map(|p| p.palette),
             band: band.map(|p| p.path.clone()),
+            wallpaper: None,
             focal_y: band.or(hero).map(|p| p.focal_y).unwrap_or(0.5),
         };
         items.push(it);
