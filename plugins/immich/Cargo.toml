@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-immich"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Immich photos: an album shared from Immich becomes the screensaver"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
