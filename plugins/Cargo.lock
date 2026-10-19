@@ -442,6 +442,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-tvheadend"
+version = "0.1.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-youtube"
 version = "0.1.0"
 dependencies = [
