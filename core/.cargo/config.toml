@@ -1,0 +1,4 @@
+
+# The bundled SQLite ships full-text search, R-trees and JSON by default; the store uses none of them.
+[env]
+LIBSQLITE3_FLAGS = "-USQLITE_ENABLE_FTS3 -USQLITE_ENABLE_FTS3_PARENTHESIS -USQLITE_ENABLE_FTS5 -USQLITE_ENABLE_RTREE -USQLITE_ENABLE_JSON1"

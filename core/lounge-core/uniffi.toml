@@ -1,0 +1,6 @@
+[bindings.kotlin]
+package_name = "tv.lounge.core"
+cdylib_name = "lounge_core"
+android = true
+android_cleaner = true
+generate_immutable_records = true

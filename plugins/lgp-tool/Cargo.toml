@@ -1,0 +1,16 @@
+[package]
+name = "lgp-tool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bundle, sign, inspect and test-run Lounge plugins"
+
+[dependencies]
+lounge-plugins = { path = "../../core/lounge-plugins" }
+lounge-plugin-api.workspace = true
+serde_json.workspace = true
+ed25519-dalek = { version = "3", default-features = false, features = ["fast", "zeroize"] }
+getrandom = "0.3"
+hex = "0.4"
+parking_lot = "0.12"
+sha2 = "0.10"

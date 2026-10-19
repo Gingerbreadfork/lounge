@@ -1,0 +1,72 @@
+[workspace]
+resolver = "3"
+members = [
+    "lounge-core",
+    "lounge-graph",
+    "lounge-store",
+    "lounge-artwork",
+    "lounge-plugin-api",
+    "lounge-plugins",
+    "lounge-companion",
+    "uniffi-bindgen",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+[workspace.dependencies]
+uniffi = { version = "0.32", features = ["tokio"] }
+tokio = { version = "1.53", features = ["rt-multi-thread", "sync", "time", "macros"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+tracing-android = "0.2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+fast_image_resize = { version = "6", features = ["only_u8x4"] }
+rayon = "1"
+libc = "0.2"
+blake3 = "1"
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+wasmi = { version = "2.0", default-features = false, features = ["stable", "std", "validate", "auto-dispatch"] }
+ureq = { version = "3.4", default-features = false, features = ["rustls", "gzip"] }
+ed25519-dalek = { version = "3", default-features = false, features = ["fast", "zeroize"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+sha2 = "0.10"
+hex = "0.4"
+
+lounge-graph = { path = "lounge-graph" }
+lounge-store = { path = "lounge-store" }
+lounge-artwork = { path = "lounge-artwork" }
+lounge-plugin-api = { path = "lounge-plugin-api" }
+lounge-plugins = { path = "lounge-plugins" }
+lounge-companion = { path = "lounge-companion" }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+panic = "unwind"
+strip = "symbols"
+debug = false
+
+[profile.release.package.lounge-store]
+opt-level = "z"
+
+# SQLite itself is C compiled by libsqlite3-sys; point lookups and inserts gain nothing from -O3.
+[profile.release.package.libsqlite3-sys]
+opt-level = "z"
+
+# Host build read by uniffi-bindgen: metadata lives in the symbol table, so never strip it.
+[profile.bindgen]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = false
+debug = false

@@ -1,0 +1,86 @@
+package tv.lounge.platform
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "lounge")
+
+/** UI-only preferences. Durable data lives in the core. */
+class Prefs(private val context: Context) {
+    enum class Theme { Dusk, House, Hearth, Opera, Marquee, GreenRoom, Moonlight, Graphite, Blackout, HighContrast }
+
+    /** Every UI preference at once, so the screen recomposes once per change rather than once per key. */
+    data class UiPrefs(
+        val theme: Theme = Theme.Dusk,
+        val sounds: Boolean = true,
+        val liteMode: Boolean? = null,
+        val reducedMotion: Boolean? = null,
+        val showMobileApps: Boolean = false,
+        val onboardingDone: Boolean = false,
+        val companionEnabled: Boolean = false,
+        /** False only for the placeholder used before the store has been read. */
+        val loaded: Boolean = false,
+    )
+
+    val all: Flow<UiPrefs> = context.dataStore.data.map { p ->
+        UiPrefs(
+            theme = runCatching { Theme.valueOf(p[THEME] ?: Theme.Dusk.name) }.getOrDefault(Theme.Dusk),
+            sounds = p[SOUNDS] ?: true,
+            liteMode = p[LITE_MODE],
+            reducedMotion = p[REDUCED_MOTION],
+            showMobileApps = p[SHOW_MOBILE_APPS] ?: false,
+            onboardingDone = p[ONBOARDING_DONE] ?: false,
+            companionEnabled = p[COMPANION_ENABLED] ?: false,
+            loaded = true,
+        )
+    }
+
+    val theme: Flow<Theme> = context.dataStore.data.map { p ->
+        runCatching { Theme.valueOf(p[THEME] ?: Theme.Dusk.name) }.getOrDefault(Theme.Dusk)
+    }
+    val sounds: Flow<Boolean> = context.dataStore.data.map { it[SOUNDS] ?: true }
+    val liteMode: Flow<Boolean?> = context.dataStore.data.map { it[LITE_MODE] }
+    val onboardingDone: Flow<Boolean> = context.dataStore.data.map { it[ONBOARDING_DONE] ?: false }
+    val reducedMotionOverride: Flow<Boolean?> = context.dataStore.data.map { it[REDUCED_MOTION] }
+    val showMobileApps: Flow<Boolean> = context.dataStore.data.map { it[SHOW_MOBILE_APPS] ?: false }
+
+    val companionEnabled: Flow<Boolean> = context.dataStore.data.map { it[COMPANION_ENABLED] ?: false }
+
+    /** The system screensaver component that was set before Lounge took over, to give back. */
+    val previousScreensaver: Flow<String?> = context.dataStore.data.map { it[PREVIOUS_SCREENSAVER] }
+    suspend fun setPreviousScreensaver(component: String?) {
+        context.dataStore.edit { if (component.isNullOrBlank()) it.remove(PREVIOUS_SCREENSAVER) else it[PREVIOUS_SCREENSAVER] = component }
+    }
+    suspend fun setCompanionEnabled(on: Boolean) { context.dataStore.edit { it[COMPANION_ENABLED] = on } }
+
+    /** The APK update time the bundled plugins were last installed from; they re-install after an update. */
+    val bundledPluginsStamp: Flow<Long> = context.dataStore.data.map { it[BUNDLED_PLUGINS_STAMP] ?: 0L }
+    suspend fun setBundledPluginsStamp(stamp: Long) { context.dataStore.edit { it[BUNDLED_PLUGINS_STAMP] = stamp } }
+
+    suspend fun setShowMobileApps(on: Boolean) { context.dataStore.edit { it[SHOW_MOBILE_APPS] = on } }
+    suspend fun setTheme(theme: Theme) { context.dataStore.edit { it[THEME] = theme.name } }
+    suspend fun setSounds(on: Boolean) { context.dataStore.edit { it[SOUNDS] = on } }
+    suspend fun setLiteMode(on: Boolean?) { context.dataStore.edit { if (on == null) it.remove(LITE_MODE) else it[LITE_MODE] = on } }
+    suspend fun setOnboardingDone(done: Boolean) { context.dataStore.edit { it[ONBOARDING_DONE] = done } }
+    suspend fun setReducedMotion(on: Boolean?) { context.dataStore.edit { if (on == null) it.remove(REDUCED_MOTION) else it[REDUCED_MOTION] = on } }
+
+    private companion object {
+        val THEME = stringPreferencesKey("theme")
+        val SOUNDS = booleanPreferencesKey("sounds")
+        val LITE_MODE = booleanPreferencesKey("lite_mode")
+        val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+        val REDUCED_MOTION = booleanPreferencesKey("reduced_motion")
+        val SHOW_MOBILE_APPS = booleanPreferencesKey("show_mobile_apps")
+        val BUNDLED_PLUGINS_STAMP = longPreferencesKey("bundled_plugins_stamp")
+        val COMPANION_ENABLED = booleanPreferencesKey("companion_enabled")
+        val PREVIOUS_SCREENSAVER = stringPreferencesKey("previous_screensaver")
+    }
+}

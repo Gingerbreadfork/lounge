@@ -1,0 +1,26 @@
+[package]
+name = "lounge-companion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "LAN companion server: REST + WebSocket API, pairing, and the embedded Svelte app"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { version = "1.53", features = ["rt-multi-thread", "sync", "time", "macros", "net", "fs"] }
+axum = { version = "0.8", features = ["ws", "json", "query"] }
+tower-http = { version = "0.7", features = ["cors"] }
+rust-embed = { version = "8", features = ["interpolate-folder-path"] }
+mime_guess = "2"
+sha2.workspace = true
+hex.workspace = true
+getrandom = "0.3"
+qrcode = { version = "0.14", default-features = false }
+image.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

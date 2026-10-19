@@ -1,0 +1,12 @@
+[package]
+name = "lounge-plugin-sample"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Sample library: public-domain films with their posters, to see Lounge with something on it"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true

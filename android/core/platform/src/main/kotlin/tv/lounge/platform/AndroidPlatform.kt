@@ -1,0 +1,198 @@
+package tv.lounge.platform
+
+import android.content.ActivityNotFoundException
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.media.tv.TvContract
+import android.net.Uri
+import android.provider.Settings
+import android.util.Log
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import tv.lounge.core.Platform
+import tv.lounge.core.PlatformException
+
+/** Commands the core asks the shell to show in its own UI rather than hand to Android. */
+sealed interface UiCommand {
+    data object OpenTvControls : UiCommand
+    data class Toast(val message: String) : UiCommand
+    /** Ask for an optional access: tv_listings, notifications, usage. */
+    data class RequestPermission(val name: String) : UiCommand
+    /** A remote key from the companion, as an Android key code. */
+    data class Key(val keyCode: Int) : UiCommand
+    /** Text from the companion for the focused field. */
+    data class TypeText(val text: String) : UiCommand
+    /** Open search with this query. */
+    data class Search(val query: String) : UiCommand
+    data object GoHome : UiCommand
+}
+
+/**
+ * The core's view of Android: launch, view, switch, tune, control. Every failure becomes a
+ * [PlatformException] so the core can report it.
+ */
+class AndroidPlatform(private val context: Context) : Platform {
+    private val _commands = MutableSharedFlow<UiCommand>(extraBufferCapacity = 8)
+    val commands: SharedFlow<UiCommand> = _commands
+
+    /** Set by the shell once the media collector exists; sends transport commands to a session. */
+    @Volatile var mediaSender: ((String, String) -> Boolean)? = null
+
+    override fun launchApp(`package`: String, activity: String) {
+        if (activity.isEmpty()) {
+            launchByPackage(`package`)
+            return
+        }
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            component = ComponentName(`package`, activity)
+            addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        }
+        start(intent) { launchByPackage(`package`) }
+    }
+
+    private fun launchByPackage(`package`: String) {
+        val intent = context.packageManager.getLeanbackLaunchIntentForPackage(`package`)
+            ?: context.packageManager.getLaunchIntentForPackage(`package`)
+            ?: throw PlatformException.Failed("No launch intent for $`package`")
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        start(intent, null)
+    }
+
+    override fun viewUri(uri: String) {
+        start(intentFor(uri), null)
+    }
+
+    /**
+     * An `intent:` or `android-app:` string (what TvProvider rows carry) is an Intent serialised
+     * by `toUri`; anything else is a plain link to view.
+     */
+    private fun intentFor(uri: String): Intent {
+        val intent = when {
+            uri.startsWith("intent:") -> Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
+            uri.startsWith("android-app:") -> Intent.parseUri(uri, Intent.URI_ANDROID_APP_SCHEME)
+            else -> Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+        }
+        return intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    override fun switchInput(inputId: String) {
+        val info = runCatching { context.getSystemService(android.media.tv.TvInputManager::class.java)?.getTvInputInfo(inputId) }.getOrNull()
+        val uri = if (info != null && !info.isPassthroughInput) {
+            TvContract.buildChannelsUriForInput(inputId)
+        } else {
+            TvContract.buildChannelUriForPassthroughInput(inputId)
+        }
+        val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        start(intent, null)
+    }
+
+    override fun tune(channelUri: String) {
+        start(intentFor(channelUri), null)
+    }
+
+    override fun control(command: String) {
+        when {
+            command == "tv:open" -> _commands.tryEmit(UiCommand.OpenTvControls)
+            command.startsWith("search:") -> _commands.tryEmit(UiCommand.Search(command.removePrefix("search:")))
+            else -> throw PlatformException.Failed("Unknown control: $command")
+        }
+    }
+
+    override fun sendKey(key: String) {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        when (key) {
+            "volume_up" -> audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_RAISE, android.media.AudioManager.FLAG_SHOW_UI)
+            "volume_down" -> audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_LOWER, android.media.AudioManager.FLAG_SHOW_UI)
+            "mute" -> audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_TOGGLE_MUTE, android.media.AudioManager.FLAG_SHOW_UI)
+            "home" -> _commands.tryEmit(UiCommand.GoHome)
+            "play_pause", "rewind", "fast_forward", "play", "pause", "next", "previous", "stop" -> {
+                // Media keys go to whichever app is playing, not to our window.
+                val code = when (key) {
+                    "play_pause" -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                    "rewind" -> android.view.KeyEvent.KEYCODE_MEDIA_REWIND
+                    "fast_forward" -> android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
+                    "play" -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+                    "pause" -> android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
+                    "next" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+                    "previous" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                    else -> android.view.KeyEvent.KEYCODE_MEDIA_STOP
+                }
+                audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+                audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+            }
+            else -> {
+                val code = when (key) {
+                    "up" -> android.view.KeyEvent.KEYCODE_DPAD_UP
+                    "down" -> android.view.KeyEvent.KEYCODE_DPAD_DOWN
+                    "left" -> android.view.KeyEvent.KEYCODE_DPAD_LEFT
+                    "right" -> android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                    "center", "ok", "select" -> android.view.KeyEvent.KEYCODE_DPAD_CENTER
+                    "back" -> android.view.KeyEvent.KEYCODE_BACK
+                    "menu" -> android.view.KeyEvent.KEYCODE_MENU
+                    else -> throw PlatformException.Failed("Unknown key: $key")
+                }
+                if (!_commands.tryEmit(UiCommand.Key(code))) throw PlatformException.Failed("busy")
+            }
+        }
+    }
+
+    override fun typeText(text: String) {
+        if (!_commands.tryEmit(UiCommand.TypeText(text))) throw PlatformException.Failed("busy")
+    }
+
+    override fun mediaCommand(`package`: String, command: String) {
+        val sender = mediaSender ?: throw PlatformException.Failed("Now playing needs notification access")
+        if (!sender(`package`, command)) throw PlatformException.Failed("That app is not playing anything")
+    }
+
+    override fun requestPermission(name: String) {
+        if (!_commands.tryEmit(UiCommand.RequestPermission(name))) throw PlatformException.Failed("busy")
+    }
+
+    override fun playStream(url: String, title: String) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(Uri.parse(url), "video/*")
+            putExtra(Intent.EXTRA_TITLE, title)
+            putExtra("title", title)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            context.startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            throw PlatformException.Failed("No video player can open this stream. Install VLC or another player.")
+        } catch (e: SecurityException) {
+            throw PlatformException.Failed(e.message ?: "not allowed")
+        }
+    }
+
+    override fun openAppInfo(`package`: String) {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$`package`"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        start(intent, null)
+    }
+
+    private fun start(intent: Intent, fallback: (() -> Unit)?) {
+        try {
+            context.startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            if (fallback != null) {
+                try {
+                    fallback()
+                    return
+                } catch (inner: Exception) {
+                    Log.w(TAG, "fallback launch failed", inner)
+                    throw PlatformException.Failed(inner.message ?: "launch failed")
+                }
+            }
+            throw PlatformException.Failed(e.message ?: "nothing can open this")
+        } catch (e: SecurityException) {
+            throw PlatformException.Failed(e.message ?: "not allowed")
+        }
+    }
+
+    private companion object {
+        const val TAG = "LoungePlatform"
+    }
+}

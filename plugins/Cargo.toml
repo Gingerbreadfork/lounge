@@ -1,0 +1,23 @@
+# First-party plugins and the SDK they are built with. Plugins compile to wasm32-unknown-unknown;
+# `lgp-tool` is a native binary that bundles, signs and test-runs them.
+[workspace]
+resolver = "3"
+members = ["sdk", "iptv", "jellyfin", "sample", "lgp-tool"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+lounge-plugin-api = { path = "../core/lounge-plugin-api" }
+lounge-plugin-sdk = { path = "sdk" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

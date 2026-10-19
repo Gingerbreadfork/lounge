@@ -1,0 +1,54 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    name: Rust core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - run: cargo test --workspace
+        working-directory: core
+
+  plugins:
+    name: Plugins and SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: plugins
+      - run: cargo test --workspace
+        working-directory: plugins
+      - run: cargo build --release --target wasm32-unknown-unknown -p lounge-plugin-iptv -p lounge-plugin-jellyfin -p lounge-plugin-sample
+        working-directory: plugins
+
+  companion:
+    name: Companion app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: companion/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: companion
+      - run: pnpm exec svelte-check --tsconfig ./tsconfig.json
+        working-directory: companion
+      - run: pnpm build
+        working-directory: companion

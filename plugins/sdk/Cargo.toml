@@ -1,0 +1,11 @@
+[package]
+name = "lounge-plugin-sdk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Write Lounge launcher plugins in Rust: implement Plugin, export it, build for wasm32"
+
+[dependencies]
+lounge-plugin-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true

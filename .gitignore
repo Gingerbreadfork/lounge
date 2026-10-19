@@ -1,0 +1,38 @@
+# Android / Gradle
+android/.gradle/
+android/**/build/
+android/local.properties
+android/.kotlin/
+android/app/src/main/jniLibs/
+android/core/bindings/src/main/java/uniffi/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Rust
+core/target/
+plugins/target/
+**/*.rs.bk
+
+# Companion (Svelte)
+companion/node_modules/
+companion/dist/
+companion/.svelte-kit/
+android/app/src/main/assets/companion/
+
+# Signed first-party plugin bundles, produced by tools/plugins/build.sh with your own key
+android/app/src/main/assets/plugins/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Local artefacts
+/out/
+/captures/
+
+# Private working notes, logs and measurements: never part of the public tree
+workdir/

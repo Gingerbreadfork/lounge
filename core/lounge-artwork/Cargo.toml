@@ -1,0 +1,16 @@
+[package]
+name = "lounge-artwork"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+image.workspace = true
+fast_image_resize.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+blake3.workspace = true
+lounge-graph.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
