@@ -415,6 +415,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-youtube"
+version = "0.1.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "quick-xml",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugins"
 version = "0.1.0"
 dependencies = [
