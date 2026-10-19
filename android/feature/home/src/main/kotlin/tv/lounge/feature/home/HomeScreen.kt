@@ -176,6 +176,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         platform.commands.collect { cmd ->
             when (cmd) {
                 is UiCommand.Toast -> say(cmd.message)
+                UiCommand.InstallUpdate -> Unit
                 UiCommand.OpenTvControls -> state.overlay = Overlay.TvControls
                 is UiCommand.RequestPermission, is UiCommand.Key, is UiCommand.TypeText -> Unit
                 is UiCommand.Search -> { state.pendingSearch = cmd.query; state.overlay = Overlay.Search }

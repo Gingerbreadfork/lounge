@@ -26,6 +26,8 @@ sealed interface UiCommand {
     /** Open search with this query. */
     data class Search(val query: String) : UiCommand
     data object GoHome : UiCommand
+    /** The update notice was pressed: install, confirm or ask for permission as the state needs. */
+    data object InstallUpdate : UiCommand
 }
 
 /**
@@ -95,6 +97,7 @@ class AndroidPlatform(private val context: Context) : Platform {
     override fun control(command: String) {
         when {
             command == "tv:open" -> _commands.tryEmit(UiCommand.OpenTvControls)
+            command == "update" -> _commands.tryEmit(UiCommand.InstallUpdate)
             command.startsWith("search:") -> _commands.tryEmit(UiCommand.Search(command.removePrefix("search:")))
             else -> throw PlatformException.Failed("Unknown control: $command")
         }

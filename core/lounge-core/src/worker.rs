@@ -30,6 +30,7 @@ pub(crate) enum Job {
     Usage(Vec<AppUsage>),
     Command(LayoutCommand),
     Permissions(Permissions),
+    UpdateNotice(Option<String>),
     UtcOffset(i32),
     Rebuild,
 }
@@ -99,6 +100,10 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                         }
                         Job::Permissions(p) => {
                             inner.state.lock().permissions = p;
+                            dirty = true;
+                        }
+                        Job::UpdateNotice(v) => {
+                            inner.state.lock().update = v;
                             dirty = true;
                         }
                         Job::UtcOffset(m) => {

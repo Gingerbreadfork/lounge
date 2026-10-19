@@ -88,6 +88,12 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
             rows.push(row);
         }
     }
+    if let Some(version) = &state.update {
+        let id = format!("notice:update:{version}");
+        if !graph.layout.dismissed_notices.contains(&id) {
+            rows.insert(0, notice_row(&id, "Lounge", &format!("Lounge {version} is ready"), "Press to install the update", "control:update"));
+        }
+    }
     HomeSnapshot {
         revision: state.revision,
         generated_at_ms: now,

@@ -568,6 +568,8 @@ pub(crate) struct State {
     pub art_threads: usize,
     pub permissions: Permissions,
     pub now_playing: Option<NowPlaying>,
+    /// A downloaded update waiting for the person; the version it would install.
+    pub update: Option<String>,
     /// Set once the worker has loaded the stored items into the graph.
     pub loaded: bool,
     /// Installed plugins with their manifests, for rows and refresh scheduling.
@@ -620,6 +622,7 @@ impl Core {
                 art_dir,
                 art_threads,
                 permissions: Permissions::default(),
+                update: None,
                 now_playing: None,
                 loaded: false,
                 plugins: plugin_entries,
@@ -692,6 +695,12 @@ impl Core {
     pub fn set_permissions(&self, permissions: Permissions) {
         self.count();
         self.enqueue(worker::Job::Permissions(permissions));
+    }
+
+    /// A downloaded update that waits for the person to install it; `None` takes the notice down.
+    pub fn set_update_notice(&self, version: Option<String>) {
+        self.count();
+        self.enqueue(worker::Job::UpdateNotice(version));
     }
 
     /// The guide grid: every tuner channel with its schedule for `hours` from `from_ms`.

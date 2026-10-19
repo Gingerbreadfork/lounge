@@ -66,6 +66,8 @@ class CoreClient(val core: Core) : SnapshotListener {
 
     fun setPermissions(permissions: Permissions) = core.setPermissions(permissions)
 
+    fun setUpdateNotice(version: String?) = core.setUpdateNotice(version)
+
     fun availableChannels(): List<ChannelInfo> = core.availableChannels()
 
     fun diagnostics(): Diagnostics = core.diagnostics()
