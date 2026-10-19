@@ -267,3 +267,53 @@ mod tests {
         assert_eq!(bytes, br#"{"ok":1}"#);
     }
 }
+
+/// "2026-10-17T02:09:23+00:00", "2026-10-18T22:11:00.0000000Z" or a date with a space → epoch
+/// milliseconds. Fractions are kept to the millisecond; a missing zone means UTC.
+pub fn parse_iso8601(s: &str) -> Option<i64> {
+    let s = s.trim();
+    if s.len() < 19 {
+        return None;
+    }
+    let (date, rest) = s.split_at(10);
+    let rest = rest.strip_prefix(['T', 't', ' '])?;
+    let year: i64 = date.get(0..4)?.parse().ok()?;
+    let month: u32 = date.get(5..7)?.parse().ok()?;
+    let day: u32 = date.get(8..10)?.parse().ok()?;
+    let hour: u32 = rest.get(0..2)?.parse().ok()?;
+    let minute: u32 = rest.get(3..5)?.parse().ok()?;
+    let second: u32 = rest.get(6..8)?.parse().ok()?;
+    let mut tail = rest.get(8..).unwrap_or("");
+    let mut millis: i64 = 0;
+    if let Some(frac) = tail.strip_prefix('.') {
+        let digits: String = frac.chars().take_while(|c| c.is_ascii_digit()).collect();
+        millis = format!("{digits:0<3}").get(..3).and_then(|d| d.parse().ok()).unwrap_or(0);
+        tail = &frac[digits.len()..];
+    }
+    let offset_minutes = match tail.chars().next() {
+        None | Some('Z') | Some('z') => 0,
+        Some(sign @ ('+' | '-')) => {
+            let hh: i32 = tail.get(1..3)?.parse().ok()?;
+            let mm: i32 = tail.get(4..6).or_else(|| tail.get(3..5)).and_then(|m| m.parse().ok()).unwrap_or(0);
+            let v = hh * 60 + mm;
+            if sign == '-' { -v } else { v }
+        }
+        _ => return None,
+    };
+    Some(epoch_ms(year, month, day, hour, minute, second, offset_minutes) + millis)
+}
+
+#[cfg(test)]
+mod iso_tests {
+    use super::parse_iso8601;
+
+    #[test]
+    fn every_common_shape() {
+        assert_eq!(parse_iso8601("2026-10-17T02:09:23+00:00"), Some(1792202963000));
+        assert_eq!(parse_iso8601("2026-10-17T02:09:23.250Z"), Some(1792202963250));
+        assert_eq!(parse_iso8601("2026-10-17T12:09:23+10:00"), Some(1792202963000));
+        assert_eq!(parse_iso8601("2026-10-17 02:09:23"), Some(1792202963000));
+        assert_eq!(parse_iso8601("2026-10-18T22:11:00.0000000Z"), Some(1792361460000));
+        assert_eq!(parse_iso8601("yesterday"), None);
+    }
+}
