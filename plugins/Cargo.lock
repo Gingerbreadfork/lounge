@@ -313,7 +313,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "lgp-tool"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -354,7 +354,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lounge-plugin-api"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -362,7 +362,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-archive"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "serde",
@@ -371,7 +371,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-channels"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "serde",
@@ -380,7 +380,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-emby"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "serde",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-hdhomerun"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "serde",
@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-immich"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "serde",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-iptv"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "flate2",
  "lounge-plugin-sdk",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-jellyfin"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "serde",
@@ -427,7 +427,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-nextpvr"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "md-5",
@@ -437,7 +437,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-plex"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "serde",
@@ -446,14 +446,14 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-sample"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
 ]
 
 [[package]]
 name = "lounge-plugin-sdk"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-api",
  "serde",
@@ -462,7 +462,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-tvheadend"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "serde",
@@ -471,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugin-youtube"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
  "quick-xml",
@@ -480,7 +480,7 @@ dependencies = [
 
 [[package]]
 name = "lounge-plugins"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ed25519-dalek",
  "hex",
