@@ -656,23 +656,34 @@ private fun Playbill(
                 }
             }
         }
+        // Every slot has a fixed height, so a one-line title or a missing line moves nothing else.
+        val type = LoungeTheme.typography
+        val metaLine = with(LocalDensity.current) { type.meta.lineHeight.toDp() }
+        val titleBlock = with(LocalDensity.current) { type.displayXl.lineHeight.toDp() } * 2
+        val captionLine = with(LocalDensity.current) { type.caption.lineHeight.toDp() }
         Column(Modifier.fillMaxSize().padding(bottom = 6.dp), verticalArrangement = Arrangement.Bottom) {
             Swap(spotlight.id, 0, keepSlots = true) {
-                Text(spotlight.category, style = LoungeTheme.typography.meta, color = colors.dust)
+                Box(Modifier.height(metaLine)) {
+                    Text(spotlight.category, style = type.meta, color = colors.dust, maxLines = 1)
+                }
             }
             Spacer(Modifier.height(16.dp))
             Swap(spotlight.id, 0, keepSlots = true) {
-                Text(spotlight.title, style = LoungeTheme.typography.displayXl, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Box(Modifier.height(titleBlock), contentAlignment = Alignment.BottomStart) {
+                    Text(spotlight.title, style = type.displayXl, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
             Spacer(Modifier.height(16.dp))
             Swap(spotlight.id, 40, keepSlots = true) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    spotlight.lines.forEachIndexed { i, line ->
-                        Text(line, style = LoungeTheme.typography.meta, color = if (i == 0) colors.limelight else colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Column {
+                    Column(Modifier.height(metaLine * 2 + 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        spotlight.lines.take(2).forEachIndexed { i, line ->
+                            Text(line, style = type.meta, color = if (i == 0) colors.limelight else colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
-                    spotlight.progress?.let {
-                        Spacer(Modifier.height(12.dp))
-                        ProgressBar(it, Modifier.width(420.dp), thickness = 6.dp)
+                    Spacer(Modifier.height(12.dp))
+                    Box(Modifier.height(6.dp)) {
+                        spotlight.progress?.let { ProgressBar(it, Modifier.width(420.dp), thickness = 6.dp) }
                     }
                 }
             }
@@ -685,10 +696,12 @@ private fun Playbill(
                     spotlight.secondary?.let { LoungeButton(it.label, onClick = { onSecondary(spotlight) }, kind = ButtonKind.Secondary, enabled = interactive && live) }
                 }
             }
-            spotlight.explanation?.let { why ->
-                Spacer(Modifier.height(16.dp))
-                Swap(spotlight.id, 80, keepSlots = true) {
-                    Text(why, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(16.dp))
+            Swap(spotlight.id, 80, keepSlots = true) {
+                Box(Modifier.height(captionLine)) {
+                    spotlight.explanation?.let { why ->
+                        Text(why, style = type.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }
