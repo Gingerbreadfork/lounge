@@ -219,9 +219,10 @@ fun Modifier.lightGlow(color: Color, intensity: () -> Float, radius: Dp = Dimens
         if (i <= 0.001f) return@drawBehind
         val blur = radius.toPx()
         val mask = GlowMasks.get(size.width.roundToInt(), size.height.roundToInt(), cornerRadius.toPx(), blur)
+        val pad = GlowMasks.pad(blur).toFloat()
         drawImage(
             image = mask,
-            topLeft = Offset(-blur, -blur),
+            topLeft = Offset(-pad, -pad),
             alpha = i,
             colorFilter = ColorFilter.tint(color, BlendMode.SrcIn),
         )
@@ -262,10 +263,13 @@ object GlowMasks {
         }
     }
 
+    /** The margin around the shape: twice the blur, where the light has faded to nothing. */
+    fun pad(blur: Float): Int = (blur * 2f).roundToInt()
+
     fun get(width: Int, height: Int, corner: Float, blur: Float): ImageBitmap {
         val key = "$width x $height r$corner b$blur"
         cache.get(key)?.let { return it }
-        val pad = blur.roundToInt()
+        val pad = pad(blur)
         val bmp = android.graphics.Bitmap.createBitmap(
             (width + pad * 2).coerceAtLeast(1),
             (height + pad * 2).coerceAtLeast(1),
@@ -275,11 +279,7 @@ object GlowMasks {
             this.color = android.graphics.Color.WHITE
             maskFilter = android.graphics.BlurMaskFilter(blur, android.graphics.BlurMaskFilter.Blur.NORMAL)
         }
-        android.graphics.Canvas(bmp).drawRoundRect(
-            pad - blur * 0.15f, pad - blur * 0.15f,
-            pad + width + blur * 0.15f, pad + height + blur * 0.15f,
-            corner, corner, paint,
-        )
+        android.graphics.Canvas(bmp).drawRoundRect(pad.toFloat(), pad.toFloat(), (pad + width).toFloat(), (pad + height).toFloat(), corner, corner, paint)
         val image = bmp.asImageBitmap()
         cache.put(key, image)
         return image

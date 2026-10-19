@@ -74,7 +74,7 @@ object Dimens {
     val collapsedStageHeight: Dp = 200.dp
     val stripTileWidth: Dp = 232.dp
     val stripTileHeight: Dp = 130.dp
-    val glowRadius: Dp = 48.dp
+    val glowRadius: Dp = 32.dp
     val spillRadius: Dp = 1100.dp
 }
 
