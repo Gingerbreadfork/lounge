@@ -4,7 +4,7 @@
 //! lgp-tool keygen <key-file>                       write a new Ed25519 signing key (hex seed)
 //! lgp-tool bundle <plugin.wasm> <key-file> <out.lgp> [--manifest manifest.json]
 //! lgp-tool inspect <bundle.lgp>                    print the manifest and verify the signature
-//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--search query]
+//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--search query] [--resolve action]
 //! ```
 //! `run` executes `refresh` (or `search`) with a host that keeps key-values in memory, reads
 //! settings from the flags, and fetches live unless `--fixtures` points at a directory of
@@ -35,7 +35,7 @@ fn main() {
     }
 }
 
-const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--search q]";
+const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--search q] [--resolve action]";
 
 fn keygen(args: &[String]) -> Result<(), String> {
     let out = args.first().ok_or(USAGE)?;
@@ -118,6 +118,14 @@ fn run(args: &[String]) -> Result<(), String> {
     };
     let plugin = host.load(&manifest.id.clone(), manifest, &wasm).map_err(|e| e.to_string())?;
     let started = std::time::Instant::now();
+    if let Some(action) = flag(args, "--resolve") {
+        let resolved = host.resolve(&plugin, &action).map_err(|e| e.to_string())?;
+        for line in services.logs.lock().iter() {
+            println!("  log: {line}");
+        }
+        println!("resolved in {:.0} ms: {resolved:?}", started.elapsed().as_secs_f64() * 1000.0);
+        return Ok(());
+    }
     let items = match flag(args, "--search") {
         Some(q) => host.search(&plugin, &q, 20),
         None => host.refresh(
