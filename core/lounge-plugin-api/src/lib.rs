@@ -130,6 +130,7 @@ pub enum Kind {
     Epg,
     Wallpaper,
     Search,
+    Screensaver,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -252,6 +253,9 @@ pub struct Item {
     pub is_new: bool,
     #[serde(default)]
     pub weight: i32,
+    /// The program a `screensaver` item draws.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shader: Option<Shader>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -263,6 +267,43 @@ pub enum ItemKind {
     Channel,
     Schedule,
     Wallpaper,
+    Screensaver,
+}
+
+/// An abstract screensaver: an AGSL program the TV runs on its GPU, and values for the
+/// uniforms it declares beyond the ones Lounge provides (PLUGINS.md, Screensavers).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Shader {
+    pub source: String,
+    #[serde(default)]
+    pub uniforms: BTreeMap<String, Uniform>,
+}
+
+/// A uniform's value: a number, up to sixteen numbers, or a colour such as "#FFA86B".
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Uniform {
+    Number(f32),
+    Numbers(Vec<f32>),
+    Color(String),
+}
+
+impl Shader {
+    pub fn new(source: impl Into<String>) -> Shader {
+        Shader { source: source.into(), uniforms: BTreeMap::new() }
+    }
+    pub fn float(mut self, name: &str, value: f32) -> Shader {
+        self.uniforms.insert(name.to_string(), Uniform::Number(value));
+        self
+    }
+    pub fn floats(mut self, name: &str, values: &[f32]) -> Shader {
+        self.uniforms.insert(name.to_string(), Uniform::Numbers(values.to_vec()));
+        self
+    }
+    pub fn color(mut self, name: &str, hex: &str) -> Shader {
+        self.uniforms.insert(name.to_string(), Uniform::Color(hex.to_string()));
+        self
+    }
 }
 
 /// What selecting an item does. The first field that is set wins, in this order: `play`
@@ -438,6 +479,25 @@ mod tests {
         assert!(m.validate().is_ok());
         m.id = "Bad Id".into();
         assert!(m.validate().is_err());
+    }
+}
+
+#[cfg(test)]
+mod shader_tests {
+    use super::*;
+
+    #[test]
+    fn uniforms_take_numbers_lists_and_colours() {
+        let item: Item = serde_json::from_str(r##"{"id": "smoke", "kind": "screensaver", "title": "Smoke",
+            "shader": {"source": "half4 main(float2 p) { return half4(1); }", "uniforms": {"speed": 0.5, "drift": [0.1, 0.2], "smoke": "#C8B8A0"}}}"##).unwrap();
+        assert_eq!(item.kind, ItemKind::Screensaver);
+        let shader = item.shader.unwrap();
+        assert_eq!(shader.uniforms["speed"], Uniform::Number(0.5));
+        assert_eq!(shader.uniforms["drift"], Uniform::Numbers(vec![0.1, 0.2]));
+        assert_eq!(shader.uniforms["smoke"], Uniform::Color("#C8B8A0".into()));
+        let built = Shader::new("x").float("speed", 0.5).floats("drift", &[0.1, 0.2]).color("smoke", "#C8B8A0");
+        assert_eq!(serde_json::to_value(&built).unwrap()["uniforms"]["drift"], serde_json::json!([0.1f32, 0.2f32]));
+        assert!(serde_json::to_string(&Item::default()).unwrap().find("shader").is_none());
     }
 }
 

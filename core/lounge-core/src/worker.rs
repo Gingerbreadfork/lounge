@@ -513,6 +513,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             PluginItemKind::Channel => ItemKind::Channel,
             PluginItemKind::Wallpaper => ItemKind::Wallpaper,
             PluginItemKind::Program | PluginItemKind::Schedule => ItemKind::Program,
+            PluginItemKind::Screensaver => continue,
         };
         let mut it = Item::content(&format!("plugin:{plugin}:{}", p.id), kind, &source, &p.title, deep_link);
         it.owner = a.fallback_launch.clone().or_else(|| a.launch.clone());
@@ -556,7 +557,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
                 it.airing_start_ms = p.start_ms;
                 it.airing_end_ms = p.end_ms;
             }
-            PluginItemKind::Program | PluginItemKind::Wallpaper => {}
+            PluginItemKind::Program | PluginItemKind::Wallpaper | PluginItemKind::Screensaver => {}
         }
         items.push(it);
     }

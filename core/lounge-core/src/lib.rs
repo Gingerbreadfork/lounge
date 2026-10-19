@@ -6,6 +6,7 @@
 mod companion;
 mod engine;
 mod plugins;
+mod screensavers;
 mod worker;
 
 use lounge_graph::Graph;
@@ -407,6 +408,26 @@ pub struct HomeSnapshot {
     pub wallpapers: Vec<Wallpaper>,
 }
 
+/// An abstract screensaver a plugin publishes, checked and ready for the renderer.
+#[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
+pub struct ShaderScreensaver {
+    /// "plugin:<plugin id>:<item id>".
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub source: String,
+    pub plugin_name: String,
+    pub uniforms: Vec<ShaderUniform>,
+}
+
+/// A value for one of a program's own uniforms: numbers, or a colour as ARGB.
+#[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
+pub struct ShaderUniform {
+    pub name: String,
+    pub floats: Vec<f32>,
+    pub color_argb: Option<u32>,
+}
+
 /// One screensaver picture from a plugin: the prepared file, what it shows and who sent it.
 #[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -795,6 +816,13 @@ impl Core {
     }
 
     // ----- plugins -----
+
+    /// Abstract screensavers from enabled plugins, in install order.
+    pub fn screensavers(&self) -> Vec<ShaderScreensaver> {
+        self.count();
+        let state = self.inner.state.lock();
+        state.plugins.iter().filter(|p| p.enabled).flat_map(|p| screensavers::load(&state.store, &p.id)).collect()
+    }
 
     /// Installed plugins, with settings and status, in install order.
     pub fn plugins(&self) -> Vec<PluginInfo> {

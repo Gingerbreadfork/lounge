@@ -154,6 +154,10 @@ fn run(args: &[String]) -> Result<(), String> {
             it.progress.map(|p| format!(" ({:.0}%)", p * 100.0)).unwrap_or_default(),
             it.channel_number.as_ref().map(|n| format!(" ch {n}")).unwrap_or_default(),
         );
+        if let Some(shader) = &it.shader {
+            let names: Vec<&str> = shader.uniforms.keys().map(String::as_str).collect();
+            println!("      shader: {} bytes, uniforms set: {}", shader.source.len(), if names.is_empty() { "none".into() } else { names.join(", ") });
+        }
     }
     if items.len() > 40 {
         println!("  … and {} more", items.len() - 40);

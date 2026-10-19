@@ -2,8 +2,8 @@
 //! settings in the store, and a dedicated thread runs refreshes on a schedule or on demand and
 //! hands the items to the worker.
 
-use crate::{now_ms, worker, Inner, PluginInfo, PluginSettingInfo};
-use lounge_plugin_api::{valid_plugin_id, Action, HttpRequest, HttpResponse, Item as ApiItem, Manifest, RefreshContext};
+use crate::{now_ms, screensavers, worker, Inner, PluginInfo, PluginSettingInfo};
+use lounge_plugin_api::{valid_plugin_id, Action, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
 use lounge_plugins::host::{Host, Limits, LoadedPlugin, Services};
 use lounge_plugins::http::Fetcher;
@@ -367,7 +367,17 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
         Ok(items) => {
             tracing::info!("plugin {id}: {} items in {} ms", items.len(), started.elapsed().as_millis());
             push_log(&inner.plugins.logs, id, 1, &format!("refreshed: {} items in {} ms", items.len(), started.elapsed().as_millis()));
-            let _ = inner.state.lock().store.plugin_set_refresh(id, now_ms(), None);
+            // Screensavers never become tiles; they are kept apart for the screensaver.
+            let (scenes, problems) = screensavers::from_items(id, &entry.manifest.name, items.iter().map(|r| &r.item));
+            for p in &problems {
+                push_log(&inner.plugins.logs, id, 2, p);
+            }
+            let items: Vec<ReadyItem> = items.into_iter().filter(|r| r.item.kind != ApiItemKind::Screensaver).collect();
+            {
+                let state = inner.state.lock();
+                let _ = state.store.plugin_set_refresh(id, now_ms(), None);
+                screensavers::save(&state.store, id, &scenes);
+            }
             inner.enqueue_job(worker::Job::PluginItems { plugin: id.to_string(), items });
         }
         Err(e) => {
@@ -424,6 +434,7 @@ impl Inner {
         {
             let mut state = self.state.lock();
             let _ = state.store.plugin_remove(id);
+            screensavers::clear(&state.store, id);
             state.graph.replace_source(&format!("plugin:{id}"), Vec::new());
             let rows = state.store.plugins().unwrap_or_default();
             state.plugins = entries_from_rows(&rows);
@@ -441,6 +452,7 @@ impl Inner {
             let _ = state.store.plugin_set_enabled(id, enabled);
             if !enabled {
                 let _ = state.store.replace_items(&format!("plugin:{id}"), &[], now_ms());
+                screensavers::clear(&state.store, id);
                 state.graph.replace_source(&format!("plugin:{id}"), Vec::new());
             }
             let rows = state.store.plugins().unwrap_or_default();

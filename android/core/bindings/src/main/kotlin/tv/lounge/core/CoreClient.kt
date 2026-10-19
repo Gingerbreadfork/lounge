@@ -42,6 +42,8 @@ class CoreClient(val core: Core) : SnapshotListener {
 
     fun plugins(): List<PluginInfo> = core.plugins()
 
+    fun screensavers(): List<ShaderScreensaver> = runCatching { core.screensavers() }.getOrDefault(emptyList())
+
     fun installPlugin(path: String, builtIn: Boolean): Result<PluginInfo> = runCatching { core.installPlugin(path, builtIn) }
 
     fun removePlugin(id: String) = core.removePlugin(id)
