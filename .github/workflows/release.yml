@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: Release APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: companion/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: companion
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            core
+            plugins
+      - run: cargo install cargo-ndk --version 4.1.2 --locked
+      - name: Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      # The app's signing key and the plugin publisher key come from repository secrets. Without
+      # them the APK is signed with the debug key and the bundled plugins with a throwaway key.
+      - name: Keys
+        env:
+          KEYSTORE_BASE64: ${{ secrets.LOUNGE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.LOUNGE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LOUNGE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.LOUNGE_KEY_PASSWORD }}
+          PUBLISHER_KEY: ${{ secrets.LOUNGE_PUBLISHER_KEY }}
+        run: |
+          mkdir -p "$HOME/.gradle"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            {
+              echo "lounge.storeFile=$RUNNER_TEMP/release.jks"
+              echo "lounge.storePassword=$KEYSTORE_PASSWORD"
+              echo "lounge.keyAlias=$KEY_ALIAS"
+              echo "lounge.keyPassword=$KEY_PASSWORD"
+            } >> "$HOME/.gradle/gradle.properties"
+            echo "signed with the release key"
+          else
+            echo "::warning::LOUNGE_KEYSTORE_BASE64 is not set; the APK is signed with the debug key"
+          fi
+          if [ -n "$PUBLISHER_KEY" ]; then
+            printf '%s' "$PUBLISHER_KEY" > "$RUNNER_TEMP/publisher.key"
+          else
+            echo "::warning::LOUNGE_PUBLISHER_KEY is not set; the bundled plugins are signed with a throwaway key"
+          fi
+      - run: tools/plugins/build.sh
+        env:
+          LOUNGE_PUBLISHER_KEY: ${{ runner.temp }}/publisher.key
+      - run: ./gradlew :app:assembleRelease
+        working-directory: android
+      - name: Package
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          cp android/app/build/outputs/apk/release/app-release.apk "Lounge-$VERSION.apk"
+          sha256sum "Lounge-$VERSION.apk" > SHA256SUMS
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - run: gh release create "$GITHUB_REF_NAME" "Lounge-$VERSION.apk" SHA256SUMS --title "Lounge $VERSION" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
