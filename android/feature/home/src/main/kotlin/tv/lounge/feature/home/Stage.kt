@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
@@ -246,6 +247,9 @@ private fun StageFrame(
     ) {
         Box(
             Modifier
+                // Taller than the frame, so it must be pinned to the top: an oversized child is
+                // otherwise centred and the frame loses the picture's top.
+                .wrapContentSize(Alignment.TopStart, unbounded = true)
                 .requiredSize(BandWidth, BandWidth * 9 / 16)
                 .graphicsLayer {
                     val p = progress()
