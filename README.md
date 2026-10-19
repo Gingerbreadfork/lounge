@@ -129,12 +129,14 @@ the spill off for a TV that needs it. The whole system is written down in
 
 ## Installing on a TV
 
-There are no packaged releases yet, so build the APK (below) and install it over ADB. Lounge
-runs on Android TV and Google TV from Android 9, on arm64 and 32-bit ARM.
+Grab `Lounge-<version>.apk` from the [Releases](../../releases) page, with a `SHA256SUMS` file
+beside it, or build it yourself (below). Lounge runs on Android TV and Google TV from Android 9,
+on arm64 and 32-bit ARM. Install it over ADB from a computer on the same network, or copy the
+file to the TV and open it with a file manager.
 
 ```sh
 adb connect <tv>:5555
-adb install -r android/app/build/outputs/apk/release/app-release.apk
+adb install -r Lounge-<version>.apk
 adb shell am start -n tv.lounge.launcher/.MainActivity
 ```
 
