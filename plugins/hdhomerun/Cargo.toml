@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-hdhomerun"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "HDHomeRun: over-the-air channels with a guide from a tuner on the network, played on the TV"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
