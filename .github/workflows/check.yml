@@ -10,6 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The companion crate embeds companion/dist at compile time, so the web app is built first.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: companion/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile && pnpm build
+        working-directory: companion
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
