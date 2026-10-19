@@ -47,7 +47,7 @@
 
 - **WebAssembly in a sandbox.** A plugin runs inside the core with a fuel budget, a memory cap, no file system, no sockets, and reaches only the hosts its manifest names.
 - **Signed bundles.** Ed25519-signed `.lgp` files; the TV pins the publisher's key on first install and refuses an update from anyone else.
-- **Jellyfin and IPTV built in**, a sample library to try things with, an SDK, and a command-line tool that bundles, signs and runs a plugin on your computer against fixtures.
+- **Eleven plugins built in**: Jellyfin, Emby, Plex, IPTV, HDHomeRun, Tvheadend, Channels DVR, NextPVR, YouTube channels, the Internet Archive and Immich photos. Plus a sample library to try things with, an SDK, and a command-line tool that bundles, signs and runs a plugin on your computer against fixtures.
 - **Any language** that targets core WebAssembly: the interface is eight imports and six exports with JSON in between.
 
 **Setting up and staying out of the way**
@@ -137,13 +137,27 @@ the only things it can do are fetch from the hosts its manifest names, keep a sm
 store, read its settings, and log. What it publishes becomes tiles, Stage spotlights, channels in
 the guide, or rows of its own. Its settings become fields on the TV and on the phone.
 
-Two ship in the APK, written against the same SDK as anyone else's: **Jellyfin** puts your
-server's resume points into Continue watching and its newest additions into a row, and answers
-search; **IPTV** turns an M3U playlist into channels in Live now and the guide, with programme
-information from an XMLTV feed. A third, **Sample library**, lives in the repository but not
-the APK: eighteen public-domain films with their posters, a few left part-watched, so you can
-see Lounge with something on it. The pictures in this file use it. [PLUGINS.md](PLUGINS.md)
-takes you from nothing to a plugin on your TV and covers the whole interface.
+Eleven ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
+use from the phone or the TV's settings; each asks only for what it needs.
+
+- **Jellyfin**, **Emby** and **Plex** put your server's resume points into Continue watching and
+  its newest additions into a row, and answer search. Items open in the server's own TV app.
+- **IPTV** turns an M3U playlist into channels in Live now and the guide, with programme
+  information from an XMLTV feed.
+- **HDHomeRun** finds the tuner on your network and puts its channels and guide on the home
+  screen; channels play in the TV's own player.
+- **Tvheadend**, **Channels DVR** and **NextPVR** do the same for a DVR, and add your recordings
+  as a row, with half-watched ones in Continue watching.
+- **YouTube channels** follows channels and playlists through their public feeds, no account
+  needed, and opens videos in the YouTube app.
+- **Internet Archive** fills rows with free feature films, cartoons and television from
+  archive.org, played on the TV, and searches its films.
+- **Immich photos** turns an album shared from your Immich server into the screensaver.
+
+A twelfth, **Sample library**, lives in the repository but not the APK: eighteen public-domain
+films with their posters, a few left part-watched, so you can see Lounge with something on it.
+The pictures in this file use it. [PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin
+on your TV and covers the whole interface.
 
 ## The look
 
@@ -240,7 +254,7 @@ the `wasm32-unknown-unknown` target, and Node 24 with pnpm 10.
 rustup target add wasm32-unknown-unknown aarch64-linux-android armv7-linux-androideabi
 cargo install cargo-ndk
 (cd companion && pnpm install)
-tools/plugins/build.sh                      # bundles and signs the two plugins into app assets
+tools/plugins/build.sh                      # bundles and signs the built-in plugins into app assets
 cd android && ./gradlew :app:assembleRelease
 ```
 
@@ -277,7 +291,7 @@ it.
 
 ```sh
 cd core && cargo test --workspace            # the core: graph, ranking, colour, store, artwork, plugins
-cd plugins && cargo test --workspace         # the SDK and the two plugins
+cd plugins && cargo test --workspace         # the SDK and the built-in plugins
 cd android && ./gradlew :power:testDebugUnitTest
 cd companion && pnpm exec svelte-check
 cd companion && LOUNGE_TV=http://<tv>:8787 pnpm dev    # the phone app against a real TV
@@ -292,7 +306,7 @@ build has been compiled the way a real install ends up, which the scripts do for
 ```
 android/     Gradle project: app, core/{bindings,design,platform}, collector/*, feature/home, power
 core/        Rust workspace: lounge-core (UniFFI), -graph, -store, -artwork, -plugins, -companion
-plugins/     Rust workspace: the plugin SDK, the IPTV and Jellyfin plugins, lgp-tool
+plugins/     Rust workspace: the plugin SDK, the built-in plugins, lgp-tool
 companion/   Svelte 5 phone app, embedded into the core at build time
 design/      fonts, the mark's sources and renderer, the sound renderer
 docs/        the pictures in this file

@@ -8,15 +8,32 @@ settings, and log. Everything it publishes is plain data; the launcher fetches t
 draws the tiles and lights the room.
 
 This guide takes you from nothing to a plugin on your TV in about twenty minutes, then covers
-every part of the interface. The three plugins in `plugins/` are complete examples:
+every part of the interface. The plugins in `plugins/` are complete examples, each showing a
+different corner of the interface:
 
 - `plugins/sample`: eighteen public-domain films with posters and stills, some part-watched. No
   settings, no network beyond the pictures. The best one to copy from.
 - `plugins/iptv`: an M3U playlist becomes channels, an XMLTV feed fills the guide. Settings,
   gzip, parsing a large document.
-- `plugins/jellyfin`: signs in to a server with a password, publishes resume points and new
-  arrivals, answers search. Secrets, a cached token in the key-value store, deep links into
-  another app.
+- `plugins/jellyfin` and `plugins/emby`: sign in to a server with a password, publish resume
+  points and new arrivals, answer search. Secrets, a cached token in the key-value store, deep
+  links into another app.
+- `plugins/plex`: the same with a token instead of a password, and pictures through the
+  server's resizer.
+- `plugins/youtube`: a list setting parsed into sources, an Atom feed read with `quick-xml`,
+  partial failure reported without giving up.
+- `plugins/archive`: rows from a search API, and `resolve`, which looks up the file to play only
+  when something is selected.
+- `plugins/immich`: `Kind::Wallpaper` items that feed the screensaver instead of a row.
+- `plugins/hdhomerun`: `Kind::Epg`, channels that play in the TV's player, a guide window from
+  `RefreshContext`, and finding a device through a discovery service.
+- `plugins/tvheadend`: basic auth for the API and a token on the addresses the TV fetches
+  itself, paging through a large guide, recordings as a row.
+- `plugins/channels`: a DVR's recordings split between Continue watching and a row by their
+  playback position.
+- `plugins/nextpvr`: a session signed in with a digest, a guide gathered across refreshes with
+  the key-value store so one refresh never exceeds the fetch budget, and `resolve` so play
+  addresses always carry a live session.
 
 ## Quick start
 
@@ -183,7 +200,8 @@ the installer refuses a bundle where the two disagree. The SDK writes both from
 **Where an item goes.** A `resume` item joins Continue watching and is a candidate for the
 Stage. A `channel` joins Live now and the guide, and `schedule` items fill in what is on it. A
 `program` goes into the row its `row` names; without one it goes nowhere. A `wallpaper` is a
-picture for the screensaver.
+picture for the screensaver: give it the picture as `thumbnail` (it is prepared at 1920×1080),
+a `title` and, if you like, a `subtitle`; it is the one kind that needs no `action`.
 
 **What a tile shows.** `title` is the first line; `subtitle` the second, in the launcher's own
 voice (commas between facts, never dots: "S2 E4, Netflix"). `season` and `episode` are shown
@@ -236,11 +254,13 @@ milliseconds without a calendar crate.
 ```sh
 lgp-tool run mine.wasm --set playlist_url=https://example.com/list.m3u --secret password=hunter2
 lgp-tool run mine.lgp --search "bear"
+lgp-tool run mine.lgp --resolve "play:his_girl_friday"
 lgp-tool run mine.wasm --fixtures ./fixtures
 ```
 
 `--set` and `--secret` stand in for the fields the user would fill. `--search` runs `search`
-instead of `refresh`. `--fixtures dir` answers every `fetch` from a file named
+instead of `refresh`, and `--resolve action` runs `resolve` for one action and prints what came
+back. `--fixtures dir` answers every `fetch` from a file named
 `<sha256 of the URL>.body` in that directory, so a test runs the same way every time and
 offline. Unit-test your parsing in ordinary Rust: the SDK's host functions are absent off wasm,
 so keep parsing in functions that take strings, as `plugins/iptv` does with `parse_m3u` and
