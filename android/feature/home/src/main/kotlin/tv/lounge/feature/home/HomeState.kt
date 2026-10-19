@@ -28,6 +28,7 @@ sealed interface Overlay {
     data object Plugins : Overlay
     data class PluginDetail(val id: String) : Overlay
     data object Companion : Overlay
+    data object Updates : Overlay
     data object PowerSetup : Overlay
     data object TvControls : Overlay
     data object Ambient : Overlay

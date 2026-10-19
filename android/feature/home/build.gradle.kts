@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":core:design"))
     implementation(project(":core:platform"))
     implementation(project(":power"))
+    implementation(project(":update"))
     val bom = platform(libs.compose.bom)
     implementation(bom)
     implementation(libs.compose.ui)

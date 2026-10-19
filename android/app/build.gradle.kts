@@ -80,6 +80,7 @@ dependencies {
     implementation(project(":collector:inputs"))
     implementation(project(":feature:home"))
     implementation(project(":power"))
+    implementation(project(":update"))
 
     val bom = platform(libs.compose.bom)
     implementation(bom)

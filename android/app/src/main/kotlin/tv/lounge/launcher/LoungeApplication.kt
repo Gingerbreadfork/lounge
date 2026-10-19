@@ -24,6 +24,11 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
         private set
     private val coreReady = java.util.concurrent.CountDownLatch(1)
     val power: tv.lounge.power.PowerSetup by lazy { tv.lounge.power.PowerSetup(this) }
+    private val appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+    val updates: tv.lounge.update.UpdateManager by lazy {
+        val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "0.0.0"
+        tv.lounge.update.UpdateManager(this, power, version)
+    }
     @Volatile private var core: CoreClient? = null
     @Volatile private var coreError: Throwable? = null
 
@@ -49,6 +54,7 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
             GlowMasks.warmUp(resources.displayMetrics.widthPixels / 1920f)
             android.util.Log.i("Lounge", "startup: fonts and masks warm in ${android.os.SystemClock.uptimeMillis() - t0} ms")
         }, "lounge-warmup").start()
+        updates.start(appScope)
         android.util.Log.i("Lounge", "startup: application onCreate took ${android.os.SystemClock.uptimeMillis() - startedAt} ms")
     }
 

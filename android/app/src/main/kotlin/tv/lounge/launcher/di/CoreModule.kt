@@ -42,6 +42,10 @@ object CoreModule {
 
     @Provides
     @Singleton
+    fun updates(@ApplicationContext context: Context): tv.lounge.update.UpdateManager = (context as LoungeApplication).updates
+
+    @Provides
+    @Singleton
     fun tvProvider(@ApplicationContext context: Context): TvProviderCollector = TvProviderCollector(context)
 
     @Provides

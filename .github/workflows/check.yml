@@ -101,7 +101,7 @@ jobs:
       - run: tools/plugins/build.sh
         env:
           LOUNGE_PUBLISHER_KEY: ${{ runner.temp }}/publisher.key
-      - run: ./gradlew :power:testDebugUnitTest :app:assembleRelease
+      - run: ./gradlew :power:testDebugUnitTest :update:testDebugUnitTest :app:assembleRelease
         working-directory: android
       - uses: actions/upload-artifact@v4
         with:

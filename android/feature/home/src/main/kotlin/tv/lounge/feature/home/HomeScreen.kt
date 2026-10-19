@@ -80,7 +80,7 @@ private var lampLit = false
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPrefs: Prefs.UiPrefs, power: tv.lounge.power.PowerSetup) {
+fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPrefs: Prefs.UiPrefs, power: tv.lounge.power.PowerSetup, updates: tv.lounge.update.UpdateManager) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val powerStatus by power.status.collectAsStateWithLifecycle()
@@ -145,6 +145,16 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     }
 
     fun say(text: String) = toasts.show(text)
+
+    // The updater's notice tile and the one-time word after an update.
+    LaunchedEffect(updates) {
+        updates.takeJustUpdatedFrom()?.let { say("Lounge updated to ${updates.currentVersion}") }
+        updates.state.collect { s ->
+            val waiting = s is tv.lounge.update.UpdateState.NeedsConfirmation ||
+                (s is tv.lounge.update.UpdateState.Ready && s.path == tv.lounge.update.InstallPath.NeedsPermission)
+            core.setUpdateNotice(if (waiting) s.release?.version?.toString() else null)
+        }
+    }
 
     /** Core actions run off the main thread: a plugin may take a moment to answer. */
     fun perform(action: String, title: String) {
@@ -390,6 +400,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     prefs = prefs,
                     uiPrefs = uiPrefs,
                     power = power,
+                    updates = updates,
                     powerStatus = powerStatus,
                     theme = theme,
                     sounds = sounds,
@@ -484,7 +495,7 @@ private data class TopInsetShape(val top: Float) : androidx.compose.ui.graphics.
 
 private fun Overlay.isSheet(): Boolean = when (this) {
     Overlay.QuickSettings, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels,
-    Overlay.Plugins, is Overlay.PluginDetail, Overlay.HomeRole, Overlay.Companion,
+    Overlay.Plugins, is Overlay.PluginDetail, Overlay.HomeRole, Overlay.Companion, Overlay.Updates,
     -> true
     else -> false
 }
@@ -535,6 +546,7 @@ private fun SheetContent(
     prefs: Prefs,
     uiPrefs: Prefs.UiPrefs,
     power: tv.lounge.power.PowerSetup,
+    updates: tv.lounge.update.UpdateManager,
     powerStatus: tv.lounge.power.PowerStatus,
     theme: Prefs.Theme,
     sounds: Boolean,
@@ -549,6 +561,8 @@ private fun SheetContent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val updateState by updates.state.collectAsStateWithLifecycle()
+    val updateAuto by updates.autoCheck.collectAsStateWithLifecycle()
     when (overlay) {
         Overlay.QuickSettings -> {
             val tvListings = remember { hasTvListings(context) }
@@ -584,9 +598,12 @@ private fun SheetContent(
                 onAmbient = { open(Overlay.Ambient) },
                 onSetupAgain = { open(Overlay.Onboarding) },
                 ambientOn = remember { power.currentScreensaver?.contains(context.packageName) == true },
+                onUpdates = { open(Overlay.Updates) },
+                updateStatus = updateStatusWord(updateState, updateAuto),
                 firstFocus = first,
             )
         }
+        Overlay.Updates -> UpdatesSheet(updates = updates, firstFocus = first)
         Overlay.Ambient -> AmbientSheet(
             power = power,
             prefs = prefs,

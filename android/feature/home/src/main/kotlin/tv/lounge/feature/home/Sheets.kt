@@ -288,6 +288,8 @@ fun QuickSettingsSheet(
     onAmbient: () -> Unit,
     ambientOn: Boolean,
     onSetupAgain: () -> Unit,
+    onUpdates: () -> Unit,
+    updateStatus: String,
     firstFocus: FocusRequester,
 ) {
     val context = LocalContext.current
@@ -386,6 +388,7 @@ fun QuickSettingsSheet(
             accent = if (powerStatus is tv.lounge.power.PowerStatus.Ready) colors.signal else colors.dust,
             onClick = onPowerSetup,
         )
+        SheetRow(icon = LoungeIcons.Refresh, title = "Updates", value = updateStatus, accent = if (updateStatus == "Up to date") colors.signal else colors.dust, onClick = onUpdates)
         SheetRow(icon = LoungeIcons.Info, title = "Diagnostics", value = if (showDiagnostics) "Hide" else "Show", onClick = { showDiagnostics = !showDiagnostics; if (showDiagnostics) diag = diagnostics() })
         SheetRow(icon = LoungeIcons.Refresh, title = "Run the setup steps again", onClick = onSetupAgain)
         if (showDiagnostics) {

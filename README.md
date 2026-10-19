@@ -47,6 +47,7 @@
 
 - **WebAssembly in a sandbox.** A plugin runs inside the core with a fuel budget, a memory cap, no file system, no sockets, and reaches only the hosts its manifest names.
 - **Signed bundles.** Ed25519-signed `.lgp` files; the TV pins the publisher's key on first install and refuses an update from anyone else.
+- **Keeps itself current**: Lounge checks its GitHub releases twice a day and installs updates on its own where Android allows it, with a confirmation only when it must ask.
 - **Eleven plugins built in**: Jellyfin, Emby, Plex, IPTV, HDHomeRun, Tvheadend, Channels DVR, NextPVR, YouTube channels, the Internet Archive and Immich photos. Plus a sample library to try things with, an SDK, and a command-line tool that bundles, signs and runs a plugin on your computer against fixtures.
 - **Any language** that targets core WebAssembly: the interface is eight imports and six exports with JSON in between.
 
@@ -215,6 +216,16 @@ the TV's power, only ever happen when you press them.
 
 The screensaver is Lounge's own: the artwork from the Stage and the rows, a slow push-in, the
 clock, and a line naming the picture.
+
+After that first install Lounge keeps itself current. Twice a day it looks at the
+[Releases](../../releases) page, downloads a newer APK, checks it against the published hash
+and installs it while you are in another app. Android 12 and later let an app update itself
+without asking once it installed the current build, so after the first update there is no
+prompt at all; with Power Setup connected there is never one. Otherwise a tile on the home
+screen says the update is ready and Android asks you to confirm when you press it. On a Google
+TV with Play Protect, that first confirmation also warns that it has not seen this developer
+before: choose More details, then Install anyway, and it will not ask again. Settings → Updates
+shows where things stand, has a "Check now", and can turn the automatic check off.
 
 ## Under the hood
 

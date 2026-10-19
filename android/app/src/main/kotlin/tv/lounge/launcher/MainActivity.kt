@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var core: CoreClient
     @Inject lateinit var power: tv.lounge.power.PowerSetup
+    @Inject lateinit var updates: tv.lounge.update.UpdateManager
     @Inject lateinit var apps: AppsCollector
     @Inject lateinit var tvProvider: TvProviderCollector
     @Inject lateinit var media: MediaSessionsCollector
@@ -99,7 +100,7 @@ class MainActivity : ComponentActivity() {
                 visuals = visuals,
             ) {
                 CompositionLocalProvider(LocalUiSounds provides soundsState.value) {
-                    HomeScreen(core = core, platform = platform, prefs = prefs, uiPrefs = uiPrefs, power = power)
+                    HomeScreen(core = core, platform = platform, prefs = prefs, uiPrefs = uiPrefs, power = power, updates = updates)
                 }
             }
         }
@@ -148,9 +149,13 @@ class MainActivity : ComponentActivity() {
                         dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_UP, cmd.keyCode, 0))
                     }
                     is UiCommand.TypeText -> typeText(cmd.text)
+                    UiCommand.InstallUpdate -> updates.interact(this@MainActivity, lifecycleScope)
                     else -> Unit
                 }
             }
+        }
+        lifecycleScope.launch {
+            updates.confirmRequests.collect { intent -> runCatching { startActivity(intent) } }
         }
         lifecycleScope.launch {
             val on = prefs.companionEnabled.first()
@@ -268,6 +273,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         core.setScreenState(true)
+        updates.noteForeground(true)
         core.setUtcOffsetMinutes(TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
         if (resumedBefore) {
             pushPermissions()
@@ -284,6 +290,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         core.setScreenState(false)
+        updates.noteForeground(false)
     }
 
     private fun collectAppsNow() {
