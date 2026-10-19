@@ -390,6 +390,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-plex"
+version = "0.1.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-sample"
 version = "0.1.0"
 dependencies = [
