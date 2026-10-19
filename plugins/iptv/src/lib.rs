@@ -255,6 +255,7 @@ pub fn parse_xmltv(xml: &str, from_ms: i64, to_ms: i64, by_id: &HashMap<&str, &C
     let mut aliases: HashMap<String, String> = HashMap::new();
     let mut current: Option<Programme> = None;
     let mut field: Option<&'static str> = None;
+    let mut text = String::new();
     let mut channel_el: Option<String> = None;
     loop {
         match reader.read_event() {
@@ -283,44 +284,43 @@ pub fn parse_xmltv(xml: &str, from_ms: i64, to_ms: i64, by_id: &HashMap<&str, &C
                         _ => None,
                     };
                 }
-                "title" if current.is_some() => field = Some("title"),
-                "desc" if current.is_some() => field = Some("desc"),
-                "sub-title" if current.is_some() => field = Some("sub"),
+                "title" => field = current.as_ref().filter(|p| p.title.is_empty()).map(|_| "title"),
+                "desc" | "sub-title" => field = current.as_ref().filter(|p| p.description.is_none()).map(|_| "desc"),
                 _ => {}
             },
-            Ok(Event::Text(t)) => {
+            Ok(Event::Text(t)) if field.is_some() => {
                 let raw = t.into_inner();
-                let text = quick_xml::escape::unescape(raw.as_ref()).map(|c| c.into_owned()).unwrap_or_else(|_| raw.into_owned());
-                if field == Some("display-name") {
-                    if let Some(id) = &channel_el {
-                        if !by_id.contains_key(id.as_str()) {
-                            if let Some(ch) = by_name.get(&normalise(&text)) {
-                                aliases.entry(id.clone()).or_insert_with(|| ch.id.clone());
-                            }
+                text.push_str(&quick_xml::escape::unescape(raw.as_ref()).map(|c| c.into_owned()).unwrap_or_else(|_| raw.into_owned()));
+            }
+            Ok(Event::GeneralRef(r)) if field.is_some() => text.push_str(&entity(&r)),
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                "display-name" => {
+                    if let (Some(id), Some(ch)) = (channel_el.as_ref().filter(|id| !by_id.contains_key(id.as_str())), by_name.get(&normalise(&text))) {
+                        aliases.entry(id.clone()).or_insert_with(|| ch.id.clone());
+                    }
+                    text.clear();
+                    field = None;
+                }
+                "title" | "desc" | "sub-title" => {
+                    if let (Some(p), Some(f)) = (current.as_mut(), field) {
+                        let value = std::mem::take(&mut text);
+                        match f {
+                            "title" => p.title = value,
+                            _ => p.description = Some(value),
                         }
                     }
-                } else if let (Some(p), Some(f)) = (current.as_mut(), field) {
-                    match f {
-                        "title" if p.title.is_empty() => p.title = text,
-                        "desc" if p.description.is_none() => p.description = Some(text),
-                        "sub" if p.description.is_none() => p.description = Some(text),
-                        _ => {}
-                    }
+                    text.clear();
+                    field = None;
                 }
-            }
-            Ok(Event::End(e)) => match e.name().as_ref() {
                 "channel" => channel_el = None,
                 "programme" => {
-                    if let Some(p) = current.take() {
-                        if !p.title.is_empty() {
-                            out.push(p);
-                            if out.len() >= MAX_SCHEDULE {
-                                break;
-                            }
+                    if let Some(p) = current.take().filter(|p| !p.title.is_empty()) {
+                        out.push(p);
+                        if out.len() >= MAX_SCHEDULE {
+                            break;
                         }
                     }
                 }
-                "title" | "desc" | "sub-title" | "display-name" => field = None,
                 _ => {}
             },
             Ok(Event::Eof) => break,
@@ -329,6 +329,22 @@ pub fn parse_xmltv(xml: &str, from_ms: i64, to_ms: i64, by_id: &HashMap<&str, &C
         }
     }
     (out, aliases.len())
+}
+
+/// The text an entity reference stands for: `&amp;`, `&#8217;` and friends.
+fn entity(r: &quick_xml::events::BytesRef) -> String {
+    if let Ok(Some(c)) = r.resolve_char_ref() {
+        return c.to_string();
+    }
+    match r.as_ref() {
+        "amp" => "&",
+        "lt" => "<",
+        "gt" => ">",
+        "quot" => "\"",
+        "apos" => "'",
+        _ => "",
+    }
+    .to_string()
 }
 
 /// "20261019001500 +0000" → epoch ms. The zone part is optional (UTC).
