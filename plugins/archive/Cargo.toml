@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-archive"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Internet Archive: free films, cartoons and television from archive.org, played straight from the TV"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
