@@ -11,8 +11,9 @@ This guide takes you from nothing to a plugin on your TV in about twenty minutes
 every part of the interface. The plugins in `plugins/` are complete examples, each showing a
 different corner of the interface:
 
-- `plugins/sample`: eighteen public-domain films with posters and stills, some part-watched. No
-  settings, no network beyond the pictures. The best one to copy from.
+- `plugins/sample`: eighteen public-domain films with posters and stills, some part-watched, and
+  a screensaver drawn on the TV's GPU. No settings, no network beyond the pictures. The best one
+  to copy from.
 - `plugins/iptv`: an M3U playlist becomes channels, an XMLTV feed fills the guide. Settings,
   gzip, parsing a large document.
 - `plugins/jellyfin` and `plugins/emby`: sign in to a server with a password, publish resume
@@ -164,7 +165,7 @@ tile without one, so prefer modestly sized files.
 | `id` | A reverse-domain name: lowercase labels of letters, digits and dashes joined by dots, at least two labels. It names the plugin's directory on the TV, so it never changes. |
 | `name`, `description`, `publisher_name` | What the TV and the phone show. The description is one sentence. |
 | `version` | Shown to the user; updates may carry any version, the signature is what matters. |
-| `kinds` | What the plugin does: `content` (items and rows), `epg` (channels and schedule), `wallpaper`, `search`. |
+| `kinds` | What the plugin does: `content` (items and rows), `epg` (channels and schedule), `wallpaper`, `screensaver`, `search`. |
 | `fetch_hosts` | Hosts `fetch` may reach, including on redirects. `*` means any host and is shown to the user as such; a plugin that talks to a server the user names must declare it. Loopback and the TV's own addresses are never implied by `*`. |
 | `refresh_minutes` | How often `refresh` runs while the screen is on; at least 5, 0 means the host's default. |
 | `rows` | Rows of your own, in order. `style` is `landscape` (16:9 tiles), `poster` (portrait) or `compact`. Items name a row by its `id`. |
@@ -201,7 +202,8 @@ the installer refuses a bundle where the two disagree. The SDK writes both from
 Stage. A `channel` joins Live now and the guide, and `schedule` items fill in what is on it. A
 `program` goes into the row its `row` names; without one it goes nowhere. A `wallpaper` is a
 picture for the screensaver: give it the picture as `thumbnail` (it is prepared at 1920×1080),
-a `title` and, if you like, a `subtitle`; it is the one kind that needs no `action`.
+a `title` and, if you like, a `subtitle`; it is the one kind that needs no `action`. A
+`screensaver` is an abstract screensaver the TV draws itself; see [Screensavers](#screensavers).
 
 **What a tile shows.** `title` is the first line; `subtitle` the second, in the launcher's own
 voice (commas between facts, never dots: "S2 E4, Netflix"). `season` and `episode` are shown
@@ -228,6 +230,70 @@ What happens when the user selects an item. The first field that is set wins, in
 | `view` | An Android URI: a deep link such as `jellyfin://…`, a web address, or an `intent:` string. `fallback_launch` runs if nothing on the TV handles it. |
 | `launch` | A package name to open. |
 | `resolve` | A string handed back to your `resolve` at selection time, which returns one of the above. Use it when the stream URL is only known at the moment of playing. |
+
+## Screensavers
+
+A plugin can add abstract screensavers that the TV draws on its own GPU. The plugin never draws:
+it publishes a program and values for the program's uniforms, and Lounge runs it behind the clock
+thirty times a second. Settings, Screensaver, Style lists them next to Lounge's own, and Preview it
+now shows one straight away.
+
+```rust
+Item {
+    id: "projector".into(),
+    kind: ItemKind::Screensaver,
+    title: "Projector".into(),
+    subtitle: Some("Smoke in the beam, from the back row".into()),
+    shader: Some(Shader::new(include_str!("projector.agsl")).float("drift", 0.08).color("beam", "#FFE2B8")),
+    ..Default::default()
+}
+```
+
+Declare `screensaver` in the manifest's `kinds`. The `title` is the style's name and the
+`subtitle` its one-line description. Every refresh replaces the plugin's screensavers, so values
+can change over time, a palette that follows the weather for instance. The TV keeps the last set,
+so the screensaver has them after a restart before the plugin has refreshed.
+
+**The program** is [AGSL](https://developer.android.com/develop/ui/views/graphics/agsl), Android's
+shading language. Its entry point is `half4 main(float2 coord)`, called for every pixel with
+`coord` in pixels from the top left. Lounge sets these uniforms when the program declares them:
+
+| Uniform | Value |
+|---|---|
+| `uniform float2 resolution` | The size being drawn, in pixels. It changes when Lounge lowers the resolution, so work in `coord / resolution.y` and the scene keeps its shape. |
+| `uniform float time` | Seconds since the screensaver started. |
+| `uniform float hour` | The local time of day, from 0 to 24. |
+| `layout(color) uniform half4 velvet` | The theme's background. `horizon`, `curtain`, `houselight`, `ember`, `signal` and `dust` are the theme's other colours (DESIGN.md §3), so a scene follows whichever theme the person picked. |
+
+Every other uniform takes its value from `shader.uniforms`: a number for a `float` or `int`, a
+list of numbers for vectors, matrices and arrays, as many as the uniform holds, and a colour such
+as `"#FFE2B8"` for a `layout(color) uniform half4`. A uniform left unset is zero. A program cannot
+take other shaders, colour filters or blenders as input.
+
+**What Lounge adds.** Every scene goes through the same finishing pass: the room's vignette, the
+house lights, which go down a step after half an hour, a ceiling on highlights so nothing glares
+in a dark room, and dither so dark gradients do not band. The clock and the style's name sit
+bottom left. Design for that: keep scenes dark, slow and calm, because they run for hours.
+
+**Cost.** Lounge draws the program at a third of the screen's resolution and upscales it, which
+suits soft, flowing scenes. It watches each frame's GPU time, and when a frame takes more than
+about 24 ms it drops to a quarter, then a fifth, down to a sixth, and remembers where the program
+settled on that TV. A program too heavy even at a sixth falls back to pictures. A few octaves of
+value noise, warped two or three times, sits comfortably on a Google TV Streamer; Lounge's Ink is
+about as heavy as a scene should get.
+
+**Trying one out.** A `.agsl` file in the TV's `screensavers` folder appears under Style as
+"This TV", with no plugin and no build:
+
+```sh
+adb push smoke.agsl /sdcard/Android/data/tv.lounge.launcher/files/screensavers/
+adb logcat -s Lounge | grep screensaver
+```
+
+Choose it, preview it, push again after each change and preview again. The log says what the
+program costs (`screensaver: local:smoke.agsl at 1/3, 33.3 ms a frame, 0.5 ms late, GPU 14.2
+ms`), and when it does not compile it falls back to pictures with the compiler's reason. Lounge's
+own scenes are in `android/feature/home/src/main/assets/screensavers` to read and borrow from.
 
 ## The host
 
@@ -290,6 +356,7 @@ kept, and the plugin refreshes.
 | Artwork | 4 MB per picture, fetched by the host |
 | Key-value | 256 keys of 256 KB |
 | Log | 500 lines per call, the last 200 kept |
+| Screensavers | 8 per plugin, each a program of up to 32 KB with up to 24 uniforms of up to 16 numbers |
 
 ## The wire interface, for other languages
 
@@ -333,4 +400,6 @@ one definition the host and the SDK share.
 - A refresh that fails returns an error naming the cause and the fix ("Jellyfin didn't answer
   at 192.168.0.20. Check the server, then try again."), not a stack trace.
 - Items keep stable `id`s between refreshes, so pins and hidden tiles survive.
+- A screensaver looks right in every theme, Blackout included, and its log line shows it holding
+  a third or a quarter of the resolution on the slowest TV you have.
 - The bundle is signed with a key you have backed up.

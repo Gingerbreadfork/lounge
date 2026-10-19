@@ -184,6 +184,7 @@ Overlays are `curtain` sheets with a 1 px `curtain-edge` top or left hairline, s
 - **Settings (on TV)**: two-column like the system: list left (`title`), detail right (`body`). Only essentials; the last item is "Open on your phone" with the pairing QR.
 - **Onboarding**: five full-screen steps, each one question, `display-l` heading, one primary button (Next / Start, with Skip beside it on the optional steps). Progress is five 8 px dots, not numbers. The left column (820 px) holds the question and its rows; the right holds a lamp in `houselight` with the step's glyph, or the live pairing QR on the phone step. Back goes to the previous step.
 - **Ambient (screensaver)**: artwork full-bleed, dimmed to 60 %, clock `clock` style bottom-left, optional now/next line; elements drift 2 px every 60 s and the whole frame dims a further 20 % after 30 minutes (OLED care).
+- **Ambient, abstract scenes**: instead of artwork, a slow scene drawn on the GPU in the theme's own colours (Ink, Lava, Aurora, Silk, or one a plugin publishes), with the same clock and two lines naming the scene and where it came from. A scene is dark with one lit thing in it, the room after the lights go down: `velvet` and `horizon` for the body, `houselight` and `ember` for the light. Every scene passes through one finishing step: a vignette, the house lights (100 %, then 80 % after 30 minutes), a ceiling on highlights at about 88 % so nothing glares, and dither against banding. It draws at 30 fps at a third of the screen's resolution, and steps down to a sixth when a frame costs the GPU more than about 24 ms.
 
 ### 5.x The mark
 
@@ -296,9 +297,10 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
   mute and play/pause follow and work without Power Setup. Without it the first row is the one
   step to set it up.
 
-- **Screensaver sheet**: one status row naming the current screensaver (ours in `signal`), then
-  the single next step — Use Lounge as the screensaver, or Back to the previous one — and
-  Preview it now, which draws the Ambient screen in-app until any key.
+- **Screensaver sheet**: one status row naming the current screensaver (ours in `signal`), a Style
+  row that cycles Pictures and the abstract scenes with Left and Right and names the current one
+  underneath, then the single next step — Use Lounge as the screensaver, or Back to the previous
+  one — and Preview it now, which draws the chosen style in-app until any key.
 
 ### 7.2 Buttons
 
@@ -368,6 +370,7 @@ No sound on Home, on scroll end, or on errors (the toast is enough).
 | Idle dim | On | On | On (free) |
 | Light field clock | 333 ms steps; sleeps after 60 s idle | 500 ms steps; sleeps after 60 s idle | Off |
 | Screensaver push-in | Stepped at 4 Hz | Stepped at 2 Hz | Off |
+| Abstract scenes | 30 fps, a third of the resolution down to a sixth by GPU time | Same | Same; Android 13 or later |
 
 ## 13. Streamer-specific (primary device)
 

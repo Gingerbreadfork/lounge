@@ -55,7 +55,7 @@
 
 - **Five screens on first run**, with a live preview of the home screen while you choose a theme.
 - **Power Setup.** Lounge talks to the TV's own debugging service after you allow it once on screen, or to Shizuku, to take the home role, grant its own accesses, drive HDMI-CEC, set the screensaver and compile itself ahead of time. Every command is shown before it runs and logged after.
-- **A screensaver of its own.** The artwork from the Stage and the rows, a slow push-in, the clock, and a line naming the picture.
+- **A screensaver of its own.** The artwork from the Stage and the rows with a slow push-in, or one of four slow abstract scenes drawn on the TV's graphics chip: Ink, Lava, Aurora and Silk. Plugins can add their own.
 - **Nothing leaves the house.** No accounts, no analytics, no update checks, no network at all unless you gave it an address.
 - **Built for old TVs too.** Android 9 and up, arm64 and 32-bit ARM, a Rust core behind a Kotlin and Compose shell.
 
@@ -214,8 +214,11 @@ compile Lounge ahead of time. Every action shows its command before it runs. Not
 hidden from you, and the two that change the living room, taking the home role and switching
 the TV's power, only ever happen when you press them.
 
-The screensaver is Lounge's own: the artwork from the Stage and the rows, a slow push-in, the
-clock, and a line naming the picture.
+The screensaver is Lounge's own. It shows the artwork from the Stage and the rows with a slow
+push-in, the clock and a line naming the picture, or one of four abstract scenes drawn on the
+TV's graphics chip: Ink, Lava, Aurora and Silk, each in the colours of your theme. Choose in
+Settings, Screensaver, Style. Plugins can add scenes of their own, and a shader file pushed to the
+TV shows up there too, for trying one out ([PLUGINS.md](PLUGINS.md#screensavers)).
 
 After that first install Lounge keeps itself current. Twice a day it looks at the
 [Releases](../../releases) page, downloads a newer APK, checks it against the published hash
