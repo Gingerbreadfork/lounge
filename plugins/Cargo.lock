@@ -370,6 +370,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-channels"
+version = "0.1.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-emby"
 version = "0.1.0"
 dependencies = [

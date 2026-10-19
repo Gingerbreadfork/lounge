@@ -2,7 +2,7 @@
 # `lgp-tool` is a native binary that bundles, signs and test-runs them.
 [workspace]
 resolver = "3"
-members = ["sdk", "iptv", "jellyfin", "emby", "plex", "youtube", "archive", "immich", "hdhomerun", "tvheadend", "sample", "lgp-tool"]
+members = ["sdk", "iptv", "jellyfin", "emby", "plex", "youtube", "archive", "immich", "hdhomerun", "tvheadend", "channels", "sample", "lgp-tool"]
 
 [workspace.package]
 version = "0.1.0"
