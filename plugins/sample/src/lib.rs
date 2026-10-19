@@ -1,7 +1,8 @@
 //! Sample library: a shelf of public-domain films with posters and stills from Wikimedia, so a fresh
 //! install has something on the Stage and in the rows. A few are left part-watched. Opening
-//! one shows its Wikipedia page. Nothing here is anyone's viewing history.
-use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle};
+//! one shows its Wikipedia page, and a screensaver of a projector's beam comes with them.
+//! Nothing here is anyone's viewing history.
+use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, Shader};
 
 pub struct Sample;
 
@@ -50,7 +51,7 @@ impl sdk::Plugin for Sample {
             version: env!("CARGO_PKG_VERSION").into(),
             description: "Eighteen public-domain films with their posters, to see Lounge with something on it.".into(),
             publisher_name: "Lounge".into(),
-            kinds: vec![Kind::Content],
+            kinds: vec![Kind::Content, Kind::Screensaver],
             fetch_hosts: vec!["thumb.wikimedia.org".into(), "upload.wikimedia.org".into()],
             refresh_minutes: 24 * 60,
             rows: vec![RowSpec { id: "shelf".into(), title: "Film club".into(), style: RowStyle::Poster }],
@@ -61,7 +62,7 @@ impl sdk::Plugin for Sample {
 
     fn refresh(_ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let now = host::now_ms();
-        let items = FILMS
+        let mut items: Vec<Item> = FILMS
             .iter()
             .enumerate()
             .map(|(i, f)| {
@@ -87,7 +88,20 @@ impl sdk::Plugin for Sample {
                 item
             })
             .collect();
+        items.push(projector());
         Ok(items)
+    }
+}
+
+/// The screensaver: the program is drawn by the TV, the plugin only chooses its colour and pace.
+fn projector() -> Item {
+    Item {
+        id: "projector".into(),
+        kind: ItemKind::Screensaver,
+        title: "Projector".into(),
+        subtitle: Some("Smoke in the beam, from the back row".into()),
+        shader: Some(Shader::new(include_str!("projector.agsl")).float("drift", 0.08).color("beam", "#FFE2B8")),
+        ..Default::default()
     }
 }
 
