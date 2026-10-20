@@ -1,14 +1,15 @@
 //! `lgp-tool`: the plugin developer's command line.
 //!
 //! ```text
-//! lgp-tool keygen <key-file>                       write a new Ed25519 signing key (hex seed)
+//! lgp-tool keygen <key-file>                       write a new Ed25519 signing key (hex seed, mode 0600, never over a file)
 //! lgp-tool bundle <plugin.wasm> <key-file> <out.lgp> [--manifest manifest.json]
 //! lgp-tool inspect <bundle.lgp>                    print the manifest and verify the signature
-//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--search query] [--resolve action]
+//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--search query] [--resolve action] [--json]
 //! ```
 //! `run` executes `refresh` (or `search`) with a host that keeps key-values in memory, reads
 //! settings from the flags, and fetches live unless `--fixtures` points at a directory of
-//! `<sha256(url)>.body` files.
+//! fixtures; [`FIXTURES`] describes them. It prints the log, the fuel used and the items, or
+//! with `--json` every item as JSON and the log on stderr.
 
 use ed25519_dalek::{Signer, SigningKey};
 use lounge_plugin_api::{HttpRequest, HttpResponse, Manifest, RefreshContext};
@@ -16,7 +17,7 @@ use lounge_plugins::bundle::Bundle;
 use lounge_plugins::host::{Host, Limits, Services};
 use lounge_plugins::http::Fetcher;
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -27,7 +28,7 @@ fn main() {
         Some("bundle") => bundle(&args[1..]),
         Some("inspect") => inspect(&args[1..]),
         Some("run") => run(&args[1..]),
-        _ => Err(USAGE.to_string()),
+        _ => Err(format!("{USAGE}\n\n{FIXTURES}")),
     };
     if let Err(e) = result {
         eprintln!("{e}");
@@ -35,14 +36,28 @@ fn main() {
     }
 }
 
-const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--search q] [--resolve action]";
+const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--search q] [--resolve action] [--json]";
+
+const FIXTURES: &str = "fixtures: --fixtures dir answers each fetch from <sha256 of the url, hex>.body in dir.
+The body may be binary, such as a gzip file: as on the TV, it reaches the plugin as text when it is UTF-8 and
+as body_base64 otherwise, and a body over the TV's 8 MB limit fails the fetch. An optional <sha256>.head
+beside it gives the status on its first line (\"404\" or \"HTTP/1.1 404 Not Found\") and headers on the
+lines after it (\"WWW-Authenticate: Digest realm=...\"). Without one the answer is 200 with no headers.";
 
 fn keygen(args: &[String]) -> Result<(), String> {
     let out = args.first().ok_or(USAGE)?;
     let mut seed = [0u8; 32];
     getrandom::fill(&mut seed).map_err(|e| e.to_string())?;
     let key = SigningKey::from_bytes(&seed);
-    std::fs::write(out, hex::encode(seed)).map_err(|e| e.to_string())?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut file = options.open(out).map_err(|e| match e.kind() {
+        std::io::ErrorKind::AlreadyExists => format!("{out} already exists; keygen never replaces a signing key"),
+        _ => format!("{out}: {e}"),
+    })?;
+    std::io::Write::write_all(&mut file, hex::encode(seed).as_bytes()).map_err(|e| format!("{out}: {e}"))?;
     println!("wrote {out}\npublisher key: {}", hex::encode(key.verifying_key().as_bytes()));
     Ok(())
 }
@@ -117,12 +132,12 @@ fn run(args: &[String]) -> Result<(), String> {
         None => host.manifest_of(&host.load("probe", Manifest::default(), &wasm).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?,
     };
     let plugin = host.load(&manifest.id.clone(), manifest, &wasm).map_err(|e| e.to_string())?;
+    let fuel_used = Arc::new(Mutex::new(None));
+    let _ = tracing::subscriber::set_global_default(FuelMeter(fuel_used.clone()));
     let started = std::time::Instant::now();
     if let Some(action) = flag(args, "--resolve") {
-        let resolved = host.resolve(&plugin, &action).map_err(|e| e.to_string())?;
-        for line in services.logs.lock().iter() {
-            println!("  log: {line}");
-        }
+        let resolved = host.resolve(&plugin, &action).inspect_err(|_| print_logs(&services)).map_err(|e| e.to_string())?;
+        print_logs(&services);
         println!("resolved in {:.0} ms: {resolved:?}", started.elapsed().as_secs_f64() * 1000.0);
         return Ok(());
     }
@@ -139,12 +154,19 @@ fn run(args: &[String]) -> Result<(), String> {
             },
         ),
     }
-    .map_err(|e| e.to_string())?;
+    .inspect_err(|_| print_logs(&services));
+    let items = items.map_err(|e| e.to_string())?;
     let elapsed = started.elapsed();
-    for line in services.logs.lock().iter() {
-        println!("  log: {line}");
+    if args.iter().any(|a| a == "--json") {
+        for line in services.logs.lock().iter() {
+            eprintln!("log: {line}");
+        }
+        println!("{}", serde_json::to_string_pretty(&items).map_err(|e| e.to_string())?);
+        return Ok(());
     }
-    println!("{} items in {:.0} ms", items.len(), elapsed.as_secs_f64() * 1000.0);
+    print_logs(&services);
+    let fuel = fuel_used.lock().map(|f| format!(", {} of {} fuel", amount(f), amount(Limits::default().fuel))).unwrap_or_default();
+    println!("{} items in {:.0} ms{fuel}", items.len(), elapsed.as_secs_f64() * 1000.0);
     for it in items.iter().take(40) {
         println!(
             "  [{:?}] {}{}{}{}",
@@ -165,6 +187,47 @@ fn run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn amount(n: u64) -> String {
+    if n >= 1_000_000_000 { format!("{:.2} billion", n as f64 / 1e9) } else { format!("{:.1} million", n as f64 / 1e6) }
+}
+
+fn print_logs(services: &RunServices) {
+    for line in services.logs.lock().iter() {
+        println!("  log: {line}");
+    }
+}
+
+/// Catches the host's debug line saying how much fuel a call used.
+struct FuelMeter(Arc<Mutex<Option<u64>>>);
+
+impl tracing::Subscriber for FuelMeter {
+    fn enabled(&self, metadata: &tracing::Metadata) -> bool {
+        metadata.target().starts_with("lounge_plugins")
+    }
+    fn new_span(&self, _: &tracing::span::Attributes) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record) {}
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+    fn event(&self, event: &tracing::Event) {
+        struct Message(String);
+        impl tracing::field::Visit for Message {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    self.0 = format!("{value:?}");
+                }
+            }
+        }
+        let mut message = Message(String::new());
+        event.record(&mut message);
+        if let Some(n) = message.0.strip_suffix(" fuel").and_then(|m| m.rsplit(' ').next()).and_then(|n| n.parse().ok()) {
+            *self.0.lock() = Some(n);
+        }
+    }
+    fn enter(&self, _: &tracing::span::Id) {}
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
 fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
@@ -172,10 +235,10 @@ fn flag(args: &[String], name: &str) -> Option<String> {
 fn pairs(args: &[String], name: &str) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for (i, a) in args.iter().enumerate() {
-        if a == name {
-            if let Some((k, v)) = args.get(i + 1).and_then(|kv| kv.split_once('=')) {
-                out.insert(k.to_string(), v.to_string());
-            }
+        if a == name
+            && let Some((k, v)) = args.get(i + 1).and_then(|kv| kv.split_once('='))
+        {
+            out.insert(k.to_string(), v.to_string());
         }
     }
     out
@@ -211,13 +274,100 @@ impl Services for RunServices {
         self.logs.lock().push(format!("{tag}: {message}"));
     }
     fn fetch(&self, _p: &str, request: &HttpRequest) -> Result<HttpResponse, String> {
-        if let Some(dir) = &self.fixtures {
-            use sha2::Digest;
-            let name = hex::encode(sha2::Sha256::digest(request.url.as_bytes()));
-            let body = std::fs::read_to_string(dir.join(format!("{name}.body")))
-                .map_err(|_| format!("no fixture for {} ({name}.body)", request.url))?;
-            return Ok(HttpResponse { status: 200, headers: Default::default(), body, body_base64: None });
+        match &self.fixtures {
+            Some(dir) => fixture(dir, &request.url),
+            None => Fetcher::new().fetch(request, &|_| true).map_err(|e| e.to_string()),
         }
-        Fetcher::new().fetch(request, &|_| true).map_err(|e| e.to_string())
+    }
+}
+
+/// The recorded answer for `url`, shaped the way the TV's host shapes a live one.
+fn fixture(dir: &Path, url: &str) -> Result<HttpResponse, String> {
+    use sha2::Digest;
+    let name = hex::encode(sha2::Sha256::digest(url.as_bytes()));
+    let bytes = std::fs::read(dir.join(format!("{name}.body"))).map_err(|_| format!("no fixture for {url} ({name}.body)"))?;
+    let limit = Fetcher::new().max_body;
+    if bytes.len() > limit {
+        return Err(format!("fetch: the response body is larger than request limit: {limit}"));
+    }
+    let (status, headers) = match std::fs::read_to_string(dir.join(format!("{name}.head"))) {
+        Ok(head) => parse_head(&head).map_err(|e| format!("{name}.head: {e}"))?,
+        Err(_) => (200, Default::default()),
+    };
+    Ok(match String::from_utf8(bytes) {
+        Ok(body) => HttpResponse { status, headers, body, body_base64: None },
+        Err(e) => HttpResponse { status, headers, body: String::new(), body_base64: Some(lounge_plugin_api::base64_encode(e.as_bytes())) },
+    })
+}
+
+/// A status line ("404" or "HTTP/1.1 404 Not Found") and then "Name: value" headers, with
+/// names lowercased as the host does.
+fn parse_head(head: &str) -> Result<(u16, BTreeMap<String, String>), String> {
+    let mut lines = head.lines().map(str::trim).filter(|l| !l.is_empty());
+    let first = lines.next().ok_or("empty")?;
+    let code = if first.starts_with("HTTP/") { first.split_whitespace().nth(1).unwrap_or("") } else { first };
+    let status = code.parse::<u16>().map_err(|_| format!("{first:?} is not a status"))?;
+    let mut headers = BTreeMap::new();
+    for line in lines {
+        let (k, v) = line.split_once(':').ok_or_else(|| format!("{line:?} is not a header"))?;
+        headers.insert(k.trim().to_ascii_lowercase(), v.trim().to_string());
+    }
+    Ok((status, headers))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dir(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("lgp-tool-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn file_for(dir: &Path, url: &str, ext: &str) -> PathBuf {
+        use sha2::Digest;
+        dir.join(format!("{}.{ext}", hex::encode(sha2::Sha256::digest(url.as_bytes()))))
+    }
+
+    #[test]
+    fn fixtures_carry_binary_bodies_statuses_and_headers() {
+        let d = dir("fixtures");
+        std::fs::write(file_for(&d, "http://a/text", "body"), "hello").unwrap();
+        std::fs::write(file_for(&d, "http://a/gz", "body"), [0x1f, 0x8b, 0x08, 0xff]).unwrap();
+        std::fs::write(file_for(&d, "http://a/locked", "body"), "").unwrap();
+        std::fs::write(file_for(&d, "http://a/locked", "head"), "HTTP/1.1 401 Unauthorized\nWWW-Authenticate: Digest realm=\"tvheadend\", nonce=\"n\"\n").unwrap();
+        let text = fixture(&d, "http://a/text").unwrap();
+        assert_eq!((text.status, text.body.as_str(), text.body_base64.is_none()), (200, "hello", true));
+        let gz = fixture(&d, "http://a/gz").unwrap();
+        assert_eq!(gz.bytes(), [0x1f, 0x8b, 0x08, 0xff]);
+        assert!(gz.body.is_empty());
+        let locked = fixture(&d, "http://a/locked").unwrap();
+        assert_eq!(locked.status, 401);
+        assert_eq!(locked.headers["www-authenticate"], "Digest realm=\"tvheadend\", nonce=\"n\"");
+        assert!(fixture(&d, "http://a/missing").unwrap_err().contains("no fixture"));
+        std::fs::write(file_for(&d, "http://a/huge", "body"), vec![b'x'; Fetcher::new().max_body + 1]).unwrap();
+        assert!(fixture(&d, "http://a/huge").unwrap_err().contains("larger than"));
+        assert_eq!(parse_head("404").unwrap().0, 404);
+        assert!(parse_head("teapot").is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn keygen_never_overwrites_and_keeps_the_seed_private() {
+        let d = dir("keygen");
+        let path = d.join("publisher.key").to_string_lossy().into_owned();
+        keygen(std::slice::from_ref(&path)).unwrap();
+        let first = std::fs::read(&path).unwrap();
+        assert!(keygen(std::slice::from_ref(&path)).unwrap_err().contains("already exists"));
+        assert_eq!(std::fs::read(&path).unwrap(), first);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        assert!(load_key(&path).is_ok());
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

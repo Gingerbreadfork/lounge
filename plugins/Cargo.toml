@@ -23,3 +23,20 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# Plugins stay small, but the native runner and its interpreter need full optimisation: at "s"
+# wasmi's instruction dispatch overflows the native stack on long plugin calls.
+[profile.release.package.lgp-tool]
+opt-level = 3
+
+[profile.release.package.wasmi]
+opt-level = 3
+
+[profile.release.package.wasmi_core]
+opt-level = 3
+
+[profile.release.package.wasmi_ir]
+opt-level = 3
+
+[profile.release.package.wasmi_collections]
+opt-level = 3
