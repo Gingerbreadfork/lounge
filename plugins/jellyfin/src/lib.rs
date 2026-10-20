@@ -2,7 +2,7 @@
 //! watching and the newest library additions into a "Recently added" row, and searches the
 //! library. Items open in the Jellyfin Android TV app.
 
-use lounge_plugin_sdk::{self as sdk, epoch_ms, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
 use serde::Deserialize;
 
 pub struct Jellyfin;
@@ -48,7 +48,8 @@ impl sdk::Plugin for Jellyfin {
         for it in latest {
             items.push(session.latest_item(&it));
         }
-        sdk::info!("{} items from {}", items.len(), session.server);
+        sdk::dedup_ids(&mut items);
+        sdk::info!("{} items from {}", items.len(), sdk::redact_url(&session.server));
         Ok(items)
     }
 
@@ -269,31 +270,6 @@ fn first_sentence(s: &str) -> String {
     s[..cut].trim().to_string()
 }
 
-/// "2026-10-18T22:11:00.0000000Z" or with an offset → epoch ms.
-pub fn parse_iso8601(s: &str) -> Option<i64> {
-    let s = s.trim();
-    if s.len() < 19 {
-        return None;
-    }
-    let year: i64 = s[0..4].parse().ok()?;
-    let month: u32 = s[5..7].parse().ok()?;
-    let day: u32 = s[8..10].parse().ok()?;
-    let hour: u32 = s[11..13].parse().ok()?;
-    let minute: u32 = s[14..16].parse().ok()?;
-    let second: u32 = s[17..19].parse().ok()?;
-    let rest = &s[19..];
-    let zone_start = rest.find(['Z', '+', '-']).map(|i| &rest[i..]).unwrap_or("Z");
-    let offset = if zone_start.starts_with('Z') || zone_start.len() < 6 {
-        0
-    } else {
-        let sign = if zone_start.starts_with('-') { -1 } else { 1 };
-        let hh: i32 = zone_start[1..3].parse().ok()?;
-        let mm: i32 = zone_start[4..6].parse().ok()?;
-        sign * (hh * 60 + mm)
-    };
-    Some(epoch_ms(year, month, day, hour, minute, second, offset))
-}
-
 fn url_encode(s: &str) -> String {
     let mut out = String::new();
     for b in s.bytes() {
@@ -315,6 +291,12 @@ mod tests {
         assert_eq!(parse_iso8601("2026-10-19T00:15:00.0000000Z"), Some(1_792_368_900_000));
         assert_eq!(parse_iso8601("2026-10-19T10:15:00+10:00"), Some(1_792_368_900_000));
         assert_eq!(parse_iso8601("nope"), None);
+        for odd in ["2026-1é-19T00:15:00Z", "2026-10-19T00:15:0ü", "2026-10-19T00:15:00+1€:00", "ＸＸＸＸＸＸＸＸＸＸＸ"] {
+            assert_eq!(parse_iso8601(odd), None, "{odd:?}");
+        }
+        let it: MediaItem = serde_json::from_str(r#"{"Id": "m", "Name": "Film", "Type": "Movie", "UserData": {"LastPlayedDate": "2026-10-1é"}, "DateCreated": "２０２６"}"#).unwrap();
+        assert_eq!(it.user_data.as_ref().and_then(|u| u.last_played.as_deref()).and_then(parse_iso8601), None);
+        assert_eq!(it.date_created.as_deref().and_then(parse_iso8601), None);
     }
 
     #[test]

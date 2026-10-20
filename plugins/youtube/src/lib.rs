@@ -69,7 +69,8 @@ impl sdk::Plugin for YouTube {
             sdk::warn!("{f}");
         }
         videos.sort_by_key(|v| std::cmp::Reverse(v.published_ms));
-        videos.dedup_by(|a, b| a.id == b.id);
+        let mut seen = std::collections::HashSet::new();
+        videos.retain(|v| seen.insert(v.id.clone()));
         let recent = ctx.now_ms - 3 * 86_400_000;
         let count = videos.len();
         let hd = hd_art(&videos);

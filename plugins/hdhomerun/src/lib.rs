@@ -4,6 +4,7 @@
 //! device's own key, which costs nothing and needs no account.
 use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
 use serde::Deserialize;
+use std::collections::HashSet;
 
 pub struct HdHomeRun;
 
@@ -33,14 +34,15 @@ impl sdk::Plugin for HdHomeRun {
             Some(d) => format!("http://{d}"),
             None => discover()?,
         };
-        let device: Discover = get_json(&format!("{base}/discover.json")).map_err(|e| format!("No HDHomeRun at {base}: {e}"))?;
+        let device: Discover = get_json(&format!("{base}/discover.json")).map_err(|e| format!("No HDHomeRun at {}: {e}", sdk::redact_url(&base)))?;
         let lineup: Vec<LineupEntry> = get_json(&device.lineup_url.clone().unwrap_or_else(|| format!("{base}/lineup.json")))?;
         let skip_drm = host::setting("skip_drm").map(|v| v != "false").unwrap_or(true);
-        let channels: Vec<&LineupEntry> = lineup.iter().filter(|c| (!skip_drm || c.drm != Some(1)) && !c.url.is_empty()).collect();
+        let mut numbers = HashSet::new();
+        let mut channels: Vec<&LineupEntry> = lineup.iter().filter(|c| (!skip_drm || c.drm != Some(1)) && !c.url.is_empty() && numbers.insert(c.guide_number.as_str())).collect();
         if channels.is_empty() {
             return Err(format!("{} has no channels yet. Run a channel scan in the HDHomeRun app first.", device.friendly_name.as_deref().unwrap_or("The tuner")));
         }
-        let mut items: Vec<Item> = Vec::new();
+        channels.truncate(sdk::MAX_ITEMS);
         let guide: Vec<GuideChannel> = match &device.device_auth {
             Some(auth) => get_json(&format!("https://api.hdhomerun.com/api/guide?DeviceAuth={}", url_encode(auth))).unwrap_or_else(|e| {
                 sdk::warn!("guide unavailable: {e}");
@@ -48,25 +50,24 @@ impl sdk::Plugin for HdHomeRun {
             }),
             None => Vec::new(),
         };
+        let mut items: Vec<Item> = Vec::new();
         for c in &channels {
             let logo = guide.iter().find(|g| g.guide_number == c.guide_number).and_then(|g| g.image_url.clone());
             items.push(channel_item(c, logo));
         }
         let window_end = ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000;
-        for g in &guide {
-            if !channels.iter().any(|c| c.guide_number == g.guide_number) {
-                continue;
-            }
+        let mut schedule = sdk::ScheduleBudget::new(sdk::MAX_ITEMS - items.len());
+        for g in guide.iter().filter(|g| numbers.contains(g.guide_number.as_str())) {
             for p in &g.guide {
-                let start = p.start_time * 1000;
-                let end = p.end_time * 1000;
-                if end <= ctx.now_ms - 3_600_000 || start > window_end {
-                    continue;
+                let (start, end) = (p.start_time * 1000, p.end_time * 1000);
+                if end > ctx.now_ms && start < window_end {
+                    schedule.push(schedule_item(&g.guide_number, p, start, end));
                 }
-                items.push(schedule_item(&g.guide_number, p, start, end));
             }
         }
-        sdk::info!("{} channels, {} programmes from {}", channels.len(), items.len() - channels.len(), device.friendly_name.as_deref().unwrap_or("the tuner"));
+        let schedule = schedule.finish();
+        sdk::info!("{} channels, {} programmes from {}", channels.len(), schedule.len(), device.friendly_name.as_deref().unwrap_or("the tuner"));
+        items.extend(schedule);
         Ok(items)
     }
 }
@@ -149,8 +150,11 @@ fn discover() -> Result<String, String> {
 }
 
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
-    let body = host::get_text(url)?;
-    serde_json::from_str(&body).map_err(|e| format!("unexpected answer from {url}: {e}"))
+    parse(url, &host::get_text(url)?)
+}
+
+fn parse<T: serde::de::DeserializeOwned>(url: &str, body: &str) -> Result<T, String> {
+    serde_json::from_str(body).map_err(|e| format!("unexpected answer from {}: {e}", sdk::redact_url(url)))
 }
 
 pub fn channel_item(c: &LineupEntry, logo: Option<String>) -> Item {
@@ -243,6 +247,13 @@ mod tests {
         assert_eq!((s.season.as_deref(), s.episode.as_deref()), (Some("12"), Some("4")));
         assert_eq!(s.subtitle.as_deref(), Some("Tonight."));
         assert_eq!((s.start_ms, s.end_ms), (Some(1760800000000), Some(1760803600000)));
+    }
+
+    #[test]
+    fn errors_never_show_the_device_key() {
+        let e = parse::<Vec<GuideChannel>>("https://api.hdhomerun.com/api/guide?DeviceAuth=SECRETKEY", "<html>").unwrap_err();
+        assert!(e.starts_with("unexpected answer from https://api.hdhomerun.com/api/guide?…"), "{e}");
+        assert!(!e.contains("SECRETKEY"));
     }
 
     #[test]
