@@ -5,12 +5,20 @@
 use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 pub struct NextPvr;
 
 const SESSION_KEY: &str = "session";
 const CURSOR_KEY: &str = "cursor";
+const WATCHED_KEY: &str = "watched";
 const LISTING_FETCHES: usize = 48;
+/// The guide is kept between refreshes in this many store keys, channels spread over them.
+const GUIDE_KEYS: i64 = 16;
+/// Set once the per-channel guide keys of earlier versions have been removed.
+const GUIDE_MOVED_KEY: &str = "guide_moved";
+/// Largest guide value written to one key, under the host's 256 KB.
+const GUIDE_KEY_BYTES: usize = 240 * 1024;
 
 impl sdk::Plugin for NextPvr {
     fn manifest() -> Manifest {
@@ -36,29 +44,40 @@ impl sdk::Plugin for NextPvr {
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let s = Server::connect()?;
         let channels: ChannelList = s.call("channel.list", "")?;
-        let channels: Vec<Channel> = channels.channels.into_iter().filter(|c| !c.channel_name.is_empty()).collect();
+        let mut channels: Vec<Channel> = channels.channels.into_iter().filter(|c| !c.channel_name.is_empty()).collect();
         if channels.is_empty() {
             return Err("NextPVR has no channels yet. Scan for channels in its settings first.".into());
         }
+        if channels.len() > sdk::MAX_ITEMS {
+            sdk::warn!("{} channels, of which the TV shows the first {}", channels.len(), sdk::MAX_ITEMS);
+            channels.truncate(sdk::MAX_ITEMS);
+        }
         let mut items: Vec<Item> = channels.iter().map(|c| s.channel_item(c)).collect();
-        let window_end = ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000;
-        let programmes = s.listings(&channels, ctx.now_ms, window_end, &mut items);
-        let mut recordings = 0;
         match s.call::<RecordingList>("recording.list", "&filter=ready") {
             Ok(list) => {
                 let max = host::setting("recordings").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(30).clamp(1, 100);
                 let mut recs: Vec<Recording> = list.recordings.into_iter().filter(|r| r.status.as_deref().unwrap_or("ready") == "ready").collect();
                 recs.sort_by_key(|r| std::cmp::Reverse(r.start_ms()));
                 recs.truncate(max);
+                let mut watched = Watched::load();
                 let count = recs.len();
                 for (i, r) in recs.iter().enumerate() {
-                    items.push(s.recording_item(r, (count - i) as i32));
-                    recordings += 1;
+                    let mut item = s.recording_item(r, (count - i) as i32);
+                    if item.kind == ItemKind::Resume {
+                        item.last_used_ms = watched.observe(r.id, r.playback_position.unwrap_or(0), ctx.now_ms);
+                    }
+                    items.push(item);
                 }
+                watched.save();
             }
             Err(e) => sdk::warn!("recordings unavailable: {e}"),
         }
-        sdk::info!("{} channels, {programmes} programmes, {recordings} recordings", channels.len());
+        items.truncate(sdk::MAX_ITEMS);
+        let recordings = items.len() - channels.len();
+        let window_end = ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000;
+        let schedule = s.listings(&channels, ctx.now_ms, window_end, sdk::MAX_ITEMS - items.len());
+        sdk::info!("{} channels, {} programmes, {recordings} recordings", channels.len(), schedule.len());
+        items.extend(schedule);
         Ok(items)
     }
 
@@ -199,13 +218,13 @@ impl Server {
             }
         }
         let pin = host::secret("pin").map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).unwrap_or_else(|| "0000".into());
-        let init: Status = get_json(&format!("{base}/service?method=session.initiate&ver=1.0&device=lounge&format=json")).map_err(|e| format!("No NextPVR at {base}: {e}"))?;
+        let init: Status = get_json(&format!("{base}/service?method=session.initiate&ver=1.0&device=lounge&format=json")).map_err(|e| format!("No NextPVR at {}: {e}", sdk::redact_url(&base)))?;
         let (sid, salt) = match (init.sid, init.salt) {
             (Some(sid), Some(salt)) => (sid, salt),
             _ => return Err("NextPVR did not start a session".into()),
         };
         let digest = md5_hex(&format!(":{}:{salt}", md5_hex(&pin)));
-        let login: Status = get_json(&format!("{base}/service?method=session.login&sid={sid}&md5={digest}&format=json"))?;
+        let login: Status = get_json(&format!("{base}/service?method=session.login&sid={sid}&md5={digest}&format=json")).map_err(|e| format!("session.login: {e}"))?;
         if login.stat != "ok" {
             return Err(format!("NextPVR rejected the PIN{}", login.msg.map(|m| format!(": {m}")).unwrap_or_default()));
         }
@@ -214,56 +233,41 @@ impl Server {
     }
 
     fn call<T: serde::de::DeserializeOwned>(&self, method: &str, params: &str) -> Result<T, String> {
-        get_json(&format!("{}/service?method={method}&sid={}{params}&format=json", self.base, self.sid))
+        get_json(&format!("{}/service?method={method}&sid={}{params}&format=json", self.base, self.sid)).map_err(|e| format!("{method}: {e}"))
     }
 
     /// The guide needs one call per channel, so each refresh takes the next slice of channels and
-    /// keeps the rest from last time.
-    fn listings(&self, channels: &[Channel], now_ms: i64, window_end: i64, items: &mut Vec<Item>) -> usize {
+    /// keeps the rest from last time, in a fixed number of store keys.
+    fn listings(&self, channels: &[Channel], now_ms: i64, window_end: i64, budget: usize) -> Vec<Item> {
+        if host::kv_get(GUIDE_MOVED_KEY).is_none() {
+            for c in channels {
+                host::kv_delete(&format!("epg:{}", c.channel_id));
+            }
+            host::kv_set(GUIDE_MOVED_KEY, b"1");
+        }
         let cursor = host::kv_get_string(CURSOR_KEY).and_then(|c| c.parse::<usize>().ok()).unwrap_or(0) % channels.len().max(1);
         let fresh: Vec<usize> = (0..channels.len().min(LISTING_FETCHES)).map(|i| (cursor + i) % channels.len()).collect();
         host::kv_set(CURSOR_KEY, ((cursor + fresh.len()) % channels.len()).to_string().as_bytes());
         let start_s = (now_ms - 3_600_000) / 1000 / 300 * 300;
         let end_s = window_end / 1000 / 300 * 300;
-        let mut count = 0;
-        for (i, c) in channels.iter().enumerate() {
-            let key = format!("epg:{}", c.channel_id);
-            let listings: Vec<Listing> = if fresh.contains(&i) {
-                match self.call::<ListingList>("channel.listings", &format!("&channel_id={}&start={start_s}&end={end_s}", c.channel_id)) {
-                    Ok(l) => {
-                        host::kv_set(&key, serde_json::to_string(&l.listings).unwrap_or_default().as_bytes());
-                        l.listings
-                    }
-                    Err(e) => {
-                        sdk::warn!("{}: {e}", c.channel_name);
-                        host::kv_get_string(&key).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
-                    }
-                }
-            } else {
-                host::kv_get_string(&key).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
-            };
-            for l in listings {
-                let (start, end) = (ms_from_any(l.start), ms_from_any(l.end));
-                if end < now_ms - 3_600_000 || start > window_end || l.name.is_empty() {
-                    continue;
-                }
-                items.push(Item {
-                    id: format!("prog:{}:{start}", c.channel_id),
-                    kind: ItemKind::Schedule,
-                    title: l.name.clone(),
-                    subtitle: l.subtitle.clone().filter(|s| !s.is_empty()).or_else(|| l.description.as_deref().map(first_sentence)),
-                    season: l.season.map(|n| n.to_string()),
-                    episode: l.episode.map(|n| n.to_string()),
-                    duration_ms: Some(end - start),
-                    channel_id: Some(c.channel_id.to_string()),
-                    start_ms: Some(start),
-                    end_ms: Some(end),
-                    ..Default::default()
-                });
-                count += 1;
+        let mut cache = GuideCache::load();
+        for &i in &fresh {
+            let c = &channels[i];
+            match self.call::<ListingList>("channel.listings", &format!("&channel_id={}&start={start_s}&end={end_s}", c.channel_id)) {
+                Ok(l) => cache.put(c.channel_id, l.listings.iter().filter_map(Cached::from_listing).filter(|l| l.end > now_ms).collect()),
+                Err(e) => sdk::warn!("{}: {e}", c.channel_name),
             }
         }
-        count
+        cache.save(channels, now_ms);
+        let mut schedule = sdk::ScheduleBudget::new(budget);
+        for c in channels {
+            for l in cache.get(c.channel_id) {
+                if l.end > now_ms && l.start < window_end {
+                    schedule.push(l.to_item(c.channel_id));
+                }
+            }
+        }
+        schedule.finish()
     }
 
     fn channel_item(&self, c: &Channel) -> Item {
@@ -304,13 +308,147 @@ impl Server {
         if in_progress {
             item.position_ms = Some(position_ms);
             item.progress = duration_ms.map(|d| (position_ms as f32 / d as f32).clamp(0.0, 1.0));
-            item.last_used_ms = Some(r.start_ms());
         } else {
             item.row = Some("recordings".into());
             item.weight = weight;
             item.is_new = position_ms == 0;
         }
         item
+    }
+}
+
+/// A listing as kept between refreshes: what a schedule item needs and nothing more.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Cached {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub season: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub episode: Option<i64>,
+    pub start: i64,
+    pub end: i64,
+}
+
+impl Cached {
+    fn from_listing(l: &Listing) -> Option<Cached> {
+        let subtitle = l.subtitle.clone().filter(|s| !s.is_empty()).or_else(|| l.description.as_deref().map(first_sentence)).filter(|s| !s.is_empty());
+        Some(Cached { name: l.name.clone(), subtitle, season: l.season, episode: l.episode, start: ms_from_any(l.start), end: ms_from_any(l.end) }).filter(|c| !c.name.is_empty())
+    }
+
+    fn to_item(&self, channel_id: i64) -> Item {
+        Item {
+            id: format!("prog:{channel_id}:{}", self.start),
+            kind: ItemKind::Schedule,
+            title: self.name.clone(),
+            subtitle: self.subtitle.clone(),
+            season: self.season.map(|n| n.to_string()),
+            episode: self.episode.map(|n| n.to_string()),
+            duration_ms: Some(self.end - self.start),
+            channel_id: Some(channel_id.to_string()),
+            start_ms: Some(self.start),
+            end_ms: Some(self.end),
+            ..Default::default()
+        }
+    }
+}
+
+/// The guide kept between refreshes, channels spread over [`GUIDE_KEYS`] store keys by id.
+#[derive(Default)]
+pub struct GuideCache {
+    parts: Vec<BTreeMap<i64, Vec<Cached>>>,
+    changed: Vec<bool>,
+}
+
+impl GuideCache {
+    fn key(part: usize) -> String {
+        format!("guide:{part}")
+    }
+
+    fn part(channel_id: i64) -> usize {
+        channel_id.rem_euclid(GUIDE_KEYS) as usize
+    }
+
+    pub fn empty() -> GuideCache {
+        GuideCache { parts: vec![BTreeMap::new(); GUIDE_KEYS as usize], changed: vec![false; GUIDE_KEYS as usize] }
+    }
+
+    fn load() -> GuideCache {
+        let mut cache = GuideCache::empty();
+        for (n, part) in cache.parts.iter_mut().enumerate() {
+            *part = host::kv_get(&Self::key(n)).and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or_default();
+        }
+        cache
+    }
+
+    pub fn put(&mut self, channel_id: i64, listings: Vec<Cached>) {
+        let n = Self::part(channel_id);
+        self.parts[n].insert(channel_id, listings);
+        self.changed[n] = true;
+    }
+
+    pub fn get(&self, channel_id: i64) -> &[Cached] {
+        self.parts[Self::part(channel_id)].get(&channel_id).map_or(&[], Vec::as_slice)
+    }
+
+    /// Writes the parts that changed, without channels that are gone or listings that are over.
+    fn save(&mut self, channels: &[Channel], now_ms: i64) {
+        for n in 0..self.parts.len() {
+            if self.changed[n] {
+                host::kv_set(&Self::key(n), &self.encode(n, channels, now_ms));
+            }
+        }
+    }
+
+    /// One part as stored, kept under [`GUIDE_KEY_BYTES`] by giving up the furthest listings.
+    pub fn encode(&mut self, n: usize, channels: &[Channel], now_ms: i64) -> Vec<u8> {
+        let part = &mut self.parts[n];
+        part.retain(|id, _| channels.iter().any(|c| c.channel_id == *id));
+        for listings in part.values_mut() {
+            listings.retain(|l| l.end > now_ms);
+            listings.sort_by_key(|l| l.start);
+        }
+        let mut cap = part.values().map(Vec::len).max().unwrap_or(0);
+        loop {
+            let bytes = serde_json::to_vec(&*part).unwrap_or_default();
+            if bytes.len() <= GUIDE_KEY_BYTES || cap == 0 {
+                return bytes;
+            }
+            cap = cap * 3 / 4;
+            part.values_mut().for_each(|l| l.truncate(cap));
+        }
+    }
+}
+
+/// When each part-watched recording was last seen to move. NextPVR keeps a position but not
+/// when it changed, so the plugin notes the refresh at which it did.
+#[derive(Serialize, Deserialize, Default)]
+pub struct Watched {
+    seen: BTreeMap<i64, (i64, Option<i64>)>,
+    #[serde(skip)]
+    now: BTreeMap<i64, (i64, Option<i64>)>,
+}
+
+impl Watched {
+    fn load() -> Watched {
+        host::kv_get(WATCHED_KEY).and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or_default()
+    }
+
+    /// The last time the position was seen to change, or `None` while that is not known.
+    pub fn observe(&mut self, id: i64, position: i64, now_ms: i64) -> Option<i64> {
+        let last_used = match self.seen.get(&id) {
+            Some(&(before, when)) if before == position => when,
+            Some(_) => Some(now_ms),
+            None => None,
+        };
+        self.now.insert(id, (position, last_used));
+        last_used
+    }
+
+    /// Keeps only the recordings observed this time.
+    fn save(self) {
+        host::kv_set(WATCHED_KEY, serde_json::to_string(&Watched { seen: self.now, now: BTreeMap::new() }).unwrap_or_default().as_bytes());
     }
 }
 
@@ -372,9 +510,51 @@ mod tests {
         assert_eq!(a.kind, ItemKind::Resume);
         assert_eq!(a.progress, Some(0.25));
         assert_eq!(a.action.resolve.as_deref(), Some("rec:10|Film"));
+        assert_eq!(a.last_used_ms, None);
         let b = s.recording_item(&list.recordings[1], 1);
         assert_eq!(b.kind, ItemKind::Program);
         assert_eq!(b.added_ms, sdk::parse_iso8601("2026-10-17T20:00:00Z"));
         assert!(b.is_new);
+    }
+
+    #[test]
+    fn watching_is_dated_only_once_the_position_moves() {
+        let mut w = Watched::default();
+        assert_eq!(w.observe(10, 1800, 1_000), None);
+        let mut w = Watched { seen: w.now, now: BTreeMap::new() };
+        assert_eq!(w.observe(10, 1800, 2_000), None);
+        let mut w = Watched { seen: w.now, now: BTreeMap::new() };
+        assert_eq!(w.observe(10, 2400, 3_000), Some(3_000));
+        let mut w = Watched { seen: w.now, now: BTreeMap::new() };
+        assert_eq!(w.observe(10, 2400, 4_000), Some(3_000));
+        assert_eq!(w.observe(11, 60, 4_000), None);
+        let json = serde_json::to_string(&Watched { seen: w.now, now: BTreeMap::new() }).unwrap();
+        let back: Watched = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.seen[&10], (2400, Some(3_000)));
+    }
+
+    fn listing(start_s: i64, description: &str) -> Cached {
+        Cached::from_listing(&Listing { id: 1, name: "News".into(), subtitle: None, description: Some(description.into()), start: start_s, end: start_s + 1800, season: Some(2), episode: None }).unwrap()
+    }
+
+    #[test]
+    fn the_guide_lives_in_a_fixed_number_of_keys() {
+        let channels: Vec<Channel> = (0..600).map(|i| Channel { channel_id: i, channel_number: i, channel_name: format!("C{i}"), ..Default::default() }).collect();
+        let mut cache = GuideCache::empty();
+        for c in &channels {
+            cache.put(c.channel_id, (0..60).map(|n| listing(1_760_800_000 + n * 1800, &format!("{} Tonight. Later.", "Long words ".repeat(20)))).collect());
+        }
+        cache.put(-5, vec![listing(1_760_800_000, "x")]);
+        assert_eq!(cache.parts.len(), GUIDE_KEYS as usize);
+        assert!(cache.get(7)[0].subtitle.as_ref().is_some_and(|s| s.chars().count() <= 120));
+        assert_eq!(cache.get(7)[0].to_item(7).id, "prog:7:1760800000000");
+        let now = 1_760_800_000_000 + 3_600_000;
+        for n in 0..GUIDE_KEYS as usize {
+            let bytes = cache.encode(n, &channels, now);
+            assert!(bytes.len() <= GUIDE_KEY_BYTES, "part {n}: {}", bytes.len());
+            let back: BTreeMap<i64, Vec<Cached>> = serde_json::from_slice(&bytes).unwrap();
+            assert!(back.values().all(|l| !l.is_empty() && l.iter().all(|x| x.end > now)));
+            assert!(!back.contains_key(&-5));
+        }
     }
 }
