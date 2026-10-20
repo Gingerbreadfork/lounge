@@ -15,7 +15,8 @@ different corner of the interface:
   a screensaver drawn on the TV's GPU. No settings, no network beyond the pictures. The best one
   to copy from.
 - `plugins/iptv`: an M3U playlist becomes channels, an XMLTV feed fills the guide. Settings,
-  gzip, parsing a large document.
+  a gzipped guide read in chunks within a memory and time budget, and the 2,000 places shared
+  fairly between channels.
 - `plugins/jellyfin` and `plugins/emby`: sign in to a server with a password, publish resume
   points and new arrivals, answer search. Secrets, a cached token in the key-value store, deep
   links into another app.
@@ -25,16 +26,17 @@ different corner of the interface:
   partial failure reported without giving up.
 - `plugins/archive`: rows from a search API, and `resolve`, which looks up the file to play only
   when something is selected.
-- `plugins/immich`: `Kind::Wallpaper` items that feed the screensaver instead of a row.
+- `plugins/immich`: `Kind::Wallpaper` items that feed the screensaver instead of a row, read
+  from a shared album's timeline a month at a time.
 - `plugins/hdhomerun`: `Kind::Epg`, channels that play in the TV's player, a guide window from
   `RefreshContext`, and finding a device through a discovery service.
-- `plugins/tvheadend`: basic auth for the API and a token on the addresses the TV fetches
-  itself, paging through a large guide, recordings as a row.
+- `plugins/tvheadend`: answering the server's Digest or Basic challenge, a token on the
+  addresses the TV fetches itself, paging through a large guide, recordings as a row.
 - `plugins/channels`: a DVR's recordings split between Continue watching and a row by their
   playback position.
-- `plugins/nextpvr`: a session signed in with a digest, a guide gathered across refreshes with
-  the key-value store so one refresh never exceeds the fetch budget, and `resolve` so play
-  addresses always carry a live session.
+- `plugins/nextpvr`: a session signed in with a digest, a guide gathered across refreshes in a
+  fixed set of key-value keys so one refresh never exceeds the fetch budget, and `resolve` so
+  play addresses always carry a live session.
 
 ## Quick start
 
@@ -127,17 +129,27 @@ things, including the plugin's recent log lines, which is where your `sdk::info!
 
 ## How a plugin is run
 
-The core loads your module fresh for every call, with a fuel budget and a memory cap, so a
-runaway loop or a leak ends that call and nothing else. There is no state between calls apart
-from the key-value store. `refresh` runs when the plugin is turned on, every `refresh_minutes`
-while the screen is on, when a setting changes, and when someone asks for it on the phone.
-`search` runs as the user types on the TV's search screen. `resolve` runs when the user
-selects an item whose action says `resolve`.
+The core loads your module fresh for every call, with a fuel budget, a memory cap and a time
+limit, so a runaway loop or a leak ends that call and nothing else. Host functions cost fuel
+too, so a loop of `kv_set` runs out like a loop of arithmetic. There is no state between calls
+apart from the key-value store. `refresh` runs when the plugin is turned on, every
+`refresh_minutes` while the screen is on, when a setting changes, and when someone asks for it
+on the phone. Refreshes run one after another on their own thread; `resolve` and `search` run on
+another, so pressing a tile never waits for someone's refresh.
+
+`search` runs as the user types on the TV's search screen, for plugins whose manifest lists the
+`search` kind and whose required settings are filled in. Each plugin that finds something gets a
+row under its own name, with the first picture of each result; the results' actions work
+exactly as they do in a refresh. A search that a newer one has replaced is not run at all.
+`resolve` runs when the user selects an item whose action says `resolve`.
 
 The host fetches artwork for you, four pictures at a time, caps each at 4 MB, scales it to
 every size the screen needs and takes the palette that lights the focused tile. Give it a
 direct image URL under one of your `fetch_hosts`; a picture that fails to download is simply a
-tile without one, so prefer modestly sized files.
+tile without one, so prefer modestly sized files. Each URL is downloaded once however many items
+name it, earliest items first. One refresh may download up to 600 new pictures, 192 MB, in two
+minutes; what does not fit comes with later refreshes, since pictures already downloaded cost
+nothing. Downloads a refresh no longer names are deleted.
 
 ## The manifest
 
@@ -166,10 +178,10 @@ tile without one, so prefer modestly sized files.
 | `name`, `description`, `publisher_name` | What the TV and the phone show. The description is one sentence. |
 | `version` | Shown to the user; updates may carry any version, the signature is what matters. |
 | `kinds` | What the plugin does: `content` (items and rows), `epg` (channels and schedule), `wallpaper`, `screensaver`, `search`. |
-| `fetch_hosts` | Hosts `fetch` may reach, including on redirects. `*` means any host and is shown to the user as such; a plugin that talks to a server the user names must declare it. Loopback and the TV's own addresses are never implied by `*`. |
+| `fetch_hosts` | Hosts `fetch` may reach, including on redirects. `*` means any host and is shown to the user as such; a plugin that talks to a server the user names must declare it. The TV checks the address every name resolves to: loopback and the TV's own addresses are reachable only through an entry that is literally `localhost` or an IP address, never through `*` or any other name. |
 | `refresh_minutes` | How often `refresh` runs while the screen is on; at least 5, 0 means the host's default. |
 | `rows` | Rows of your own, in order. `style` is `landscape` (16:9 tiles), `poster` (portrait) or `compact`. Items name a row by its `id`. |
-| `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `url`, `password`, `number` or `toggle`. A `password` is only readable through `secret`, never through `setting`, and is never shown back. |
+| `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `url`, `password`, `number` or `toggle`. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. |
 | `homepage` | A link shown on the plugin's page. |
 
 The manifest ships as `manifest.json` in the bundle and is also returned by `lg_manifest`;
@@ -202,8 +214,12 @@ the installer refuses a bundle where the two disagree. The SDK writes both from
 Stage. A `channel` joins Live now and the guide, and `schedule` items fill in what is on it. A
 `program` goes into the row its `row` names; without one it goes nowhere. A `wallpaper` is a
 picture for the screensaver: give it the picture as `thumbnail` (it is prepared at 1920×1080),
-a `title` and, if you like, a `subtitle`; it is the one kind that needs no `action`. A
-`screensaver` is an abstract screensaver the TV draws itself; see [Screensavers](#screensavers).
+a `title` and, if you like, a `subtitle`; it needs no `action`. A `screensaver` is an abstract
+screensaver the TV draws itself; see [Screensavers](#screensavers).
+
+**Ids.** An item's `id` must be unique within one refresh and stay the same from one refresh to
+the next. When two items share an id, the first is kept and the plugin's log says how many were
+left out. The first 2,000 items of a refresh are kept, so put what matters first.
 
 **What a tile shows.** `title` is the first line; `subtitle` the second, in the launcher's own
 voice (commas between facts, never dots: "S2 E4, Netflix"). `season` and `episode` are shown
@@ -217,8 +233,9 @@ framed on the Stage over a soft backdrop. `logo` is a channel or publisher mark,
 cropped. Give both `thumbnail` and `poster` when you have them.
 
 **Channels.** A `channel` item carries `channel_id`, `channel_name` and `channel_number`;
-`schedule` items name the same `channel_id` with `start_ms` and `end_ms`. The guide window the
-host wants is in `RefreshContext.window_hours`.
+`schedule` items name the same `channel_id` with `start_ms` and `end_ms`. A `schedule` item needs
+no `action`: selecting it plays its channel. The guide window the host wants is in
+`RefreshContext.window_hours`.
 
 ## Actions
 
@@ -301,10 +318,10 @@ Everything a plugin can do, as the SDK exposes it under `host`:
 
 | Function | What it does |
 |---|---|
-| `fetch(request)` | An HTTP request to a host in `fetch_hosts`. Bodies are capped at 8 MB; a response body is text when it is valid UTF-8, otherwise base64 in `body_base64`. Redirects are followed only to allowed hosts. At most 64 calls per invocation, sharing a 60 s budget. |
-| `get_text(url)` | `fetch` for a GET that must return text, failing on anything but 2xx. |
+| `fetch(request)` | An HTTP request to a host in `fetch_hosts`. Bodies are capped at 8 MB, and a larger one fails with `host::TOO_LARGE`; a response body is text when it is valid UTF-8, otherwise base64 in `body_base64`, which `sdk::body_bytes` turns into bytes. Redirects are followed only to allowed hosts, and your headers go only to the origin you addressed: a redirect to another host, port or scheme drops them. `timeout_ms` shortens one request; none takes longer than 20 s. At most 64 calls per invocation, sharing a 60 s budget. |
+| `get_text(url)` | `fetch` for a GET that must return text, failing on anything but 2xx. Its errors name the address without its query string or password, so they are safe to log; `sdk::redact` does the same for your own messages. |
 | `kv_get`, `kv_get_string`, `kv_set`, `kv_delete` | A private store: 256 keys of up to 256 KB each. Survives restarts and updates; cleared when the plugin is removed. Cache tokens and the last refresh's result here. |
-| `setting(key)` | A setting's value, or its manifest default. |
+| `setting(key)` | A setting's value, or its manifest default. Nothing for a `password`. |
 | `required_setting(key, label)` | The same, or an error naming the field for the user. |
 | `secret(key)` | A `password` setting's value. Only keys the manifest declares as passwords. |
 | `now_ms()` | Milliseconds since the epoch. |
@@ -313,7 +330,13 @@ Everything a plugin can do, as the SDK exposes it under `host`:
 `RefreshContext` tells `refresh` the time, the UTC offset in minutes, the device tier (`a`, `b`
 or `c`, so a plugin can fetch less on a small TV), when the last successful refresh finished,
 and how many hours of schedule are wanted. `epoch_ms(...)` in the SDK turns a civil date into
-milliseconds without a calendar crate.
+milliseconds without a calendar crate, and `parse_iso8601` reads a timestamp, returning nothing
+for anything malformed.
+
+A refresh keeps at most `sdk::MAX_ITEMS`. `sdk::dedup_ids` drops repeated ids, and
+`fit_schedule` or, for a long guide read as it arrives, `ScheduleBudget` share the places left
+after the channels evenly between them, earliest programmes first. `for_each_in_array` reads a
+large JSON array one entry at a time.
 
 ## Testing without a TV
 
@@ -326,11 +349,14 @@ lgp-tool run mine.wasm --fixtures ./fixtures
 
 `--set` and `--secret` stand in for the fields the user would fill. `--search` runs `search`
 instead of `refresh`, and `--resolve action` runs `resolve` for one action and prints what came
-back. `--fixtures dir` answers every `fetch` from a file named
-`<sha256 of the URL>.body` in that directory, so a test runs the same way every time and
-offline. Unit-test your parsing in ordinary Rust: the SDK's host functions are absent off wasm,
-so keep parsing in functions that take strings, as `plugins/iptv` does with `parse_m3u` and
-`parse_xmltv`.
+back. Each run prints the fuel it used; `--json` prints the items as JSON. `--fixtures dir`
+answers every `fetch` from a file named `<sha256 of the URL>.body` in that directory, so a test
+runs the same way every time and offline. A binary body reaches the plugin as `body_base64`, as
+on the TV, and one over 8 MB fails the same way. An optional `<sha256>.head` beside it gives the
+status on its first line and headers on the lines after; without one the answer is 200 with no
+headers. Unit-test your parsing in ordinary Rust: the SDK's host functions are absent off wasm,
+so keep parsing in functions that take strings or readers, as `plugins/iptv` does with
+`parse_m3u` and `parse_xmltv`.
 
 ## Bundling, signing and updates
 
@@ -338,7 +364,8 @@ A `.lgp` is a zip with `manifest.json`, `plugin.wasm`, `publisher.pub` (an Ed255
 32 bytes or 64 hex characters) and `signature.sig` (64 bytes or 128 hex characters) over
 `"lounge-plugin-v1\0"`, the length-prefixed manifest, then the length-prefixed module.
 
-`lgp-tool keygen` writes a signing key once; keep it private and back it up. The TV pins your
+`lgp-tool keygen` writes a signing key once, readable only by you, and refuses to overwrite one
+that exists; keep it private and back it up. The TV pins your
 public key the first time it installs your plugin and refuses a later bundle signed by any other
 key, so a new key means your users have to remove and reinstall. `lgp-tool bundle` signs,
 `lgp-tool inspect` verifies and prints the manifest. Installing a bundle with the same `id`
@@ -349,13 +376,16 @@ kept, and the plugin refreshes.
 
 | | |
 |---|---|
-| Memory | 32 MB of linear memory per call |
+| Memory | 32 MB of linear memory per call, one memory, tables of up to 100,000 entries |
 | Fuel | 20 billion instructions per call; a runaway loop ends with "out of fuel" |
-| Fetches | 64 per call, 60 s of waiting in total, 8 MB per body |
-| Result | 8 MB of JSON per call; keep item counts in the hundreds |
-| Artwork | 4 MB per picture, fetched by the host |
-| Key-value | 256 keys of 256 KB |
-| Log | 500 lines per call, the last 200 kept |
+| Host calls | 10,000 fuel each, plus one per byte they move |
+| Time | 3 minutes for a refresh, 12 s for `search`, `resolve` and the manifest |
+| Fetches | 64 per call, 60 s of waiting in total, 20 s and 8 MB each |
+| Result | 8 MB of JSON per call |
+| Items | 2,000 per refresh, each id once |
+| Artwork | 4 MB per picture; 600 new pictures, 192 MB and two minutes per refresh |
+| Key-value | 256 keys of up to 256 bytes, values of 256 KB, 1,000 writes per call |
+| Log | 500 lines per call of up to 4 KB each, the last 200 kept |
 | Screensavers | 8 per plugin, each a program of up to 32 KB with up to 24 uniforms of up to 16 numbers |
 
 ## The wire interface, for other languages
@@ -383,11 +413,12 @@ boundary as UTF-8 JSON in linear memory, and a `(ptr, len)` pair is packed into 
 | `now() -> i64` | | milliseconds since the epoch |
 | `log(level, ptr, len)` | | 0 debug, 1 info, 2 warn, 3 error |
 | `secret(k, kl) -> packed` | | a `password` setting's value |
-| `setting(k, kl) -> packed` | | any setting's value, or its default |
+| `setting(k, kl) -> packed` | | any other setting's value, or its default |
 
 Memory the host hands to the plugin (fetch responses, settings) is allocated with the plugin's
 `lg_alloc` and belongs to the plugin; memory the plugin returns is freed by the host with
-`lg_free`. The JSON shapes are the structs in `core/lounge-plugin-api/src/lib.rs`, which is the
+`lg_free`. `lg_alloc` must not call host functions: the call fails if it does. Keys longer
+than 256 bytes are an error, not cut short. The JSON shapes are the structs in `core/lounge-plugin-api/src/lib.rs`, which is the
 one definition the host and the SDK share.
 
 ## Checklist before you share it
