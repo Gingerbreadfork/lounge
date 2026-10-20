@@ -323,6 +323,7 @@ dependencies = [
  "parking_lot",
  "serde_json",
  "sha2 0.10.9",
+ "tracing",
 ]
 
 [[package]]
@@ -411,7 +412,6 @@ version = "0.1.2"
 dependencies = [
  "flate2",
  "lounge-plugin-sdk",
- "quick-xml",
  "serde",
  "serde_json",
 ]
@@ -465,6 +465,7 @@ name = "lounge-plugin-tvheadend"
 version = "0.1.2"
 dependencies = [
  "lounge-plugin-sdk",
+ "md-5",
  "serde",
  "serde_json",
 ]
