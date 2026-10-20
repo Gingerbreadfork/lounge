@@ -4,10 +4,12 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.tv.TvContract
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
+import java.net.URISyntaxException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import tv.lounge.core.Platform
@@ -68,15 +70,48 @@ class AndroidPlatform(private val context: Context) : Platform {
 
     /**
      * An `intent:` or `android-app:` string (what TvProvider rows carry) is an Intent serialised
-     * by `toUri`; anything else is a plain link to view.
+     * by `toUri`; anything else is a plain link to view. They come from other apps and plugins, so
+     * only a view, or a launch of a named app, gets through: no selector, clip data or URI grants,
+     * no installs, and only into another app's exported activity.
      */
     private fun intentFor(uri: String): Intent {
-        val intent = when {
-            uri.startsWith("intent:") -> Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
-            uri.startsWith("android-app:") -> Intent.parseUri(uri, Intent.URI_ANDROID_APP_SCHEME)
-            else -> Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+        val intent = try {
+            when {
+                uri.startsWith("intent:") -> Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
+                uri.startsWith("android-app:") -> Intent.parseUri(uri, Intent.URI_ANDROID_APP_SCHEME)
+                else -> Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+            }
+        } catch (e: URISyntaxException) {
+            throw PlatformException.Failed("That link is not one Lounge can open")
+        }
+        val refused = PlatformException.Failed("Lounge won't open that link")
+        val explicit = intent.component != null || intent.`package` != null
+        when (intent.action) {
+            null, Intent.ACTION_VIEW -> Unit
+            Intent.ACTION_MAIN -> if (!explicit) throw refused
+            else -> throw refused
+        }
+        intent.selector = null
+        intent.clipData = null
+        intent.flags = intent.flags and URI_GRANTS.inv()
+        if (intent.type == APK_TYPE || intent.data?.scheme?.lowercase() in setOf("package", "file")) throw refused
+        val own = context.packageName
+        if (intent.`package` == own) throw refused
+        intent.component?.let { component ->
+            if (component.packageName == own) throw refused
+            val info = try {
+                context.packageManager.getActivityInfo(component, 0)
+            } catch (e: PackageManager.NameNotFoundException) {
+                throw PlatformException.Failed("No Activity found for ${component.packageName}")
+            }
+            if (!info.exported || info.permission != null) throw refused
         }
         return intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    /** Home was pressed while Lounge was already in front. */
+    fun goHome() {
+        _commands.tryEmit(UiCommand.GoHome)
     }
 
     override fun switchInput(inputId: String) {
@@ -197,5 +232,8 @@ class AndroidPlatform(private val context: Context) : Platform {
 
     private companion object {
         const val TAG = "LoungePlatform"
+        const val APK_TYPE = "application/vnd.android.package-archive"
+        const val URI_GRANTS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
     }
 }

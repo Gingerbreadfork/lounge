@@ -19,19 +19,23 @@ import java.security.MessageDigest
 /**
  * Copies artwork from http(s), content and android.resource URIs into a cache directory so the
  * artwork pipeline reads plain files. A URI is fetched once and refreshed after [maxAgeMs];
- * failures are remembered for an hour.
+ * failures are remembered for an hour. The URIs come from other apps' rows and are read as Lounge,
+ * so file URIs and the providers [isOwnAuthority] names as Lounge's are refused.
  */
 class ArtworkFetcher(
     private val resolver: ContentResolver,
     private val dir: File,
     private val maxAgeMs: Long = 7L * 86_400_000L,
+    private val isOwnAuthority: (String) -> Boolean,
 ) {
     private val failures = HashMap<String, Long>()
     private val gate = Semaphore(4)
 
-    /** Fetch every URI in parallel (four at a time); returns a local path per input, or null. */
+    /** Fetch every distinct URI in parallel (four at a time); returns a local path per input, or null. */
     suspend fun fetchAll(uris: List<String?>): List<String?> = coroutineScope {
-        uris.map { uri -> async { if (uri == null) null else gate.withPermit { fetch(uri) } } }.awaitAll()
+        val paths = uris.filterNotNull().distinct().map { uri -> uri to async { gate.withPermit { fetch(uri) } } }
+            .associate { (uri, path) -> uri to path.await() }
+        uris.map { uri -> uri?.let { paths[it] } }
     }
 
     suspend fun fetch(uri: String): String? = withContext(Dispatchers.IO) {
@@ -42,7 +46,7 @@ class ArtworkFetcher(
         val failedAt = synchronized(failures) { failures[uri] }
         if (failedAt != null && System.currentTimeMillis() - failedAt < 3_600_000L) return@withContext file.takeIf { it.exists() }?.absolutePath
         dir.mkdirs()
-        val tmp = File(dir, file.name + ".tmp")
+        val tmp = File.createTempFile(file.name + ".", ".tmp", dir)
         try {
             open(Uri.parse(uri)).use { input -> tmp.outputStream().use { input.copyTo(it) } }
             if (tmp.length() == 0L) throw IllegalStateException("empty")
@@ -72,6 +76,13 @@ class ArtworkFetcher(
     }
 
     private fun open(uri: Uri): InputStream = when (uri.scheme?.lowercase()) {
+        "content" -> {
+            // A user id before the authority still reaches the provider it names.
+            val authority = uri.authority?.substringAfterLast('@').orEmpty()
+            if (authority.isEmpty() || isOwnAuthority(authority)) throw IllegalArgumentException("not another app's provider")
+            resolver.openInputStream(uri) ?: throw IllegalStateException("no stream")
+        }
+        "android.resource" -> resolver.openInputStream(uri) ?: throw IllegalStateException("no stream")
         "http", "https" -> {
             val conn = URL(uri.toString()).openConnection() as HttpURLConnection
             conn.connectTimeout = 8_000
@@ -81,16 +92,16 @@ class ArtworkFetcher(
             if (conn.responseCode !in 200..299) throw IllegalStateException("HTTP ${conn.responseCode}")
             conn.inputStream
         }
-        "content", "android.resource", "file" -> resolver.openInputStream(uri) ?: throw IllegalStateException("no stream")
         else -> throw IllegalArgumentException("unsupported scheme")
     }
 
-    /** Delete cached files older than [maxAgeMs] that are not in [keep]. */
+    /** Delete cached files older than [maxAgeMs] that are not in [keep], and downloads abandoned an hour ago. */
     fun prune(keep: Collection<String>) {
         val keepNames = keep.map { File(it).name }.toHashSet()
-        val cutoff = System.currentTimeMillis() - maxAgeMs
+        val now = System.currentTimeMillis()
         dir.listFiles()?.forEach { f ->
-            if (f.name !in keepNames && (f.lastModified() < cutoff || f.name.endsWith(".tmp"))) f.delete()
+            val stale = if (f.name.endsWith(".tmp")) f.lastModified() < now - 3_600_000L else f.lastModified() < now - maxAgeMs
+            if (f.name !in keepNames && stale) f.delete()
         }
     }
 

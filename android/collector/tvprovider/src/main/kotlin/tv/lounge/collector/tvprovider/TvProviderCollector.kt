@@ -18,6 +18,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import tv.lounge.core.ProgramKind
 import tv.lounge.core.ProgramRecord
@@ -31,7 +33,11 @@ import java.io.File
  */
 class TvProviderCollector(private val context: Context) {
     private val resolver = context.contentResolver
-    private val artwork = ArtworkFetcher(resolver, File(context.cacheDir, "tvart"))
+    private val artwork = ArtworkFetcher(resolver, File(context.cacheDir, "tvart")) { authority ->
+        runCatching { context.packageManager.resolveContentProvider(authority, 0)?.packageName == context.packageName }.getOrDefault(true)
+    }
+    /** One snapshot at a time: they share the artwork cache, and pruning must not see another's downloads. */
+    private val collecting = Mutex()
 
     fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, TvContractCompat.PERMISSION_READ_TV_LISTINGS) == PackageManager.PERMISSION_GRANTED
@@ -41,7 +47,11 @@ class TvProviderCollector(private val context: Context) {
      * [scheduleHours] ahead.
      */
     suspend fun snapshot(nowMs: Long = System.currentTimeMillis(), scheduleHours: Int = 6): List<ProgramRecord> = withContext(Dispatchers.IO) {
-        if (!hasPermission()) return@withContext emptyList()
+        collecting.withLock { collect(nowMs, scheduleHours) }
+    }
+
+    private suspend fun collect(nowMs: Long, scheduleHours: Int): List<ProgramRecord> {
+        if (!hasPermission()) return emptyList()
         val drafts = ArrayList<Draft>()
         runCatching { drafts += watchNext() }.onFailure { Log.w(TAG, "watch next", it) }
         val channels = runCatching { channels() }.getOrElse { Log.w(TAG, "channels", it); emptyList() }
@@ -58,7 +68,7 @@ class TvProviderCollector(private val context: Context) {
         val thumbnails = artwork.fetchAll(drafts.map { it.thumbnailUri })
         val logos = artwork.fetchAll(drafts.map { it.logoUri })
         artwork.prune(posters.filterNotNull() + thumbnails.filterNotNull() + logos.filterNotNull())
-        drafts.mapIndexed { i, d -> d.toRecord(posters[i], thumbnails[i], logos[i]) }
+        return drafts.mapIndexed { i, d -> d.toRecord(posters[i], thumbnails[i], logos[i]) }
     }
 
     /** Emits when any TV provider table changes; callers should debounce. */

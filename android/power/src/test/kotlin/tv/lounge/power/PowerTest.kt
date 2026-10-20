@@ -6,6 +6,8 @@ import java.nio.ByteOrder
 import java.security.KeyPairGenerator
 import java.security.interfaces.RSAPublicKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -42,6 +44,29 @@ class PowerTest {
         assertEquals(255, f.exitCode)
         assertEquals("Error: unknown command", f.output)
         assertEquals(-1, AdbBackend.parseResult("no marker").exitCode)
+    }
+
+    @Test
+    fun onlyThisDevicesDaemonIsTrusted() {
+        val banner = "device::ro.product.name=kirkwood;ro.product.model=Google TV Streamer;ro.product.device=kirkwood;features=shell_v2,cmd"
+        assertTrue(AdbClient.bannerIsThisDevice(banner, "kirkwood", "Google TV Streamer", "kirkwood"))
+        assertFalse(AdbClient.bannerIsThisDevice(banner, "kirkwood", "Other TV", "kirkwood"))
+        assertFalse(AdbClient.bannerIsThisDevice("device::features=shell_v2", "kirkwood", "Google TV Streamer", "kirkwood"))
+        assertFalse(AdbClient.bannerIsThisDevice("host::ro.product.name=kirkwood", "kirkwood", "Google TV Streamer", "kirkwood"))
+
+        assertEquals(true, AdbClient.tcpPortMatches("5555", null, 5555))
+        assertEquals(true, AdbClient.tcpPortMatches(null, "5555", 5555))
+        assertEquals(false, AdbClient.tcpPortMatches("-1", "5555", 5555))
+        assertEquals(false, AdbClient.tcpPortMatches("7000", null, 5555))
+        assertNull(AdbClient.tcpPortMatches(null, null, 5555))
+    }
+
+    @Test
+    fun theScreensaverFlagIsReadFromTheActionOutput() {
+        assertEquals("0", PowerSetup.previousScreensaverEnabled("0"))
+        assertEquals("null", PowerSetup.previousScreensaverEnabled("null\n"))
+        assertNull(PowerSetup.previousScreensaverEnabled("Error: permission denied"))
+        assertNull(PowerSetup.previousScreensaverEnabled(""))
     }
 
     @Test

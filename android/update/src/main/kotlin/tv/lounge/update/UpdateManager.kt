@@ -5,7 +5,10 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
 import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
+import android.content.pm.Signature
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -54,8 +57,8 @@ sealed interface UpdateState {
     data class Downloading(override val release: Release, val progress: Float) : UpdateState {
         override val label: String get() = "Downloading"
     }
-    /** Downloaded and verified, waiting for a quiet moment or a press. */
-    data class Ready(override val release: Release, val file: File, val path: InstallPath) : UpdateState {
+    /** Downloaded and verified against [sha256], waiting for a quiet moment or a press. */
+    data class Ready(override val release: Release, val file: File, val sha256: String, val path: InstallPath) : UpdateState {
         override val label: String get() = "Ready ($path)"
     }
     data class Installing(override val release: Release) : UpdateState {
@@ -73,7 +76,8 @@ sealed interface UpdateState {
 /**
  * Keeps Lounge current from its GitHub releases: a check every half day, a verified download,
  * and an install that asks nothing when Android or Power Setup allows it. Everything happens in
- * the background; the Settings sheet and the home notice only show where it stands.
+ * the background and off the main thread; the Settings sheet and the home notice only show where
+ * it stands.
  */
 class UpdateManager(
     private val context: Context,
@@ -82,11 +86,13 @@ class UpdateManager(
     private val repo: String = "Gingerbreadfork/lounge",
 ) {
     private val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
-    private val _state = MutableStateFlow<UpdateState>(restoredState())
-    private val _autoCheck = MutableStateFlow(prefs.getBoolean(KEY_AUTO, true))
+    private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle(0L))
+    private val _autoCheck = MutableStateFlow(true)
     private val _confirmRequests = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
     private val work = Mutex()
     @Volatile private var inForeground = false
+    @Volatile private var lastAttemptMs = 0L
+    @Volatile private var installingSince = 0L
     private var loop: Job? = null
 
     val state: StateFlow<UpdateState> = _state.asStateFlow()
@@ -95,7 +101,7 @@ class UpdateManager(
     val confirmRequests: SharedFlow<Intent> = _confirmRequests.asSharedFlow()
     val lastCheckedMs: Long get() = prefs.getLong(KEY_LAST_CHECK, 0L)
 
-    /** The release found last time, when it is still newer than this build. */
+    /** What the last run left: the release it found and, if its download still checks out, that it is ready. */
     private fun restoredState(): UpdateState {
         val release = prefs.getString(KEY_RELEASE_JSON, null)?.let { runCatching { Release.parse(it) }.getOrNull() }
         val installed = Version.parse(currentVersion)
@@ -125,10 +131,10 @@ class UpdateManager(
         inForeground = foreground
     }
 
+    /** Starts the background work. Restoring the last run's state reads and hashes files, so it happens here, off the caller's thread. */
     fun start(scope: CoroutineScope) {
         current = this
         if (loop != null) return
-        runCatching { context.packageManager.packageInstaller.let { pi -> pi.mySessions.forEach { pi.abandonSession(it.sessionId) } } }
         scope.launch {
             var last = ""
             _state.collect {
@@ -137,7 +143,14 @@ class UpdateManager(
                 last = line
             }
         }
-        loop = scope.launch {
+        loop = scope.launch(Dispatchers.IO) {
+            work.withLock {
+                runCatching { context.packageManager.packageInstaller.let { pi -> pi.mySessions.forEach { pi.abandonSession(it.sessionId) } } }
+                _autoCheck.value = prefs.getBoolean(KEY_AUTO, true)
+                lastAttemptMs = lastCheckedMs
+                if (_state.value is UpdateState.Idle) _state.value = restoredState()
+                stagingDir()?.listFiles()?.forEach { it.delete() }
+            }
             delay(FIRST_DELAY_MS)
             while (true) {
                 runCatching { tick() }.onFailure { Log.w(TAG, "updates: ${it.message}") }
@@ -149,12 +162,22 @@ class UpdateManager(
     /** One pass of the background work: a due check, then the download, then a quiet install. */
     private suspend fun tick() {
         repeat(3) {
+            if (!_autoCheck.value) return
             val s = _state.value
             val now = System.currentTimeMillis()
-            val due = now - lastCheckedMs > CHECK_EVERY_MS || (s is UpdateState.Failed && now - s.atMs > RETRY_AFTER_MS)
             when {
-                !_autoCheck.value -> return
-                due && (s is UpdateState.Idle || s is UpdateState.UpToDate || s is UpdateState.Failed) -> if (s is UpdateState.Failed && s.release != null) download(s.release) else check()
+                s is UpdateState.Installing -> {
+                    // Power Setup can report success without Android replacing the app; give up and retry later.
+                    if (now - installingSince > INSTALL_TIMEOUT_MS) {
+                        Log.w(TAG, "updates: the install of ${s.release.tag} never finished")
+                        _state.value = UpdateState.Failed("The install did not finish", s.release, now)
+                    }
+                    return
+                }
+                s is UpdateState.Checking || s is UpdateState.Downloading -> return
+                // Due checks run from every resting state, so a newer release replaces one still waiting.
+                now - lastAttemptMs > CHECK_EVERY_MS -> work.withLock { checkLocked(quiet = s.isWaiting()) }
+                s is UpdateState.Failed && now - s.atMs > RETRY_AFTER_MS -> if (s.release != null) download(s.release) else check()
                 s is UpdateState.Available -> download(s.release)
                 // A quiet install waits until the home is off screen; one that needs a confirmation
                 // only prepares the session, so Android has the dialog ready for the notice.
@@ -164,9 +187,20 @@ class UpdateManager(
         }
     }
 
+    private fun UpdateState.isWaiting(): Boolean =
+        this is UpdateState.Available || this is UpdateState.Ready || this is UpdateState.NeedsConfirmation
+
     /** Looks for a newer release right now. */
-    suspend fun check(): UpdateState = work.withLock {
-        _state.value = UpdateState.Checking
+    suspend fun check(): UpdateState = withContext(Dispatchers.IO) { work.withLock { checkLocked(quiet = false) } }
+
+    /**
+     * One look at GitHub. [quiet] leaves a waiting update on show while it looks and keeps it if the
+     * look fails; the same release found again keeps its state, confirmation and all.
+     */
+    private suspend fun checkLocked(quiet: Boolean): UpdateState {
+        val before = _state.value
+        if (!quiet) _state.value = UpdateState.Checking
+        lastAttemptMs = System.currentTimeMillis()
         val result = runCatching { fetchLatest() }
         val now = System.currentTimeMillis()
         val next = result.fold(
@@ -176,58 +210,78 @@ class UpdateManager(
                 when {
                     release == null -> UpdateState.UpToDate(now)
                     installed != null && release.version <= installed -> UpdateState.UpToDate(now)
+                    before.isWaiting() && before.release?.version == release.version -> before
                     else -> readyIfDownloaded(release) ?: UpdateState.Available(release)
                 }
             },
-            onFailure = { UpdateState.Failed(it.message ?: "Could not reach GitHub", null, now) },
+            onFailure = { if (quiet) before else UpdateState.Failed(it.message ?: "Could not reach GitHub", null, now) },
         )
         _state.value = next
-        next
+        return next
     }
 
     /** Fetches and verifies the APK; the state ends at [UpdateState.Ready] or [UpdateState.Failed]. */
-    suspend fun download(release: Release): UpdateState = work.withLock {
-        readyIfDownloaded(release)?.let { _state.value = it; return it }
-        _state.value = UpdateState.Downloading(release, 0f)
-        val result = runCatching { fetchApk(release) }
-        val next = result.fold(
-            onSuccess = { file -> UpdateState.Ready(release, file, currentPath()) },
-            onFailure = { UpdateState.Failed(it.message ?: "The download failed", release, System.currentTimeMillis()) },
-        )
-        _state.value = next
-        next
+    suspend fun download(release: Release): UpdateState = withContext(Dispatchers.IO) {
+        work.withLock {
+            readyIfDownloaded(release)?.let { _state.value = it; return@withLock it }
+            _state.value = UpdateState.Downloading(release, 0f)
+            val result = runCatching { fetchApk(release) }
+            val next = result.fold(
+                onSuccess = { (file, hash) -> UpdateState.Ready(release, file, hash, currentPath()) },
+                onFailure = { UpdateState.Failed(it.message ?: "The download failed", release, System.currentTimeMillis()) },
+            )
+            _state.value = next
+            next
+        }
     }
 
     /**
      * Installs the downloaded update. Without a prompt where Android or Power Setup allow it;
      * otherwise Android's dialog is opened at once when [interactive], or kept for the notice.
+     * Every path checks the file again first: its hash, that it is Lounge, and that it is signed
+     * like the installed copy.
      */
-    suspend fun install(interactive: Boolean): UpdateState = work.withLock {
+    suspend fun install(interactive: Boolean): UpdateState = withContext(Dispatchers.IO) {
+        work.withLock { installLocked(interactive) }
+    }
+
+    private suspend fun installLocked(interactive: Boolean): UpdateState {
         val ready = _state.value as? UpdateState.Ready ?: return _state.value
         val path = currentPath()
         if (path == InstallPath.NeedsPermission) {
             _state.value = ready.copy(path = path)
             return _state.value
         }
+        val fail = { message: String -> UpdateState.Failed(message, ready.release, System.currentTimeMillis()).also { _state.value = it } }
+        runCatching { verify(ready.file, ready.sha256) }.onFailure { e ->
+            Log.w(TAG, "updates: ${ready.file.name} failed its check: ${e.message}")
+            ready.file.delete()
+            return fail(e.message ?: "The update did not check out")
+        }
         _state.value = UpdateState.Installing(ready.release)
+        installingSince = System.currentTimeMillis()
         pendingInteractive = interactive
         pendingFile = ready.file
         pendingSilent = path == InstallPath.Silent
         if (path == InstallPath.PowerSetup) {
-            val r = runCatching { power.run(installAction(ready.file)) }
+            val r = runCatching {
+                val staged = stage(ready.file, ready.sha256)
+                try {
+                    power.run(installAction(staged))
+                } finally {
+                    staged.delete()
+                }
+            }
             if (r.isSuccess && r.getOrThrow().ok) {
                 Log.i(TAG, "updates: installed ${ready.release.tag} through Power Setup")
                 return _state.value
             }
             Log.w(TAG, "updates: Power Setup install failed: ${r.exceptionOrNull()?.message ?: r.getOrNull()?.output}")
-            if (!canRequestInstalls()) {
-                _state.value = UpdateState.Failed("Power Setup could not install it", ready.release, System.currentTimeMillis())
-                return _state.value
-            }
+            if (!canRequestInstalls()) return fail("Power Setup could not install it")
         }
-        runCatching { commitSession(ready.release, ready.file, silent = path == InstallPath.Silent) }
-            .onFailure { _state.value = UpdateState.Failed(it.message ?: "The install failed", ready.release, System.currentTimeMillis()) }
-        _state.value
+        runCatching { commitSession(ready.release, ready.file, ready.sha256, silent = path == InstallPath.Silent) }
+            .onFailure { fail(it.message ?: "The install failed") }
+        return _state.value
     }
 
     /** Does the one thing the current state is waiting for, from a press in the UI. */
@@ -265,11 +319,16 @@ class UpdateManager(
         }
     }.getOrDefault(false)
 
+    /** The release's APK when it is already here and still matches its hash. Reads the whole file. */
     private fun readyIfDownloaded(release: Release): UpdateState.Ready? {
         val file = fileFor(release)
-        val hash = release.sha256 ?: return null
-        return if (file.exists() && file.length() == release.apkSize && sha256(file) == hash) UpdateState.Ready(release, file, currentPath()) else null
+        val hash = release.sha256 ?: savedHash(release.apkName) ?: return null
+        return if (file.exists() && file.length() == release.apkSize && sha256(file) == hash) UpdateState.Ready(release, file, hash, currentPath()) else null
     }
+
+    /** The hash a download was checked against, for releases that list it only in SHA256SUMS. */
+    private fun savedHash(apkName: String): String? =
+        prefs.getString(KEY_APK_HASH, null)?.split(' ', limit = 2)?.takeIf { it.size == 2 && it[0] == apkName }?.get(1)
 
     private fun fileFor(release: Release): File = File(downloadDir(), release.apkName)
 
@@ -283,11 +342,66 @@ class UpdateManager(
                 digest.update(buf, 0, n)
             }
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return digest.digest().toHex()
     }
 
-    /** External storage when there is any: the shell user can read it, so Power Setup can install from it. */
-    private fun downloadDir(): File = File(context.getExternalFilesDir(null) ?: context.cacheDir, "updates").apply { mkdirs() }
+    /** Throws unless [file] still has [sha256] and is a Lounge APK signed like the installed one. */
+    private fun verify(file: File, sha256: String) {
+        if (sha256(file) != sha256) throw IllegalStateException("The update changed after it was checked")
+        checkPackage(file)
+    }
+
+    private fun checkPackage(file: File) {
+        val pm = context.packageManager
+        val archive = archiveInfo(file) ?: throw IllegalStateException("The update is not an app Android can read")
+        if (archive.packageName != context.packageName) throw IllegalStateException("The update is not Lounge")
+        @Suppress("DEPRECATION")
+        val installed = signers(pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES), withHistory = false)
+        if (!signedLike(installed, signers(archive, withHistory = true))) throw IllegalStateException("The update is not signed like this copy of Lounge")
+    }
+
+    private fun archiveInfo(file: File): PackageInfo? {
+        // Signatures too: some versions only read an archive's certificates when asked for them.
+        @Suppress("DEPRECATION")
+        val flags = PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES
+        return if (Build.VERSION.SDK_INT >= 33) {
+            context.packageManager.getPackageArchiveInfo(file.path, PackageManager.PackageInfoFlags.of(flags.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageArchiveInfo(file.path, flags)
+        }
+    }
+
+    /** SHA-256 digests of a package's signing certificates; with [withHistory], the ones it rotated from too. */
+    private fun signers(info: PackageInfo, withHistory: Boolean): Set<String> {
+        val signing = info.signingInfo
+        val certificates: List<Signature> = when {
+            signing == null -> @Suppress("DEPRECATION") info.signatures?.toList().orEmpty()
+            signing.hasMultipleSigners() || !withHistory -> signing.apkContentsSigners?.toList().orEmpty()
+            else -> signing.apkContentsSigners?.toList().orEmpty() + signing.signingCertificateHistory?.toList().orEmpty()
+        }
+        return certificates.map { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).toHex() }.toSet()
+    }
+
+    /** Private storage: nothing but Lounge can touch the APK between its checks. */
+    private fun downloadDir(): File = File(context.noBackupFilesDir, "updates").apply { mkdirs() }
+
+    /** Shared storage the shell user can read, used only for the moment of a Power Setup install. */
+    private fun stagingDir(): File? = context.getExternalFilesDir(null)?.let { File(it, "updates") }
+
+    /** Copies the APK where `pm` can read it and checks the copy, right before it is installed. */
+    private fun stage(file: File, sha256: String): File {
+        val dir = stagingDir()?.apply { mkdirs() } ?: throw IllegalStateException("There is no shared storage for Power Setup to read from")
+        val staged = File(dir, file.name)
+        file.copyTo(staged, overwrite = true)
+        try {
+            verify(staged, sha256)
+        } catch (e: Exception) {
+            staged.delete()
+            throw e
+        }
+        return staged
+    }
 
     private fun installAction(file: File): PowerAction = PowerAction(
         "install_update",
@@ -317,7 +431,8 @@ class UpdateManager(
         }
     }
 
-    private suspend fun fetchApk(release: Release): File = withContext(Dispatchers.IO) {
+    /** The APK and the hash it was checked against. */
+    private suspend fun fetchApk(release: Release): Pair<File, String> = withContext(Dispatchers.IO) {
         val expected = release.sha256 ?: release.sumsUrl?.let { url ->
             open(url).run { try { Release.hashFromSums(inputStream.bufferedReader().readText(), release.apkName) } finally { disconnect() } }
         } ?: throw IllegalStateException("The release has no checksum for ${release.apkName}")
@@ -347,14 +462,14 @@ class UpdateManager(
                     }
                 }
             }
-            val actual = digest.digest().joinToString("") { "%02x".format(it) }
-            if (actual != expected) {
+            if (digest.digest().toHex() != expected) {
                 partial.delete()
                 throw IllegalStateException("The download did not match its checksum")
             }
             if (!partial.renameTo(target)) throw IllegalStateException("Could not keep the download")
             downloadDir().listFiles()?.filter { it != target && it.name.endsWith(".apk") }?.forEach { it.delete() }
-            target
+            prefs.edit().putString(KEY_APK_HASH, "${release.apkName} $expected").apply()
+            target to expected
         } finally {
             conn.disconnect()
         }
@@ -369,7 +484,8 @@ class UpdateManager(
 
     // ----- Android's installer -----
 
-    private fun commitSession(release: Release, file: File, silent: Boolean) {
+    /** Streams the APK into a session, hashing what is written, and commits only if it matches [sha256]. */
+    private fun commitSession(release: Release, file: File, sha256: String, silent: Boolean) {
         val installer = context.packageManager.packageInstaller
         installer.mySessions.forEach { runCatching { installer.abandonSession(it.sessionId) } }
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
@@ -382,14 +498,29 @@ class UpdateManager(
         }
         val id = installer.createSession(params)
         activeSession = id
-        installer.openSession(id).use { session ->
-            session.openWrite("lounge.apk", 0, file.length()).use { out ->
-                file.inputStream().use { it.copyTo(out) }
-                session.fsync(out)
+        try {
+            installer.openSession(id).use { session ->
+                val digest = MessageDigest.getInstance("SHA-256")
+                session.openWrite("lounge.apk", 0, file.length()).use { out ->
+                    file.inputStream().use { input ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            digest.update(buf, 0, n)
+                        }
+                    }
+                    session.fsync(out)
+                }
+                if (digest.digest().toHex() != sha256) throw IllegalStateException("The update changed while it was being installed")
+                val intent = Intent(context, InstallReceiver::class.java).setAction(ACTION_RESULT).putExtra(EXTRA_TAG, release.tag)
+                val pending = PendingIntent.getBroadcast(context, id, intent, PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                session.commit(pending.intentSender)
             }
-            val intent = Intent(context, InstallReceiver::class.java).setAction(ACTION_RESULT).putExtra(EXTRA_TAG, release.tag)
-            val pending = PendingIntent.getBroadcast(context, id, intent, PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            session.commit(pending.intentSender)
+        } catch (e: Exception) {
+            runCatching { installer.abandonSession(id) }
+            throw e
         }
         Log.i(TAG, "updates: session $id committed for ${release.tag}")
     }
@@ -441,15 +572,23 @@ class UpdateManager(
         private const val KEY_SEEN_VERSION = "seen_version"
         private const val KEY_RELEASE_JSON = "release_json"
         private const val KEY_SILENT_BLOCKED = "silent_blocked"
+        private const val KEY_APK_HASH = "apk_hash"
         private const val FIRST_DELAY_MS = 45_000L
         private const val TICK_MS = 15 * 60_000L
         private const val CHECK_EVERY_MS = 12 * 3_600_000L
         private const val RETRY_AFTER_MS = 3_600_000L
+        private const val INSTALL_TIMEOUT_MS = 10 * 60_000L
 
         /** The one manager in the process, for the install receiver. */
         @Volatile internal var current: UpdateManager? = null
 
         internal fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+        /** Whether an update signed by [update] may replace an app signed by [installed]: every current signer must be among them. */
+        internal fun signedLike(installed: Set<String>, update: Set<String>): Boolean =
+            installed.isNotEmpty() && update.containsAll(installed)
+
+        private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
     }
 }
 

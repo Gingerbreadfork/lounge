@@ -27,6 +27,7 @@ class AdbBackend(private val client: AdbClient) : Privileged {
             AdbClient.Outcome.Refused -> throw PrivilegedException("ADB is not listening on this device")
             AdbClient.Outcome.Unknown, AdbClient.Outcome.Denied -> throw PrivilegedException("This device has not approved Lounge's key")
             is AdbClient.Outcome.TlsRequired -> throw PrivilegedException(o.detail)
+            is AdbClient.Outcome.NotThisDevice -> throw PrivilegedException(o.detail)
             is AdbClient.Outcome.Error -> throw PrivilegedException(o.detail)
         }
     }

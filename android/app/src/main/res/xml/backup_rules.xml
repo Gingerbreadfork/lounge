@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older. Only the look-and-feel preferences: the ADB key, the core's database,
+     plugin settings and companion pairings stay on this device. -->
+<full-backup-content>
+    <include domain="file" path="datastore/lounge.preferences_pb" />
+</full-backup-content>

@@ -25,6 +25,8 @@ class AdbClient(private val keys: AdbKeys, private val host: String = "127.0.0.1
         data object Unknown : Outcome
         data object Denied : Outcome
         data class TlsRequired(val detail: String) : Outcome
+        /** Whatever answered is not this device's daemon. */
+        data class NotThisDevice(val detail: String) : Outcome
         data class Error(val detail: String) : Outcome
     }
 
@@ -78,6 +80,10 @@ class AdbClient(private val keys: AdbKeys, private val host: String = "127.0.0.1
         approvalTimeoutMs: Int = 120_000,
         giveUpAt: AtomicLong = AtomicLong(Long.MAX_VALUE),
     ): Outcome {
+        // Only adbd set up for this port, and naming this device in its banner, is trusted.
+        if (tcpPortMatches(systemProperty("service.adb.tcp.port"), systemProperty("persist.adb.tcp.port"), port) == false) {
+            return Outcome.Refused
+        }
         val socket = Socket()
         try {
             socket.tcpNoDelay = true
@@ -126,6 +132,11 @@ class AdbClient(private val keys: AdbKeys, private val host: String = "127.0.0.1
                         }
                     }
                     A_CNXN -> {
+                        val banner = String(m.data, Charsets.UTF_8)
+                        if (!bannerIsThisDevice(banner, android.os.Build.PRODUCT, android.os.Build.MODEL, android.os.Build.DEVICE)) {
+                            socket.close()
+                            return Outcome.NotThisDevice("Something other than this device's debugging service answered on port $port")
+                        }
                         socket.soTimeout = 20_000
                         return Outcome.Online(Connection(socket, input, output))
                     }
@@ -163,6 +174,35 @@ class AdbClient(private val keys: AdbKeys, private val host: String = "127.0.0.1
         private const val AUTH_SIGNATURE = 2
         private const val AUTH_RSAPUBLICKEY = 3
         private val EMPTY = ByteArray(0)
+
+        /**
+         * Whether adbd's TCP port properties allow it to listen on [port], the way adbd reads them:
+         * the service value first, then the persistent one. Null when neither can be read, which is
+         * how they look to apps on builds that hide them; the banner check still applies.
+         */
+        internal fun tcpPortMatches(service: String?, persist: String?, port: Int): Boolean? {
+            val value = service ?: persist ?: return null
+            return value.toIntOrNull() == port
+        }
+
+        /**
+         * Whether a CNXN banner ("device::ro.product.name=…;ro.product.model=…;ro.product.device=…;…")
+         * names this device. All three must be there and match.
+         */
+        internal fun bannerIsThisDevice(banner: String, product: String?, model: String?, device: String?): Boolean {
+            if (!banner.startsWith("device:")) return false
+            val props = banner.substringAfter("::", "").split(';').mapNotNull { part ->
+                val kv = part.split('=', limit = 2)
+                if (kv.size == 2) kv[0] to kv[1] else null
+            }.toMap()
+            val expected = listOf("ro.product.name" to product, "ro.product.model" to model, "ro.product.device" to device)
+            return expected.all { (key, value) -> value != null && props[key] == value }
+        }
+
+        /** A system property through the hidden SystemProperties API; null when unset or unreadable. */
+        private fun systemProperty(name: String): String? = runCatching {
+            Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, name) as String?
+        }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
 
         private fun write(out: OutputStream, command: Int, arg0: Int, arg1: Int, data: ByteArray) {
             var check = 0

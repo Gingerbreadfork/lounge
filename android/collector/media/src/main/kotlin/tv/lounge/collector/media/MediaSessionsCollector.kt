@@ -34,6 +34,8 @@ class MediaSessionsCollector(private val context: Context) {
     private val main = Handler(Looper.getMainLooper())
 
     @Volatile private var controllers: List<MediaController> = emptyList()
+    /** When each package's session was first seen, for sessions that report no time of their own. */
+    private val firstSeen = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     fun isEnabled(): Boolean =
         NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
@@ -80,9 +82,13 @@ class MediaSessionsCollector(private val context: Context) {
         }
     }
 
-    /** Transport command for the session owned by [packageName]: play-pause, play, pause, next, previous, stop. */
+    /**
+     * Transport command for the session owned by [packageName]: play-pause, play, pause, next, previous, stop.
+     * The sessions are asked for afresh, since [sessions] is only collected while the home is on screen.
+     */
     fun send(packageName: String, command: String): Boolean {
-        val c = controllers.firstOrNull { it.packageName == packageName } ?: return false
+        val current = runCatching { manager.getActiveSessions(component) }.getOrNull() ?: controllers
+        val c = current.firstOrNull { it.packageName == packageName } ?: return false
         val t = c.transportControls
         when (command) {
             "play-pause" -> if (c.playbackState?.state == PlaybackState.STATE_PLAYING) t.pause() else t.play()
@@ -112,12 +118,21 @@ class MediaSessionsCollector(private val context: Context) {
             else -> PlaybackStatus.STOPPED
         }
         val actions = ps?.actions ?: 0L
-        val position = ps?.let { state ->
-            if (state.position < 0) null else if (status == PlaybackStatus.PLAYING && state.lastPositionUpdateTime > 0) {
-                state.position + ((android.os.SystemClock.elapsedRealtime() - state.lastPositionUpdateTime) * state.playbackSpeed).toLong()
-            } else {
-                state.position
+        // A position and the time it was true. A playing session is in use now, so its position is
+        // carried to now; any other keeps the time its state last changed, so a paused session does
+        // not look recently used.
+        val now = System.currentTimeMillis()
+        val stateTime = ps?.lastPositionUpdateTime?.takeIf { it > 0 }
+        val playing = status == PlaybackStatus.PLAYING
+        val position = ps?.let { s ->
+            s.position.takeIf { it >= 0 }?.let { p ->
+                if (playing && stateTime != null) p + ((android.os.SystemClock.elapsedRealtime() - stateTime) * s.playbackSpeed).toLong() else p
             }
+        }
+        val updated = when {
+            playing -> now
+            stateTime != null -> now - (android.os.SystemClock.elapsedRealtime() - stateTime)
+            else -> firstSeen.getOrPut(c.packageName) { now }
         }
         return SessionRecord(
             `package` = c.packageName,
@@ -132,7 +147,7 @@ class MediaSessionsCollector(private val context: Context) {
             canPlay = actions and (PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PLAY_PAUSE) != 0L,
             canSkipNext = actions and PlaybackState.ACTION_SKIP_TO_NEXT != 0L,
             canSkipPrevious = actions and PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L,
-            updatedMs = System.currentTimeMillis(),
+            updatedMs = updated,
         )
     }
 
@@ -142,15 +157,28 @@ class MediaSessionsCollector(private val context: Context) {
             ?: md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
             ?: return md.getString(MediaMetadata.METADATA_KEY_ART_URI)?.takeIf { it.startsWith("http") || it.startsWith("content") }
-        val key = ((title ?: "") + bitmap.width + bitmap.height + bitmap.generationId).hashCode().toUInt().toString(16)
+        // Keyed on what the metadata says, not the bitmap object: every fetch is a fresh copy.
+        val described = listOf(
+            title,
+            md.getString(MediaMetadata.METADATA_KEY_MEDIA_ID),
+            md.getString(MediaMetadata.METADATA_KEY_ARTIST),
+            md.getString(MediaMetadata.METADATA_KEY_ALBUM),
+            md.getString(MediaMetadata.METADATA_KEY_ART_URI),
+            md.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI),
+            md.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI),
+        ).joinToString("\u0000") { it.orEmpty() }
+        val key = (described + bitmap.width + "x" + bitmap.height).hashCode().toUInt().toString(16)
         val file = File(artDir, "$pkg-$key.png")
-        if (!file.exists()) {
-            runCatching {
-                val tmp = File(file.path + ".tmp")
-                FileOutputStream(tmp).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                if (!tmp.renameTo(file)) { tmp.copyTo(file, overwrite = true); tmp.delete() }
-                artDir.listFiles()?.filter { it.name.startsWith("$pkg-") && it != file }?.forEach { it.delete() }
-            }.onFailure { Log.w(TAG, "art for $pkg", it) }
+        // Metadata and state changes publish together, so two writers can want the same file.
+        synchronized(artDir) {
+            if (!file.exists()) {
+                runCatching {
+                    val tmp = File(file.path + ".tmp")
+                    FileOutputStream(tmp).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    if (!tmp.renameTo(file)) { tmp.copyTo(file, overwrite = true); tmp.delete() }
+                    artDir.listFiles()?.filter { it.name.startsWith("$pkg-") && it != file }?.forEach { it.delete() }
+                }.onFailure { Log.w(TAG, "art for $pkg", it) }
+            }
         }
         return file.takeIf { it.exists() }?.absolutePath
     }

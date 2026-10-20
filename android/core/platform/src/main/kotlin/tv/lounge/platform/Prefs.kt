@@ -63,6 +63,12 @@ class Prefs(private val context: Context) {
     suspend fun setPreviousScreensaver(component: String?) {
         context.dataStore.edit { if (component.isNullOrBlank()) it.remove(PREVIOUS_SCREENSAVER) else it[PREVIOUS_SCREENSAVER] = component }
     }
+
+    /** The screensaver's enabled flag before Lounge took over: "1", "0", "null" for unset, or null when unknown. */
+    val previousScreensaverEnabled: Flow<String?> = context.dataStore.data.map { it[PREVIOUS_SCREENSAVER_ENABLED] }
+    suspend fun setPreviousScreensaverEnabled(value: String?) {
+        context.dataStore.edit { if (value == null) it.remove(PREVIOUS_SCREENSAVER_ENABLED) else it[PREVIOUS_SCREENSAVER_ENABLED] = value }
+    }
     suspend fun setCompanionEnabled(on: Boolean) { context.dataStore.edit { it[COMPANION_ENABLED] = on } }
 
     /** The APK update time the bundled plugins were last installed from; they re-install after an update. */
@@ -86,6 +92,7 @@ class Prefs(private val context: Context) {
         val BUNDLED_PLUGINS_STAMP = longPreferencesKey("bundled_plugins_stamp")
         val COMPANION_ENABLED = booleanPreferencesKey("companion_enabled")
         val PREVIOUS_SCREENSAVER = stringPreferencesKey("previous_screensaver")
+        val PREVIOUS_SCREENSAVER_ENABLED = stringPreferencesKey("previous_screensaver_enabled")
         val AMBIENT_STYLE = stringPreferencesKey("ambient_style")
     }
 }

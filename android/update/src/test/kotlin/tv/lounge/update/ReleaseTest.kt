@@ -1,6 +1,7 @@
 package tv.lounge.update
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,6 +54,16 @@ class ReleaseTest {
         assertEquals(InstallPath.PowerSetup, installPath(sdk = 30, selfIsInstaller = true, powerReady = true, canRequestInstalls = true))
         assertEquals(InstallPath.NeedsPermission, installPath(sdk = 34, selfIsInstaller = false, powerReady = false, canRequestInstalls = false))
         assertEquals(InstallPath.Confirm, installPath(sdk = 30, selfIsInstaller = true, powerReady = false, canRequestInstalls = true))
+    }
+
+    @Test
+    fun anUpdateMustCarryTheInstalledSigners() {
+        assertTrue(UpdateManager.signedLike(setOf("aa"), setOf("aa")))
+        // A rotated key lists the one it replaced in its history.
+        assertTrue(UpdateManager.signedLike(setOf("aa"), setOf("bb", "aa")))
+        assertFalse(UpdateManager.signedLike(setOf("aa"), setOf("bb")))
+        assertFalse(UpdateManager.signedLike(setOf("aa", "cc"), setOf("aa")))
+        assertFalse(UpdateManager.signedLike(emptySet(), setOf("aa")))
     }
 
     private companion object {

@@ -1,5 +1,6 @@
 package tv.lounge.launcher
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -26,6 +27,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
@@ -139,16 +141,29 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             apps.packageChanges().collectLatest { collectAppsNow() }
         }
+        // Collections run one at a time, and requests made while one runs fold into a single rerun.
+        lifecycleScope.launch(Dispatchers.IO) {
+            for (request in appCollects) {
+                val includeMobile = prefs.showMobileApps.first()
+                core.ingestApps(apps.snapshot(includeMobileApps = includeMobile))
+                val usage = apps.usage()
+                if (usage.isNotEmpty()) core.reportUsage(usage)
+            }
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            for (request in tvCollects) core.ingestPrograms(tvProvider.snapshot())
+        }
         lifecycleScope.launch {
             platform.commands.collect { cmd ->
                 when (cmd) {
                     is UiCommand.RequestPermission -> requestAccess(cmd.name)
-                    is UiCommand.Key -> {
+                    // Phone keys only reach Lounge's own window while it is in front; text goes to the
+                    // focused field through the home screen.
+                    is UiCommand.Key -> if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                         val now = android.os.SystemClock.uptimeMillis()
                         dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_DOWN, cmd.keyCode, 0))
                         dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_UP, cmd.keyCode, 0))
                     }
-                    is UiCommand.TypeText -> typeText(cmd.text)
                     UiCommand.InstallUpdate -> updates.interact(this@MainActivity, lifecycleScope)
                     else -> Unit
                 }
@@ -184,18 +199,11 @@ class MainActivity : ComponentActivity() {
         if (hasFocus) power.noteWindowFocused()
     }
 
-    /** Types [text] into whatever has focus, as the keyboard the companion is standing in for. */
-    private fun typeText(text: String) {
-        val map = android.view.KeyCharacterMap.load(android.view.KeyCharacterMap.VIRTUAL_KEYBOARD)
-        for (ch in text) {
-            val events = map.getEvents(charArrayOf(ch))
-            if (events != null) {
-                events.forEach { dispatchKeyEvent(it) }
-            } else {
-                val now = android.os.SystemClock.uptimeMillis()
-                dispatchKeyEvent(android.view.KeyEvent(now, ch.toString(), android.view.KeyCharacterMap.VIRTUAL_KEYBOARD, 0))
-            }
-        }
+    /** Home pressed while Lounge is in front, or on the way back to it: close what is open and show the Stage. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == Intent.ACTION_MAIN) platform.goHome()
     }
 
     private fun afterFirstFrames(frames: Int, block: () -> Unit) {
@@ -253,13 +261,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private var lastTvCollectMs = 0L
+    private val tvCollects = Channel<Unit>(Channel.CONFLATED)
+    private val appCollects = Channel<Unit>(Channel.CONFLATED)
 
     private fun collectTvNow() {
         if (!tvProvider.hasPermission()) return
         lastTvCollectMs = System.currentTimeMillis()
-        lifecycleScope.launch(Dispatchers.IO) {
-            core.ingestPrograms(tvProvider.snapshot())
-        }
+        tvCollects.trySend(Unit)
     }
 
     private var resumedBefore = false
@@ -294,11 +302,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun collectAppsNow() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val includeMobile = prefs.showMobileApps.first()
-            core.ingestApps(apps.snapshot(includeMobileApps = includeMobile))
-            val usage = apps.usage()
-            if (usage.isNotEmpty()) core.reportUsage(usage)
-        }
+        appCollects.trySend(Unit)
     }
 }

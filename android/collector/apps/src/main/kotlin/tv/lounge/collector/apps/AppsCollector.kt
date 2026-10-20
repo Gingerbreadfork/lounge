@@ -19,6 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import tv.lounge.core.AppRecord
@@ -34,9 +36,15 @@ class AppsCollector(private val context: Context) {
     private val pm: PackageManager = context.packageManager
     private val bannerDir = File(context.cacheDir, "banners").apply { mkdirs() }
     private val indexFile = File(bannerDir, "index.json")
+    /** One collection at a time: they share the index and the picture files. */
+    private val collecting = Mutex()
 
     /** Every launchable TV app, with banner and icon files ready for the core. */
     suspend fun snapshot(includeMobileApps: Boolean = false): List<AppRecord> = withContext(Dispatchers.IO) {
+        collecting.withLock { collect(includeMobileApps) }
+    }
+
+    private fun collect(includeMobileApps: Boolean): List<AppRecord> {
         val index = loadIndex()
         val leanback = pm.queryIntentActivities(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER),
@@ -62,7 +70,7 @@ class AppsCollector(private val context: Context) {
         }
         saveIndex(index)
         pruneOrphans(records)
-        records
+        return records
     }
 
     /** Last-used time per package from UsageStats, or empty when the permission isn't granted. */
@@ -158,7 +166,7 @@ class AppsCollector(private val context: Context) {
             val canvas = Canvas(bmp)
             drawable.setBounds(0, 0, width, height)
             drawable.draw(canvas)
-            val tmp = File(out.path + ".tmp")
+            val tmp = File.createTempFile(out.name + ".", ".tmp", bannerDir)
             FileOutputStream(tmp).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
             if (!tmp.renameTo(out)) {
                 tmp.copyTo(out, overwrite = true)
@@ -178,10 +186,11 @@ class AppsCollector(private val context: Context) {
         runCatching { indexFile.writeText(index.toString()) }.onFailure { Log.w(TAG, "save index", it) }
     }
 
+    /** Deletes pictures of apps that are gone, and temporary files a failed render left behind. */
     private fun pruneOrphans(records: List<AppRecord>) {
         val keep = records.flatMap { listOfNotNull(it.bannerPath, it.iconPath) }.map { File(it).name }.toHashSet()
         bannerDir.listFiles()?.forEach { f ->
-            if (f.name != indexFile.name && f.name !in keep && !f.name.endsWith(".tmp")) f.delete()
+            if (f.name != indexFile.name && f.name !in keep) f.delete()
         }
     }
 

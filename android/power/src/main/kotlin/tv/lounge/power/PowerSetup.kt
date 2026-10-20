@@ -45,19 +45,21 @@ class PowerSetup(private val context: Context) {
     val status: StateFlow<PowerStatus> = _status.asStateFlow()
     val log: StateFlow<List<PowerLogEntry>> = _log.asStateFlow()
     val packageName: String get() = context.packageName
-    val fingerprint: String get() = keys.fingerprint()
     val hasKey: Boolean get() = keys.exists
+
+    /** The key's fingerprint as the device's prompt shows it. The first call makes the key, so it runs off the main thread. */
+    suspend fun fingerprint(): String = withContext(Dispatchers.IO) { keys.fingerprint() }
     val shizukuInstalled: Boolean get() = shizuku.installed
 
     val adbEnabled: Boolean
         get() = runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) == 1 }.getOrDefault(false)
 
-    /** Finds out which backend works, without prompting anyone. */
+    /** Finds out which backend works, without prompting anyone. With debugging off, nothing on the ADB port is adbd. */
     suspend fun refresh(): PowerStatus = lock.withLock {
         val s = when {
             shizuku.permitted -> PowerStatus.Ready("shizuku")
-            adb.available() -> PowerStatus.Ready("adb")
             !adbEnabled -> PowerStatus.Unavailable(if (shizuku.installed) "Shizuku is installed but has not granted access" else "Developer options → USB debugging is off")
+            adb.available() -> PowerStatus.Ready("adb")
             else -> PowerStatus.NotPaired
         }
         _status.value = s
@@ -70,6 +72,9 @@ class PowerSetup(private val context: Context) {
      */
     suspend fun pair(): PowerStatus = lock.withLock {
         withContext(Dispatchers.IO) {
+            if (!adbEnabled) {
+                return@withContext PowerStatus.Unavailable("Developer options → USB debugging is off").also { _status.value = it }
+            }
             giveUpAt.set(Long.MAX_VALUE)
             val outcome = AdbClient(keys).connect(onWaitingForUser = { _status.value = PowerStatus.WaitingForApproval }, giveUpAt = giveUpAt)
             val s = when (outcome) {
@@ -77,6 +82,7 @@ class PowerSetup(private val context: Context) {
                 AdbClient.Outcome.Refused -> PowerStatus.Unavailable("ADB is not listening. Turn on Developer options → USB debugging, then try again.")
                 AdbClient.Outcome.Unknown, AdbClient.Outcome.Denied -> PowerStatus.NotPaired
                 is AdbClient.Outcome.TlsRequired -> PowerStatus.Failed(outcome.detail)
+                is AdbClient.Outcome.NotThisDevice -> PowerStatus.Failed(outcome.detail)
                 is AdbClient.Outcome.Error -> PowerStatus.Failed(outcome.detail)
             }
             _status.value = s
@@ -143,20 +149,44 @@ class PowerSetup(private val context: Context) {
     val systemAudioOn = PowerAction("cec_sam_on", "Sound through the soundbar", "HDMI-CEC System Audio Mode on.", "cmd hdmi_control setsystemaudiomode on")
     val systemAudioOff = PowerAction("cec_sam_off", "Sound through the TV", "HDMI-CEC System Audio Mode off.", "cmd hdmi_control setsystemaudiomode off")
     fun selectDevice(d: CecDevice) = PowerAction("cec_select_${d.logicalAddress}", "Switch to ${d.name}", "HDMI-CEC device select.", "cmd hdmi_control deviceselect ${d.logicalAddress}")
-    fun mediaKey(key: String) = PowerAction("media_$key", "Media: $key", "Dispatches a media key to the active session.", "cmd media_session dispatch $key")
-    fun volume(direction: String) = PowerAction("volume_$direction", "Volume $direction", "Adjusts the media stream.", "cmd media_session volume --adj $direction --show")
+
+    /** A media key for `cmd media_session dispatch`; anything else is refused. */
+    fun mediaKey(key: String): PowerAction {
+        require(key in MEDIA_KEYS) { "Unknown media key: $key" }
+        return PowerAction("media_$key", "Media: $key", "Dispatches a media key to the active session.", "cmd media_session dispatch ${shellQuote(key)}")
+    }
+
+    /** Raise, lower or same; anything else is refused. */
+    fun volume(direction: String): PowerAction {
+        require(direction in VOLUME_DIRECTIONS) { "Unknown volume direction: $direction" }
+        return PowerAction("volume_$direction", "Volume $direction", "Adjusts the media stream.", "cmd media_session volume --adj ${shellQuote(direction)} --show")
+    }
 
     val setupActions: List<PowerAction> get() = listOf(homeRole, tvListings, notificationAccess, usageAccess, quickAnimations, optimise)
 
     private val ambient = ComponentName(context.packageName, "tv.lounge.launcher.AmbientDreamService").flattenToShortString()
 
-    val useAmbient = PowerAction("ambient", "Use Lounge as the screensaver", "Points the system screensaver at Lounge's Ambient mode.", "settings put secure screensaver_components $ambient; settings put secure screensaver_enabled 1")
-    fun restoreScreensaver(component: String?) = PowerAction(
-        "ambient_restore",
-        "Back to the previous screensaver",
-        "Puts the system screensaver back the way it was.",
-        if (component.isNullOrBlank()) "settings delete secure screensaver_components" else "settings put secure screensaver_components ${shellQuote(component)}",
+    /** Prints the screensaver's enabled flag as it was (see [previousScreensaverEnabled]), then switches to Lounge's. */
+    val useAmbient = PowerAction(
+        "ambient",
+        "Use Lounge as the screensaver",
+        "Points the system screensaver at Lounge's Ambient mode.",
+        "settings get secure screensaver_enabled; settings put secure screensaver_components $ambient; settings put secure screensaver_enabled 1",
     )
+
+    /**
+     * Puts the screensaver back: [component] as it was, and the enabled flag as [useAmbient] printed
+     * it ("1", "0" or "null" for unset). An unknown flag is left alone.
+     */
+    fun restoreScreensaver(component: String?, enabled: String?): PowerAction {
+        val restoreComponent = if (component.isNullOrBlank()) "settings delete secure screensaver_components" else "settings put secure screensaver_components ${shellQuote(component)}"
+        val restoreEnabled = when (enabled) {
+            "0", "1" -> "; settings put secure screensaver_enabled $enabled"
+            "null" -> "; settings delete secure screensaver_enabled"
+            else -> ""
+        }
+        return PowerAction("ambient_restore", "Back to the previous screensaver", "Puts the system screensaver back the way it was.", restoreComponent + restoreEnabled)
+    }
 
     /** The system screensaver component as flattened by Settings, or null when none is set. */
     val currentScreensaver: String?
@@ -189,6 +219,13 @@ class PowerSetup(private val context: Context) {
     val hasTvControls: Boolean get() = hasCec && !isTelevision
 
     companion object {
+        private val MEDIA_KEYS = setOf("play", "pause", "play-pause", "mute", "stop", "next", "previous", "rewind", "record", "fast-forward")
+        private val VOLUME_DIRECTIONS = setOf("raise", "lower", "same")
+
+        /** The enabled flag [useAmbient] printed before switching: "1", "0" or "null", else null. */
+        fun previousScreensaverEnabled(output: String): String? =
+            output.lineSequence().firstOrNull()?.trim()?.takeIf { it == "0" || it == "1" || it == "null" }
+
         private val cecLine = Regex("""logical_address:\s*0x([0-9a-fA-F]+)\s+device_type:\s*(\d+).*?display_name:\s*(.*?)\s+power_status:\s*(-?\d+)\s+physical_address:\s*0x([0-9a-fA-F]+)""")
 
         fun parseCecDevices(dump: String): List<CecDevice> {
