@@ -3,6 +3,7 @@
 //! looks up its files and plays the MP4 in the TV's own player.
 use lounge_plugin_sdk::{self as sdk, host, Action, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
+use std::collections::HashSet;
 
 pub struct Archive;
 
@@ -44,23 +45,19 @@ impl sdk::Plugin for Archive {
         let per_row = host::setting("per_row").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(24).clamp(4, 60);
         let mut items = Vec::new();
         let mut failures = Vec::new();
+        let mut shown = HashSet::new();
         for (row, _, default) in ROWS {
             let collection = host::setting(&format!("{row}_collection")).map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).unwrap_or_else(|| default.to_string());
-            let mut docs = match search(&collection_query(&collection, true), per_row) {
+            // A few extra, as an item already in an earlier row is left out of this one.
+            let wanted = per_row + 8;
+            let docs = match search(&collection_query(&collection, true), wanted) {
                 Ok(d) => d,
                 Err(e) => {
                     failures.push(format!("{collection}: {e}"));
                     continue;
                 }
             };
-            if docs.len() < 8 {
-                for d in search(&collection_query(&collection, false), per_row).unwrap_or_default() {
-                    if !docs.iter().any(|x| x.identifier == d.identifier) {
-                        docs.push(d);
-                    }
-                }
-            }
-            docs.truncate(per_row);
+            let docs = row_docs(docs, || search(&collection_query(&collection, false), wanted).unwrap_or_default(), &mut shown, per_row);
             let count = docs.len();
             items.extend(docs.into_iter().enumerate().map(|(i, d)| item_for(&d, Some(row), (count - i) as i32)));
         }
@@ -174,7 +171,29 @@ fn search(query: &str, rows: usize) -> Result<Vec<Doc>, String> {
         encode_query(query)
     );
     let r: SearchResponse = get_json(&url)?;
-    Ok(r.response.docs.into_iter().filter(|d| !d.identifier.is_empty()).collect())
+    Ok(unique_docs(r.response.docs))
+}
+
+/// A row's docs: the well-rated ones, topped up from `more` when there are fewer than eight,
+/// leaving out anything an earlier row already shows.
+fn row_docs(mut docs: Vec<Doc>, more: impl FnOnce() -> Vec<Doc>, shown: &mut HashSet<String>, per_row: usize) -> Vec<Doc> {
+    docs.retain(|d| !shown.contains(&d.identifier));
+    if docs.len() < 8 {
+        for d in more() {
+            if !shown.contains(&d.identifier) && !docs.iter().any(|x| x.identifier == d.identifier) {
+                docs.push(d);
+            }
+        }
+    }
+    docs.truncate(per_row);
+    shown.extend(docs.iter().map(|d| d.identifier.clone()));
+    docs
+}
+
+/// Docs with an identifier, each identifier once.
+fn unique_docs(docs: Vec<Doc>) -> Vec<Doc> {
+    let mut seen = HashSet::new();
+    docs.into_iter().filter(|d| !d.identifier.is_empty() && seen.insert(d.identifier.clone())).collect()
 }
 
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
@@ -305,6 +324,28 @@ mod tests {
         assert_eq!(a.action.resolve.as_deref(), Some("play:his_girl_friday"));
         let b = item_for(&r.response.docs[1], None, 0);
         assert_eq!(b.subtitle.as_deref(), Some("1925"));
+    }
+
+    #[test]
+    fn an_identifier_appears_once() {
+        let r: SearchResponse = serde_json::from_str(r#"{"response": {"docs": [
+            {"identifier": "a"}, {"identifier": ""}, {"identifier": "b"}, {"identifier": "a"}
+        ]}}"#).unwrap();
+        let ids: Vec<String> = unique_docs(r.response.docs).into_iter().map(|d| d.identifier).collect();
+        assert_eq!(ids, ["a", "b"]);
+    }
+
+    #[test]
+    fn an_item_in_two_rows_shows_in_the_first() {
+        let doc = |id: &str| Doc { identifier: id.into(), ..Default::default() };
+        let mut shown = HashSet::new();
+        let films = row_docs(vec![doc("a"), doc("b"), doc("c")], Vec::new, &mut shown, 24);
+        let tv = row_docs(vec![doc("b"), doc("d")], || vec![doc("a"), doc("e"), doc("d")], &mut shown, 24);
+        let ids = |docs: &[Doc]| docs.iter().map(|d| d.identifier.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&films), ["a", "b", "c"]);
+        assert_eq!(ids(&tv), ["d", "e"]);
+        let items: Vec<Item> = films.iter().chain(&tv).map(|d| item_for(d, Some("films"), 0)).collect();
+        assert_eq!(items.iter().map(|i| &i.id).collect::<HashSet<_>>().len(), 5);
     }
 
     #[test]
