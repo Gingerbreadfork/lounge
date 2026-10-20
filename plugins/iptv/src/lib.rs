@@ -2,13 +2,22 @@
 //! feed (plain or gzipped) fills in what is on. Streams open in whatever video player the TV
 //! has (`play` action).
 
-use lounge_plugin_sdk::{self as sdk, epoch_ms, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
-use std::collections::HashMap;
+use lounge_plugin_sdk::{self as sdk, epoch_ms, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
+use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
+use std::hash::BuildHasherDefault;
 use std::io::Read;
 
 pub struct Iptv;
 
-const MAX_SCHEDULE: usize = 30_000;
+/// Most bytes a gzipped guide may unpack to; reading stops there.
+const MAX_GUIDE_BYTES: usize = 48 * 1024 * 1024;
+/// How long reading the guide may take before what has been read so far is used.
+const GUIDE_MS: i64 = 20_000;
+/// Longest text read from one guide field, in bytes.
+const MAX_FIELD_BYTES: usize = 1024;
+/// Longest description shown under a programme, in characters.
+const DESCRIPTION_CHARS: usize = 140;
 
 impl sdk::Plugin for Iptv {
     fn manifest() -> Manifest {
@@ -34,36 +43,27 @@ impl sdk::Plugin for Iptv {
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let playlist_url = host::required_setting("playlist_url", "Playlist URL")?;
         let group = host::setting("group");
-        let playlist = host::get_text(&playlist_url)?;
-        let channels = parse_m3u(&playlist, group.as_deref());
+        let (channels, total) = parse_m3u(&host::get_text(&playlist_url)?, group.as_deref(), sdk::MAX_ITEMS);
         if channels.is_empty() {
-            return Err("the playlist has no channels".into());
+            return Err(match group {
+                Some(g) => format!("the playlist has no channels in the group \"{g}\""),
+                None => "the playlist has no channels".into(),
+            });
+        }
+        if total > channels.len() {
+            sdk::warn!("the playlist has {total} channels and the TV shows the first {}; choose a group in the settings to see others", channels.len());
         }
         sdk::info!("{} channels in playlist", channels.len());
 
-        let mut items: Vec<Item> = channels.iter().map(|c| c.to_item()).collect();
-
-        if let Some(epg_url) = host::setting("epg_url") {
-            let response = host::fetch(&sdk::HttpRequest::get(&epg_url))?;
-            if !response.ok() {
-                return Err(format!("HTTP {} for the guide", response.status));
-            }
-            let xml = decode_maybe_gzip(response.bytes())?;
-            let by_id: HashMap<&str, &Channel> = channels.iter().map(|c| (c.id.as_str(), c)).collect();
-            let by_name: HashMap<String, &Channel> = channels.iter().map(|c| (normalise(&c.name), c)).collect();
-            let from = ctx.now_ms - 3 * 3_600_000;
-            let to = ctx.now_ms + (ctx.window_hours.max(6) as i64) * 3_600_000;
-            let (programmes, aliases) = parse_xmltv(&xml, from, to, &by_id, &by_name);
-            let matched = programmes.iter().filter(|p| by_id.contains_key(p.channel.as_str())).count();
-            sdk::info!("{} programmes in window for {} channels ({} matched by name)", programmes.len(), by_id.len(), aliases);
-            for p in programmes {
-                if let Some(ch) = by_id.get(p.channel.as_str()) {
-                    items.push(p.to_item(ch));
-                }
-            }
-            if matched == 0 {
-                sdk::warn!("no guide channel ids match the playlist's tvg-id values or names");
-            }
+        let mut items: Vec<Item> = channels.iter().map(Channel::to_item).collect();
+        let budget = sdk::MAX_ITEMS - items.len();
+        match host::setting("epg_url") {
+            Some(_) if budget == 0 => sdk::warn!("the channels fill all {} places the TV keeps, so the guide is left out", sdk::MAX_ITEMS),
+            Some(epg_url) => match guide(&epg_url, &channels, ctx, budget) {
+                Ok(schedule) => items.extend(schedule),
+                Err(e) => sdk::warn!("guide unavailable, showing the channels without it: {e}"),
+            },
+            None => {}
         }
         Ok(items)
     }
@@ -71,9 +71,73 @@ impl sdk::Plugin for Iptv {
 
 sdk::export_plugin!(Iptv);
 
+/// Fetches the guide and reads it as it unpacks, keeping only what fits in `budget` items.
+fn guide(url: &str, channels: &[Channel], ctx: &RefreshContext, budget: usize) -> Result<Vec<Item>, String> {
+    let response = host::fetch(&HttpRequest::get(url))?;
+    if !response.ok() {
+        return Err(format!("HTTP {} for the guide", response.status));
+    }
+    let bytes = sdk::body_bytes(response);
+    let window = (ctx.now_ms, ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000);
+    let mut guide = Guide::new(channels, window, budget);
+    guide.deadline_ms = host::now_ms() + GUIDE_MS;
+    let outcome = read_guide(&bytes, &mut guide, MAX_GUIDE_BYTES);
+    drop(bytes);
+    if let Err(e) = outcome {
+        if guide.stored == 0 {
+            return Err(e);
+        }
+        sdk::warn!("the guide stopped early ({e}); keeping what came before");
+    }
+    if guide.seen > 0 && guide.matched == 0 {
+        sdk::warn!("no guide channel ids match the playlist's tvg-id values or names");
+    }
+    let (seen, aliases) = (guide.seen, guide.aliases.len());
+    let schedule = guide.into_items();
+    sdk::info!("{} of {seen} guide programmes fit, for {} channels ({aliases} guide channels matched by name)", schedule.len(), channels.len());
+    Ok(schedule)
+}
+
+/// Reads a plain or gzipped XMLTV document into `guide`, unpacking at most `cap` bytes.
+pub fn read_guide(bytes: &[u8], guide: &mut Guide, cap: usize) -> Result<(), String> {
+    if !bytes.starts_with(&[0x1f, 0x8b]) {
+        return parse_xmltv(bytes, guide);
+    }
+    let mut input = Capped { inner: flate2::read::MultiGzDecoder::new(bytes), left: cap, over: false };
+    parse_xmltv(&mut input, guide).map_err(|e| if input.over { format!("it unpacks to more than {} MB", cap >> 20) } else { e })
+}
+
+/// Passes on at most `left` bytes and then fails, so a guide that unpacks without end stops.
+struct Capped<R> {
+    inner: R,
+    left: usize,
+    over: bool,
+}
+
+impl<R: Read> Read for Capped<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.left == 0 {
+            if self.inner.read(&mut [0u8])? == 0 {
+                return Ok(0);
+            }
+            self.over = true;
+            return Err(std::io::Error::other("the guide is too large"));
+        }
+        let n = buf.len().min(self.left);
+        let got = self.inner.read(&mut buf[..n])?;
+        self.left -= got;
+        Ok(got)
+    }
+}
+
+/// One playlist entry. `id` is unique in the playlist and stays the same between refreshes:
+/// the tvg-id, else the name as a slug, else a hash of the stream address, with "~2", "~3" and
+/// so on added when one repeats.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Channel {
     pub id: String,
+    /// The tvg-id as written, which guide programmes refer to; repeats share it.
+    pub tvg_id: Option<String>,
     pub name: String,
     pub number: Option<String>,
     pub logo: Option<String>,
@@ -96,12 +160,19 @@ impl Channel {
             ..Default::default()
         }
     }
+
+    fn guide_id(&self) -> &str {
+        self.tvg_id.as_deref().unwrap_or(&self.id)
+    }
 }
 
-/// Parse an extended M3U. Attributes on `#EXTINF` (`tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno`,
-/// `group-title`) are optional; the id falls back to the name, then the URL.
-pub fn parse_m3u(text: &str, only_group: Option<&str>) -> Vec<Channel> {
+/// Parse an extended M3U, keeping the first `limit` channels in `only_group` (every group when
+/// `None`); also returns how many channels the group has. Attributes on `#EXTINF` (`tvg-id`,
+/// `tvg-name`, `tvg-logo`, `tvg-chno`, `group-title`) are optional.
+pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Channel>, usize) {
     let mut out = Vec::new();
+    let mut used = HashSet::new();
+    let mut total = 0;
     let mut pending: Option<(HashMap<String, String>, String)> = None;
     let mut index = 0usize;
     for raw in text.lines() {
@@ -110,38 +181,52 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>) -> Vec<Channel> {
             continue;
         }
         if let Some(rest) = line.strip_prefix("#EXTINF:") {
-            let (attrs_part, name) = match rest.rfind(',') {
-                Some(i) => (&rest[..i], rest[i + 1..].trim()),
-                None => (rest, ""),
-            };
-            pending = Some((parse_attrs(attrs_part), name.to_string()));
+            let (attrs, name) = split_extinf(rest);
+            pending = Some((parse_attrs(attrs), name.to_string()));
         } else if line.starts_with('#') {
             continue;
         } else if let Some((attrs, name)) = pending.take() {
             index += 1;
+            let name = if name.is_empty() { attrs.get("tvg-name").cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Channel {index}")) } else { name };
+            let tvg_id = attrs.get("tvg-id").map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+            let base = tvg_id.clone().unwrap_or_else(|| Some(slug(&name)).filter(|s| !s.is_empty()).unwrap_or_else(|| url_hash(line)));
+            let id = unique_id(&mut used, base);
             let group = attrs.get("group-title").cloned().filter(|g| !g.is_empty());
-            if let Some(want) = only_group {
-                if group.as_deref().map(|g| !g.eq_ignore_ascii_case(want)).unwrap_or(true) {
-                    continue;
-                }
+            if only_group.is_some_and(|want| !group.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(want))) {
+                continue;
             }
-            let name = if name.is_empty() { attrs.get("tvg-name").cloned().unwrap_or_else(|| format!("Channel {index}")) } else { name };
-            let id = attrs
-                .get("tvg-id")
-                .cloned()
-                .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| slug(&name));
-            out.push(Channel {
-                id,
-                name,
-                number: attrs.get("tvg-chno").cloned().filter(|s| !s.is_empty()).or_else(|| Some(index.to_string())),
-                logo: attrs.get("tvg-logo").cloned().filter(|s| s.starts_with("http")),
-                group,
-                url: line.to_string(),
-            });
+            total += 1;
+            if out.len() < limit {
+                out.push(Channel {
+                    id,
+                    tvg_id,
+                    name,
+                    number: attrs.get("tvg-chno").cloned().filter(|s| !s.is_empty()).or_else(|| Some(index.to_string())),
+                    logo: attrs.get("tvg-logo").cloned().filter(|s| s.starts_with("http")),
+                    group,
+                    url: line.to_string(),
+                });
+            }
         }
     }
-    out
+    (out, total)
+}
+
+/// Splits what follows `#EXTINF:` into the duration with its attributes, and the title, which
+/// is everything after the first comma outside quotes.
+fn split_extinf(rest: &str) -> (&str, &str) {
+    let mut quoted = false;
+    for (i, c) in rest.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            ',' if !quoted => return (&rest[..i], rest[i + 1..].trim()),
+            _ => {}
+        }
+    }
+    match rest.rfind(',') {
+        Some(i) => (&rest[..i], rest[i + 1..].trim()),
+        None => (rest, ""),
+    }
 }
 
 fn parse_attrs(s: &str) -> HashMap<String, String> {
@@ -196,9 +281,31 @@ fn slug(s: &str) -> String {
     out.trim_matches('-').to_string()
 }
 
+/// A hash of the stream address that stays the same across builds and platforms.
+fn url_hash(url: &str) -> String {
+    let mut hash = Fnv::default();
+    std::hash::Hasher::write(&mut hash, url.as_bytes());
+    format!("url-{:016x}", std::hash::Hasher::finish(&hash))
+}
+
+fn unique_id(used: &mut HashSet<String>, base: String) -> String {
+    let mut id = base.clone();
+    let mut n = 1;
+    while !used.insert(id.clone()) {
+        n += 1;
+        id = format!("{base}~{n}");
+    }
+    id
+}
+
+pub fn normalise(name: &str) -> String {
+    let lower = name.to_lowercase();
+    let cut = lower.split(['(', '[']).next().unwrap_or("");
+    cut.chars().filter(|c| c.is_alphanumeric()).collect()
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Programme {
-    pub channel: String,
     pub title: String,
     pub description: Option<String>,
     pub start_ms: i64,
@@ -208,17 +315,16 @@ pub struct Programme {
 impl Programme {
     fn to_item(&self, ch: &Channel) -> Item {
         Item {
-            id: format!("prog:{}:{}", self.channel, self.start_ms),
+            id: format!("prog:{}:{}", ch.id, self.start_ms),
             kind: ItemKind::Schedule,
             title: self.title.clone(),
-            subtitle: self.description.as_ref().map(|d| truncate(d, 140)),
+            subtitle: self.description.clone(),
             duration_ms: Some(self.end_ms - self.start_ms),
-            channel_id: Some(self.channel.clone()),
+            channel_id: Some(ch.id.clone()),
             channel_name: Some(ch.name.clone()),
             channel_number: ch.number.clone(),
             start_ms: Some(self.start_ms),
             end_ms: Some(self.end_ms),
-            action: Action::play(&ch.url, &self.title),
             ..Default::default()
         }
     }
@@ -228,144 +334,506 @@ fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max { s.to_string() } else { format!("{}…", s.chars().take(max - 1).collect::<String>().trim_end()) }
 }
 
-fn decode_maybe_gzip(bytes: Vec<u8>) -> Result<String, String> {
-    if bytes.len() > 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
-        let mut out = String::new();
-        flate2::read::GzDecoder::new(&bytes[..]).read_to_string(&mut out).map_err(|e| format!("gzip: {e}"))?;
-        Ok(out)
-    } else {
-        String::from_utf8(bytes).map_err(|_| "the guide is not UTF-8".to_string())
+/// Programmes gathered from a guide for the playlist's channels. Programmes are kept per
+/// bucket, the playlist channels that share one guide id, and trimmed as they arrive so no
+/// more are held than could be shown.
+pub struct Guide<'a> {
+    channels: &'a [Channel],
+    by_id: FastMap<&'a str, usize>,
+    by_name: FastMap<String, usize>,
+    /// Guide channel ids that match no tvg-id, matched to a bucket by display name.
+    aliases: FastMap<String, usize>,
+    /// Indices into `channels` for each bucket; several when a tvg-id repeats.
+    buckets: Vec<Vec<usize>>,
+    programmes: Vec<Vec<Programme>>,
+    stored: usize,
+    /// How many programmes a bucket can still use, known after the first trim.
+    keep: usize,
+    /// When reading stops, in epoch ms.
+    pub deadline_ms: i64,
+    window: (i64, i64),
+    budget: usize,
+    /// Programmes read, and how many of them belong to a playlist channel.
+    pub seen: usize,
+    pub matched: usize,
+}
+
+/// A programme whose element is still being read.
+struct Pending {
+    bucket: usize,
+    start_ms: i64,
+    end_ms: i64,
+    title: Option<String>,
+    sub_title: Option<String>,
+    desc: Option<String>,
+}
+
+impl<'a> Guide<'a> {
+    /// Programmes overlapping `window` (start and end in epoch ms) for `channels`, to fill at
+    /// most `budget` items.
+    pub fn new(channels: &'a [Channel], window: (i64, i64), budget: usize) -> Guide<'a> {
+        let mut by_id = FastMap::default();
+        let mut by_name = FastMap::default();
+        let mut buckets: Vec<Vec<usize>> = Vec::new();
+        for (i, c) in channels.iter().enumerate() {
+            let bucket = *by_id.entry(c.guide_id()).or_insert_with(|| {
+                buckets.push(Vec::new());
+                buckets.len() - 1
+            });
+            buckets[bucket].push(i);
+            let name = normalise(&c.name);
+            if !name.is_empty() {
+                by_name.entry(name).or_insert(bucket);
+            }
+        }
+        let programmes = vec![Vec::new(); buckets.len()];
+        Guide { channels, by_id, by_name, aliases: FastMap::default(), buckets, programmes, stored: 0, keep: usize::MAX, deadline_ms: i64::MAX, window, budget, seen: 0, matched: 0 }
+    }
+
+    fn alias(&mut self, guide_id: &str, display_name: &str) {
+        if self.by_id.contains_key(guide_id) {
+            return;
+        }
+        if let Some(&bucket) = self.by_name.get(&normalise(display_name)) {
+            self.aliases.entry(guide_id.to_string()).or_insert(bucket);
+        }
+    }
+
+    /// The programme a `<programme …>` start tag opens, when it belongs to a playlist channel
+    /// and overlaps the window.
+    fn start(&mut self, tag: &[u8]) -> Option<Pending> {
+        self.seen += 1;
+        let (mut channel, mut start, mut stop) = (None, None, None);
+        for (name, value) in Attributes(tag) {
+            match name {
+                b"channel" if value.contains(&b'&') => channel = Some(Cow::Owned(decode(value, MAX_FIELD_BYTES))),
+                b"channel" => channel = Some(String::from_utf8_lossy(value)),
+                b"start" => start = std::str::from_utf8(value).ok().and_then(parse_xmltv_time),
+                b"stop" => stop = std::str::from_utf8(value).ok().and_then(parse_xmltv_time),
+                _ => {}
+            }
+        }
+        let channel = channel?;
+        let bucket = *self.by_id.get(&*channel).or_else(|| self.aliases.get(&*channel))?;
+        self.matched += 1;
+        let (start_ms, end_ms) = (start?, stop?);
+        if end_ms <= self.window.0 || start_ms >= self.window.1 || end_ms <= start_ms {
+            return None;
+        }
+        // Once a bucket holds as many earlier programmes as it can use, later ones are not read.
+        let list = &self.programmes[bucket];
+        if list.len() >= self.keep && list.iter().filter(|p| p.start_ms <= start_ms).count() >= self.keep {
+            return None;
+        }
+        Some(Pending { bucket, start_ms, end_ms, title: None, sub_title: None, desc: None })
+    }
+
+    fn add(&mut self, p: Pending) {
+        let Some(title) = p.title else { return };
+        if self.keep != usize::MAX && self.programmes[p.bucket].iter().any(|q| q.start_ms == p.start_ms) {
+            return;
+        }
+        let description = p.desc.or(p.sub_title).map(|d| truncate(&d, DESCRIPTION_CHARS));
+        self.programmes[p.bucket].push(Programme { title, description, start_ms: p.start_ms, end_ms: p.end_ms });
+        self.stored += 1;
+        if self.stored > 2 * self.budget + self.buckets.len() + 256 {
+            self.trim();
+        }
+    }
+
+    /// Sorts each bucket and drops what can no longer be shown. The fair share per channel only
+    /// shrinks as programmes arrive, and a channel never ends up with more than one past it, so
+    /// anything beyond that is safe to drop now.
+    fn trim(&mut self) {
+        for list in &mut self.programmes {
+            list.sort_by_key(|p| p.start_ms);
+            list.dedup_by_key(|p| p.start_ms);
+        }
+        let counts: Vec<usize> = self.programmes.iter().zip(&self.buckets).flat_map(|(list, twins)| std::iter::repeat_n(list.len(), twins.len())).collect();
+        self.keep = sdk::fair_share(&counts, self.budget) + 1;
+        for list in &mut self.programmes {
+            list.truncate(self.keep);
+        }
+        self.stored = self.programmes.iter().map(Vec::len).sum();
+    }
+
+    /// Schedule items for every playlist channel, at most `budget` of them, shared evenly.
+    pub fn into_items(mut self) -> Vec<Item> {
+        self.trim();
+        let mut items = Vec::new();
+        for (list, twins) in self.programmes.iter().zip(&self.buckets) {
+            for &t in twins {
+                items.extend(list.iter().map(|p| p.to_item(&self.channels[t])));
+            }
+        }
+        sdk::fit_schedule(items, self.budget)
     }
 }
 
-pub fn normalise(name: &str) -> String {
-    let lower = name.to_lowercase();
-    let cut = lower.split(['(', '[']).next().unwrap_or("");
-    cut.chars().filter(|c| c.is_alphanumeric()).collect()
+/// Reads an XMLTV document into `guide` as it streams in. Elements are found with a plain byte
+/// scan, and only the parts of channels and wanted programmes that matter are decoded, which
+/// keeps a large guide affordable. On a fault, what came before it is kept and the fault
+/// returned.
+pub fn parse_xmltv<R: Read>(input: R, guide: &mut Guide) -> Result<(), String> {
+    let mut s = Stream { input, buf: Vec::with_capacity(2 * CHUNK), pos: 0, done: false };
+    while let Some(lt) = s.find(0, b"<")? {
+        s.pos += lt;
+        while s.buf.len() - s.pos < 16 && s.more()? {}
+        let head = &s.buf[s.pos..];
+        if head.starts_with(b"<!--") {
+            let end = s.find(4, b"-->")?.ok_or("the guide ends inside a comment")?;
+            s.pos += end + 3;
+        } else if head.starts_with(b"<![CDATA[") {
+            let end = s.find(9, b"]]>")?.ok_or("the guide ends inside a CDATA section")?;
+            s.pos += end + 3;
+        } else if is_tag(head, b"programme") || is_tag(head, b"channel") {
+            let is_programme = is_tag(head, b"programme");
+            if guide.seen % 1024 == 1023 && host::now_ms() > guide.deadline_ms {
+                return Err(format!("reading it took more than {} seconds", GUIDE_MS / 1000));
+            }
+            let tag_end = s.tag_end()?;
+            let pending = if is_programme { guide.start(&s.buf[s.pos..s.pos + tag_end]) } else { None };
+            let len = if s.buf[s.pos + tag_end - 1] == b'/' {
+                tag_end + 1
+            } else {
+                let close: &[u8] = if is_programme { b"</programme" } else { b"</channel" };
+                let at = s.find(tag_end, close)?.ok_or("the guide ends part-way through an element")?;
+                s.find(at, b">")?.ok_or("the guide ends part-way through an element")? + 1
+            };
+            let element = &s.buf[s.pos..s.pos + len];
+            match pending {
+                Some(mut p) => {
+                    for (name, content) in Children(element, tag_end + 1) {
+                        let slot = match name {
+                            b"title" => &mut p.title,
+                            b"sub-title" => &mut p.sub_title,
+                            b"desc" => &mut p.desc,
+                            _ => continue,
+                        };
+                        if slot.is_none() {
+                            *slot = Some(clean(&decode(content, MAX_FIELD_BYTES))).filter(|v| !v.is_empty());
+                        }
+                    }
+                    guide.add(p);
+                }
+                None if !is_programme => {
+                    let id = Attributes(&element[..tag_end]).find(|(name, _)| *name == b"id").map(|(_, v)| decode(v, MAX_FIELD_BYTES));
+                    if let Some(id) = id {
+                        for (_, content) in Children(element, tag_end + 1).filter(|(name, _)| *name == b"display-name") {
+                            guide.alias(&id, &clean(&decode(content, MAX_FIELD_BYTES)));
+                        }
+                    }
+                }
+                None => {}
+            }
+            s.pos += len;
+        } else {
+            s.pos += s.tag_end()? + 1;
+        }
+    }
+    Ok(())
 }
 
-/// Programmes from an XMLTV document that overlap `[from_ms, to_ms)` on playlist channels. Guide
-/// ids rarely match a playlist's `tvg-id`, so display names are matched too and programmes are re-
-/// keyed to the playlist id. Also returns how many guide channels matched by name.
-pub fn parse_xmltv(xml: &str, from_ms: i64, to_ms: i64, by_id: &HashMap<&str, &Channel>, by_name: &HashMap<String, &Channel>) -> (Vec<Programme>, usize) {
-    use quick_xml::events::Event;
-    let mut reader = quick_xml::Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut out = Vec::new();
-    let mut aliases: HashMap<String, String> = HashMap::new();
-    let mut current: Option<Programme> = None;
-    let mut field: Option<&'static str> = None;
-    let mut text = String::new();
-    let mut channel_el: Option<String> = None;
-    loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                "channel" => {
-                    channel_el = e.attributes().flatten().find(|a| a.key.as_ref() == "id").map(|a| a.value.into_owned());
-                }
-                "display-name" if channel_el.is_some() => field = Some("display-name"),
-                "programme" => {
-                    let mut channel = String::new();
-                    let (mut start, mut stop) = (None, None);
-                    for a in e.attributes().flatten() {
-                        let v = a.value.into_owned();
-                        match a.key.as_ref() {
-                            "channel" => channel = v,
-                            "start" => start = parse_xmltv_time(&v),
-                            "stop" => stop = parse_xmltv_time(&v),
-                            _ => {}
-                        }
-                    }
-                    let key = if by_id.contains_key(channel.as_str()) { Some(channel) } else { aliases.get(&channel).cloned() };
-                    current = match (start, stop, key) {
-                        (Some(s), Some(e), Some(channel)) if e > from_ms && s < to_ms => {
-                            Some(Programme { channel, title: String::new(), description: None, start_ms: s, end_ms: e })
-                        }
-                        _ => None,
-                    };
-                }
-                "title" => field = current.as_ref().filter(|p| p.title.is_empty()).map(|_| "title"),
-                "desc" | "sub-title" => field = current.as_ref().filter(|p| p.description.is_none()).map(|_| "desc"),
-                _ => {}
-            },
-            Ok(Event::Text(t)) if field.is_some() => {
-                let raw = t.into_inner();
-                text.push_str(&quick_xml::escape::unescape(raw.as_ref()).map(|c| c.into_owned()).unwrap_or_else(|_| raw.into_owned()));
+const CHUNK: usize = 64 * 1024;
+/// Largest single element the scanner holds while looking for its end.
+const MAX_ELEMENT: usize = 1 << 20;
+
+/// A window on the document as it arrives. Offsets handed out are relative to `pos`, which
+/// stay valid when consumed bytes are dropped from the front.
+struct Stream<R> {
+    input: R,
+    buf: Vec<u8>,
+    pos: usize,
+    done: bool,
+}
+
+impl<R: Read> Stream<R> {
+    /// Reads the next chunk; false at the end of the document.
+    fn more(&mut self) -> Result<bool, String> {
+        if self.done {
+            return Ok(false);
+        }
+        if self.buf.len() - self.pos > MAX_ELEMENT {
+            return Err("an element in the guide is larger than 1 MB".into());
+        }
+        if self.pos > CHUNK {
+            self.buf.drain(..self.pos);
+            self.pos = 0;
+        }
+        let len = self.buf.len();
+        self.buf.resize(len + CHUNK, 0);
+        let read = loop {
+            match self.input.read(&mut self.buf[len..]) {
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                other => break other,
             }
-            Ok(Event::GeneralRef(r)) if field.is_some() => text.push_str(&entity(&r)),
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                "display-name" => {
-                    if let (Some(id), Some(ch)) = (channel_el.as_ref().filter(|id| !by_id.contains_key(id.as_str())), by_name.get(&normalise(&text))) {
-                        aliases.entry(id.clone()).or_insert_with(|| ch.id.clone());
-                    }
-                    text.clear();
-                    field = None;
+        };
+        let n = read.map_err(|e| {
+            self.buf.truncate(len);
+            e.to_string()
+        })?;
+        self.buf.truncate(len + n);
+        self.done = n == 0;
+        Ok(n > 0)
+    }
+
+    /// Where `needle` next starts, at or after `from`, reading on as needed.
+    fn find(&mut self, mut from: usize, needle: &[u8]) -> Result<Option<usize>, String> {
+        loop {
+            let hay = &self.buf[self.pos..];
+            if let Some(i) = find_bytes(hay.get(from..).unwrap_or_default(), needle) {
+                return Ok(Some(from + i));
+            }
+            from = from.max((hay.len() + 1).saturating_sub(needle.len()));
+            if !self.more()? {
+                return Ok(None);
+            }
+        }
+    }
+
+    /// Where the tag starting at `pos` closes with `>`, skipping any inside quoted values.
+    fn tag_end(&mut self) -> Result<usize, String> {
+        let (mut at, mut quote) = (1, None);
+        loop {
+            let hay = &self.buf[self.pos..];
+            while at < hay.len() {
+                match (hay[at], quote) {
+                    (b'>', None) => return Ok(at),
+                    (q @ (b'"' | b'\''), None) => quote = Some(q),
+                    (c, Some(q)) if c == q => quote = None,
+                    _ => {}
                 }
-                "title" | "desc" | "sub-title" => {
-                    if let (Some(p), Some(f)) = (current.as_mut(), field) {
-                        let value = std::mem::take(&mut text);
-                        match f {
-                            "title" => p.title = value,
-                            _ => p.description = Some(value),
-                        }
-                    }
-                    text.clear();
-                    field = None;
+                at += 1;
+            }
+            if !self.more()? {
+                return Err("the guide ends inside a tag".into());
+            }
+        }
+    }
+}
+
+fn find_bytes(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    let mut from = 0;
+    while let Some(i) = hay[from..].iter().position(|&b| b == needle[0]) {
+        let at = from + i;
+        if hay[at..].starts_with(needle) {
+            return Some(at);
+        }
+        from = at + 1;
+    }
+    None
+}
+
+/// Whether `head` starts the element `name`, not merely one whose name begins with it.
+fn is_tag(head: &[u8], name: &[u8]) -> bool {
+    head.get(1..=name.len()) == Some(name) && head.get(name.len() + 1).is_some_and(|c| c.is_ascii_whitespace() || matches!(c, b'>' | b'/'))
+}
+
+/// The attributes of a start tag given without its closing `>`, as raw names and values.
+struct Attributes<'a>(&'a [u8]);
+
+impl<'a> Iterator for Attributes<'a> {
+    type Item = (&'a [u8], &'a [u8]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let s = self.0;
+        let skip_space = |mut i: usize| {
+            while i < s.len() && s[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            i
+        };
+        // The element's name comes first and is passed over like an attribute without a value.
+        let mut i = 0;
+        loop {
+            i = skip_space(i);
+            let name_start = i;
+            while i < s.len() && !s[i].is_ascii_whitespace() && !matches!(s[i], b'=' | b'/' | b'<') {
+                i += 1;
+            }
+            let name = &s[name_start..i];
+            i = skip_space(i);
+            if i >= s.len() {
+                self.0 = &[];
+                return None;
+            }
+            if s[i] != b'=' {
+                i += usize::from(i == name_start);
+                continue;
+            }
+            i = skip_space(i + 1);
+            let (value, rest) = match s.get(i) {
+                Some(&q @ (b'"' | b'\'')) => {
+                    let end = s[i + 1..].iter().position(|&c| c == q).map_or(s.len(), |e| i + 1 + e);
+                    (&s[i + 1..end], (end + 1).min(s.len()))
                 }
-                "channel" => channel_el = None,
-                "programme" => {
-                    if let Some(p) = current.take().filter(|p| !p.title.is_empty()) {
-                        out.push(p);
-                        if out.len() >= MAX_SCHEDULE {
-                            break;
-                        }
-                    }
+                _ => {
+                    let end = s[i..].iter().position(u8::is_ascii_whitespace).map_or(s.len(), |e| i + e);
+                    (&s[i..end], end)
                 }
-                _ => {}
-            },
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            };
+            self.0 = &s[rest..];
+            return Some((name, value));
+        }
+    }
+}
+
+/// The child elements of `element` from `from` on, as names and raw contents. Self-closing
+/// children have empty contents.
+struct Children<'a>(&'a [u8], usize);
+
+impl<'a> Iterator for Children<'a> {
+    type Item = (&'a [u8], &'a [u8]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let el = self.0;
+        loop {
+            let at = self.1 + el.get(self.1..)?.iter().position(|&b| b == b'<')?;
+            let head = &el[at..];
+            if let Some(skip) = [(&b"<!--"[..], &b"-->"[..]), (b"<![CDATA[", b"]]>")].iter().find(|(open, _)| head.starts_with(open)).map(|(_, close)| close) {
+                self.1 = find_bytes(&el[at..], skip).map_or(el.len(), |e| at + e + skip.len());
+                continue;
+            }
+            if matches!(head.get(1), Some(b'/' | b'!' | b'?')) {
+                self.1 = at + 1;
+                continue;
+            }
+            let name_end = head.iter().position(|c| c.is_ascii_whitespace() || matches!(c, b'>' | b'/')).unwrap_or(head.len());
+            let name = &head[1..name_end];
+            let open_end = at + tag_close(head)?;
+            if el[open_end - 1] == b'/' {
+                self.1 = open_end + 1;
+                return Some((name, &[]));
+            }
+            let mut close = Vec::with_capacity(name.len() + 2);
+            close.extend_from_slice(b"</");
+            close.extend_from_slice(name);
+            let content_start = open_end + 1;
+            let content_end = find_bytes(&el[content_start..], &close).map_or(el.len(), |e| content_start + e);
+            self.1 = content_end + el[content_end..].iter().position(|&b| b == b'>').map_or(el.len() - content_end, |e| e + 1);
+            return Some((name, &el[content_start..content_end]));
+        }
+    }
+}
+
+/// Where the tag at the start of `head` closes with `>`, skipping any inside quoted values.
+fn tag_close(head: &[u8]) -> Option<usize> {
+    let mut quote = None;
+    for (i, &c) in head.iter().enumerate().skip(1) {
+        match (c, quote) {
+            (b'>', None) => return Some(i),
+            (b'"' | b'\'', None) => quote = Some(c),
+            (c, Some(q)) if c == q => quote = None,
             _ => {}
         }
     }
-    (out, aliases.len())
+    None
 }
 
-/// The text an entity reference stands for: `&amp;`, `&#8217;` and friends.
-fn entity(r: &quick_xml::events::BytesRef) -> String {
-    if let Ok(Some(c)) = r.resolve_char_ref() {
-        return c.to_string();
+/// Up to about `max` bytes of text content, with entities and CDATA sections decoded and any
+/// markup inside dropped. Bytes that are not UTF-8 become replacement characters.
+fn decode(raw: &[u8], max: usize) -> String {
+    let mut out = String::new();
+    let mut i = 0;
+    while i < raw.len() && out.len() < max {
+        let next = raw[i..].iter().position(|&b| b == b'<' || b == b'&').map_or(raw.len(), |n| i + n).min(i + max);
+        out.push_str(&String::from_utf8_lossy(&raw[i..next]));
+        i = next;
+        let rest = &raw[i.min(raw.len())..];
+        if rest.starts_with(b"<![CDATA[") {
+            let end = find_bytes(&rest[9..], b"]]>").map_or(rest.len(), |e| 9 + e);
+            out.push_str(&String::from_utf8_lossy(&rest[9..end]));
+            i += (end + 3).min(rest.len());
+        } else if rest.starts_with(b"<") {
+            i += tag_close(rest).map_or(rest.len(), |e| e + 1);
+        } else if rest.starts_with(b"&") {
+            let end = rest.iter().take(12).position(|&b| b == b';');
+            match end.and_then(|e| entity(&rest[1..e])) {
+                Some(c) => {
+                    out.push(c);
+                    i += end.unwrap_or(0) + 1;
+                }
+                None => {
+                    out.push('&');
+                    i += 1;
+                }
+            }
+        }
     }
-    match r.as_ref() {
-        "amp" => "&",
-        "lt" => "<",
-        "gt" => ">",
-        "quot" => "\"",
-        "apos" => "'",
-        _ => "",
-    }
-    .to_string()
+    out
 }
 
-/// "20261019001500 +0000" → epoch ms. The zone part is optional (UTC).
+/// The character an entity stands for: `amp`, `#8217`, `#x2019` and friends.
+fn entity(name: &[u8]) -> Option<char> {
+    Some(match name {
+        b"amp" => '&',
+        b"lt" => '<',
+        b"gt" => '>',
+        b"quot" => '"',
+        b"apos" => '\'',
+        b"nbsp" => ' ',
+        [b'#', b'x' | b'X', hex @ ..] => char::from_u32(u32::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok()?)?,
+        [b'#', dec @ ..] => char::from_u32(std::str::from_utf8(dec).ok()?.parse().ok()?)?,
+        _ => return None,
+    })
+}
+
+/// FNV-1a: far cheaper than the default hasher inside the sandbox, and guide ids need no
+/// defence against collisions.
+struct Fnv(u64);
+
+impl Default for Fnv {
+    fn default() -> Self {
+        Fnv(0xcbf2_9ce4_8422_2325)
+    }
+}
+
+impl std::hash::Hasher for Fnv {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 = (self.0 ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+}
+
+type FastMap<K, V> = HashMap<K, V, BuildHasherDefault<Fnv>>;
+
+fn clean(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// "20261019001500 +0000", "20261019011500 +01:00" or "202610190015" → epoch ms. A missing or
+/// named zone means UTC.
 pub fn parse_xmltv_time(s: &str) -> Option<i64> {
     let s = s.trim();
-    let digits: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if digits.len() < 12 {
+    let b = s.as_bytes();
+    let digits = b.iter().take_while(|c| c.is_ascii_digit()).count();
+    if digits < 12 {
         return None;
     }
-    let num = |a: usize, b: usize| digits.get(a..b).and_then(|x| x.parse::<u32>().ok());
-    let year = digits[0..4].parse::<i64>().ok()?;
-    let (month, day, hour, minute) = (num(4, 6)?, num(6, 8)?, num(8, 10)?, num(10, 12)?);
-    let second = num(12, 14).unwrap_or(0);
-    let zone = s[digits.len()..].trim();
-    let offset = if zone.len() >= 5 {
-        let sign = if zone.starts_with('-') { -1 } else { 1 };
-        let hh: i32 = zone[1..3].parse().ok()?;
-        let mm: i32 = zone[3..5].parse().ok()?;
-        sign * (hh * 60 + mm)
-    } else {
-        0
+    let num = |at: usize| u32::from(b[at] - b'0') * 10 + u32::from(b[at + 1] - b'0');
+    let year = i64::from(num(0) * 100 + num(2));
+    let (month, day, hour, minute) = (num(4), num(6), num(8), num(10));
+    let second = if digits >= 14 { num(12) } else { 0 };
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 24 || minute > 59 || second > 60 {
+        return None;
+    }
+    let zone = s[digits..].trim_start().as_bytes();
+    let offset = match zone {
+        [sign @ (b'+' | b'-'), rest @ ..] => {
+            let mut d = rest.iter().filter(|&&c| c != b':').take_while(|c| c.is_ascii_digit()).map(|c| i32::from(c - b'0'));
+            let (h1, h2, m1, m2) = (d.next(), d.next(), d.next(), d.next());
+            let v = match (h1, h2, m1, m2, d.next()) {
+                (Some(h1), Some(h2), None, None, None) => (h1 * 10 + h2) * 60,
+                (Some(h1), Some(h2), Some(m1), Some(m2), None) => (h1 * 10 + h2) * 60 + m1 * 10 + m2,
+                _ => return None,
+            };
+            if *sign == b'-' { -v } else { v }
+        }
+        _ => 0,
     };
     Some(epoch_ms(year, month, day, hour, minute, second, offset))
 }
@@ -373,6 +841,23 @@ pub fn parse_xmltv_time(s: &str) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+
+    const HOUR: i64 = 3_600_000;
+
+    fn channel(id: &str, name: &str) -> Channel {
+        Channel { id: id.into(), tvg_id: Some(id.into()), name: name.into(), number: None, logo: None, group: None, url: format!("http://s/{id}") }
+    }
+
+    fn at(stamp: &str) -> i64 {
+        parse_xmltv_time(stamp).unwrap()
+    }
+
+    fn read(xml: &str, channels: &[Channel], window: (i64, i64), budget: usize) -> Vec<Item> {
+        let mut guide = Guide::new(channels, window, budget);
+        read_guide(xml.as_bytes(), &mut guide, MAX_GUIDE_BYTES).unwrap();
+        guide.into_items()
+    }
 
     #[test]
     fn parses_extended_m3u() {
@@ -384,42 +869,234 @@ https://example.com/sport.m3u8
 #EXTINF:-1 tvg-chno="7",Seven
 https://example.com/seven.m3u8
 "#;
-        let chans = parse_m3u(m3u, None);
-        assert_eq!(chans.len(), 3);
+        let (chans, total) = parse_m3u(m3u, None, 100);
+        assert_eq!((chans.len(), total), (3, 3));
         assert_eq!(chans[0].id, "abc.au");
         assert_eq!(chans[0].logo.as_deref(), Some("https://x/abc.png"));
         assert_eq!(chans[0].number.as_deref(), Some("1"));
         assert_eq!(chans[1].id, "sport-one");
+        assert_eq!(chans[1].tvg_id, None);
         assert_eq!(chans[2].number.as_deref(), Some("7"));
-        assert_eq!(parse_m3u(m3u, Some("sport")).len(), 1);
+        assert_eq!(parse_m3u(m3u, Some("sport"), 100).0.len(), 1);
+        let (first, total) = parse_m3u(m3u, None, 2);
+        assert_eq!((first.len(), total), (2, 3));
     }
 
     #[test]
-    fn parses_xmltv_times_and_programmes() {
-        assert_eq!(parse_xmltv_time("20261019001500 +0000"), Some(1_792_368_900_000));
-        assert_eq!(parse_xmltv_time("20261019101500 +1000"), Some(1_792_368_900_000));
+    fn titles_run_from_the_first_comma_after_the_attributes() {
+        let m3u = r#"#EXTINF:-1 tvg-id="sky1" group-title="Sport, UK",Sky Sports 1, HD
+http://s/1
+#EXTINF:-1,Plain, with a comma
+http://s/2
+#EXTINF:-1 tvg-name="Fallback name" group-title="x",
+http://s/3
+"#;
+        let (chans, _) = parse_m3u(m3u, None, 10);
+        assert_eq!(chans[0].name, "Sky Sports 1, HD");
+        assert_eq!(chans[0].group.as_deref(), Some("Sport, UK"));
+        assert_eq!(chans[1].name, "Plain, with a comma");
+        assert_eq!(chans[2].name, "Fallback name");
+        assert_eq!(parse_m3u(m3u, Some("sport, uk"), 10).0.len(), 1);
+    }
+
+    #[test]
+    fn channel_ids_are_unique_and_stable() {
+        let m3u = r#"#EXTM3U
+#EXTINF:-1 tvg-id="bbc1.uk" group-title="UK",BBC One
+http://s/bbc1
+#EXTINF:-1 tvg-id="bbc1.uk" group-title="HD",BBC One HD
+http://s/bbc1hd
+#EXTINF:-1 tvg-id="bbc1.uk~2" group-title="HD",Imposter
+http://s/odd
+#EXTINF:-1,!!!
+http://s/a
+#EXTINF:-1,???
+http://s/b
+#EXTINF:-1,★
+http://s/a
+#EXTINF:-1,News
+http://s/n1
+#EXTINF:-1,News
+http://s/n2
+"#;
+        let (chans, _) = parse_m3u(m3u, None, 100);
+        let ids: Vec<&str> = chans.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(&ids[..3], ["bbc1.uk", "bbc1.uk~2", "bbc1.uk~2~2"]);
+        assert!(ids[3].starts_with("url-") && ids[4].starts_with("url-") && ids[3] != ids[4]);
+        assert_eq!(ids[5], format!("{}~2", ids[3]));
+        assert_eq!(&ids[6..], ["news", "news~2"]);
+        assert_eq!(ids.iter().collect::<HashSet<_>>().len(), ids.len());
+        assert_eq!(chans[1].tvg_id.as_deref(), Some("bbc1.uk"));
+        let again: Vec<String> = parse_m3u(m3u, None, 100).0.into_iter().map(|c| c.id).collect();
+        assert_eq!(ids, again);
+        let hd: Vec<String> = parse_m3u(m3u, Some("HD"), 100).0.into_iter().map(|c| c.id).collect();
+        assert_eq!(hd, ["bbc1.uk~2", "bbc1.uk~2~2"]);
+        let items: Vec<Item> = chans.iter().map(Channel::to_item).collect();
+        assert_eq!(items.iter().map(|i| &i.id).collect::<HashSet<_>>().len(), items.len());
+    }
+
+    #[test]
+    fn xmltv_times_take_every_offset_style() {
+        let utc = 1_792_368_900_000;
+        assert_eq!(parse_xmltv_time("20261019001500 +0000"), Some(utc));
+        assert_eq!(parse_xmltv_time("20261019101500 +1000"), Some(utc));
+        assert_eq!(parse_xmltv_time("20261019011500 +01:00"), Some(utc));
+        assert_eq!(parse_xmltv_time("20261019011500+01:00"), Some(utc));
+        assert_eq!(parse_xmltv_time("20261018191500 -05:00"), Some(utc));
+        assert_eq!(parse_xmltv_time("20261019011500 +01"), Some(utc));
+        assert_eq!(parse_xmltv_time("20261019001500"), Some(utc));
+        assert_eq!(parse_xmltv_time("202610190015"), Some(utc));
+        assert_eq!(parse_xmltv_time("20261019001500 UTC"), Some(utc));
+        for bad in ["20261019001500 +1é00", "20261019001500 +", "2026101900", "20261319001500", "２０２６1019001500", ""] {
+            assert_eq!(parse_xmltv_time(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn programmes_keep_entities_cdata_and_prefer_desc() {
+        let abc = channel("abc.au", "ABC TV");
         let xml = r#"<?xml version="1.0"?><tv>
 <channel id="abc.au"><display-name>ABC</display-name></channel>
-<programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="abc.au"><title>News</title><desc>Tonight's news.</desc></programme>
-<programme start="20261019003000 +0000" stop="20261019010000 +0000" channel="other"><title>Nope</title></programme>
-<programme start="20261020000000 +0000" stop="20261020003000 +0000" channel="abc.au"><title>Tomorrow</title></programme>
+<programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="abc.au">
+  <title lang="en">Law &amp; Order</title><title lang="fr">New York, police judiciaire</title>
+  <sub-title>The &#8220;Pilot&#8221;</sub-title>
+  <desc>Detectives &amp; <![CDATA[lawyers <in> court]]> take   on
+     a case.</desc>
+</programme>
+<programme start="20261019003000 +01:00" stop="20261019010000 +0000" channel="abc.au"><title>Q&amp;A</title><sub-title>Only a sub-title</sub-title></programme>
+<programme start="20261019010000 +0000" stop="20261019013000 +0000" channel="abc.au"><title><![CDATA[Tom & Jerry]]></title></programme>
+<programme start="20261019013000 +0000" stop="20261019020000 +0000" channel="abc.au"><title>AT&T Presents</title></programme>
 </tv>"#;
-        let from = parse_xmltv_time("20261019000500 +0000").unwrap();
-        let to = from + 6 * 3_600_000;
-        let abc = Channel { id: "abc.au".into(), name: "ABC TV".into(), number: None, logo: None, group: None, url: "u".into() };
-        let by_id: HashMap<&str, &Channel> = [("abc.au", &abc)].into_iter().collect();
-        let by_name: HashMap<String, &Channel> = [(normalise(&abc.name), &abc)].into_iter().collect();
-        let (progs, _) = parse_xmltv(xml, from, to, &by_id, &by_name);
-        assert_eq!(progs.len(), 1);
-        assert_eq!(progs[0].title, "News");
-        assert_eq!(progs[0].description.as_deref(), Some("Tonight's news."));
+        let items = read(xml, std::slice::from_ref(&abc), (at("20261018230000"), at("20261019060000")), 100);
+        let titles: Vec<&str> = items.iter().map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, ["Q&A", "Law & Order", "Tom & Jerry", "AT&T Presents"]);
+        assert_eq!(items[0].subtitle.as_deref(), Some("Only a sub-title"));
+        assert_eq!(items[0].start_ms, Some(at("20261018233000")));
+        assert_eq!(items[1].subtitle.as_deref(), Some("Detectives & lawyers <in> court take on a case."));
+        assert_eq!(items[1].id, format!("prog:abc.au:{}", at("20261019000000")));
+        assert_eq!(items[1].channel_id.as_deref(), Some("abc.au"));
+        assert!(items[1].action.is_empty());
+    }
 
-        // Guide ids that differ from the playlist are matched through display names.
-        let xml2 = r#"<tv><channel id="guide-7"><display-name>ABC TV (1080p)</display-name></channel>
+    #[test]
+    fn only_programmes_in_the_window_are_kept() {
+        let abc = channel("abc.au", "ABC TV");
+        let xml = r#"<tv>
+<programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="abc.au"><title>Over</title></programme>
+<programme start="20261019003000 +0000" stop="20261019010000 +0000" channel="abc.au"><title>On now</title></programme>
+<programme start="20261019010000 +0000" stop="20261019013000 +0000" channel="abc.au"><title>Next</title></programme>
+<programme start="20261019070000 +0000" stop="20261019073000 +0000" channel="abc.au"><title>Tomorrow</title></programme>
+<programme start="20261019013000 +0000" stop="20261019020000 +0000" channel="other"><title>Elsewhere</title></programme>
+<programme start="20261019013000 +0000" channel="abc.au"><title>No stop</title></programme>
+</tv>"#;
+        let items = read(xml, std::slice::from_ref(&abc), (at("20261019004500"), at("20261019064500")), 100);
+        assert_eq!(items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), ["On now", "Next"]);
+    }
+
+    #[test]
+    fn guide_ids_that_differ_are_matched_by_display_name() {
+        let abc = channel("abc.au", "ABC TV");
+        let xml = r#"<tv><channel id="guide-7"><display-name>ABC TV (1080p)</display-name></channel>
 <programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="guide-7"><title>Matched</title></programme></tv>"#;
-        let (progs2, aliased) = parse_xmltv(xml2, from, to, &by_id, &by_name);
-        assert_eq!(aliased, 1);
-        assert_eq!(progs2.len(), 1);
-        assert_eq!(progs2[0].channel, "abc.au");
+        let channels = [abc];
+        let mut guide = Guide::new(&channels, (at("20261018230000"), at("20261019060000")), 100);
+        read_guide(xml.as_bytes(), &mut guide, MAX_GUIDE_BYTES).unwrap();
+        assert_eq!(guide.aliases.len(), 1);
+        let items = guide.into_items();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].channel_id.as_deref(), Some("abc.au"));
+    }
+
+    #[test]
+    fn channels_sharing_a_tvg_id_both_get_the_guide() {
+        let m3u = "#EXTINF:-1 tvg-id=\"abc.au\",ABC\nhttp://s/sd\n#EXTINF:-1 tvg-id=\"abc.au\",ABC HD\nhttp://s/hd\n";
+        let (chans, _) = parse_m3u(m3u, None, 10);
+        let xml = r#"<tv><programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="abc.au"><title>News</title></programme>
+<programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="abc.au"><title>News again</title></programme></tv>"#;
+        let items = read(xml, &chans, (at("20261018230000"), at("20261019060000")), 100);
+        let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+        let start = at("20261019000000");
+        assert_eq!(ids, [format!("prog:abc.au:{start}"), format!("prog:abc.au~2:{start}")]);
+        assert_eq!(items[0].title, "News");
+    }
+
+    /// A guide written channel by channel, as most are, with far more than fits.
+    fn big_guide(channels: usize, per_channel: usize) -> String {
+        let mut xml = String::from("<tv>\n");
+        let base = at("20261019000000");
+        for c in 0..channels {
+            for p in 0..per_channel {
+                let start = base + p as i64 * HOUR / 2;
+                let stamp = |ms: i64| {
+                    let mins = (ms - base) / 60_000;
+                    format!("20261019{:02}{:02}00 +0000", mins / 60, mins % 60)
+                };
+                xml.push_str(&format!("<programme start=\"{}\" stop=\"{}\" channel=\"c{c}\"><title>P{p}</title><desc>About programme {p}.</desc></programme>\n", stamp(start), stamp(start + HOUR / 2)));
+            }
+        }
+        xml.push_str("</tv>\n");
+        xml
+    }
+
+    #[test]
+    fn the_budget_is_spread_over_every_channel_by_start_time() {
+        let channels: Vec<Channel> = (0..50).map(|c| channel(&format!("c{c}"), &format!("Channel {c}"))).collect();
+        let xml = big_guide(50, 40);
+        let items = read(&xml, &channels, (at("20261019000000"), at("20261019235900")), 120);
+        assert_eq!(items.len(), 120);
+        let expected = [at("20261019000000"), at("20261019003000"), at("20261019010000")];
+        for c in &channels {
+            let starts: Vec<i64> = items.iter().filter(|i| i.channel_id.as_deref() == Some(&c.id)).map(|i| i.start_ms.unwrap()).collect();
+            assert!(starts == expected[..2] || starts == expected, "{}: {starts:?}", c.id);
+        }
+        let mut uneven = Guide::new(&channels, (at("20261019000000"), at("20261019235900")), 1000);
+        read_guide(xml.as_bytes(), &mut uneven, MAX_GUIDE_BYTES).unwrap();
+        assert!(uneven.stored <= 2 * 1000 + 50 + 256);
+        assert_eq!(uneven.into_items().len(), 1000);
+    }
+
+    #[test]
+    fn gzipped_guides_are_read_as_they_unpack() {
+        let channels: Vec<Channel> = (0..5).map(|c| channel(&format!("c{c}"), &format!("Channel {c}"))).collect();
+        let xml = big_guide(5, 40);
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(xml.as_bytes()).unwrap();
+        let gz = gz.finish().unwrap();
+        let window = (at("20261019000000"), at("20261019235900"));
+        let mut guide = Guide::new(&channels, window, 1000);
+        read_guide(&gz, &mut guide, MAX_GUIDE_BYTES).unwrap();
+        assert_eq!(guide.into_items().len(), 200);
+
+        let mut capped = Guide::new(&channels, window, 1000);
+        let err = read_guide(&gz, &mut capped, xml.len() / 2).unwrap_err();
+        assert!(err.contains("unpacks to more than"), "{err}");
+        let kept = capped.into_items().len();
+        assert!(kept > 50 && kept < 200, "{kept}");
+
+        let mut broken = Guide::new(&channels, window, 1000);
+        assert!(read_guide(&gz[..gz.len() / 2], &mut broken, MAX_GUIDE_BYTES).is_err());
+        assert!(!broken.into_items().is_empty());
+    }
+
+    #[test]
+    fn reading_stops_at_the_deadline_with_what_came_before() {
+        let channels: Vec<Channel> = (0..50).map(|c| channel(&format!("c{c}"), &format!("Channel {c}"))).collect();
+        let mut guide = Guide::new(&channels, (at("20261019000000"), at("20261019235900")), 500);
+        guide.deadline_ms = -1;
+        let err = read_guide(big_guide(50, 40).as_bytes(), &mut guide, MAX_GUIDE_BYTES).unwrap_err();
+        assert!(err.contains("seconds"), "{err}");
+        assert_eq!(guide.seen, 1023);
+        assert!(!guide.into_items().is_empty());
+    }
+
+    #[test]
+    fn a_malformed_guide_keeps_what_came_before_the_fault() {
+        let abc = channel("abc.au", "ABC TV");
+        let xml = r#"<tv><programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="abc.au"><title>Fine</title></programme>
+<programme start="20261019003000 +0000" stop="20261019010000 +0000" channel="abc.au"><title>Cut off</title></programme><!-- never closed"#;
+        let channels = [abc];
+        let mut guide = Guide::new(&channels, (at("20261018230000"), at("20261019060000")), 100);
+        assert!(read_guide(xml.as_bytes(), &mut guide, MAX_GUIDE_BYTES).is_err());
+        assert_eq!(guide.into_items().iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), ["Fine", "Cut off"]);
     }
 }
