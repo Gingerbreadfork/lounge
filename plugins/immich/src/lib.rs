@@ -1,8 +1,12 @@
 //! Immich photos: the pictures in an album shared from Immich become the screensaver. A shared
 //! link needs no account on the TV, and its key lets the launcher fetch the pictures without
 //! headers, which is what the artwork pipeline needs.
-use lounge_plugin_sdk::{self as sdk, host, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
 use serde::Deserialize;
+use std::collections::HashSet;
+
+/// Most months of an album read through the timeline in one refresh.
+const MAX_MONTHS: usize = 24;
 
 pub struct Immich;
 
@@ -40,36 +44,91 @@ impl sdk::Plugin for Immich {
         let password = host::secret("password").filter(|p| !p.is_empty());
         let max = host::setting("max").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(60).clamp(1, 300);
         let auth = query(&key, password.as_deref());
-        let r = host::fetch(&sdk::HttpRequest::get(format!("{base}/api/shared-links/me?{auth}")).header("Accept", "application/json"))?;
-        match r.status {
-            401 => return Err("Immich refused the link. If it has a password, enter it in the plugin's settings.".into()),
-            404 => return Err("Immich does not know this link any more. Create a new shared link for the album.".into()),
-            s if !(200..300).contains(&s) => return Err(format!("Immich answered HTTP {s}")),
-            _ => {}
-        }
-        let shared: SharedLink = serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer from Immich: {e}"))?;
+        let shared: SharedLink = serde_json::from_str(&get(&format!("{base}/api/shared-links/me?{auth}"))?).map_err(|e| format!("unexpected answer from Immich: {e}"))?;
         let album = shared.album.as_ref().and_then(|a| a.album_name.clone()).unwrap_or_else(|| "Photos".into());
-        let mut assets: Vec<Asset> = shared.assets.into_iter().chain(shared.album.map(|a| a.assets).unwrap_or_default()).filter(|a| a.kind == "IMAGE").collect();
-        assets.sort_by_key(|a| std::cmp::Reverse(a.taken_ms()));
-        assets.dedup_by(|a, b| a.id == b.id);
-        assets.truncate(max);
-        let count = assets.len();
+        // Older servers list an album's pictures with the link; newer ones serve them a month at a time.
+        let (mut pictures, album_id) = match shared.album {
+            Some(a) => ([shared.assets.0, a.assets.0].concat(), Some(a.id).filter(|id| !id.is_empty())),
+            None => (shared.assets.0, None),
+        };
+        if let (true, Some(id)) = (pictures.is_empty(), album_id) {
+            pictures = timeline(&base, &id, &auth, max)?;
+        }
+        let pictures = newest(pictures, max);
+        let count = pictures.len();
         sdk::info!("{count} pictures from \"{album}\"");
-        Ok(assets
+        Ok(pictures
             .into_iter()
             .enumerate()
-            .map(|(i, a)| Item {
-                id: format!("asset:{}", a.id),
+            .map(|(i, p)| Item {
+                id: format!("asset:{}", p.id),
                 kind: ItemKind::Wallpaper,
                 title: album.clone(),
-                subtitle: a.taken_ms().map(month_year),
-                added_ms: a.taken_ms(),
-                thumbnail: Some(format!("{base}/api/assets/{}/thumbnail?size=preview&{auth}", a.id)),
+                subtitle: p.taken_ms.map(|t| month_year(t + p.local_offset_ms)),
+                added_ms: p.taken_ms,
+                thumbnail: Some(format!("{base}/api/assets/{}/thumbnail?size=preview&{auth}", p.id)),
                 weight: (count - i) as i32,
                 ..Default::default()
             })
             .collect())
     }
+}
+
+const TOO_BIG: &str = "The album is too big to read: Immich answered with more than the 8 MB a plugin may read at once. Turn off Show metadata on the shared link, or share a smaller album.";
+
+/// GET from Immich, turning its refusals into advice.
+fn get(url: &str) -> Result<String, String> {
+    let r = match host::fetch(&HttpRequest::get(url).header("Accept", "application/json")) {
+        Err(e) if e == host::TOO_LARGE => return Err(TOO_BIG.into()),
+        other => other?,
+    };
+    match r.status {
+        401 => Err("Immich refused the link. If it has a password, enter it in the plugin's settings.".into()),
+        404 => Err("Immich does not know this link any more. Create a new shared link for the album.".into()),
+        s if !(200..300).contains(&s) => Err(format!("Immich answered HTTP {s}")),
+        _ => Ok(r.body),
+    }
+}
+
+/// The newest `max` pictures of an album, read a month at a time from Immich's timeline,
+/// newest month first.
+fn timeline(base: &str, album_id: &str, auth: &str, max: usize) -> Result<Vec<Picture>, String> {
+    let mut months: Vec<Month> = serde_json::from_str(&get(&format!("{base}/api/timeline/buckets?albumId={album_id}&order=desc&size=MONTH&{auth}"))?)
+        .map_err(|e| format!("unexpected album timeline from Immich: {e}"))?;
+    months.sort_by(|a, b| b.time_bucket.cmp(&a.time_bucket));
+    let mut out = Vec::new();
+    for month in months.iter().take(MAX_MONTHS) {
+        if out.len() >= max {
+            break;
+        }
+        let bucket = if month.time_bucket.contains('T') { month.time_bucket.clone() } else { format!("{}T00:00:00.000Z", month.time_bucket) };
+        let body = get(&format!("{base}/api/timeline/bucket?albumId={album_id}&timeBucket={}&order=desc&size=MONTH&{auth}", url_encode(&bucket)))?;
+        out.extend(month_pictures(&body)?);
+    }
+    Ok(out)
+}
+
+/// The pictures in one month of the timeline: columns of values from newer servers, or a list
+/// of assets from older ones.
+pub fn month_pictures(json: &str) -> Result<Vec<Picture>, String> {
+    if let Ok(c) = serde_json::from_str::<Columns>(json) {
+        let offset = |i: usize| c.local_offset_hours.get(i).copied().flatten().map_or(0, |h| (h * 3_600_000.0) as i64);
+        return Ok((0..c.id.len())
+            .filter(|&i| c.is_image.get(i).copied().unwrap_or(false))
+            .map(|i| Picture { id: c.id[i].clone(), taken_ms: c.file_created_at.get(i).and_then(|t| t.as_deref()).and_then(sdk::parse_iso8601), local_offset_ms: offset(i) })
+            .collect());
+    }
+    let assets: Images = serde_json::from_str(json).map_err(|e| format!("unexpected album month from Immich: {e}"))?;
+    Ok(assets.0)
+}
+
+/// The newest `max`, each picture once.
+fn newest(mut pictures: Vec<Picture>, max: usize) -> Vec<Picture> {
+    pictures.sort_by_key(|p| std::cmp::Reverse(p.taken_ms));
+    let mut seen = HashSet::new();
+    pictures.retain(|p| seen.insert(p.id.clone()));
+    pictures.truncate(max);
+    pictures
 }
 
 sdk::export_plugin!(Immich);
@@ -79,15 +138,72 @@ struct SharedLink {
     #[serde(default)]
     album: Option<Album>,
     #[serde(default)]
-    assets: Vec<Asset>,
+    assets: Images,
 }
 
 #[derive(Deserialize, Default)]
 struct Album {
+    #[serde(default)]
+    id: String,
     #[serde(rename = "albumName")]
     album_name: Option<String>,
     #[serde(default)]
-    assets: Vec<Asset>,
+    assets: Images,
+}
+
+#[derive(Deserialize)]
+struct Month {
+    #[serde(rename = "timeBucket")]
+    time_bucket: String,
+}
+
+/// One month of the timeline as newer servers send it: a column per field.
+#[derive(Deserialize)]
+struct Columns {
+    id: Vec<String>,
+    #[serde(rename = "isImage")]
+    is_image: Vec<bool>,
+    #[serde(rename = "fileCreatedAt", default)]
+    file_created_at: Vec<Option<String>>,
+    #[serde(rename = "localOffsetHours", default)]
+    local_offset_hours: Vec<Option<f64>>,
+}
+
+/// A picture to show: its id and when it was taken, in UTC, with the offset to local time
+/// where Immich knows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Picture {
+    pub id: String,
+    pub taken_ms: Option<i64>,
+    pub local_offset_ms: i64,
+}
+
+/// A list of assets kept as pictures: videos are dropped and each asset is cut down to what a
+/// picture needs as it is read, so a long list with metadata stays small.
+#[derive(Default)]
+struct Images(Vec<Picture>);
+
+impl<'de> Deserialize<'de> for Images {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Images, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = Images;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a list of assets")
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Images, A::Error> {
+                let mut out = Vec::new();
+                while let Some(a) = seq.next_element::<Asset>()? {
+                    if a.kind == "IMAGE" {
+                        let taken_ms = a.taken_ms();
+                        out.push(Picture { id: a.id, taken_ms, local_offset_ms: 0 });
+                    }
+                }
+                Ok(Images(out))
+            }
+        }
+        d.deserialize_seq(Visitor)
+    }
 }
 
 #[derive(Deserialize, Default, Clone)]
@@ -177,17 +293,46 @@ mod tests {
 
     #[test]
     fn a_shared_album_reads_its_pictures() {
-        let s: SharedLink = serde_json::from_str(r#"{"type": "ALBUM", "album": {"albumName": "Summer", "assets": [
-            {"id": "a1", "type": "IMAGE", "fileCreatedAt": "2025-10-03T10:00:00.000Z", "exifInfo": {"dateTimeOriginal": "2025-10-01T09:00:00.000Z"}},
+        let s: SharedLink = serde_json::from_str(r#"{"type": "ALBUM", "album": {"id": "al1", "albumName": "Summer", "assets": [
+            {"id": "a1", "type": "IMAGE", "fileCreatedAt": "2025-10-03T10:00:00.000Z", "exifInfo": {"dateTimeOriginal": "2025-10-01T09:00:00.000Z", "make": "Canon", "description": "long"}},
             {"id": "v1", "type": "VIDEO", "fileCreatedAt": "2025-10-04T10:00:00.000Z"},
-            {"id": "a2", "type": "IMAGE", "fileCreatedAt": "2025-12-24T10:00:00.000Z"}
+            {"id": "a2", "type": "IMAGE", "fileCreatedAt": "2025-12-24T10:00:00.000Z", "people": [{"name": "Ann"}]}
         ]}, "assets": []}"#).unwrap();
         let album = s.album.as_ref().unwrap();
-        assert_eq!(album.album_name.as_deref(), Some("Summer"));
-        let images: Vec<&Asset> = album.assets.iter().filter(|a| a.kind == "IMAGE").collect();
+        assert_eq!((album.id.as_str(), album.album_name.as_deref()), ("al1", Some("Summer")));
+        let images = &album.assets.0;
         assert_eq!(images.len(), 2);
-        assert_eq!(images[0].taken_ms(), sdk::parse_iso8601("2025-10-01T09:00:00.000Z"));
-        assert_eq!(month_year(images[1].taken_ms().unwrap()), "December 2025");
+        assert_eq!(images[0].taken_ms, sdk::parse_iso8601("2025-10-01T09:00:00.000Z"));
+        assert_eq!(month_year(images[1].taken_ms.unwrap()), "December 2025");
+    }
+
+    #[test]
+    fn newer_servers_send_an_album_without_its_pictures() {
+        let s: SharedLink = serde_json::from_str(r#"{"type": "ALBUM", "assets": [], "album": {"id": "al1", "albumName": "Summer", "assetCount": 3000}}"#).unwrap();
+        assert!(s.assets.0.is_empty() && s.album.unwrap().assets.0.is_empty());
+    }
+
+    #[test]
+    fn timeline_months_come_in_columns_or_as_assets() {
+        let columns = r#"{"id": ["p1", "v1", "p2"], "ownerId": ["o", "o", "o"], "ratio": [1.5, 1.7, 0.75], "isFavorite": [false, false, true],
+            "visibility": ["timeline", "timeline", "timeline"], "isTrashed": [false, false, false], "isImage": [true, false, true],
+            "thumbhash": [null, null, null], "createdAt": ["2025-10-02T00:00:00.000Z", "2025-10-02T00:00:00.000Z", "2025-10-02T00:00:00.000Z"],
+            "fileCreatedAt": ["2025-10-31T23:30:00.000Z", "2025-10-02T00:00:00.000Z", null], "localOffsetHours": [2, 0, null],
+            "duration": [null, "0:00:05.000", null], "projectionType": [null, null, null], "livePhotoVideoId": [null, null, null]}"#;
+        let pictures = month_pictures(columns).unwrap();
+        assert_eq!(pictures.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["p1", "p2"]);
+        assert_eq!(month_year(pictures[0].taken_ms.unwrap() + pictures[0].local_offset_ms), "November 2025");
+        assert_eq!(pictures[1].taken_ms, None);
+        let assets = r#"[{"id": "a1", "type": "IMAGE", "fileCreatedAt": "2024-02-29T12:00:00.000Z"}, {"id": "v", "type": "VIDEO"}]"#;
+        assert_eq!(month_pictures(assets).unwrap(), [Picture { id: "a1".into(), taken_ms: sdk::parse_iso8601("2024-02-29T12:00:00.000Z"), local_offset_ms: 0 }]);
+        assert!(month_pictures(r#"{"message": "Forbidden"}"#).is_err());
+    }
+
+    #[test]
+    fn the_newest_pictures_are_kept_once_each() {
+        let p = |id: &str, t: i64| Picture { id: id.into(), taken_ms: Some(t), local_offset_ms: 0 };
+        let kept = newest(vec![p("a", 1), p("b", 3), p("a", 1), p("c", 2), Picture { id: "d".into(), taken_ms: None, local_offset_ms: 0 }], 3);
+        assert_eq!(kept.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["b", "c", "a"]);
     }
 
     #[test]
