@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -85,7 +86,7 @@ class UpdateManager(
     val currentVersion: String,
     private val repo: String = "Gingerbreadfork/lounge",
 ) {
-    private val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle(0L))
     private val _autoCheck = MutableStateFlow(true)
     private val _confirmRequests = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
@@ -129,11 +130,20 @@ class UpdateManager(
     /** The activity tells the updater when the home screen is on screen, so quiet installs wait. */
     fun noteForeground(foreground: Boolean) {
         inForeground = foreground
+        // Back from Android's list with Lounge allowed: carry on with the install that asked.
+        if (foreground && awaitingPermission) {
+            awaitingPermission = false
+            if (canRequestInstalls() && _state.value is UpdateState.Ready) {
+                returnAfterInstall()
+                workScope?.launch(Dispatchers.IO) { install(interactive = true) }
+            }
+        }
     }
 
     /** Starts the background work. Restoring the last run's state reads and hashes files, so it happens here, off the caller's thread. */
     fun start(scope: CoroutineScope) {
         current = this
+        workScope = scope
         if (loop != null) return
         scope.launch {
             var last = ""
@@ -149,6 +159,9 @@ class UpdateManager(
                 _autoCheck.value = prefs.getBoolean(KEY_AUTO, true)
                 lastAttemptMs = lastCheckedMs
                 if (_state.value is UpdateState.Idle) _state.value = restoredState()
+                // A download that is not newer than this version has been installed or overtaken.
+                val keep = _state.value.release?.takeIf { r -> Version.parse(currentVersion)?.let { r.version > it } ?: true }?.apkName
+                downloadDir().listFiles()?.filter { it.name != keep }?.forEach { it.delete() }
                 stagingDir()?.listFiles()?.forEach { it.delete() }
             }
             delay(FIRST_DELAY_MS)
@@ -191,7 +204,20 @@ class UpdateManager(
         this is UpdateState.Available || this is UpdateState.Ready || this is UpdateState.NeedsConfirmation
 
     /** Looks for a newer release right now. */
-    suspend fun check(): UpdateState = withContext(Dispatchers.IO) { work.withLock { checkLocked(quiet = false) } }
+    suspend fun check(): UpdateState = withContext(Dispatchers.IO) {
+        when (val found = work.withLock { checkLocked(quiet = false) }) {
+            is UpdateState.Available -> prepare(download(found.release))
+            is UpdateState.Ready -> prepare(found)
+            else -> found
+        }
+    }
+
+    /**
+     * After a check someone asked for, the next steps run now rather than on the background
+     * loop's next pass: the download, then Android's dialog where the install needs one.
+     */
+    private suspend fun prepare(s: UpdateState): UpdateState =
+        if (s is UpdateState.Ready && currentPath() == InstallPath.Confirm) install(interactive = false) else s
 
     /**
      * One look at GitHub. [quiet] leaves a waiting update on show while it looks and keeps it if the
@@ -287,18 +313,43 @@ class UpdateManager(
     /** Does the one thing the current state is waiting for, from a press in the UI. */
     fun interact(activity: Activity, scope: CoroutineScope) {
         when (val s = _state.value) {
-            is UpdateState.NeedsConfirmation -> runCatching { activity.startActivity(s.confirm) }
-            is UpdateState.Ready -> if (currentPath() == InstallPath.NeedsPermission) openInstallPermission(activity) else scope.launch { install(interactive = true) }
-            is UpdateState.Available -> scope.launch { download(s.release); if (_state.value is UpdateState.Ready) install(interactive = true) }
+            is UpdateState.NeedsConfirmation -> {
+                returnAfterInstall()
+                runCatching { activity.startActivity(s.confirm) }
+            }
+            is UpdateState.Ready -> if (currentPath() == InstallPath.NeedsPermission) {
+                openInstallPermission(activity)
+            } else {
+                returnAfterInstall()
+                scope.launch { install(interactive = true) }
+            }
+            is UpdateState.Available -> {
+                returnAfterInstall()
+                scope.launch { download(s.release); if (_state.value is UpdateState.Ready) install(interactive = true) }
+            }
             is UpdateState.Failed -> scope.launch { if (s.release != null) download(s.release) else check() }
             else -> Unit
         }
     }
 
-    /** Android's "install unknown apps" switch for Lounge. */
+    /**
+     * Android's "install unknown apps" switch for Lounge. TV settings show the whole list rather
+     * than Lounge's own page, so a hint says what to switch on; coming back with it allowed
+     * carries on with the install.
+     */
     fun openInstallPermission(activity: Activity) {
         val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
-        runCatching { activity.startActivity(intent) }.onFailure { Log.w(TAG, "updates: no unknown-sources screen") }
+        runCatching { activity.startActivity(intent) }
+            .onSuccess {
+                awaitingPermission = true
+                Toast.makeText(activity, "Switch on Lounge in this list, then press Back", Toast.LENGTH_LONG).show()
+            }
+            .onFailure { Log.w(TAG, "updates: no unknown-sources screen") }
+    }
+
+    /** The person started this install from Lounge, so it opens again once Android has replaced it. */
+    private fun returnAfterInstall() {
+        prefs.edit().putLong(KEY_RETURN, System.currentTimeMillis()).commit()
     }
 
     fun canRequestInstalls(): Boolean = context.packageManager.canRequestPackageInstalls()
@@ -525,6 +576,8 @@ class UpdateManager(
         Log.i(TAG, "updates: session $id committed for ${release.tag}")
     }
 
+    @Volatile private var workScope: CoroutineScope? = null
+    @Volatile private var awaitingPermission = false
     @Volatile private var pendingInteractive = false
     @Volatile private var pendingFile: File? = null
     @Volatile private var pendingSilent = false
@@ -557,6 +610,8 @@ class UpdateManager(
                 }
                 Log.w(TAG, "updates: install status $status: $message")
                 if (pendingSilent) prefs.edit().putBoolean(KEY_SILENT_BLOCKED, true).apply()
+                // Cancelled or refused: a later quiet update must not pull Lounge to the front.
+                prefs.edit().remove(KEY_RETURN).apply()
                 _state.value = UpdateState.Failed(text, release, System.currentTimeMillis())
             }
         }
@@ -567,6 +622,10 @@ class UpdateManager(
         internal const val TAG = "Lounge"
         internal const val ACTION_RESULT = "tv.lounge.update.RESULT"
         internal const val EXTRA_TAG = "tag"
+        internal const val PREFS = "updates"
+        internal const val KEY_RETURN = "return_after_install"
+        /** How long after a person starts an install Lounge still opens itself when it lands. */
+        internal const val RETURN_WITHIN_MS = 10 * 60_000L
         private const val KEY_AUTO = "auto"
         private const val KEY_LAST_CHECK = "last_check"
         private const val KEY_SEEN_VERSION = "seen_version"
@@ -602,5 +661,25 @@ class InstallReceiver : BroadcastReceiver() {
         @Suppress("DEPRECATION")
         val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
         UpdateManager.current?.onInstallResult(sessionId, status, message, confirm)
+    }
+}
+
+/**
+ * Android replaced Lounge with an update. When the person started it from Lounge, open Lounge again
+ * rather than leaving them in whatever app was behind it: as the home screen where it is one.
+ */
+class UpdatedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        val prefs = context.getSharedPreferences(UpdateManager.PREFS, Context.MODE_PRIVATE)
+        val askedAt = prefs.getLong(UpdateManager.KEY_RETURN, 0L)
+        prefs.edit().remove(UpdateManager.KEY_RETURN).apply()
+        if (System.currentTimeMillis() - askedAt > UpdateManager.RETURN_WITHIN_MS) return
+        val pm = context.packageManager
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val isHome = pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == context.packageName
+        val open = if (isHome) home else pm.getLeanbackLaunchIntentForPackage(context.packageName) ?: pm.getLaunchIntentForPackage(context.packageName) ?: return
+        runCatching { context.startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { Log.w(UpdateManager.TAG, "updates: could not reopen Lounge: ${it.message}") }
     }
 }

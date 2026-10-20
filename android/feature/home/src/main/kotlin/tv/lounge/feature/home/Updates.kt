@@ -28,7 +28,9 @@ import tv.lounge.update.UpdateState
 /** The one word the Settings row shows for the updater. */
 fun updateStatusWord(state: UpdateState, auto: Boolean): String = when (state) {
     UpdateState.Checking -> "Checking…"
-    is UpdateState.Available, is UpdateState.Downloading, is UpdateState.Ready, is UpdateState.NeedsConfirmation -> "${state.release?.version} ready"
+    is UpdateState.Available -> "${state.release.version} available"
+    is UpdateState.Downloading -> "Downloading…"
+    is UpdateState.Ready, is UpdateState.NeedsConfirmation -> "${state.release?.version} ready"
     is UpdateState.Installing -> "Installing…"
     is UpdateState.Failed -> "Problem"
     is UpdateState.UpToDate -> "Up to date"
