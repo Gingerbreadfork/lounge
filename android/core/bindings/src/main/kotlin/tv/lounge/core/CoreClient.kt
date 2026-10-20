@@ -56,6 +56,9 @@ class CoreClient(val core: Core) : SnapshotListener {
 
     fun pluginLog(id: String): List<String> = core.pluginLog(id)
 
+    /** Rows from the search plugins; blocks while they answer, so call it off the main thread. */
+    fun searchPlugins(query: String): List<Row> = runCatching { core.searchPlugins(query) }.getOrDefault(emptyList())
+
     fun startCompanion(port: Int): Result<CompanionStatus> = runCatching { core.startCompanion(port.toUShort()) }
 
     fun stopCompanion() = core.stopCompanion()

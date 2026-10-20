@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -53,6 +54,8 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
     val status by power.status.collectAsStateWithLifecycle()
     val runs = remember { mutableStateMapOf<String, RunState>() }
     var pairing by remember { mutableStateOf(false) }
+    // Forgetting the key makes a new one, so the fingerprint is read again on every status change.
+    val fingerprint by produceState<String?>(null, status) { value = power.fingerprint() }
 
     LaunchedEffect(Unit) {
         power.refresh()
@@ -101,7 +104,7 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
             },
             value = when (s) {
                 is PowerStatus.Ready -> if (s.backend == "shizuku") "Shizuku" else "This device"
-                PowerStatus.WaitingForApproval -> "Key ${power.fingerprint.take(11)}…"
+                PowerStatus.WaitingForApproval -> fingerprint?.let { "Key ${it.take(11)}…" } ?: "Look at the prompt"
                 is PowerStatus.Unavailable -> "Turn on USB debugging"
                 else -> if (pairing) "Connecting…" else "Asks once on screen"
             },
@@ -140,7 +143,7 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
     }
     SheetFootnote(
         "Nothing runs until you press it, and every command is shown first.",
-        "The key stays on this device: ${power.fingerprint}",
+        fingerprint?.let { "The key stays on this device: $it" } ?: "The key stays on this device.",
     )
 }
 

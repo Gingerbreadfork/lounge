@@ -80,6 +80,7 @@ fun TileMenuPopover(
                             .background(colors.curtain)
                             .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
                             .focusProperties { canFocus = !leaving }
+                            .trapFocus(leaving)
                             .focusGroup()
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),

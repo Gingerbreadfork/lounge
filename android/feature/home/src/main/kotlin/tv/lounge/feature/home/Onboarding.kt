@@ -429,7 +429,14 @@ private fun StepPhone(core: CoreClient, prefs: Prefs, uiPrefs: Prefs.UiPrefs) {
         title = "Phone companion",
         value = if (uiPrefs.companionEnabled) "On" else "Turn on",
         accent = if (uiPrefs.companionEnabled) colors.signal else colors.houselight,
-        onClick = { scope.launch { prefs.setCompanionEnabled(!uiPrefs.companionEnabled) } },
+        onClick = {
+            val on = !uiPrefs.companionEnabled
+            scope.launch {
+                prefs.setCompanionEnabled(on)
+                // Off stops the server too, as Settings does.
+                if (!on) core.stopCompanion()
+            }
+        },
     )
     Spacer(Modifier.height(20.dp))
     Text("Everything stays on your home network. Forget a phone any time from Settings → Phone companion.", style = LoungeTheme.typography.caption, color = colors.dust)

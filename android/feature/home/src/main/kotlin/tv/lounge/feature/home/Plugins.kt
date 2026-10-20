@@ -28,9 +28,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -188,7 +190,8 @@ private fun agoText(ms: Long): String {
 
 /**
  * A plugin setting as a TV text field: label above, value in `title`, saved when the keyboard's
- * Done is pressed or focus leaves. Passwords are masked; toggles are a row.
+ * Done is pressed or focus leaves. Passwords are masked; toggles are a row. Text typed on the phone
+ * goes into the focused field.
  */
 @Composable
 private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit, onToggle: (Boolean) -> Unit) {
@@ -200,11 +203,16 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
         return
     }
     val secret = setting.kind == "password"
-    var text by remember(setting.key) { mutableStateOf(setting.value ?: "") }
+    var field by remember(setting.key) { mutableStateOf(TextFieldValue(setting.value ?: "")) }
     var committed by remember(setting.key) { mutableStateOf(setting.value ?: "") }
     var focused by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
+    PhoneTextInput(active = focused) { typed ->
+        val next = field.text + typed
+        field = TextFieldValue(next, TextRange(next.length))
+    }
     fun commit() {
+        val text = field.text
         if (text != committed || (secret && text.isNotEmpty())) {
             committed = text
             onCommit(text.ifBlank { null })
@@ -227,14 +235,14 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
             contentAlignment = Alignment.CenterStart,
         ) {
             val placeholder = when {
-                secret && setting.hasValue && text.isEmpty() -> "•••••••• (saved)"
+                secret && setting.hasValue && field.text.isEmpty() -> "•••••••• (saved)"
                 setting.help != null -> setting.help!!
                 else -> "Not set"
             }
-            if (text.isEmpty()) Text(placeholder, style = LoungeTheme.typography.title, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (field.text.isEmpty()) Text(placeholder, style = LoungeTheme.typography.title, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
             BasicTextField(
-                value = text,
-                onValueChange = { text = it },
+                value = field,
+                onValueChange = { field = it },
                 singleLine = true,
                 textStyle = LoungeTheme.typography.title.copy(color = colors.limelight),
                 cursorBrush = SolidColor(colors.houselight),

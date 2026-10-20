@@ -344,7 +344,8 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
                     when {
                         ready -> run("use") {
                             prefs.setPreviousScreensaver(current)
-                            power.run(power.useAmbient)
+                            val r = power.run(power.useAmbient)
+                            prefs.setPreviousScreensaverEnabled(PowerSetup.previousScreensaverEnabled(r.output))
                         }
                         status is PowerStatus.Unavailable -> runCatching {
                             context.startActivity(Intent(android.provider.Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -361,7 +362,7 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
                 onClick = {
                     if (ready) run("restore") {
                         val previous = prefs.previousScreensaver.first()
-                        power.run(power.restoreScreensaver(previous))
+                        power.run(power.restoreScreensaver(previous, prefs.previousScreensaverEnabled.first()))
                     } else onPowerSetup()
                 },
             )

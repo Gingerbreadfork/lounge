@@ -2,6 +2,9 @@ package tv.lounge.design
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -25,6 +28,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -32,6 +38,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +65,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.clickable
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
@@ -208,91 +216,175 @@ fun Modifier.describe(description: String): Modifier = semantics { contentDescri
 /** Whether the enclosing [Swap] slot is the live one; hidden copies read false. */
 val LocalSwapSlotActive = staticCompositionLocalOf<State<Boolean>> { mutableStateOf(true) }
 
-/** A [Swap]'s two slots. Composition reads the plain fields; the draw and focus lambdas read the states. */
-private class SwapBook {
-    val keys = arrayOfNulls<Any>(2)
-    val contents = arrayOfNulls<@Composable () -> Unit>(2)
-    var active = 0
-    var leaving = -1
-    val activeState = mutableIntStateOf(0)
-    val leavingState = mutableIntStateOf(-1)
-    val cleared = mutableIntStateOf(0)
-}
+private const val SWAP_SLOTS = 3
 
 /**
- * Content swap (DESIGN.md §6.3): the outgoing content fades over the first half while the incoming
- * one rises [rise] px, slides [shiftX] px and fades in after [delayMs]. Two persistent slots
- * alternate, so only the incoming content is composed and measured, and one progress value is read
- * only while drawing.
+ * A [Swap]'s slots. Composition reads and writes the plain fields when the target changes; drawing
+ * reads [clock] and [stamp], focus reads [activeState], and composition reads [cleared].
+ */
+private class SwapBook {
+    val keys = arrayOfNulls<Any>(SWAP_SLOTS)
+    val values = arrayOfNulls<Any>(SWAP_SLOTS)
+    val filled = BooleanArray(SWAP_SLOTS)
+    /** Drawing order: the most recent target is drawn on top. */
+    val order = IntArray(SWAP_SLOTS)
+    var counter = 0
+    var active = 0
+    val activeState = mutableIntStateOf(0)
+    val cleared = mutableIntStateOf(0)
+    val stamp = mutableIntStateOf(0)
+    /** Milliseconds into the current swap; one write a frame moves every slot. */
+    val clock = mutableFloatStateOf(0f)
+    var easing: Easing = LinearEasing
+    /** Each slot's look as alpha, x, y and scale, at the start and the end of its part of the swap. */
+    val from = Array(SWAP_SLOTS) { floatArrayOf(0f, 0f, 0f, 1f) }
+    val to = Array(SWAP_SLOTS) { floatArrayOf(0f, 0f, 0f, 1f) }
+    val startMs = FloatArray(SWAP_SLOTS)
+    val durationMs = FloatArray(SWAP_SLOTS)
+
+    fun fraction(i: Int, clock: Float): Float =
+        if (durationMs[i] <= 0f) 1f else easing.transform(((clock - startMs[i]) / durationMs[i]).coerceIn(0f, 1f))
+
+    fun value(i: Int, k: Int, clock: Float): Float = from[i][k] + (to[i][k] - from[i][k]) * fraction(i, clock)
+
+    fun look(i: Int): FloatArray {
+        val c = Snapshot.withoutReadObservation { clock.floatValue }
+        return FloatArray(4) { k -> value(i, k, c) }
+    }
+
+    /** Puts a slot at [look] and keeps it there. */
+    fun hold(i: Int, look: FloatArray) {
+        from[i] = look
+        to[i] = look.copyOf()
+        durationMs[i] = 0f
+        stamp.intValue++
+    }
+}
+
+private val SwapRest = floatArrayOf(1f, 0f, 0f, 1f)
+
+/**
+ * Content swap (DESIGN.md §6.3): the outgoing content fades over [outFraction] of the time and the
+ * incoming one fades in after [delayMs] and [inDelayFraction], from [shiftX], [rise] and [fromScale].
+ * Three slots each draw their own target, newest on top, so a change mid-swap carries on from
+ * whatever is on screen instead of cutting it.
  */
 @Composable
-fun Swap(
-    key: Any,
+fun <T> Swap(
+    target: T,
+    modifier: Modifier = Modifier,
     delayMs: Int = 0,
     rise: Dp = 10.dp,
     shiftX: Dp = 0.dp,
+    fromScale: Float = 1f,
     durationMs: Int? = null,
-    /**
-     * Keep the hidden slot composed so the next swap updates its nodes instead of creating them.
-     */
+    outFraction: Float = 0.5f,
+    inDelayFraction: Float = 0f,
+    /** Keep hidden slots composed so the next swap updates their nodes instead of creating them. */
     keepSlots: Boolean = false,
-    content: @Composable () -> Unit,
+    /** Draw each slot's alpha straight into its content, without an offscreen layer. */
+    modulateAlpha: Boolean = false,
+    keyOf: (T) -> Any? = { it },
+    content: @Composable (T) -> Unit,
 ) {
     val motion = LoungeTheme.motion
+    val density = LocalDensity.current
+    val shiftPx = with(density) { shiftX.toPx() }
+    val risePx = with(density) { rise.toPx() }
     val book = remember { SwapBook() }
-    val progress = remember { Animatable(1f) }
+    book.easing = motion.curtainEasing
     book.cleared.intValue
+    val key = keyOf(target)
     when {
-        book.keys[book.active] == null -> book.keys[book.active] = key
-        book.keys[book.active] != key -> {
-            val next = 1 - book.active
-            book.keys[next] = key
-            book.leaving = book.active
-            book.active = next
-            book.leavingState.intValue = book.leaving
-            book.activeState.intValue = next
+        !book.filled[book.active] -> {
+            book.keys[book.active] = key
+            book.filled[book.active] = true
+            book.hold(book.active, SwapRest.copyOf())
+        }
+        book.keys[book.active] != key -> Snapshot.withoutReadObservation {
+            // Back to something still on screen: it turns around. Otherwise the least visible slot,
+            // an empty one first, takes the new target.
+            val back = (0 until SWAP_SLOTS).firstOrNull { it != book.active && book.filled[it] && book.keys[it] == key }
+            val chosen = back ?: (0 until SWAP_SLOTS).minBy { if (book.filled[it]) book.look(it)[0] else -1f }
+            if (back == null) {
+                book.keys[chosen] = key
+                book.filled[chosen] = true
+                book.hold(chosen, floatArrayOf(0f, shiftPx, risePx, fromScale))
+            }
+            book.order[chosen] = ++book.counter
+            book.active = chosen
+            book.activeState.intValue = chosen
         }
     }
-    book.contents[book.active] = content
+    book.values[book.active] = target
     LaunchedEffect(key) {
-        if (book.leaving < 0) return@LaunchedEffect
-        progress.snapTo(0f)
-        if (motion.reducedMotion) progress.snapTo(1f) else progress.animateTo(1f, tween(durationMs ?: motion.curtainMs, delayMillis = delayMs, easing = motion.curtainEasing))
-        val gone = book.leaving
-        book.leaving = -1
-        book.leavingState.intValue = -1
-        if (!keepSlots && gone >= 0 && gone != book.active) {
-            book.contents[gone] = null
-            book.keys[gone] = null
-            book.cleared.intValue++
+        val incoming = book.active
+        val total = (durationMs ?: motion.curtainMs).toFloat()
+        var end = 0f
+        for (i in 0 until SWAP_SLOTS) {
+            if (!book.filled[i]) continue
+            val now = book.look(i)
+            val target = if (i == incoming) SwapRest.copyOf() else floatArrayOf(0f, -shiftPx, 0f, 1f)
+            if (now.contentEquals(target) || (now[0] == 0f && target[0] == 0f)) {
+                book.hold(i, target)
+                continue
+            }
+            val wait = when {
+                i != incoming -> 0f
+                now[0] > 0f -> 0f
+                else -> delayMs + total * inDelayFraction
+            }
+            book.from[i] = now
+            book.to[i] = target
+            book.startMs[i] = wait
+            book.durationMs[i] = if (i == incoming) total * (1f - inDelayFraction) else total * outFraction
+            end = maxOf(end, wait + book.durationMs[i])
+        }
+        // The looks changed under a clock that may not move (reduced motion lands on the same end).
+        book.stamp.intValue++
+        if (end > 0f) {
+            if (motion.reducedMotion) {
+                book.clock.floatValue = end
+            } else {
+                book.clock.floatValue = 0f
+                animate(0f, end, animationSpec = tween(end.toInt(), easing = LinearEasing)) { v, _ -> book.clock.floatValue = v }
+            }
+        }
+        if (!keepSlots) {
+            var removed = false
+            for (i in 0 until SWAP_SLOTS) {
+                if (i == book.active || !book.filled[i]) continue
+                book.filled[i] = false
+                book.values[i] = null
+                book.keys[i] = null
+                removed = true
+            }
+            if (removed) book.cleared.intValue++
         }
     }
-    Box {
-        for (i in 0..1) {
-            val slotContent = book.contents[i] ?: continue
-            androidx.compose.runtime.key(i) {
+    Box(modifier) {
+        for (i in 0 until SWAP_SLOTS) {
+            if (!book.filled[i]) continue
+            @Suppress("UNCHECKED_CAST")
+            val value = book.values[i] as T
+            androidx.compose.runtime.key(i, if (keepSlots) null else book.keys[i]) {
                 val live = remember { derivedStateOf { book.activeState.intValue == i } }
                 Box(
                     Modifier
-                        .focusProperties { canFocus = book.activeState.intValue == i }
+                        .zIndex(book.order[i].toFloat())
+                        .focusProperties { if (book.activeState.intValue != i) canFocus = false }
                         .graphicsLayer {
-                            val p = progress.value
-                            val leaving = book.leavingState.intValue
-                            when {
-                                leaving == i -> {
-                                    alpha = (1f - p * 2f).coerceIn(0f, 1f)
-                                    translationX = -p * shiftX.toPx()
-                                    translationY = 0f
-                                }
-                                book.activeState.intValue == i -> {
-                                    alpha = if (leaving >= 0) p else 1f
-                                    translationY = (1f - p) * rise.toPx()
-                                    translationX = (1f - p) * shiftX.toPx()
-                                }
-                                else -> alpha = 0f
-                            }
+                            book.stamp.intValue
+                            val c = book.clock.floatValue
+                            alpha = book.value(i, 0, c)
+                            translationX = book.value(i, 1, c)
+                            translationY = book.value(i, 2, c)
+                            val sc = book.value(i, 3, c)
+                            scaleX = sc
+                            scaleY = sc
+                            if (modulateAlpha) compositingStrategy = CompositingStrategy.ModulateAlpha
                         },
-                ) { CompositionLocalProvider(LocalSwapSlotActive provides live) { slotContent() } }
+                ) { CompositionLocalProvider(LocalSwapSlotActive provides live) { content(value) } }
             }
         }
     }

@@ -149,7 +149,8 @@ fun TileView(
     val initial = remember { (if (lit) Lights.Focused else lights.value).dimmed(idle) }
     val animBrightness = remember { Animatable(initial.first) }
     val animSaturation = remember { Animatable(initial.second) }
-    LaunchedEffect(lit, idle) {
+    // Keyed on the State too: a row hands a new one when the room dims or the tile moves.
+    LaunchedEffect(lit, idle, lights) {
         snapshotFlow { (if (lit) Lights.Focused else lights.value).dimmed(idle) }.collectLatest { (b, sat) ->
             val spec = if (idle) motion.dim<Float>() else motion.settle()
             launch { animBrightness.animateTo(b, spec) }

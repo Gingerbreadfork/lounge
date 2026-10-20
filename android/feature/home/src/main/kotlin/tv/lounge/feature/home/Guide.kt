@@ -117,6 +117,7 @@ fun GuideSheet(core: CoreClient, visibleState: MutableTransitionState<Boolean>, 
                     .background(colors.curtain)
                     .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
                     .focusProperties { canFocus = !leaving }
+                    .trapFocus(leaving)
                     .focusGroup(),
             ) {
                 Box(Modifier.fillMaxWidth().height(1.dp).background(colors.curtainEdge))

@@ -67,7 +67,7 @@ import tv.lounge.design.lightGlow
 
 /**
  * The Now Playing card (DESIGN.md §5.4): bottom-right, 640 × 200, artwork left, title and
- * artist, transport buttons, elapsed progress. Back closes it; focus returns to the top bar.
+ * artist, transport buttons, elapsed progress. Back closes it; focus returns to what opened it.
  */
 @Composable
 fun NowPlayingCard(
@@ -113,6 +113,7 @@ fun NowPlayingCard(
                     .background(colors.curtain)
                     .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
                     .focusProperties { canFocus = !leaving }
+                    .trapFocus(leaving)
                     .focusGroup(),
             ) {
                 Box(Modifier.size(200.dp).background(light.copy(alpha = 0.25f))) {

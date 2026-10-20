@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -69,6 +69,7 @@ import tv.lounge.design.Dot
 import tv.lounge.design.Hairline
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.LocalSwapSlotActive
 import tv.lounge.design.Swap
 import tv.lounge.design.sounds
 import tv.lounge.design.lightGlow
@@ -81,12 +82,12 @@ import tv.lounge.platform.Prefs
  * direction.
  */
 @Composable
-fun RightSheet(
+fun <K : Any> RightSheet(
     visibleState: MutableTransitionState<Boolean>,
-    key: Any,
+    key: K,
     depth: Int,
     onDismiss: () -> Unit,
-    content: @Composable (firstFocus: FocusRequester) -> Unit,
+    content: @Composable (firstFocus: FocusRequester, key: K) -> Unit,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -111,29 +112,26 @@ fun RightSheet(
                         .fillMaxSize()
                         .background(colors.curtain)
                         .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
-                        .focusProperties {
-                            canFocus = !leaving
-                            // The d-pad never walks out of the sheet onto the home behind it.
-                            onExit = { if (!leaving && requestedFocusDirection in Directional) cancelFocusChange() }
-                        }
+                        .focusProperties { canFocus = !leaving }
+                        .trapFocus(leaving)
                         .focusGroup()
                         // Half the side padding sits outside the scroll, so a focused row's glow has room.
                         .padding(horizontal = 24.dp, vertical = Dimens.safeY)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp),
                 ) {
-                    Swap(key, rise = 0.dp, shiftX = if (forward) 8.dp else (-8).dp, durationMs = 180) {
+                    Swap(key, rise = 0.dp, shiftX = if (forward) 8.dp else (-8).dp, durationMs = 180) { shown ->
                         val firstFocus = remember { FocusRequester() }
-                        Column { content(firstFocus) }
-                        LaunchedEffect(Unit) { firstFocus.requestWhenReady() }
+                        Column { content(firstFocus, shown) }
+                        // A sheet coming back mid-swap is still composed, so focus follows the live copy.
+                        val live = LocalSwapSlotActive.current.value
+                        LaunchedEffect(live) { if (live) firstFocus.requestWhenReady() }
                     }
                 }
             }
         }
     }
 }
-
-private val Directional = setOf(FocusDirection.Up, FocusDirection.Down, FocusDirection.Left, FocusDirection.Right, FocusDirection.Next, FocusDirection.Previous)
 
 /**
  * A 72 dp sheet row: glyph, title, optional trailing value. Focus is a lifted `curtainEdge` surface
@@ -152,7 +150,7 @@ fun SheetRow(
     height: Dp = 72.dp,
     onCycle: ((Int) -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
-    /** A second line under the title, for rows that must stay narrow. */
+    /** A second line under the title, for rows that must stay narrow; the row grows past [height] when large text needs it. */
     subtitle: String? = null,
 ) {
     val colors = LoungeTheme.colors
@@ -172,7 +170,7 @@ fun SheetRow(
         modifier
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .fillMaxWidth()
-            .height(height)
+            .then(if (subtitle != null) Modifier.heightIn(min = height) else Modifier.height(height))
             .lightGlow(colors.houselight, { glow.value }, cornerRadius = 16.dp)
             .drawBehind {
                 val a = lift.value
@@ -205,7 +203,7 @@ fun SheetRow(
         if (leading != null) leading()
         if (icon != null) Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(28.dp))
         if (subtitle != null) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.weight(1f).padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(subtitle, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -216,8 +214,8 @@ fun SheetRow(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (status) Dot(colors.signal)
                 if (onCycle != null && focused) Text("‹", style = LoungeTheme.typography.meta, color = colors.dust)
-                Swap(value, rise = 0.dp, shiftX = if (onCycle != null) (8 * direction).dp else 0.dp, durationMs = 180) {
-                    Text(value, style = LoungeTheme.typography.meta, color = colors.dust, maxLines = 1)
+                Swap(value, rise = 0.dp, shiftX = if (onCycle != null) (8 * direction).dp else 0.dp, durationMs = 180) { v ->
+                    Text(v, style = LoungeTheme.typography.meta, color = colors.dust, maxLines = 1)
                 }
                 if (onCycle != null && focused) Text("›", style = LoungeTheme.typography.meta, color = colors.dust)
             }

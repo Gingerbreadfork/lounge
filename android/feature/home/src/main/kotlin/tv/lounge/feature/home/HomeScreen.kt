@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -45,9 +46,12 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -132,7 +136,11 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     }
     LaunchedEffect(state.idle) { light.idle = state.idle }
     val overlay = state.overlay
-    val opaqueOverlay = overlay == Overlay.Search || overlay == Overlay.Onboarding || overlay == Overlay.AmbientPreview
+    val menu = overlay as? Overlay.TileMenu
+    // A menu opened from a search result keeps Search open beneath it.
+    val searchOpen = overlay == Overlay.Search || menu?.under == Overlay.Search
+    val homeMenu = menu?.takeIf { it.under == Overlay.None }
+    val opaqueOverlay = searchOpen || overlay == Overlay.Onboarding || overlay == Overlay.AmbientPreview
     FieldSleep(light, { state.lastInputAt }, opaqueOverlay)
     // The rows the lowered Stage reveals are composed in idle frames while it is still up, so
     // the proscenium never composes a row in the middle of a frame.
@@ -182,16 +190,88 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         }
     }
 
+    /** Focus back on the home where it was, or as near as the current rows allow. */
+    suspend fun focusHome() {
+        when (state.region) {
+            FocusRegion.TopBar -> {
+                // The Now Playing chip leaves with its session; Settings sits where it was.
+                val chipGone = state.topBar.last === state.topBar.nowPlaying && snapshot.nowPlaying == null
+                val last = if (chipGone) state.topBar.settings else state.topBar.last
+                if (!last.requestWhenReady(6)) state.topBarFocus.requestWhenReady()
+            }
+            FocusRegion.Stage -> if (!(state.playbillFocused && state.playbillFocus.requestWhenReady(6))) state.focusStrip()
+            FocusRegion.Rows -> {
+                val rows = snapshot.rows
+                val row = rows.firstOrNull { it.id == state.focusedRowId }
+                when {
+                    row != null && row.tiles.isNotEmpty() -> state.rowRequester(row.id, state.focusedTileIndex.coerceIn(0, row.tiles.lastIndex)).requestWhenReady()
+                    rows.isNotEmpty() -> state.focusRow(rows.first().id)
+                    else -> goToStage()
+                }
+            }
+        }
+    }
+
+    fun clearOverlays() {
+        state.overlay = Overlay.None
+        state.opener = null
+        state.sheetTrail.clear()
+        state.pendingSearch = null
+    }
+
+    /** Opens [next] from the home, remembering what had focus so closing it can go back there. */
+    fun openOverlay(next: Overlay, from: FocusRequester? = null) {
+        if (from != null) {
+            state.opener = from
+        } else if (state.overlay == Overlay.None) {
+            state.opener = state.currentFocus()
+        }
+        state.sheetTrail.clear()
+        state.overlay = next
+    }
+
+    /** Closes whatever is open and hands focus back to what opened it (DESIGN.md §6.4). */
+    fun closeOverlay(sound: Boolean = true) {
+        if (sound) close()
+        val back = state.opener?.takeUnless { it === state.topBar.nowPlaying && snapshot.nowPlaying == null }
+        clearOverlays()
+        scope.launch { if (back == null || !back.requestWhenReady(6)) focusHome() }
+    }
+
+    /** One sheet opening another: Back from [next] returns to the sheet that opened it. */
+    fun openSheet(next: Overlay) {
+        val current = state.overlay
+        if (next.isSheet() && current.isSheet()) {
+            val back = state.sheetTrail.lastIndexOf(next)
+            if (back >= 0) {
+                while (state.sheetTrail.size > back) state.sheetTrail.removeAt(state.sheetTrail.lastIndex)
+            } else {
+                state.sheetTrail += current
+            }
+        }
+        state.overlay = next
+    }
+
+    // Text from the phone goes to Lounge's focused text field, and only while Lounge is in front.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val phoneText = remember { MutableSharedFlow<String>(extraBufferCapacity = 8) }
     LaunchedEffect(Unit) {
         platform.commands.collect { cmd ->
             when (cmd) {
                 is UiCommand.Toast -> say(cmd.message)
                 UiCommand.InstallUpdate -> Unit
-                UiCommand.OpenTvControls -> state.overlay = Overlay.TvControls
-                is UiCommand.RequestPermission, is UiCommand.Key, is UiCommand.TypeText -> Unit
-                is UiCommand.Search -> { state.pendingSearch = cmd.query; state.overlay = Overlay.Search }
+                UiCommand.OpenTvControls -> openOverlay(Overlay.TvControls)
+                is UiCommand.RequestPermission, is UiCommand.Key -> Unit
+                is UiCommand.TypeText -> if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) phoneText.tryEmit(cmd.text)
+                is UiCommand.Search -> {
+                    state.pendingSearch = cmd.query
+                    if (state.overlay != Overlay.Search) openOverlay(Overlay.Search)
+                }
                 // Home from another app: the rows are already home when the window appears.
-                UiCommand.GoHome -> { state.overlay = Overlay.None; goToStage(snap = true) }
+                UiCommand.GoHome -> {
+                    clearOverlays()
+                    goToStage(snap = true)
+                }
             }
         }
     }
@@ -202,17 +282,52 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         } else {
             Rect.Zero
         }
-        state.overlay = Overlay.TileMenu(tile, rowId, resolved, returnFocus)
+        val under = if (state.overlay == Overlay.Search) Overlay.Search else Overlay.None
+        state.overlay = Overlay.TileMenu(tile, rowId, resolved, returnFocus, under)
     }
+
+    /** Where [tileId] sits in the home row [rowId] right now, or -1. */
+    fun indexInRow(rowId: String, tileId: String): Int =
+        snapshot.rows.firstOrNull { it.id == rowId }?.tiles?.indexOfFirst { it.id == tileId } ?: -1
 
     val hasStrip = snapshot.stage.strip.isNotEmpty()
     val nowPlaying = snapshot.nowPlaying
     LaunchedEffect(nowPlaying == null) {
-        if (nowPlaying == null && state.overlay == Overlay.NowPlaying) state.overlay = Overlay.None
+        if (nowPlaying == null && state.overlay == Overlay.NowPlaying) closeOverlay(sound = false)
     }
-    val menu = overlay as? Overlay.TileMenu
+
+    // A tile hidden or unpinned while it had focus leaves its row: focus moves to its neighbour,
+    // or to the row that took its place.
+    val rowIds = remember { arrayOf(emptyList<String>()) }
+    LaunchedEffect(snapshot) {
+        val before = rowIds[0]
+        rowIds[0] = snapshot.rows.map { it.id }
+        if (state.overlay != Overlay.None) return@LaunchedEffect
+        when (state.region) {
+            FocusRegion.Rows -> {
+                val rowId = state.focusedRowId ?: return@LaunchedEffect
+                val tileId = state.focusedTileId ?: return@LaunchedEffect
+                val rows = snapshot.rows
+                val row = rows.firstOrNull { it.id == rowId }
+                if (row != null && row.tiles.any { it.id == tileId }) return@LaunchedEffect
+                when {
+                    row != null && row.tiles.isNotEmpty() -> state.rowRequester(rowId, state.focusedTileIndex.coerceIn(0, row.tiles.lastIndex)).requestWhenReady()
+                    rows.isNotEmpty() -> state.focusRow(rows[before.indexOf(rowId).coerceIn(0, rows.lastIndex)].id)
+                    else -> goToStage()
+                }
+            }
+            FocusRegion.Stage -> {
+                val id = state.stageTileId ?: return@LaunchedEffect
+                val strip = snapshot.stage.strip
+                if (state.playbillFocused || strip.isEmpty() || strip.any { it.id == id }) return@LaunchedEffect
+                state.stripRequester(state.stageIndex.coerceIn(0, strip.lastIndex)).requestWhenReady()
+            }
+            FocusRegion.TopBar -> if (state.topBar.last === state.topBar.nowPlaying && snapshot.nowPlaying == null) focusHome()
+        }
+    }
+
     // While an anchored menu is open the room dims around its tile (the rows dim their tiles).
-    val roomAlpha = animateFloatAsState(if (menu != null) 0.5f else 1f, motion.settle(), label = "roomAlpha")
+    val roomAlpha = animateFloatAsState(if (homeMenu != null) 0.5f else 1f, motion.settle(), label = "roomAlpha")
 
     Box(
         Modifier
@@ -256,14 +371,14 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 showGuide = snapshot.rows.any { it.id == "live" },
                 nowPlaying = nowPlaying,
                 idle = state.idle,
-                firstFocus = state.topBarFocus,
+                focus = state.topBar,
                 downFocus = { state.stripFocus() },
                 onFocused = { state.region = FocusRegion.TopBar; light.clear(); uiSounds?.tick() },
-                onSearch = { uiSounds?.open(); state.overlay = Overlay.Search },
-                onTvControls = { uiSounds?.open(); state.overlay = Overlay.TvControls },
-                onGuide = { uiSounds?.open(); state.overlay = Overlay.Guide },
-                onNowPlaying = { uiSounds?.open(); state.overlay = Overlay.NowPlaying },
-                onSettings = { uiSounds?.open(); state.overlay = Overlay.QuickSettings },
+                onSearch = { uiSounds?.open(); openOverlay(Overlay.Search) },
+                onTvControls = { uiSounds?.open(); openOverlay(Overlay.TvControls) },
+                onGuide = { uiSounds?.open(); openOverlay(Overlay.Guide) },
+                onNowPlaying = { uiSounds?.open(); openOverlay(Overlay.NowPlaying) },
+                onSettings = { uiSounds?.open(); openOverlay(Overlay.QuickSettings) },
                 modifier = Modifier.graphicsLayer { alpha = roomAlpha.value },
             )
             Spacer(Modifier.height(34.dp))
@@ -297,14 +412,15 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                             idle = state.idle,
                             listState = state.rowListState(row.id),
                             requesterFor = { index -> state.rowRequester(row.id, index) },
-                            onTileFocused = { _, index, _ ->
+                            onTileFocused = { tile, index, _ ->
                                 if (state.focusedRowId != row.id) uiSounds?.tick(rowChange = true) else if (state.focusedTileIndex != index) uiSounds?.tick()
                                 state.focusedRowId = row.id
                                 state.focusedTileIndex = index
+                                state.focusedTileId = tile.id
                             },
                             onTileClick = { perform(it) },
                             onTileLongPress = { tile, bounds, fr -> openMenu(tile, row.id, bounds, fr) },
-                            heldTileId = menu?.tile?.id,
+                            heldTileId = homeMenu?.tile?.id,
                         )
                     }
                 }
@@ -341,6 +457,86 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         }
 
         // Overlays stay composed through their exit so each can animate out.
+        Presence(overlay.takeIf { it.isSheet() }) { ov, visibleState ->
+            RightSheet(
+                visibleState = visibleState,
+                key = ov,
+                depth = ov.sheetDepth(),
+                onDismiss = {
+                    val previous = state.sheetTrail.removeLastOrNull()
+                    if (previous != null) {
+                        close()
+                        state.overlay = previous
+                    } else {
+                        closeOverlay()
+                    }
+                },
+            ) { first, shown ->
+                CompositionLocalProvider(LocalPhoneText provides phoneText) {
+                    SheetContent(
+                        overlay = shown,
+                        first = first,
+                        core = core,
+                        platform = platform,
+                        prefs = prefs,
+                        uiPrefs = uiPrefs,
+                        power = power,
+                        updates = updates,
+                        powerStatus = powerStatus,
+                        theme = theme,
+                        sounds = sounds,
+                        lite = lite,
+                        reduced = reduced,
+                        showMobile = showMobile,
+                        isDefaultHome = isDefaultHome,
+                        onHomeChanged = { isDefaultHome = isDefaultHome(context) },
+                        say = ::say,
+                        open = { next -> uiSounds?.open(); openSheet(next) },
+                        closeAll = { closeOverlay() },
+                    )
+                }
+            }
+        }
+
+        Presence(if (overlay == Overlay.Guide) Unit else null) { _, visibleState ->
+            GuideSheet(
+                core = core,
+                visibleState = visibleState,
+                onTune = { action -> uiSounds?.open(); perform(action, "that channel") },
+                onDismiss = { closeOverlay() },
+            )
+        }
+
+        Presence(nowPlaying.takeIf { overlay == Overlay.NowPlaying }) { np, visibleState ->
+            NowPlayingCard(
+                np = np,
+                visibleState = visibleState,
+                onCommand = { cmd -> perform("media:${np.`package`}:$cmd", np.title) },
+                onOpenApp = { uiSounds?.open(); runCatching { platform.launchApp(np.`package`, "") }.onFailure { say(friendlyError(it, np.appLabel)) } },
+                onDismiss = { closeOverlay() },
+            )
+        }
+
+        Presence(if (searchOpen) Unit else null) { _, visibleState ->
+            CompositionLocalProvider(LocalPhoneText provides phoneText) {
+                SearchScreen(
+                    snapshot = snapshot,
+                    idle = state.idle,
+                    visibleState = visibleState,
+                    pendingQuery = state.pendingSearch,
+                    onQueryTaken = { state.pendingSearch = null },
+                    covered = menu != null,
+                    heldTileId = menu?.tile?.id,
+                    onTileFocused = { _, _ -> },
+                    onTileClick = { perform(it) },
+                    onTileLongPress = { tile, rowId, bounds, fr -> openMenu(tile, rowId, bounds, fr) },
+                    onClose = { closeOverlay() },
+                    searchPlugins = { q -> core.searchPlugins(q) },
+                )
+            }
+        }
+
+        // The menu draws over Search when it opened from a result.
         Presence(menu) { ov, visibleState ->
             val pkg = ov.tile.id.removePrefix("app:")
             TileMenuPopover(
@@ -354,97 +550,31 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say("Hidden from ${rowTitle(snapshot, ov.rowId)}") },
                     onPin = { core.command(LayoutCommand.PinApp(pkg)); say("Pinned to Your apps") },
                     onUnpin = { core.command(LayoutCommand.UnpinApp(pkg)) },
-                    onMoveLeft = { core.command(LayoutCommand.MoveApp(pkg, (state.focusedTileIndex - 1).coerceAtLeast(0).toUInt())) },
-                    onMoveRight = { core.command(LayoutCommand.MoveApp(pkg, (state.focusedTileIndex + 1).toUInt())) },
+                    // The tile's place in Your apps now, wherever its menu was opened from.
+                    onMoveLeft = {
+                        val at = indexInRow(ov.rowId, ov.tile.id)
+                        if (at >= 0) core.command(LayoutCommand.MoveApp(pkg, (at - 1).coerceAtLeast(0).toUInt()))
+                    },
+                    onMoveRight = {
+                        val at = indexInRow(ov.rowId, ov.tile.id)
+                        if (at >= 0) core.command(LayoutCommand.MoveApp(pkg, (at + 1).toUInt()))
+                    },
                     onPinStage = { core.command(LayoutCommand.PinToStage(ov.tile.id)); say("Pinned to the Stage") },
                     onUnpinStage = { core.command(LayoutCommand.UnpinFromStage(ov.tile.id)) },
                     onAppInfo = { perform("info:${ov.tile.id}", ov.tile.title) },
                     onUninstall = { requestUninstall(context, pkg) },
                     onPlay = { openPlayListing(context, pkg) },
                     onDismissNotice = { core.command(LayoutCommand.DismissNotice(ov.tile.id)) },
-                    onGuide = { state.overlay = Overlay.Guide },
+                    onGuide = { openOverlay(Overlay.Guide, from = ov.returnFocus) },
                 ),
                 visibleState = visibleState,
                 onDismiss = {
                     if (state.overlay == ov) {
                         close()
-                        state.overlay = Overlay.None
+                        state.overlay = ov.under
                         scope.launch { ov.returnFocus.requestWhenReady() }
                     }
                 },
-            )
-        }
-
-        Presence(overlay.takeIf { it.isSheet() }) { ov, visibleState ->
-            RightSheet(
-                visibleState = visibleState,
-                key = ov,
-                depth = ov.sheetDepth(),
-                onDismiss = {
-                    close()
-                    when (ov) {
-                        Overlay.QuickSettings, Overlay.TvControls -> {
-                            state.overlay = Overlay.None
-                            scope.launch { state.topBarFocus.requestWhenReady() }
-                        }
-                        is Overlay.PluginDetail -> state.overlay = Overlay.Plugins
-                        else -> state.overlay = Overlay.QuickSettings
-                    }
-                },
-            ) { first ->
-                SheetContent(
-                    overlay = ov,
-                    first = first,
-                    core = core,
-                    platform = platform,
-                    prefs = prefs,
-                    uiPrefs = uiPrefs,
-                    power = power,
-                    updates = updates,
-                    powerStatus = powerStatus,
-                    theme = theme,
-                    sounds = sounds,
-                    lite = lite,
-                    reduced = reduced,
-                    showMobile = showMobile,
-                    isDefaultHome = isDefaultHome,
-                    onHomeChanged = { isDefaultHome = isDefaultHome(context) },
-                    say = ::say,
-                    open = { next -> uiSounds?.open(); state.overlay = next },
-                    closeAll = { close(); state.overlay = Overlay.None },
-                )
-            }
-        }
-
-        Presence(if (overlay == Overlay.Guide) Unit else null) { _, visibleState ->
-            GuideSheet(
-                core = core,
-                visibleState = visibleState,
-                onTune = { action -> uiSounds?.open(); perform(action, "that channel") },
-                onDismiss = { close(); state.overlay = Overlay.None; scope.launch { state.topBarFocus.requestWhenReady() } },
-            )
-        }
-
-        Presence(nowPlaying.takeIf { overlay == Overlay.NowPlaying }) { np, visibleState ->
-            NowPlayingCard(
-                np = np,
-                visibleState = visibleState,
-                onCommand = { cmd -> perform("media:${np.`package`}:$cmd", np.title) },
-                onOpenApp = { uiSounds?.open(); runCatching { platform.launchApp(np.`package`, "") }.onFailure { say(friendlyError(it, np.appLabel)) } },
-                onDismiss = { close(); state.overlay = Overlay.None; scope.launch { state.topBarFocus.requestWhenReady() } },
-            )
-        }
-
-        Presence(if (overlay == Overlay.Search) Unit else null) { _, visibleState ->
-            SearchScreen(
-                snapshot = snapshot,
-                idle = state.idle,
-                visibleState = visibleState,
-                initialQuery = state.pendingSearch,
-                onTileFocused = { _, _ -> },
-                onTileClick = { perform(it) },
-                onTileLongPress = { tile, rowId, bounds, fr -> openMenu(tile, rowId, bounds, fr) },
-                onClose = { close(); state.pendingSearch = ""; state.overlay = Overlay.None; scope.launch { state.topBarFocus.requestWhenReady() } },
             )
         }
 
@@ -465,7 +595,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     close()
                     scope.launch { prefs.setOnboardingDone(true) }
                     isDefaultHome = isDefaultHome(context)
-                    state.overlay = Overlay.None
+                    clearOverlays()
                     goToStage()
                 },
             )
@@ -480,7 +610,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
 
     // Any Back the UI didn't consume still means "home": never let it reach the Activity.
     BackHandler(enabled = true) {
-        if (state.overlay == Overlay.None) goToStage() else { close(); state.overlay = Overlay.None }
+        if (state.overlay == Overlay.None) goToStage() else closeOverlay()
     }
 }
 
@@ -685,8 +815,18 @@ private fun StageSlot(
     SideEffect { state.stageHeight = height }
     val light = LocalLightState.current
     LaunchedEffect(height) { snapshotFlow { height.value }.collect { light.sourceMoved() } }
-    val count = snapshot.stage.strip.size
-    val selected = remember(count) { derivedStateOf { state.stageIndex.coerceIn(0, (count - 1).coerceAtLeast(0)) } }
+    // The selection follows its tile's id, so a snapshot that reorders the strip keeps the playbill
+    // on the focused tile; the last index stands in once the tile is gone.
+    val strip = rememberUpdatedState(snapshot.stage.strip)
+    val selected = remember {
+        derivedStateOf {
+            val tiles = strip.value
+            val id = state.stageTileId
+            val byId = if (id == null) -1 else tiles.indexOfFirst { it.id == id }
+            if (byId >= 0) byId else state.stageIndex.coerceIn(0, (tiles.size - 1).coerceAtLeast(0))
+        }
+    }
+    SideEffect { state.stageIndex = selected.value }
     StageView(
         stage = snapshot.stage,
         selectedIndex = selected.value,
@@ -700,8 +840,9 @@ private fun StageSlot(
         playbillFocus = state.playbillFocus,
         upFocus = state.topBarFocus,
         onPlaybillFocusChanged = { state.playbillFocused = it },
-        onStripFocused = { index, _ ->
-            if (state.stageIndex != index || state.focusedRowId != null) uiSounds?.tick()
+        onStripFocused = { index, tile ->
+            if (state.stageTileId != tile.id || state.focusedRowId != null) uiSounds?.tick()
+            state.stageTileId = tile.id
             state.stageIndex = index
             state.focusedRowId = null
         },

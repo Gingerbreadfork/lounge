@@ -18,7 +18,8 @@ import tv.lounge.core.Tile
 /** Which overlay, if any, is open. Overlays answer one question each (DESIGN.md §2). */
 sealed interface Overlay {
     data object None : Overlay
-    data class TileMenu(val tile: Tile, val rowId: String, val anchor: Rect, val returnFocus: FocusRequester) : Overlay
+    /** A tile's menu; [under] is the overlay it opened over, which stays open beneath it. */
+    data class TileMenu(val tile: Tile, val rowId: String, val anchor: Rect, val returnFocus: FocusRequester, val under: Overlay = None) : Overlay
     data object QuickSettings : Overlay
     data object HomeRole : Overlay
     data object Search : Overlay
@@ -40,22 +41,50 @@ sealed interface Overlay {
 /** Where focus lives on the home screen. The Stage is expanded only while focus is in it. */
 enum class FocusRegion { TopBar, Stage, Rows }
 
+/** One requester per top-bar button, so an overlay can hand focus back to the button that opened it. */
+class TopBarFocus {
+    val search = FocusRequester()
+    val guide = FocusRequester()
+    val tvControls = FocusRequester()
+    val nowPlaying = FocusRequester()
+    val settings = FocusRequester()
+    /** The button that last had focus. */
+    var last: FocusRequester = search
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Stable
 class HomeState(private val tierA: Boolean = true) {
     var region by mutableStateOf(FocusRegion.Stage)
+    /** The Stage's selection: the strip tile's id, with its last known index for when the id is gone. */
+    var stageTileId by mutableStateOf<String?>(null)
     var stageIndex by mutableIntStateOf(0)
     var focusedRowId by mutableStateOf<String?>(null)
     var focusedTileIndex by mutableIntStateOf(-1)
+    /** The focused row tile's id; not read by composition. */
+    var focusedTileId: String? = null
     var overlay by mutableStateOf<Overlay>(Overlay.None)
     var idle by mutableStateOf(false)
     var lastInputAt by mutableStateOf(System.currentTimeMillis())
 
     val playbillFocus = FocusRequester()
-    val topBarFocus = FocusRequester()
+    val topBar = TopBarFocus()
+    val topBarFocus: FocusRequester get() = topBar.search
     var playbillFocused by mutableStateOf(false)
-    /** A query the companion asked us to search for when the search screen next opens. */
-    var pendingSearch by mutableStateOf("")
+    /** A query the companion asked us to search for, until the search screen takes it. */
+    var pendingSearch by mutableStateOf<String?>(null)
+
+    /** What had focus on the home when the open overlay was opened over it. */
+    var opener: FocusRequester? = null
+    /** The sheets under the open one, so Back returns to the sheet that opened it. */
+    val sheetTrail = ArrayList<Overlay>()
+
+    /** The requester for whatever has focus on the home now. */
+    fun currentFocus(): FocusRequester? = when (region) {
+        FocusRegion.TopBar -> topBar.last
+        FocusRegion.Stage -> if (playbillFocused) playbillFocus else stripFocus()
+        FocusRegion.Rows -> focusedRowId?.let { rowRequester(it, focusedTileIndex.coerceAtLeast(0)) }
+    }
 
     private val stripRequesters = ArrayList<FocusRequester>()
 

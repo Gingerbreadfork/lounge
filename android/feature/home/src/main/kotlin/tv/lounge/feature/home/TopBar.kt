@@ -20,6 +20,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,7 +68,7 @@ fun TopBar(
     showGuide: Boolean,
     nowPlaying: NowPlaying?,
     idle: Boolean,
-    firstFocus: FocusRequester,
+    focus: TopBarFocus,
     downFocus: () -> FocusRequester,
     onFocused: () -> Unit,
     onSearch: () -> Unit,
@@ -91,11 +92,11 @@ fun TopBar(
     ) {
         Mark()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            TopBarButton(LoungeIcons.Search, "Search", onSearch, Modifier.focusRequester(firstFocus))
-            if (showGuide) TopBarButton(LoungeIcons.Tv, "Guide", onGuide)
-            if (showTvControls) TopBarButton(LoungeIcons.Tv, "TV controls", onTvControls)
-            if (nowPlaying != null) NowPlayingChip(nowPlaying, idle, onNowPlaying)
-            TopBarButton(LoungeIcons.Settings, "Settings", onSettings)
+            TopBarButton(LoungeIcons.Search, "Search", onSearch, focus, focus.search)
+            if (showGuide) TopBarButton(LoungeIcons.Tv, "Guide", onGuide, focus, focus.guide)
+            if (showTvControls) TopBarButton(LoungeIcons.Tv, "TV controls", onTvControls, focus, focus.tvControls)
+            if (nowPlaying != null) NowPlayingChip(nowPlaying, idle, onNowPlaying, focus)
+            TopBarButton(LoungeIcons.Settings, "Settings", onSettings, focus, focus.settings)
             Spacer(Modifier.width(12.dp))
             Clock()
         }
@@ -113,7 +114,7 @@ private fun Mark() {
  * not move), the glyph in houselight, the full glow and a 1.04 scale, all read while drawing.
  */
 @Composable
-private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, focus: TopBarFocus, requester: FocusRequester) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
@@ -122,7 +123,8 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
     val lift = animateFloatAsState(if (focused) 1f else 0f, if (focused) motion.snap() else motion.settle(), label = "topBtnLift")
     val glow = animateFloatAsState(if (focused) visuals.glowAlpha else 0f, if (focused) motion.snap() else motion.settle(), label = "topBtnGlow")
     Row(
-        modifier
+        Modifier
+            .focusRequester(requester)
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
             .lightGlow(colors.houselight, { glow.value }, cornerRadius = 24.dp)
             .drawBehind {
@@ -130,7 +132,10 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
                 if (a > 0.001f) drawRoundRect(colors.curtainEdge.copy(alpha = a), cornerRadius = CornerRadius(size.height / 2f))
             }
             .clip(RoundedCornerShape(24.dp))
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) focus.last = requester
+            }
             .tilePress(onClick, onClick)
             .focusable()
             .semantics { role = Role.Button }
@@ -150,7 +155,7 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
  * room is idle.
  */
 @Composable
-private fun NowPlayingChip(np: NowPlaying, idle: Boolean, onClick: () -> Unit) {
+private fun NowPlayingChip(np: NowPlaying, idle: Boolean, onClick: () -> Unit, focus: TopBarFocus) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
@@ -170,6 +175,7 @@ private fun NowPlayingChip(np: NowPlaying, idle: Boolean, onClick: () -> Unit) {
     }
     Row(
         Modifier
+            .focusRequester(focus.nowPlaying)
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
             .lightGlow(light, { glow.value }, cornerRadius = 24.dp)
             .drawBehind {
@@ -177,7 +183,10 @@ private fun NowPlayingChip(np: NowPlaying, idle: Boolean, onClick: () -> Unit) {
                 if (a > 0.001f) drawRoundRect(colors.curtainEdge.copy(alpha = a), cornerRadius = CornerRadius(size.height / 2f))
             }
             .clip(RoundedCornerShape(24.dp))
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) focus.last = focus.nowPlaying
+            }
             .tilePress(onClick, onClick)
             .focusable()
             .semantics { role = Role.Button; contentDescription = "Now playing, ${np.title}" }
@@ -226,9 +235,12 @@ private fun Clock() {
     }
     val text = now.format(formatter)
     Row {
+        // Places are keyed from the right, so an hour gaining a digit shifts nothing else.
         text.forEachIndexed { i, ch ->
-            Swap(key = "$i:$ch", rise = 6.dp, durationMs = 180) {
-                Text(ch.toString(), style = LoungeTheme.typography.clock, color = LoungeTheme.colors.limelight)
+            key(text.length - i) {
+                Swap(ch, rise = 6.dp, durationMs = 180) { c ->
+                    Text(c.toString(), style = LoungeTheme.typography.clock, color = LoungeTheme.colors.limelight)
+                }
             }
         }
     }

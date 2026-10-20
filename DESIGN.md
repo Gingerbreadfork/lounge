@@ -176,7 +176,7 @@ Overlays are `curtain` sheets with a 1 px `curtain-edge` top or left hairline, s
 - **Live Guide** — bottom sheet, 680 tall, grid of channels × time. Slides up over `proscenium`, down over `settle`.
 - **Now Playing** — bottom-right card, 640 × 200, artwork left, title/artist, transport buttons. Rises half its height over `proscenium`, leaves over `settle`.
 - **Long-press tile menu** — anchored popover beside the tile, 360 wide, `curtain`, radius 16, header with the item's icon at 40 px and its title in `title`, items with 56 px rows. It grows out of the edge facing the tile (scale 0.96 → 1, 8 px slide, fade) over `snap`; exit is a 90 ms fade. There is no scrim: the room dims with house lights (every tile drops to brightness 0.60, the band and top bar to 50 %), and the tile that opened it stays lit.
-- **Sheet rows** are 72 px: glyph, `title`, optional value in `meta`. A rested row paints nothing; focus is a `curtainEdge` surface (in over `snap`, out over `settle`) with the glow at half strength and the glyph in `houselight`. A row whose state is "on" shows a 10 px `signal` dot before its value; glyphs are never tinted `signal`. Rows with a cyclable value show `‹ value ›` when focused and change it with Left and Right as well as OK, the value swapping with an 8 px slide and a 180 ms crossfade. Groups of rows carry a `caption`/`dust` label above them ("Look and sound", "What Lounge can see", "This TV").
+- **Sheet rows** are 72 px: glyph, `title`, optional value in `meta`; a row with a second line grows when large text needs the room. A rested row paints nothing; focus is a `curtainEdge` surface (in over `snap`, out over `settle`) with the glow at half strength and the glyph in `houselight`. A row whose state is "on" shows a 10 px `signal` dot before its value; glyphs are never tinted `signal`. Rows with a cyclable value show `‹ value ›` when focused and change it with Left and Right as well as OK, the value swapping with an 8 px slide and a 180 ms crossfade. Groups of rows carry a `caption`/`dust` label above them ("Look and sound", "What Lounge can see", "This TV").
 
 ### 5.5 Other screens
 
@@ -222,7 +222,7 @@ Brightness is a colour-matrix on the tile image, not an overlay, so blacks stay 
 | `snap` | 120 ms | cubic-bezier(0.2, 0, 0, 1) | Focus scale and glow in |
 | `settle` | 180 ms | cubic-bezier(0.2, 0, 0, 1) | Focus out, brightness changes |
 | `travel` | 220 ms | cubic-bezier(0.3, 0, 0.1, 1) | Row horizontal scroll, backdrop spill moving |
-| `proscenium` (Stage) | — | — | The Stage's height eases between 864 and 200 px while one picture's frame travels from the artwork's place to the band (5.2) and the playbill and strip fade beneath it; the rows slide up. Nothing is squeezed. Text swaps in the playbill are one rise-and-crossfade per spotlight change, lines staggered by 40 ms. |
+| `proscenium` (Stage) | — | — | The Stage's height eases between 864 and 200 px while one picture's frame travels from the artwork's place to the band (5.2) and the playbill and strip fade beneath it; the rows slide up. Nothing is squeezed. Text swaps in the playbill are one in-place fade per spotlight change, lines staggered by 40 ms. |
 | `proscenium` | 260 ms | cubic-bezier(0.35, 0, 0.15, 1) | Stage collapse/expand, overlay enter |
 | `curtain` | 320 ms | cubic-bezier(0.3, 0, 0.1, 1) | Stage artwork crossfade, playbill swap, theme change |
 | `dim` | 1200 ms | cubic-bezier(0.4, 0, 0.2, 1) | The house lights going down when idle; the screensaver's late dim over 60 s is the same idea stepped |
@@ -232,7 +232,7 @@ No overshoot, no bounce, no spring physics. Reduced motion: all durations become
 
 ### 6.3 The Stage change
 
-When the strip focus moves: the outgoing artwork fades to 0 while sliding 12 px in the direction of travel; the incoming artwork fades in from 0.92 scale to 1.0 and from 12 px behind; the playbill text swaps with a 10 px rise and 320 ms crossfade, title first, metadata 40 ms later, buttons 80 ms later. The spill colour tweens to the new light over the same 320 ms. Nothing else on screen moves.
+When the strip focus moves: the outgoing artwork fades to 0 while sliding 12 px in the direction of travel; the incoming artwork fades in from 0.92 scale to 1.0 and from 12 px behind; the playbill's old text fades out as one in the first 40 % of 320 ms and the new text fades in exactly where it will sit, title from 112 ms, metadata 40 ms later, buttons and the explanation 80 ms later; nothing in the column moves, and old and new never overlap. A change that arrives while a swap is still running carries on from whatever is on screen: each of up to three copies fades from where it is, the newest drawn on top, so fast presses never cut a picture or a line off mid-fade. The spill colour tweens to the new light over the same 320 ms. Nothing else on screen moves.
 
 ### 6.4 Focus behaviour
 

@@ -9,14 +9,24 @@ import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.layout.LazyLayoutPrefetchState
 import androidx.compose.foundation.lazy.layout.NestedPrefetchScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusEventModifierNode
+import androidx.compose.ui.focus.FocusState
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.KeyInputModifierNode
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.node.ModifierNodeElement
 import tv.lounge.design.LoungeTheme
 
 /**
@@ -75,31 +85,59 @@ private val menuKeys = setOf(Key.Menu, Key.ButtonY)
 private val backKeys = setOf(Key.Back, Key.Escape, Key.ButtonB)
 
 /**
- * D-pad centre for tiles: a short press selects; holding 450 ms, or the Menu or controller Y key,
+ * D-pad centre for tiles: a short press selects; holding it, or the Menu or controller Y key,
  * opens the tile menu. `combinedClickable` cannot see key long-presses, so this reads the repeated
- * KeyDowns.
+ * KeyDowns. The press lives in a node, so a recomposition between KeyDown and KeyUp keeps it.
  */
-fun Modifier.tilePress(onClick: () -> Unit, onLongPress: () -> Unit): Modifier {
-    var downAt = 0L
-    var longFired = false
-    return onPreviewKeyEvent { event ->
+fun Modifier.tilePress(onClick: () -> Unit, onLongPress: () -> Unit): Modifier = this then TilePressElement(onClick, onLongPress)
+
+private class TilePressElement(val onClick: () -> Unit, val onLongPress: () -> Unit) : ModifierNodeElement<TilePressNode>() {
+    override fun create() = TilePressNode(onClick, onLongPress)
+
+    override fun update(node: TilePressNode) {
+        node.onClick = onClick
+        node.onLongPress = onLongPress
+    }
+
+    override fun equals(other: Any?): Boolean =
+        other is TilePressElement && other.onClick === onClick && other.onLongPress === onLongPress
+
+    override fun hashCode(): Int = 31 * onClick.hashCode() + onLongPress.hashCode()
+}
+
+private class TilePressNode(var onClick: () -> Unit, var onLongPress: () -> Unit) : Modifier.Node(), KeyInputModifierNode, FocusEventModifierNode {
+    private var downAt = 0L
+    private var longFired = false
+
+    override fun onFocusEvent(focusState: FocusState) {
+        if (!focusState.isFocused) {
+            downAt = 0L
+            longFired = false
+        }
+    }
+
+    override fun onPreKeyEvent(event: KeyEvent): Boolean {
         val isSelect = event.key in selectKeys
         val isMenu = event.key in menuKeys
-        when {
+        return when {
             isMenu && event.type == KeyEventType.KeyUp -> {
                 onLongPress(); true
             }
             isMenu && event.type == KeyEventType.KeyDown -> true
             isSelect && event.type == KeyEventType.KeyDown -> {
                 val now = System.currentTimeMillis()
-                val repeat = event.nativeKeyEvent.repeatCount > 0
-                if (downAt == 0L) {
-                    // A repeat whose first press landed elsewhere (the tile whose menu just opened)
-                    // is not ours.
-                    if (repeat) return@onPreviewKeyEvent true
-                    downAt = now; longFired = false
-                } else if (!longFired && now - downAt >= LONG_PRESS_MS) {
-                    longFired = true; onLongPress()
+                when {
+                    event.nativeKeyEvent.repeatCount == 0 -> {
+                        downAt = now
+                        longFired = false
+                    }
+                    // A repeat whose first press landed elsewhere (the tile whose menu just opened) is not ours.
+                    downAt == 0L -> Unit
+                    // The system flags the repeat at the person's own long-press time; failing that, 450 ms.
+                    !longFired && (event.nativeKeyEvent.isLongPress || now - downAt >= LONG_PRESS_MS) -> {
+                        longFired = true
+                        onLongPress()
+                    }
                 }
                 true
             }
@@ -113,11 +151,36 @@ fun Modifier.tilePress(onClick: () -> Unit, onLongPress: () -> Unit): Modifier {
             else -> false
         }
     }
+
+    override fun onKeyEvent(event: KeyEvent): Boolean = false
 }
 
 private const val LONG_PRESS_MS = 450L
 
+private val Directional = setOf(FocusDirection.Up, FocusDirection.Down, FocusDirection.Left, FocusDirection.Right, FocusDirection.Next, FocusDirection.Previous)
+
+/**
+ * Keeps the d-pad inside an overlay, so focus never walks onto the home behind it. Goes before the
+ * overlay's focus group; requests from code still leave, and so does everything once [leaving].
+ */
+fun Modifier.trapFocus(leaving: Boolean): Modifier = focusProperties {
+    onExit = { if (!leaving && requestedFocusDirection in Directional) cancelFocusChange() }
+}
+
 fun KeyEvent.isBack(): Boolean = key in backKeys
+
+/** Text typed on the phone, for the Lounge text field that has focus. */
+val LocalPhoneText = staticCompositionLocalOf<Flow<String>> { emptyFlow() }
+
+/** While [active], hands each piece of text typed on the phone to [onText]. */
+@Composable
+fun PhoneTextInput(active: Boolean, onText: (String) -> Unit) {
+    val texts = LocalPhoneText.current
+    val latest = rememberUpdatedState(onText)
+    LaunchedEffect(active, texts) {
+        if (active) texts.collect { latest.value(it) }
+    }
+}
 
 /**
  * Request focus once the target is attached. Lazy lists compose their children a frame or two

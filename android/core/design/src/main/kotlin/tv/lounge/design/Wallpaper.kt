@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import java.util.Calendar
 import kotlinx.coroutines.delay
 
@@ -81,8 +82,11 @@ half4 main(float2 frag) {
 }
 """
 
-/** The playbill's light, published by the Stage while it is expanded (screen pixels). */
-data class BillLight(val center: Offset, val rx: Float, val ry: Float, val color: Color)
+/**
+ * The playbill's light, published by the Stage (screen pixels). [strength] is read while drawing,
+ * so the light fades with the playbill as the Stage lowers.
+ */
+data class BillLight(val center: Offset, val rx: Float, val ry: Float, val color: Color, val strength: () -> Float = { 1f })
 
 private const val FIELD_SLEEPS_AFTER_MS = 60_000L
 
@@ -174,12 +178,11 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
         modifier
             .fillMaxSize()
             .layout { measurable, constraints ->
+                // Fixed, not a range: the canvas takes its minimum size and would otherwise be 0 × 0.
                 val placeable = measurable.measure(
-                    constraints.copy(
-                        maxWidth = kotlin.math.ceil(constraints.maxWidth / scale).toInt(),
-                        maxHeight = kotlin.math.ceil(constraints.maxHeight / scale).toInt(),
-                        minWidth = 0,
-                        minHeight = 0,
+                    Constraints.fixed(
+                        kotlin.math.ceil(constraints.maxWidth / scale).toInt(),
+                        kotlin.math.ceil(constraints.maxHeight / scale).toInt(),
                     ),
                 )
                 layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
@@ -210,7 +213,7 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
         if (bill != null) {
             shader.setFloatUniform("bill", bill.center.x / scale, bill.center.y / scale)
             shader.setFloatUniform("billRadii", (bill.rx / scale).coerceAtLeast(1f), (bill.ry / scale).coerceAtLeast(1f))
-            shader.setFloatUniform("billAlpha", billAlpha * level)
+            shader.setFloatUniform("billAlpha", billAlpha * level * bill.strength().coerceIn(0f, 1f))
             shader.setColorUniform("billColor", android.graphics.Color.valueOf(bill.color.red, bill.color.green, bill.color.blue, 1f))
         } else {
             shader.setFloatUniform("bill", -10000f, -10000f)

@@ -4,9 +4,7 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.layout.layout
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -35,11 +33,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,6 +96,10 @@ import tv.lounge.design.drawSpill
 import tv.lounge.design.glowRoom
 import tv.lounge.design.lightGlow
 
+/** The playbill's text clears in the first 40 % of a swap and the new text starts at 35 %, so the two never overlap. */
+private const val TEXT_OUT = 0.4f
+private const val TEXT_IN_DELAY = 0.35f
+
 /** Expanded Stage height: artwork 630 + gap 32 + strip 130 + gap 32 (DESIGN.md §5.1). */
 val StageExpandedHeight = 630.dp + 32.dp + Dimens.stripTileHeight + 32.dp
 val StageCollapsedHeight = Dimens.collapsedStageHeight + 32.dp
@@ -125,7 +124,7 @@ fun StageView(
     stripFocus: () -> FocusRequester,
     playbillFocus: FocusRequester,
     upFocus: FocusRequester,
-    onStripFocused: (Int, Rect) -> Unit,
+    onStripFocused: (Int, Tile) -> Unit,
     onStripClick: (Tile) -> Unit,
     onStripLongPress: (Tile, Rect, FocusRequester) -> Unit,
     onPrimary: (StageSpotlight) -> Unit,
@@ -140,6 +139,11 @@ fun StageView(
     val spotlight = stage.spotlights.getOrNull(selectedIndex) ?: stage.spotlights.firstOrNull()
     val progress = animateFloatAsState(if (expanded) 1f else 0f, motion.proscenium(), label = "stageProgress")
     val read: () -> Float = remember(progress) { { progress.value } }
+    // The playbill and strip go in the first 60 % of the lowering and come back in the last 60 % of the raising.
+    val shown: () -> Float = remember(progress) { { ((progress.value - 0.4f) / 0.6f).coerceIn(0f, 1f) } }
+    // Read when focus searches, so the strip can refuse focus without recomposing its tiles.
+    val expandedNow = rememberUpdatedState(expanded)
+    val canTakeFocus: () -> Boolean = remember(expandedNow) { { expandedNow.value } }
 
     PrefetchStageArt(stage, selectedIndex)
 
@@ -189,17 +193,17 @@ fun StageView(
             onPrimary = onPrimary,
             onSecondary = onSecondary,
             onPlaybillFocusChanged = onPlaybillFocusChanged,
-            // The playbill and strip go in the first 60 % of the lowering and come back in
-            // the last 60 % of the raising; alpha modulates each draw, no offscreen layer.
+            // Alpha modulates each draw, no offscreen layer.
             modifier = Modifier
                 .fillMaxWidth()
                 .requiredHeight(StageExpandedHeight)
-                .focusProperties { canFocus = expanded }
                 .graphicsLayer {
-                    alpha = ((progress.value - 0.4f) / 0.6f).coerceIn(0f, 1f)
+                    alpha = shown()
                     compositingStrategy = CompositingStrategy.ModulateAlpha
                 },
             interactive = expanded,
+            shown = shown,
+            canTakeFocus = canTakeFocus,
         )
     }
 }
@@ -235,7 +239,6 @@ private fun StageFrame(
     progress: () -> Float,
     geometry: FrameGeometry,
 ) {
-    val motion = LoungeTheme.motion
     Box(
         Modifier
             .fillMaxWidth()
@@ -261,7 +264,7 @@ private fun StageFrame(
                     translationY = geometry.pictureTop(p)
                 },
         ) {
-            StageArtworkCrossfade(spotlight, index, motion, Modifier.fillMaxSize())
+            StageArtworkCrossfade(spotlight, index, Modifier.fillMaxSize())
         }
     }
 }
@@ -371,7 +374,7 @@ private fun ExpandedStage(
     stripFocus: () -> FocusRequester,
     playbillFocus: FocusRequester,
     upFocus: FocusRequester,
-    onStripFocused: (Int, Rect) -> Unit,
+    onStripFocused: (Int, Tile) -> Unit,
     onStripClick: (Tile) -> Unit,
     onStripLongPress: (Tile, Rect, FocusRequester) -> Unit,
     onPrimary: (StageSpotlight) -> Unit,
@@ -379,6 +382,8 @@ private fun ExpandedStage(
     onPlaybillFocusChanged: (Boolean) -> Unit,
     modifier: Modifier,
     interactive: Boolean,
+    shown: () -> Float,
+    canTakeFocus: () -> Boolean,
 ) {
     Column(modifier) {
         Row(Modifier.padding(horizontal = Dimens.safeX).height(630.dp)) {
@@ -388,13 +393,14 @@ private fun ExpandedStage(
                     .fillMaxSize()
                     .onFocusChanged { onPlaybillFocusChanged(it.hasFocus) }
                     // Once for the group itself, once for the buttons inside it: either way Down
-                    // reaches the strip's selected tile, which overlaps this box's light room.
+                    // reaches the strip's selected tile, which overlaps this box's light room. The
+                    // second also keeps the lowered playbill's buttons out of focus.
                     .focusProperties { down = stripFocus(); up = upFocus }
                     .focusGroup()
-                    .focusProperties { down = stripFocus(); up = upFocus },
+                    .focusProperties { down = stripFocus(); up = upFocus; if (!canTakeFocus()) canFocus = false },
             ) {
                 if (spotlight != null) {
-                    Playbill(spotlight, onPrimary, onSecondary, interactive, playbillFocus)
+                    Playbill(spotlight, onPrimary, onSecondary, interactive, playbillFocus, shown)
                 } else {
                     EmptyPlaybill(indexed)
                 }
@@ -414,6 +420,7 @@ private fun ExpandedStage(
             selected = selected,
             idle = idle,
             upFocus = if (spotlight != null) playbillFocus else upFocus,
+            canTakeFocus = canTakeFocus,
             stripRequester = stripRequester,
             onStripFocused = onStripFocused,
             onStripClick = onStripClick,
@@ -424,7 +431,8 @@ private fun ExpandedStage(
 
 /**
  * The strip under the playbill. Nothing here changes when the selection moves, so a move
- * recomposes no tile: each tile's light is a State on the selection.
+ * recomposes no tile: each tile's light is a State on the selection. [canTakeFocus] is read when
+ * focus searches, so the lowered strip refuses focus without recomposing.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -433,8 +441,9 @@ private fun StageStrip(
     selected: androidx.compose.runtime.IntState,
     idle: Boolean,
     upFocus: FocusRequester,
+    canTakeFocus: () -> Boolean,
     stripRequester: (Int) -> FocusRequester,
-    onStripFocused: (Int, Rect) -> Unit,
+    onStripFocused: (Int, Tile) -> Unit,
     onStripClick: (Tile) -> Unit,
     onStripLongPress: (Tile, Rect, FocusRequester) -> Unit,
 ) {
@@ -450,7 +459,8 @@ private fun StageStrip(
                 .glowRoom()
                 .focusRestorer()
                 .focusGroup()
-                .focusProperties { up = upFocus },
+                // After the group, so it reaches every tile.
+                .focusProperties { up = upFocus; if (!canTakeFocus()) canFocus = false },
         ) {
             itemsIndexed(strip, key = { _, t -> t.id }) { index, tile ->
                 val lights = remember(index) {
@@ -464,7 +474,7 @@ private fun StageStrip(
                     idle = idle,
                     rowName = "Stage",
                     focusRequester = stripRequester(index),
-                    onFocused = { focused, bounds -> if (focused) onStripFocused(index, bounds) },
+                    onFocused = { focused, _ -> if (focused) onStripFocused(index, tile) },
                     onClick = { onStripClick(tile) },
                     onLongPress = { bounds -> onStripLongPress(tile, bounds, stripRequester(index)) },
                     chrome = false,
@@ -479,52 +489,30 @@ private fun StageStrip(
  * one rises from 92 % and fades in. Alpha is applied per draw, with no offscreen layer.
  */
 @Composable
-private fun StageArtworkCrossfade(spotlight: StageSpotlight?, index: Int, motion: tv.lounge.design.LoungeMotion, modifier: Modifier) {
-    var current by remember { mutableStateOf(spotlight) }
-    var previous by remember { mutableStateOf<StageSpotlight?>(null) }
-    var lastIndex by remember { mutableIntStateOf(index) }
-    var direction by remember { mutableIntStateOf(1) }
-    val progress = remember { Animatable(1f) }
-    LaunchedEffect(spotlight?.id) {
-        if (spotlight?.id != current?.id) {
-            direction = if (index >= lastIndex) 1 else -1
-            lastIndex = index
-            previous = current
-            current = spotlight
-            if (motion.reducedMotion) {
-                progress.snapTo(1f)
-            } else {
-                progress.snapTo(0f)
-                progress.animateTo(1f, tween(motion.curtainMs, easing = motion.curtainEasing))
-            }
-            previous = null
-        }
+private fun StageArtworkCrossfade(spotlight: StageSpotlight?, index: Int, modifier: Modifier) {
+    val travel = remember { Travel(index, spotlight?.id) }
+    if (spotlight?.id != travel.id) {
+        travel.direction = if (index < travel.index) -1 else 1
+        travel.index = index
+        travel.id = spotlight?.id
     }
-    Box(modifier) {
-        previous?.let { sp ->
-            StageArtwork(
-                sp,
-                Modifier.fillMaxSize().graphicsLayer {
-                    alpha = 1f - progress.value
-                    translationX = -direction * 12f * progress.value
-                    compositingStrategy = CompositingStrategy.ModulateAlpha
-                },
-            )
-        }
-        current?.let { sp ->
-            StageArtwork(
-                sp,
-                Modifier.fillMaxSize().graphicsLayer {
-                    val p = progress.value
-                    alpha = p
-                    translationX = direction * 12f * (1f - p)
-                    scaleX = 0.92f + 0.08f * p
-                    scaleY = 0.92f + 0.08f * p
-                    compositingStrategy = CompositingStrategy.ModulateAlpha
-                },
-            )
-        }
+    Swap(
+        spotlight,
+        modifier = modifier,
+        rise = 0.dp,
+        shiftX = (12 * travel.direction).dp,
+        fromScale = 0.92f,
+        outFraction = 1f,
+        modulateAlpha = true,
+        keyOf = { it?.id },
+    ) { sp ->
+        if (sp != null) StageArtwork(sp, Modifier.fillMaxSize())
     }
+}
+
+/** Where the selection was and which way it last moved, for the artwork's slide. */
+private class Travel(var index: Int, var id: String?) {
+    var direction = 1
 }
 
 /**
@@ -611,6 +599,7 @@ private fun Playbill(
     onSecondary: (StageSpotlight) -> Unit,
     interactive: Boolean,
     primaryFocus: FocusRequester,
+    shown: () -> Float,
 ) {
     val colors = LoungeTheme.colors
     val light = LoungeTheme.colors.light(spotlight.lightArgb)
@@ -622,12 +611,13 @@ private fun Playbill(
             Modifier
                 .fillMaxSize()
                 .onPlaced { coords ->
-                    // The light field draws this light with everything else; hand it the geometry.
+                    // The light field draws this light with everything else; hand it the geometry,
+                    // and the playbill's own fade so the light goes down with the Stage.
                     if (lightState.fieldDrawsLights) {
                         val origin = coords.positionInRoot()
                         val w = coords.size.width.toFloat()
                         val h = coords.size.height.toFloat()
-                        lightState.bill = BillLight(Offset(origin.x + w + 48f, origin.y + h * 0.45f), w * 1.15f, h * 0.45f, light)
+                        lightState.bill = BillLight(Offset(origin.x + w + 48f, origin.y + h * 0.45f), w * 1.15f, h * 0.45f, light, shown)
                     }
                 }
                 .drawBehind {
@@ -646,10 +636,10 @@ private fun Playbill(
                 },
         )
         // The source chip sits level with the artwork's top edge: it says where OK will take you.
-        spotlight.source?.let { source ->
-            Swap(spotlight.id, keepSlots = true) {
+        PlaybillPart(spotlight) { s ->
+            s.source?.let { source ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    spotlight.sourceIconPath?.let { icon ->
+                    s.sourceIconPath?.let { icon ->
                         AsyncImage(model = icon, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
                     }
                     Text(source, style = LoungeTheme.typography.meta, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -662,51 +652,56 @@ private fun Playbill(
         val titleBlock = with(LocalDensity.current) { type.displayXl.lineHeight.toDp() } * 2
         val captionLine = with(LocalDensity.current) { type.caption.lineHeight.toDp() }
         Column(Modifier.fillMaxSize().padding(bottom = 6.dp), verticalArrangement = Arrangement.Bottom) {
-            Swap(spotlight.id, 0, keepSlots = true) {
-                Box(Modifier.height(metaLine)) {
-                    Text(spotlight.category, style = type.meta, color = colors.dust, maxLines = 1)
+            PlaybillPart(spotlight) { s ->
+                Column {
+                    Box(Modifier.height(metaLine)) {
+                        Text(s.category, style = type.meta, color = colors.dust, maxLines = 1)
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Box(Modifier.height(titleBlock), contentAlignment = Alignment.BottomStart) {
+                        Text(s.title, style = type.displayXl, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Swap(spotlight.id, 0, keepSlots = true) {
-                Box(Modifier.height(titleBlock), contentAlignment = Alignment.BottomStart) {
-                    Text(spotlight.title, style = type.displayXl, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            Swap(spotlight.id, 40, keepSlots = true) {
+            PlaybillPart(spotlight, delayMs = 40) { s ->
                 Column {
                     Column(Modifier.height(metaLine * 2 + 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        spotlight.lines.take(2).forEachIndexed { i, line ->
+                        s.lines.take(2).forEachIndexed { i, line ->
                             Text(line, style = type.meta, color = if (i == 0) colors.limelight else colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
                     Box(Modifier.height(6.dp)) {
-                        spotlight.progress?.let { ProgressBar(it, Modifier.width(420.dp), thickness = 6.dp) }
+                        s.progress?.let { ProgressBar(it, Modifier.width(420.dp), thickness = 6.dp) }
                     }
                 }
             }
             Spacer(Modifier.height(24.dp))
-            Swap(spotlight.id, 80, keepSlots = true) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Only the live copy answers the playbill's focus requester; a hidden one cannot take focus.
-                    val live = LocalSwapSlotActive.current.value
-                    LoungeButton(spotlight.primary.label, onClick = { onPrimary(spotlight) }, light = light, enabled = interactive && live, focusRequester = if (live) primaryFocus else null)
-                    spotlight.secondary?.let { LoungeButton(it.label, onClick = { onSecondary(spotlight) }, kind = ButtonKind.Secondary, enabled = interactive && live) }
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            Swap(spotlight.id, 80, keepSlots = true) {
-                Box(Modifier.height(captionLine)) {
-                    spotlight.explanation?.let { why ->
-                        Text(why, style = type.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            PlaybillPart(spotlight, delayMs = 80) { s ->
+                Column {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        // Only the live copy answers the playbill's focus requester; a hidden one cannot take focus.
+                        val live = LocalSwapSlotActive.current.value
+                        LoungeButton(s.primary.label, onClick = { onPrimary(s) }, light = colors.light(s.lightArgb), enabled = interactive && live, focusRequester = if (live) primaryFocus else null)
+                        s.secondary?.let { LoungeButton(it.label, onClick = { onSecondary(s) }, kind = ButtonKind.Secondary, enabled = interactive && live) }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Box(Modifier.height(captionLine)) {
+                        s.explanation?.let { why ->
+                            Text(why, style = type.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
         }
     }
 }
+
+/** One part of the playbill: the old text fades out first, then the new fades in where it sits. */
+@Composable
+private fun PlaybillPart(spotlight: StageSpotlight, delayMs: Int = 0, content: @Composable (StageSpotlight) -> Unit) =
+    Swap(spotlight, delayMs = delayMs, rise = 0.dp, outFraction = TEXT_OUT, inDelayFraction = TEXT_IN_DELAY, keepSlots = true, keyOf = { it.id }, content = content)
 
 /** Nothing on the Stage yet: still indexing, or genuinely nothing to show (DESIGN.md §8). */
 @Composable
