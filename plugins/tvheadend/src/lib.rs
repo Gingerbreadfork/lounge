@@ -1,9 +1,12 @@
 //! Tvheadend: channels become Live now with the guide behind them, finished recordings a
 //! "Recordings" row, and the guide answers search. Everything plays in the TV's player straight
-//! from the server. The API is read with the user's password; streams and pictures, which the
-//! TV fetches on its own, carry the persistent token from the user's Tvheadend settings.
+//! from the server. The API is read with the user's password, answering the server's Digest or
+//! Basic challenge; streams and pictures, which the TV fetches on its own, carry the persistent
+//! token from the user's Tvheadend settings.
 use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use md5::{Digest, Md5};
 use serde::Deserialize;
+use std::cell::RefCell;
 
 pub struct Tvheadend;
 
@@ -43,31 +46,15 @@ impl sdk::Plugin for Tvheadend {
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let s = Server::from_settings()?;
-        let channels = s.channels()?;
+        let mut channels = s.channels()?;
         if channels.is_empty() {
             return Err("Tvheadend has no enabled channels. Map some services to channels first.".into());
         }
-        let mut items: Vec<Item> = channels.iter().map(|c| s.channel_item(c)).collect();
-        let window_end = ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000;
-        let mut events = 0;
-        'pages: for page in 0..MAX_PAGES {
-            let grid: Grid<Event> = s.get_json(&format!("/api/epg/events/grid?start={}&limit={PAGE}", page * PAGE))?;
-            let got = grid.entries.len();
-            for e in grid.entries {
-                let start = e.start * 1000;
-                if start > window_end {
-                    break 'pages;
-                }
-                if e.stop * 1000 < ctx.now_ms - 3_600_000 || !channels.iter().any(|c| c.uuid == e.channel_uuid) {
-                    continue;
-                }
-                items.push(s.event_item(&e, None));
-                events += 1;
-            }
-            if got < PAGE {
-                break;
-            }
+        if channels.len() > sdk::MAX_ITEMS {
+            sdk::warn!("{} channels, of which the TV shows the first {}; choose a channel tag in the settings", channels.len(), sdk::MAX_ITEMS);
+            channels.truncate(sdk::MAX_ITEMS);
         }
+        let mut items: Vec<Item> = channels.iter().map(|c| s.channel_item(c)).collect();
         match s.get_json::<Grid<Recording>>("/api/dvr/entry/grid_finished?limit=40&sort=start&dir=desc") {
             Ok(grid) => {
                 let count = grid.entries.len();
@@ -75,7 +62,36 @@ impl sdk::Plugin for Tvheadend {
             }
             Err(e) => sdk::warn!("recordings unavailable: {e}"),
         }
-        sdk::info!("{} channels, {events} programmes, {} recordings", channels.len(), items.len() - channels.len() - events);
+        items.truncate(sdk::MAX_ITEMS);
+        let recordings = items.len() - channels.len();
+
+        let uuids: std::collections::HashSet<&str> = channels.iter().map(|c| c.uuid.as_str()).collect();
+        let window_end = ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000;
+        let mut schedule = sdk::ScheduleBudget::new(sdk::MAX_ITEMS - items.len());
+        'pages: for page in 0..MAX_PAGES {
+            let grid: Grid<Event> = match s.get_json(&format!("/api/epg/events/grid?start={}&limit={PAGE}", page * PAGE)) {
+                Ok(grid) => grid,
+                Err(e) => {
+                    sdk::warn!("guide unavailable: {e}");
+                    break;
+                }
+            };
+            let got = grid.entries.len();
+            for e in grid.entries {
+                if e.start * 1000 >= window_end {
+                    break 'pages;
+                }
+                if e.stop * 1000 > ctx.now_ms && uuids.contains(e.channel_uuid.as_str()) {
+                    schedule.push(s.event_item(&e, None));
+                }
+            }
+            if got < PAGE {
+                break;
+            }
+        }
+        let schedule = schedule.finish();
+        sdk::info!("{} channels, {} programmes, {recordings} recordings", channels.len(), schedule.len());
+        items.extend(schedule);
         Ok(items)
     }
 
@@ -90,10 +106,169 @@ sdk::export_plugin!(Tvheadend);
 
 struct Server {
     base: String,
-    auth_header: Option<String>,
+    /// User name and password for the API.
+    login: Option<(String, String)>,
+    /// How the server last asked to be answered; later requests answer it straight away.
+    auth: RefCell<Option<Auth>>,
     url_auth: String,
     profile: String,
     tag: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Auth {
+    Basic,
+    Digest(Challenge),
+}
+
+/// A Digest challenge (RFC 7616) the plugin can answer: MD5 or MD5-sess, with or without
+/// `qop=auth`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Challenge {
+    pub realm: String,
+    pub nonce: String,
+    pub opaque: Option<String>,
+    pub qop_auth: bool,
+    pub sess: bool,
+    /// Requests answered with this nonce so far.
+    pub count: u32,
+}
+
+/// What a `WWW-Authenticate` header asks for: Digest when it is offered with an algorithm the
+/// plugin speaks, else Basic, else nothing. An unsupported Digest algorithm is returned as the
+/// error.
+fn read_challenge(header: &str) -> Result<Option<Auth>, String> {
+    let mut basic = false;
+    let mut unsupported = None;
+    for (scheme, params) in challenges(header) {
+        if scheme.eq_ignore_ascii_case("basic") {
+            basic = true;
+        } else if scheme.eq_ignore_ascii_case("digest") {
+            let get = |k: &str| params.iter().find(|(key, _)| key.eq_ignore_ascii_case(k)).map(|(_, v)| v.clone());
+            let algorithm = get("algorithm").unwrap_or_else(|| "MD5".into());
+            let sess = algorithm.eq_ignore_ascii_case("MD5-sess");
+            if !sess && !algorithm.eq_ignore_ascii_case("MD5") {
+                unsupported = Some(algorithm);
+                continue;
+            }
+            let qop = get("qop");
+            if qop.as_deref().is_some_and(|q| !q.split(',').any(|o| o.trim().eq_ignore_ascii_case("auth"))) {
+                unsupported = Some(format!("qop={}", qop.unwrap_or_default()));
+                continue;
+            }
+            let Some(nonce) = get("nonce") else { continue };
+            let challenge = Challenge { realm: get("realm").unwrap_or_default(), nonce, opaque: get("opaque"), qop_auth: qop.is_some(), sess, count: 0 };
+            return Ok(Some(Auth::Digest(challenge)));
+        }
+    }
+    match (basic, unsupported) {
+        (true, _) => Ok(Some(Auth::Basic)),
+        (false, Some(what)) => Err(format!("Tvheadend asks for Digest sign-in with {what}, which the plugin cannot answer. In Tvheadend's general settings, set the digest hash type to MD5.")),
+        (false, None) => Ok(None),
+    }
+}
+
+/// The challenges in a `WWW-Authenticate` value: each scheme with its parameters. A token not
+/// followed by `=` starts the next challenge.
+fn challenges(header: &str) -> Vec<(String, Vec<(String, String)>)> {
+    let mut out: Vec<(String, Vec<(String, String)>)> = Vec::new();
+    let b = header.as_bytes();
+    let mut i = 0;
+    while i < b.len() {
+        while i < b.len() && (b[i].is_ascii_whitespace() || b[i] == b',') {
+            i += 1;
+        }
+        let start = i;
+        while i < b.len() && !b[i].is_ascii_whitespace() && b[i] != b'=' && b[i] != b',' {
+            i += 1;
+        }
+        let token = header[start..i].to_string();
+        let mut j = i;
+        while j < b.len() && b[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        if token.is_empty() {
+            i += 1;
+            continue;
+        }
+        if j >= b.len() || b[j] != b'=' {
+            out.push((token, Vec::new()));
+            continue;
+        }
+        j += 1;
+        while j < b.len() && b[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        let mut value = String::new();
+        if j < b.len() && b[j] == b'"' {
+            j += 1;
+            let mut escaped = false;
+            for c in header[j..].chars() {
+                j += c.len_utf8();
+                match (c, escaped) {
+                    (_, true) => {
+                        value.push(c);
+                        escaped = false;
+                    }
+                    ('\\', false) => escaped = true,
+                    ('"', false) => break,
+                    _ => value.push(c),
+                }
+            }
+        } else {
+            let end = header[j..].find(',').map_or(header.len(), |e| j + e);
+            value = header[j..end].trim().to_string();
+            j = end;
+        }
+        i = j;
+        match out.last_mut() {
+            Some((_, params)) => params.push((token, value)),
+            None => out.push((String::new(), vec![(token, value)])),
+        }
+    }
+    out
+}
+
+fn md5_hex(s: &str) -> String {
+    Md5::digest(s.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn quoted(s: &str) -> String {
+    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+impl Challenge {
+    /// The `Authorization` value answering this challenge for one request.
+    pub fn answer(&self, username: &str, password: &str, method: &str, uri: &str, cnonce: &str) -> String {
+        let nc = format!("{:08x}", self.count.max(1));
+        let mut ha1 = md5_hex(&format!("{username}:{}:{password}", self.realm));
+        if self.sess {
+            ha1 = md5_hex(&format!("{ha1}:{}:{cnonce}", self.nonce));
+        }
+        let ha2 = md5_hex(&format!("{method}:{uri}"));
+        let response = if self.qop_auth { md5_hex(&format!("{ha1}:{}:{nc}:{cnonce}:auth:{ha2}", self.nonce)) } else { md5_hex(&format!("{ha1}:{}:{ha2}", self.nonce)) };
+        let mut out = format!(
+            "Digest username={}, realm={}, nonce={}, uri={}, algorithm={}, response=\"{response}\"",
+            quoted(username),
+            quoted(&self.realm),
+            quoted(&self.nonce),
+            quoted(uri),
+            if self.sess { "MD5-sess" } else { "MD5" }
+        );
+        if self.qop_auth {
+            out.push_str(&format!(", qop=auth, nc={nc}, cnonce={}", quoted(cnonce)));
+        }
+        if let Some(opaque) = &self.opaque {
+            out.push_str(&format!(", opaque={}", quoted(opaque)));
+        }
+        out
+    }
+}
+
+/// The path and query of `url`, which Digest signs.
+fn request_target(url: &str) -> &str {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    rest.find('/').map_or("/", |i| &rest[i..])
 }
 
 #[derive(Deserialize, Default)]
@@ -168,7 +343,6 @@ impl Server {
         let username = host::setting("username").map(|u| u.trim().to_string()).filter(|u| !u.is_empty());
         let password = host::secret("password").unwrap_or_default();
         let token = host::secret("token").map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
-        let auth_header = username.as_ref().map(|u| format!("Basic {}", base64(format!("{u}:{password}").as_bytes())));
         let url_auth = match (&token, &username) {
             (Some(t), _) => format!("auth={t}"),
             (None, Some(_)) => {
@@ -179,21 +353,50 @@ impl Server {
         };
         let profile = host::setting("profile").map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).unwrap_or_else(|| "pass".into());
         let tag = host::setting("tag").map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
-        Ok(Server { base, auth_header, url_auth, profile, tag })
+        Ok(Server { base, login: username.map(|u| (u, password)), auth: RefCell::new(None), url_auth, profile, tag })
+    }
+
+    fn request(&self, url: &str) -> HttpRequest {
+        let req = HttpRequest::get(url).header("Accept", "application/json");
+        let mut auth = self.auth.borrow_mut();
+        let (Some((user, password)), Some(auth)) = (&self.login, auth.as_mut()) else { return req };
+        let value = match auth {
+            Auth::Basic => format!("Basic {}", base64(format!("{user}:{password}").as_bytes())),
+            Auth::Digest(c) => {
+                c.count += 1;
+                let cnonce = &md5_hex(&format!("{}:{}:{}", host::now_ms(), c.count, c.nonce))[..16];
+                c.answer(user, password, "GET", request_target(url), cnonce)
+            }
+        };
+        req.header("Authorization", &value)
     }
 
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, String> {
-        let mut req = HttpRequest::get(format!("{}{}", self.base, path)).header("Accept", "application/json");
-        if let Some(h) = &self.auth_header {
-            req = req.header("Authorization", h);
+        let url = format!("{}{}", self.base, path);
+        let mut r = host::fetch(&self.request(&url))?;
+        if r.status == 401 && self.login.is_some() {
+            let asked = read_challenge(r.headers.get("www-authenticate").map(String::as_str).unwrap_or(""))?;
+            if asked.is_some() {
+                *self.auth.borrow_mut() = asked;
+                r = host::fetch(&self.request(&url))?;
+            }
         }
-        let r = host::fetch(&req)?;
         match r.status {
-            401 | 403 => return Err("Tvheadend rejected the username or password".into()),
-            s if !(200..300).contains(&s) => return Err(format!("Tvheadend answered HTTP {s} for {path}")),
+            401 => return Err(self.rejected()),
+            403 => return Err("Tvheadend refused this user (HTTP 403). Check its access entry allows the web interface.".into()),
+            s if !(200..300).contains(&s) => return Err(format!("Tvheadend answered HTTP {s} for {}", path.split('?').next().unwrap_or(path))),
             _ => {}
         }
-        serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer for {path}: {e}"))
+        serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer for {}: {e}", path.split('?').next().unwrap_or(path)))
+    }
+
+    fn rejected(&self) -> String {
+        match (&self.login, &*self.auth.borrow()) {
+            (None, _) => "Tvheadend wants a username and password: enter them in the plugin's settings".into(),
+            (Some(_), Some(Auth::Digest(_))) => "Tvheadend rejected the username or password (tried HTTP Digest)".into(),
+            (Some(_), Some(Auth::Basic)) => "Tvheadend rejected the username or password (tried HTTP Basic)".into(),
+            (Some(_), None) => "Tvheadend refused the request without saying how to sign in".into(),
+        }
     }
 
     fn channels(&self) -> Result<Vec<Channel>, String> {
@@ -321,7 +524,7 @@ mod tests {
     use super::*;
 
     fn server() -> Server {
-        Server { base: "http://tvh:9981".into(), auth_header: Some(format!("Basic {}", base64(b"me:pw"))), url_auth: "auth=tok".into(), profile: "pass".into(), tag: None }
+        Server { base: "http://tvh:9981".into(), login: Some(("me".into(), "pw".into())), auth: RefCell::new(None), url_auth: "auth=tok".into(), profile: "pass".into(), tag: None }
     }
 
     #[test]
@@ -362,6 +565,61 @@ mod tests {
         assert_eq!(r.duration_ms, Some(7_200_000));
         assert_eq!(r.action.play.as_deref(), Some("http://tvh:9981/dvrfile/r1?auth=tok"));
         assert_eq!(r.row.as_deref(), Some("recordings"));
+    }
+
+    fn digest(header: &str) -> Challenge {
+        match read_challenge(header) {
+            Ok(Some(Auth::Digest(c))) => c,
+            other => panic!("{header}: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn digest_answers_match_the_rfc_examples() {
+        let mut c = digest(r#"Digest realm="testrealm@host.com", qop="auth,auth-int", nonce="dcd98b7102dd2f0e8b11d0f600bfb0c093", opaque="5ccc069c403ebaf9f0171e9517f40e41""#);
+        c.count = 1;
+        let answer = c.answer("Mufasa", "Circle Of Life", "GET", "/dir/index.html", "0a4f113b");
+        assert!(answer.contains(r#"response="6629fae49393a05397450978507c4ef1""#), "{answer}");
+        assert!(answer.contains(r#"qop=auth, nc=00000001, cnonce="0a4f113b""#));
+        assert!(answer.ends_with(r#"opaque="5ccc069c403ebaf9f0171e9517f40e41""#));
+
+        let mut c = digest(r#"Digest realm="http-auth@example.org", qop="auth, auth-int", algorithm=SHA-256, nonce="7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v", opaque="FQhe/qaU925kfnzjCev0ciny7QMkPqMAFRtzCUYo5tdS", Digest realm="http-auth@example.org", qop="auth, auth-int", algorithm=MD5, nonce="7ypf/xlj9XXwfDPEoM4URrv/xwf94BcCAzFZH4GiTo0v", opaque="FQhe/qaU925kfnzjCev0ciny7QMkPqMAFRtzCUYo5tdS""#);
+        c.count = 1;
+        let answer = c.answer("Mufasa", "Circle of Life", "GET", "/dir/index.html", "f2/wE4q74E6zIJEtWaHKaf5wv/H5QzzpXusqGemxURZJ");
+        assert!(answer.contains(r#"response="8ca523f5e9506fed4657c9700eebdbec""#), "{answer}");
+    }
+
+    #[test]
+    fn challenges_in_every_shape_tvheadend_sends() {
+        let c = digest(r#"Digest realm="tvheadend", qop=auth, nonce="0123abcd", opaque="ffee""#);
+        assert_eq!((c.realm.as_str(), c.nonce.as_str(), c.opaque.as_deref(), c.qop_auth, c.sess), ("tvheadend", "0123abcd", Some("ffee"), true, false));
+        let legacy = digest(r#"Digest realm="tvheadend", nonce="n""#);
+        assert!(!legacy.qop_auth);
+        assert!(!legacy.answer("me", "pw", "GET", "/api", "c").contains("qop="));
+        assert!(digest(r#"Digest realm="r", nonce="n", algorithm=MD5-sess, qop="auth""#).sess);
+        assert_eq!(read_challenge(r#"Basic realm="tvheadend""#), Ok(Some(Auth::Basic)));
+        assert!(matches!(read_challenge(r#"Basic realm="x", Digest realm="x", nonce="n""#), Ok(Some(Auth::Digest(_)))));
+        assert_eq!(read_challenge(""), Ok(None));
+        assert!(read_challenge(r#"Digest realm="tvheadend", qop=auth, algorithm=SHA-256, nonce="n""#).unwrap_err().contains("SHA-256"));
+        assert_eq!(read_challenge(r#"Digest realm="x", algorithm=SHA-256, nonce="n", Basic realm="x""#), Ok(Some(Auth::Basic)));
+        assert_eq!(digest(r#"Digest realm="a \"b\" c", nonce="n,1""#).realm, r#"a "b" c"#);
+    }
+
+    #[test]
+    fn requests_answer_the_last_challenge() {
+        let s = server();
+        assert!(!s.request("http://tvh:9981/api/x").headers.contains_key("Authorization"));
+        *s.auth.borrow_mut() = Some(Auth::Basic);
+        assert_eq!(s.request("http://tvh:9981/api/x").headers["Authorization"], format!("Basic {}", base64(b"me:pw")));
+        *s.auth.borrow_mut() = read_challenge(r#"Digest realm="tvheadend", qop=auth, nonce="abc""#).unwrap();
+        let first = s.request("http://tvh:9981/tvh/api/epg/events/grid?start=0&limit=1000").headers["Authorization"].clone();
+        let second = s.request("http://tvh:9981/api/x").headers["Authorization"].clone();
+        assert!(first.contains(r#"uri="/tvh/api/epg/events/grid?start=0&limit=1000""#) && first.contains("nc=00000001"), "{first}");
+        assert!(second.contains("nc=00000002"));
+        assert_eq!(s.rejected(), "Tvheadend rejected the username or password (tried HTTP Digest)");
+        *s.auth.borrow_mut() = Some(Auth::Basic);
+        assert_eq!(s.rejected(), "Tvheadend rejected the username or password (tried HTTP Basic)");
+        assert_eq!(request_target("http://host"), "/");
     }
 
     #[test]
