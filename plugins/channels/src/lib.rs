@@ -3,6 +3,7 @@
 //! in the TV's player from the server, which needs no login on the local network.
 use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
+use std::collections::HashSet;
 
 pub struct Channels;
 
@@ -31,51 +32,82 @@ impl sdk::Plugin for Channels {
         let base = host::required_setting("server", "Server address")?.trim_end_matches('/').to_string();
         let favorites_only = host::setting("favorites_only").map(|v| v == "true").unwrap_or(false);
         let max_recordings = host::setting("recordings").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(30).clamp(1, 100);
-        let channels: Vec<Channel> = get_json(&format!("{base}/api/channels")).map_err(|e| format!("No Channels DVR at {base}: {e}"))?;
-        let channels: Vec<Channel> = channels.into_iter().filter(|c| !c.hidden && (c.favorite || !favorites_only) && !c.number().is_empty()).collect();
+        let mut numbers = HashSet::new();
+        let mut channels: Vec<Channel> = lineup(&base)
+            .map_err(|e| format!("No Channels DVR at {}: {e}", sdk::redact_url(&base)))?
+            .into_iter()
+            .filter(|c| !c.hidden && (c.favorite || !favorites_only) && !c.number().is_empty() && numbers.insert(c.number()))
+            .collect();
         if channels.is_empty() {
             return Err("Channels DVR has no channels to show. Add a source in its settings, or turn off the favourites filter.".into());
         }
-        let mut items: Vec<Item> = channels.iter().map(|c| channel_item(&base, c)).collect();
-        let window_end = ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000;
-        let mut programmes = 0;
-        match get_json::<Vec<GuideEntry>>(&format!("{base}/devices/ANY/guide")) {
-            Ok(guide) => {
-                for g in guide {
-                    let number = g.channel.number();
-                    if !channels.iter().any(|c| c.number() == number) {
-                        continue;
-                    }
-                    for a in g.airings {
-                        let start = a.time * 1000;
-                        let end = (a.time + a.duration) * 1000;
-                        if end < ctx.now_ms - 3_600_000 || start > window_end {
-                            continue;
-                        }
-                        items.push(schedule_item(&number, &a, start, end));
-                        programmes += 1;
-                    }
-                }
-            }
-            Err(e) => sdk::warn!("guide unavailable: {e}"),
+        if channels.len() > sdk::MAX_ITEMS {
+            sdk::warn!("{} channels, of which the TV shows the first {}; turn on the favourites filter to choose", channels.len(), sdk::MAX_ITEMS);
+            channels.truncate(sdk::MAX_ITEMS);
         }
-        let mut recordings = 0;
-        match get_json::<Vec<Recording>>(&format!("{base}/dvr/files")) {
-            Ok(mut files) => {
-                files.retain(|f| f.completed && !f.cancelled && !f.delete && f.duration > 60.0);
-                files.sort_by_key(|f| std::cmp::Reverse(f.airing.time));
-                files.truncate(max_recordings);
+        let mut items: Vec<Item> = channels.iter().map(|c| channel_item(&base, c)).collect();
+
+        match host::get_text(&format!("{base}/dvr/files")).and_then(|body| newest_recordings(&body, max_recordings)) {
+            Ok(files) => {
                 let count = files.len();
-                for (i, f) in files.iter().enumerate() {
-                    items.push(recording_item(&base, f, (count - i) as i32));
-                    recordings += 1;
-                }
+                items.extend(files.iter().enumerate().map(|(i, f)| recording_item(&base, f, (count - i) as i32)));
             }
+            Err(e) if e == host::TOO_LARGE => sdk::warn!("the recordings list is larger than the 8 MB a plugin may read, so recordings are left out; the channels and guide are not affected"),
             Err(e) => sdk::warn!("recordings unavailable: {e}"),
         }
-        sdk::info!("{} channels, {programmes} programmes, {recordings} recordings", channels.len());
+        items.truncate(sdk::MAX_ITEMS);
+        let recordings = items.len() - channels.len();
+
+        let window_end = ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000;
+        let mut schedule = sdk::ScheduleBudget::new(sdk::MAX_ITEMS - items.len());
+        let read = host::get_text(&format!("{base}/devices/ANY/guide")).and_then(|body| {
+            sdk::for_each_in_array(&body, |g: GuideEntry| {
+                let number = g.channel.number();
+                if !numbers.contains(&number) {
+                    return;
+                }
+                for a in &g.airings {
+                    let (start, end) = (a.time * 1000, (a.time + a.duration) * 1000);
+                    if end > ctx.now_ms && start < window_end {
+                        schedule.push(schedule_item(&number, a, start, end));
+                    }
+                }
+            })
+        });
+        if let Err(e) = read {
+            sdk::warn!("guide unavailable: {e}");
+        }
+        let schedule = schedule.finish();
+        sdk::info!("{} channels, {} programmes, {recordings} recordings", channels.len(), schedule.len());
+        items.extend(schedule);
         Ok(items)
     }
+}
+
+/// The server's channel lineup, or its older channel list when the lineup is not there.
+fn lineup(base: &str) -> Result<Vec<Channel>, String> {
+    get_json(&format!("{base}/devices/ANY/channels")).or_else(|e| get_json(&format!("{base}/api/channels")).map_err(|_| e))
+}
+
+/// The newest `max` finished recordings, read from the server's list one at a time so a large
+/// library is never held whole.
+pub fn newest_recordings(json: &str, max: usize) -> Result<Vec<Recording>, String> {
+    let newest_first = |files: &mut Vec<Recording>| {
+        files.sort_by_key(|f| std::cmp::Reverse(f.airing.time));
+        files.truncate(max);
+    };
+    let mut kept = Vec::new();
+    sdk::for_each_in_array(json, |r: Recording| {
+        if r.completed && !r.cancelled && !r.delete && r.duration > 60.0 {
+            kept.push(r);
+            if kept.len() >= 2 * max {
+                newest_first(&mut kept);
+            }
+        }
+    })
+    .map_err(|e| format!("unexpected recordings list: {e}"))?;
+    newest_first(&mut kept);
+    Ok(kept)
 }
 
 sdk::export_plugin!(Channels);
@@ -152,13 +184,26 @@ pub struct Recording {
     pub duration: f64,
     #[serde(rename = "PlaybackTime", default)]
     pub playback_time: f64,
+    /// Epoch milliseconds.
+    #[serde(rename = "CreatedAt", default)]
+    pub created_at: i64,
+    /// Epoch milliseconds; changes when the playback position does.
     #[serde(rename = "UpdatedAt", default)]
     pub updated_at: i64,
 }
 
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
     let body = host::get_text(url)?;
-    serde_json::from_str(&body).map_err(|e| format!("unexpected answer from {url}: {e}"))
+    serde_json::from_str(&body).map_err(|e| format!("unexpected answer from {}: {e}", sdk::redact_url(url)))
+}
+
+/// Epoch milliseconds from a stamp in milliseconds, or in seconds as older servers send.
+pub fn epoch_ms(stamp: i64) -> Option<i64> {
+    match stamp {
+        s if s <= 0 => None,
+        s if s < 100_000_000_000 => Some(s * 1000),
+        s => Some(s),
+    }
 }
 
 pub fn channel_item(base: &str, c: &Channel) -> Item {
@@ -209,7 +254,7 @@ pub fn recording_item(base: &str, r: &Recording, weight: i32) -> Item {
         season: a.season_number.map(|n| n.to_string()),
         episode: a.episode_number.map(|n| n.to_string()),
         duration_ms: Some(duration_ms),
-        added_ms: Some(a.time * 1000),
+        added_ms: epoch_ms(r.created_at).or(epoch_ms(a.time)),
         thumbnail: a.image.clone().filter(|i| !i.is_empty()),
         channel_name: if a.channel.is_empty() { None } else { Some(a.channel.clone()) },
         action: Action::play(format!("{base}/dvr/files/{}/stream.mpg", r.id), a.title.clone()),
@@ -218,7 +263,7 @@ pub fn recording_item(base: &str, r: &Recording, weight: i32) -> Item {
     if in_progress {
         item.position_ms = Some(position_ms);
         item.progress = Some((position_ms as f32 / duration_ms as f32).clamp(0.0, 1.0));
-        item.last_used_ms = Some(if r.updated_at > 0 { r.updated_at * 1000 } else { a.time * 1000 });
+        item.last_used_ms = epoch_ms(r.updated_at);
     } else {
         item.row = Some("recordings".into());
         item.weight = weight;
@@ -265,7 +310,7 @@ mod tests {
     #[test]
     fn recordings_split_into_resume_and_row() {
         let files: Vec<Recording> = serde_json::from_str(r#"[
-            {"ID": "1", "Airing": {"Time": 1760700000, "Duration": 3600, "Title": "Film", "Image": "http://i/f.jpg"}, "Completed": true, "Duration": 3590.5, "PlaybackTime": 1200, "Watched": false, "UpdatedAt": 1760790000},
+            {"ID": "1", "Airing": {"Time": 1760700000, "Duration": 3600, "Title": "Film", "Image": "http://i/f.jpg"}, "Completed": true, "Duration": 3590.5, "PlaybackTime": 1200, "Watched": false, "CreatedAt": 1760703600123, "UpdatedAt": 1760790000456},
             {"ID": "2", "Airing": {"Time": 1760600000, "Duration": 1800, "Title": "Show", "EpisodeTitle": "Pilot"}, "Completed": true, "Duration": 1790, "PlaybackTime": 0, "Watched": false},
             {"ID": "3", "Airing": {"Time": 1760500000, "Duration": 1800, "Title": "Gone"}, "Completed": true, "Duration": 1790, "Delete": true}
         ]"#).unwrap();
@@ -273,13 +318,38 @@ mod tests {
         assert_eq!(a.kind, ItemKind::Resume);
         assert_eq!(a.position_ms, Some(1_200_000));
         assert!((a.progress.unwrap() - 0.334).abs() < 0.01);
-        assert_eq!(a.last_used_ms, Some(1760790000000));
+        assert_eq!(a.last_used_ms, Some(1760790000456));
+        assert_eq!(a.added_ms, Some(1760703600123));
         assert_eq!(a.action.play.as_deref(), Some("http://dvr:8089/dvr/files/1/stream.mpg"));
         let b = recording_item("http://dvr:8089", &files[1], 1);
         assert_eq!(b.kind, ItemKind::Program);
         assert_eq!(b.row.as_deref(), Some("recordings"));
         assert_eq!(b.subtitle.as_deref(), Some("Pilot"));
         assert!(b.is_new);
+        assert_eq!(b.added_ms, Some(1760600000000));
         assert!(files[2].delete);
+    }
+
+    #[test]
+    fn stamps_in_seconds_or_milliseconds_land_in_milliseconds() {
+        assert_eq!(epoch_ms(1760790000456), Some(1760790000456));
+        assert_eq!(epoch_ms(1760790000), Some(1760790000000));
+        assert_eq!(epoch_ms(0), None);
+        let r: Recording = serde_json::from_str(r#"{"ID": "9", "Airing": {"Time": 1760700000, "Title": "F"}, "Completed": true, "Duration": 3600, "PlaybackTime": 600, "UpdatedAt": 0}"#).unwrap();
+        assert_eq!(recording_item("http://dvr:8089", &r, 1).last_used_ms, None);
+    }
+
+    #[test]
+    fn only_the_newest_finished_recordings_are_kept() {
+        let mut json = String::from("[");
+        for i in 0..500 {
+            let done = i % 7 != 0;
+            json.push_str(&format!(r#"{{"ID": "{i}", "Airing": {{"Time": {}, "Title": "R{i}", "Summary": "{}"}}, "Completed": {done}, "Duration": 1800}},"#, 1_760_000_000 + i * 3600, "x".repeat(200)));
+        }
+        json.push_str(r#"{"ID": "short", "Airing": {"Time": 1790000000}, "Completed": true, "Duration": 30}]"#);
+        let kept = newest_recordings(&json, 5).unwrap();
+        let ids: Vec<&str> = kept.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, ["499", "498", "496", "495", "494"]);
+        assert!(newest_recordings("{\"error\": \"nope\"}", 5).is_err());
     }
 }
