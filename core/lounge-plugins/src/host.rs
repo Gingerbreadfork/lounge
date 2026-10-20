@@ -1,6 +1,6 @@
-//! Runs plugin modules. Every call gets a fresh instance with a fuel budget and a memory cap,
-//! so a misbehaving plugin can burn its own budget and nothing else. Host functions read and
-//! write the plugin's linear memory through its own `lg_alloc`.
+//! Runs plugin modules. Every call gets a fresh instance with a fuel budget, a memory and table
+//! cap and a deadline, so a misbehaving plugin can burn its own budget and nothing else. Host
+//! functions read and write the plugin's linear memory through its own `lg_alloc`.
 
 use crate::api::{self, exports, imports, Action, HttpRequest, HttpResponse, Item, Manifest, Outcome, RefreshContext, SearchQuery};
 use crate::{PluginError, Result};
@@ -24,31 +24,51 @@ pub trait Services: Send + Sync {
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub memory_bytes: usize,
+    /// Most entries the module's tables may hold, in total.
+    pub table_elements: usize,
     pub fuel: u64,
+    /// What every host call costs, on top of one unit per byte it moves, so a loop of host calls
+    /// runs out of fuel like a loop of instructions.
+    pub host_call_fuel: u64,
     /// Longest value a plugin may store under one key.
     pub kv_value_bytes: usize,
     pub kv_keys: usize,
+    /// Most `kv_set` and `kv_delete` calls one invocation may make.
+    pub kv_writes: u32,
     /// Most `fetch` calls one invocation may make, and the wall-clock budget they share;
     /// fuel meters instructions, this meters the time spent waiting on the network.
     pub max_fetches: u32,
     pub fetch_budget: Duration,
     /// Largest value an export may hand back.
     pub max_result_bytes: usize,
+    /// Wall-clock limit for one refresh, and for any other call.
+    pub refresh_time: Duration,
+    pub call_time: Duration,
 }
 
 impl Default for Limits {
     fn default() -> Self {
         Limits {
             memory_bytes: 32 * 1024 * 1024,
+            table_elements: 100_000,
             fuel: 20_000_000_000,
+            host_call_fuel: 10_000,
             kv_value_bytes: 256 * 1024,
             kv_keys: 256,
+            kv_writes: 1_000,
             max_fetches: 64,
             fetch_budget: Duration::from_secs(60),
             max_result_bytes: 8 * 1024 * 1024,
+            refresh_time: Duration::from_secs(180),
+            call_time: Duration::from_secs(12),
         }
     }
 }
+
+/// Longest key, in bytes, for the key-value store, settings and secrets.
+const MAX_KEY_BYTES: usize = 256;
+/// Longest log line, in bytes; anything after it is dropped.
+const MAX_LOG_BYTES: usize = 4096;
 
 pub struct LoadedPlugin {
     pub id: String,
@@ -67,10 +87,15 @@ struct State {
     manifest: Manifest,
     services: Arc<dyn Services>,
     limits: StoreLimits,
-    kv_limits: (usize, usize),
+    kv_value_bytes: usize,
+    kv_writes_left: u32,
+    host_call_fuel: u64,
     log_lines: u32,
     fetches_left: u32,
     fetch_deadline: Instant,
+    deadline: Instant,
+    /// Set while the host waits on the plugin's `lg_alloc`, which may not call back into the host.
+    in_alloc: bool,
 }
 
 impl Host {
@@ -93,29 +118,34 @@ impl Host {
 
     /// The manifest the module itself reports, for cross-checking with `manifest.json`.
     pub fn manifest_of(&self, plugin: &LoadedPlugin) -> Result<Manifest> {
-        self.call_json::<(), Manifest>(plugin, exports::MANIFEST, None).map(|o| match o {
+        self.call_json::<(), Manifest>(plugin, exports::MANIFEST, None, self.limits.call_time).map(|o| match o {
             Outcome::Ok(m) => Ok(m),
             Outcome::Err(e) => Err(PluginError::Failed(e)),
         })?
     }
 
     pub fn refresh(&self, plugin: &LoadedPlugin, ctx: &RefreshContext) -> Result<Vec<Item>> {
-        self.outcome(self.call_json(plugin, exports::REFRESH, Some(ctx))?)
+        self.outcome(self.call_json(plugin, exports::REFRESH, Some(ctx), self.limits.refresh_time)?)
+    }
+
+    /// Whether the module answers `lg_search`.
+    pub fn can_search(&self, plugin: &LoadedPlugin) -> bool {
+        plugin.module.get_export(exports::SEARCH).is_some()
     }
 
     pub fn search(&self, plugin: &LoadedPlugin, query: &str, limit: u32) -> Result<Vec<Item>> {
-        if plugin.module.get_export(exports::SEARCH).is_none() {
+        if !self.can_search(plugin) {
             return Ok(Vec::new());
         }
         let q = SearchQuery { query: query.to_string(), limit };
-        self.outcome(self.call_json(plugin, exports::SEARCH, Some(&q))?)
+        self.outcome(self.call_json(plugin, exports::SEARCH, Some(&q), self.limits.call_time)?)
     }
 
     pub fn resolve(&self, plugin: &LoadedPlugin, action: &str) -> Result<Action> {
         if plugin.module.get_export(exports::RESOLVE).is_none() {
             return Err(PluginError::Failed("plugin cannot resolve actions".into()));
         }
-        self.outcome(self.call_json(plugin, exports::RESOLVE, Some(&action.to_string()))?)
+        self.outcome(self.call_json(plugin, exports::RESOLVE, Some(&action.to_string()), self.limits.call_time)?)
     }
 
     fn outcome<T>(&self, o: Outcome<T>) -> Result<T> {
@@ -125,16 +155,28 @@ impl Host {
         }
     }
 
-    fn call_json<I: Serialize, O: DeserializeOwned>(&self, plugin: &LoadedPlugin, export: &str, input: Option<&I>) -> Result<Outcome<O>> {
+    fn call_json<I: Serialize, O: DeserializeOwned>(&self, plugin: &LoadedPlugin, export: &str, input: Option<&I>, time: Duration) -> Result<Outcome<O>> {
+        let started = Instant::now();
+        let deadline = started + time;
         let state = State {
             plugin: plugin.id.clone(),
             manifest: plugin.manifest.clone(),
             services: Arc::clone(&self.services),
-            limits: StoreLimitsBuilder::new().memory_size(self.limits.memory_bytes).memories(1).build(),
-            kv_limits: (self.limits.kv_value_bytes, self.limits.kv_keys),
+            limits: StoreLimitsBuilder::new()
+                .memory_size(self.limits.memory_bytes)
+                .memories(1)
+                .table_elements(self.limits.table_elements)
+                .tables(4)
+                .instances(1)
+                .build(),
+            kv_value_bytes: self.limits.kv_value_bytes,
+            kv_writes_left: self.limits.kv_writes,
+            host_call_fuel: self.limits.host_call_fuel,
             log_lines: 0,
             fetches_left: self.limits.max_fetches,
-            fetch_deadline: Instant::now() + self.limits.fetch_budget,
+            fetch_deadline: (started + self.limits.fetch_budget).min(deadline),
+            deadline,
+            in_alloc: false,
         };
         let mut store = Store::new(&self.engine, state);
         store.limiter(|s| &mut s.limits);
@@ -161,6 +203,9 @@ impl Host {
                 f.call(&mut store, ()).map_err(trap_err)?
             }
         };
+        if Instant::now() > deadline {
+            return Err(PluginError::Trap(format!("{export} ran past its {} s limit", time.as_secs())));
+        }
         let (ptr, len) = api::unpack(packed);
         if len == 0 {
             return Err(PluginError::Failed(format!("{export} returned nothing")));
@@ -204,6 +249,24 @@ fn memory_of(caller: &Caller<'_, State>) -> std::result::Result<Memory, wasmi::E
         .ok_or_else(|| wasmi::Error::new("plugin has no memory export"))
 }
 
+/// The bookkeeping every host call starts with: no calls from inside `lg_alloc`, none past the
+/// deadline, and fuel for the call and the bytes it moves.
+fn enter(caller: &mut Caller<'_, State>, bytes: usize) -> std::result::Result<(), wasmi::Error> {
+    let st = caller.data();
+    if st.in_alloc {
+        return Err(wasmi::Error::new("lg_alloc may not call host functions"));
+    }
+    if Instant::now() > st.deadline {
+        return Err(wasmi::Error::new("the plugin ran past its time limit"));
+    }
+    let cost = st.host_call_fuel.saturating_add(bytes as u64);
+    let fuel = caller.get_fuel()?;
+    if fuel < cost {
+        return Err(wasmi::Error::from(wasmi::TrapCode::OutOfFuel));
+    }
+    caller.set_fuel(fuel - cost)
+}
+
 fn read_guest(caller: &Caller<'_, State>, ptr: i32, len: i32) -> std::result::Result<Vec<u8>, wasmi::Error> {
     if len <= 0 {
         return Ok(Vec::new());
@@ -214,8 +277,28 @@ fn read_guest(caller: &Caller<'_, State>, ptr: i32, len: i32) -> std::result::Re
     Ok(buf)
 }
 
-fn read_guest_str(caller: &Caller<'_, State>, ptr: i32, len: i32) -> std::result::Result<String, wasmi::Error> {
-    String::from_utf8(read_guest(caller, ptr, len)?).map_err(|_| wasmi::Error::new("plugin passed invalid UTF-8"))
+/// A key for the key-value store, settings or secrets: whole, valid text, never cut short.
+fn read_key(caller: &Caller<'_, State>, ptr: i32, len: i32) -> std::result::Result<String, wasmi::Error> {
+    if len as usize > MAX_KEY_BYTES {
+        return Err(wasmi::Error::new(format!("a key is longer than {MAX_KEY_BYTES} bytes")));
+    }
+    String::from_utf8(read_guest(caller, ptr, len)?).map_err(|_| wasmi::Error::new("plugin passed a key that is not valid UTF-8"))
+}
+
+/// Up to `max` bytes of text; a character the limit cuts through is dropped, not an error.
+fn read_text(caller: &Caller<'_, State>, ptr: i32, len: i32, max: usize) -> std::result::Result<String, wasmi::Error> {
+    let cut = len.max(0) as usize > max;
+    let bytes = read_guest(caller, ptr, len.min(max as i32))?;
+    match String::from_utf8(bytes) {
+        Ok(text) => Ok(text),
+        Err(e) if cut && e.utf8_error().error_len().is_none() => {
+            let valid = e.utf8_error().valid_up_to();
+            let mut bytes = e.into_bytes();
+            bytes.truncate(valid);
+            Ok(String::from_utf8(bytes).unwrap_or_default())
+        }
+        Err(_) => Err(wasmi::Error::new("plugin passed invalid UTF-8")),
+    }
 }
 
 /// Allocate in the plugin with its `lg_alloc`, copy `bytes` in and return the packed pointer.
@@ -228,7 +311,10 @@ fn write_guest(caller: &mut Caller<'_, State>, bytes: &[u8]) -> std::result::Res
         .and_then(Extern::into_func)
         .ok_or_else(|| wasmi::Error::new("plugin has no lg_alloc"))?
         .typed::<i32, i32>(&*caller)?;
-    let ptr = alloc.call(&mut *caller, bytes.len() as i32)?;
+    caller.data_mut().in_alloc = true;
+    let ptr = alloc.call(&mut *caller, bytes.len() as i32);
+    caller.data_mut().in_alloc = false;
+    let ptr = ptr?;
     if ptr <= 0 {
         return Err(wasmi::Error::new("plugin allocation failed"));
     }
@@ -237,22 +323,31 @@ fn write_guest(caller: &mut Caller<'_, State>, bytes: &[u8]) -> std::result::Res
     Ok(api::pack(ptr as u32, bytes.len() as u32))
 }
 
+/// Charge for the bytes a call hands back, then copy them into the plugin.
+fn hand_back(caller: &mut Caller<'_, State>, bytes: &[u8]) -> std::result::Result<i64, wasmi::Error> {
+    let fuel = caller.get_fuel()?;
+    caller.set_fuel(fuel.saturating_sub(bytes.len() as u64))?;
+    write_guest(caller, bytes)
+}
+
 fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
     let m = api::HOST_MODULE;
     let err = |e: wasmi::errors::LinkerError| PluginError::Wasm(e.to_string());
 
     linker
-        .func_wrap(m, imports::NOW, |_caller: Caller<'_, State>| -> i64 {
-            std::time::SystemTime::now()
+        .func_wrap(m, imports::NOW, |mut caller: Caller<'_, State>| -> std::result::Result<i64, wasmi::Error> {
+            enter(&mut caller, 0)?;
+            Ok(std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_millis() as i64)
-                .unwrap_or(0)
+                .unwrap_or(0))
         })
         .map_err(err)?;
 
     linker
         .func_wrap(m, imports::LOG, |mut caller: Caller<'_, State>, level: i32, ptr: i32, len: i32| -> std::result::Result<(), wasmi::Error> {
-            let msg = read_guest_str(&caller, ptr, len.min(4096))?;
+            enter(&mut caller, len.clamp(0, MAX_LOG_BYTES as i32) as usize)?;
+            let msg = read_text(&caller, ptr, len, MAX_LOG_BYTES)?;
             let state = caller.data_mut();
             state.log_lines += 1;
             if state.log_lines <= 500 {
@@ -264,22 +359,28 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
 
     linker
         .func_wrap(m, imports::KV_GET, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<i64, wasmi::Error> {
-            let key = read_guest_str(&caller, ptr, len.min(256))?;
+            enter(&mut caller, 0)?;
+            let key = read_key(&caller, ptr, len)?;
             let value = caller.data().services.kv_get(&caller.data().plugin, &key);
             match value {
-                Some(v) => write_guest(&mut caller, &v),
+                Some(v) => hand_back(&mut caller, &v),
                 None => Ok(0),
             }
         })
         .map_err(err)?;
 
     linker
-        .func_wrap(m, imports::KV_SET, |caller: Caller<'_, State>, kp: i32, kl: i32, vp: i32, vl: i32| -> std::result::Result<(), wasmi::Error> {
-            let key = read_guest_str(&caller, kp, kl.min(256))?;
-            let (max_value, _) = caller.data().kv_limits;
-            if vl as usize > max_value {
+        .func_wrap(m, imports::KV_SET, |mut caller: Caller<'_, State>, kp: i32, kl: i32, vp: i32, vl: i32| -> std::result::Result<(), wasmi::Error> {
+            enter(&mut caller, vl.max(0) as usize)?;
+            let key = read_key(&caller, kp, kl)?;
+            if vl as usize > caller.data().kv_value_bytes {
                 return Err(wasmi::Error::new("kv value too large"));
             }
+            let st = caller.data_mut();
+            if st.kv_writes_left == 0 {
+                return Err(wasmi::Error::new("too many key-value writes in one call"));
+            }
+            st.kv_writes_left -= 1;
             let value = read_guest(&caller, vp, vl)?;
             caller.data().services.kv_set(&caller.data().plugin, &key, &value);
             Ok(())
@@ -287,8 +388,14 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
         .map_err(err)?;
 
     linker
-        .func_wrap(m, imports::KV_DELETE, |caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<(), wasmi::Error> {
-            let key = read_guest_str(&caller, ptr, len.min(256))?;
+        .func_wrap(m, imports::KV_DELETE, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<(), wasmi::Error> {
+            enter(&mut caller, 0)?;
+            let key = read_key(&caller, ptr, len)?;
+            let st = caller.data_mut();
+            if st.kv_writes_left == 0 {
+                return Err(wasmi::Error::new("too many key-value writes in one call"));
+            }
+            st.kv_writes_left -= 1;
             caller.data().services.kv_delete(&caller.data().plugin, &key);
             Ok(())
         })
@@ -296,7 +403,8 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
 
     linker
         .func_wrap(m, imports::SECRET, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<i64, wasmi::Error> {
-            let key = read_guest_str(&caller, ptr, len.min(256))?;
+            enter(&mut caller, 0)?;
+            let key = read_key(&caller, ptr, len)?;
             // Only secrets the manifest declared as password settings are readable.
             let declared = caller.data().manifest.settings.iter().any(|s| s.key == key && s.kind.is_secret());
             if !declared {
@@ -304,7 +412,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
             }
             let value = caller.data().services.secret(&caller.data().plugin, &key);
             match value {
-                Some(v) => write_guest(&mut caller, v.as_bytes()),
+                Some(v) => hand_back(&mut caller, v.as_bytes()),
                 None => Ok(0),
             }
         })
@@ -312,14 +420,17 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
 
     linker
         .func_wrap(m, imports::SETTING, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<i64, wasmi::Error> {
-            let key = read_guest_str(&caller, ptr, len.min(256))?;
-            let value = caller
-                .data()
-                .services
-                .setting(&caller.data().plugin, &key)
-                .or_else(|| caller.data().manifest.settings.iter().find(|s| s.key == key).and_then(|s| s.default.clone()));
+            enter(&mut caller, 0)?;
+            let key = read_key(&caller, ptr, len)?;
+            let spec = caller.data().manifest.settings.iter().find(|s| s.key == key);
+            // A password is only ever read through `secret`.
+            if spec.is_some_and(|s| s.kind.is_secret()) {
+                return Ok(0);
+            }
+            let default = spec.and_then(|s| s.default.clone());
+            let value = caller.data().services.setting(&caller.data().plugin, &key).or(default);
             match value {
-                Some(v) => write_guest(&mut caller, v.as_bytes()),
+                Some(v) => hand_back(&mut caller, v.as_bytes()),
                 None => Ok(0),
             }
         })
@@ -327,15 +438,20 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
 
     linker
         .func_wrap(m, imports::FETCH, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<i64, wasmi::Error> {
+            enter(&mut caller, len.clamp(0, 1 << 20) as usize)?;
             let raw = read_guest(&caller, ptr, len.min(1 << 20))?;
-            let request: HttpRequest = serde_json::from_slice(&raw).map_err(|e| wasmi::Error::new(format!("bad request: {e}")))?;
+            let mut request: HttpRequest = serde_json::from_slice(&raw).map_err(|e| wasmi::Error::new(format!("bad request: {e}")))?;
             let host = crate::http::host_of(&request.url).unwrap_or_default();
             let budget = {
                 let st = caller.data_mut();
-                if st.fetches_left == 0 || Instant::now() > st.fetch_deadline {
+                let now = Instant::now();
+                if st.fetches_left == 0 || now > st.fetch_deadline {
                     Err("fetch budget for this call is used up".to_string())
                 } else {
                     st.fetches_left -= 1;
+                    // A request never outlives the call's own budget.
+                    let left = st.fetch_deadline.saturating_duration_since(now).as_millis().max(1) as u32;
+                    request.timeout_ms = if request.timeout_ms == 0 { left } else { request.timeout_ms.min(left) };
                     Ok(())
                 }
             };
@@ -350,7 +466,8 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
                 }
             };
             let bytes = serde_json::to_vec(&response).map_err(|e| wasmi::Error::new(e.to_string()))?;
-            write_guest(&mut caller, &bytes)
+            drop(response);
+            hand_back(&mut caller, &bytes)
         })
         .map_err(err)?;
 
@@ -478,6 +595,134 @@ mod tests {
         let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
         let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
         assert!(matches!(&err, PluginError::Trap(msg) if msg.contains("fuel")), "{err}");
+    }
+
+    /// A minimal module whose `lg_refresh` body is `body`; `lg_alloc` is `alloc`.
+    fn module(imports: &str, extra: &str, alloc: &str, body: &str) -> Vec<u8> {
+        wat::parse_str(format!(
+            r#"(module {imports}
+              (memory (export "memory") 2)
+              {extra}
+              (func (export "lg_alloc") (param $len i32) (result i32) {alloc})
+              (func (export "lg_free") (param i32 i32))
+              (func (export "lg_manifest") (result i64) (i64.const 0))
+              (func (export "lg_refresh") (param i32 i32) (result i64) {body}))"#
+        ))
+        .unwrap()
+    }
+
+    fn secret_manifest() -> Manifest {
+        let mut m = Manifest { id: "tv.lounge.test".into(), name: "Test".into(), version: "1".into(), ..Default::default() };
+        m.settings.push(lounge_plugin_api::SettingSpec { key: "server".into(), label: "Server".into(), kind: lounge_plugin_api::SettingKind::Text, required: false, help: None, default: None });
+        m.settings.push(lounge_plugin_api::SettingSpec { key: "password".into(), label: "Password".into(), kind: lounge_plugin_api::SettingKind::Password, required: false, help: None, default: None });
+        m
+    }
+
+    #[test]
+    fn lg_alloc_cannot_call_back_into_the_host() {
+        let (host, _) = host();
+        let wasm = module(
+            r#"(import "lounge" "setting" (func $setting (param i32 i32) (result i64)))"#,
+            r#"(data (i32.const 1100) "server")"#,
+            "(drop (call $setting (i32.const 1100) (i32.const 6))) (i32.const 4096)",
+            "(drop (call $setting (i32.const 1100) (i32.const 6))) (i64.const 0)",
+        );
+        let plugin = host.load("tv.lounge.test", secret_manifest(), &wasm).unwrap();
+        let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert!(err.to_string().contains("lg_alloc may not call host functions"), "{err}");
+    }
+
+    #[test]
+    fn tables_cannot_escape_the_memory_cap() {
+        let (host, _) = host();
+        let wasm = module("", "(table 200000000 funcref)", "(i32.const 8)", "(i64.const 0)");
+        let plugin = host.load("x", Manifest::default(), &wasm).unwrap();
+        assert!(host.refresh(&plugin, &RefreshContext::default()).is_err());
+    }
+
+    #[test]
+    fn passwords_only_come_through_secret() {
+        // `setting("password")` must hand back nothing; `secret("password")` must hand back the value.
+        let wasm = module(
+            r#"(import "lounge" "setting" (func $setting (param i32 i32) (result i64)))
+               (import "lounge" "secret" (func $secret (param i32 i32) (result i64)))"#,
+            r#"(global $heap (mut i32) (i32.const 4096)) (data (i32.const 1100) "password")"#,
+            "(local $p i32) (local.set $p (global.get $heap)) (global.set $heap (i32.add (global.get $heap) (i32.add (local.get $len) (i32.const 8)))) (local.get $p)",
+            "(if (i64.ne (call $setting (i32.const 1100) (i32.const 8)) (i64.const 0)) (then unreachable))
+             (if (i64.eq (call $secret (i32.const 1100) (i32.const 8)) (i64.const 0)) (then unreachable))
+             (i64.const 0)",
+        );
+        struct Both;
+        impl Services for Both {
+            fn kv_get(&self, _: &str, _: &str) -> Option<Vec<u8>> { None }
+            fn kv_set(&self, _: &str, _: &str, _: &[u8]) {}
+            fn kv_delete(&self, _: &str, _: &str) {}
+            fn secret(&self, _: &str, _: &str) -> Option<String> { Some("hunter2".into()) }
+            fn setting(&self, _: &str, _: &str) -> Option<String> { Some("hunter2".into()) }
+            fn log(&self, _: &str, _: i32, _: &str) {}
+            fn fetch(&self, _: &str, _: &HttpRequest) -> std::result::Result<HttpResponse, String> { Err("no".into()) }
+        }
+        let h = Host::new(Arc::new(Both), Limits::default());
+        let plugin = h.load("tv.lounge.test", secret_manifest(), &wasm).unwrap();
+        let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        // Both checks passed: the module got as far as returning nothing.
+        assert!(err.to_string().contains("returned nothing"), "{err}");
+    }
+
+    #[test]
+    fn a_log_line_cut_through_a_character_is_kept() {
+        let (host, services) = host();
+        let mut text = "a".repeat(MAX_LOG_BYTES - 1);
+        text.push('é');
+        text.push_str("bbbb");
+        let wasm = module(
+            r#"(import "lounge" "log" (func $log (param i32 i32 i32)))"#,
+            &format!(r#"(data (i32.const 8192) "{text}")"#),
+            "(i32.const 8)",
+            &format!("(call $log (i32.const 1) (i32.const 8192) (i32.const {})) (i64.const 0)", text.len()),
+        );
+        let plugin = host.load("x", Manifest::default(), &wasm).unwrap();
+        let _ = host.refresh(&plugin, &RefreshContext::default());
+        let logs = services.logs.lock();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0], "a".repeat(MAX_LOG_BYTES - 1));
+    }
+
+    #[test]
+    fn host_calls_cost_fuel_and_time() {
+        let (host, _) = host();
+        let wasm = module(
+            r#"(import "lounge" "now" (func $now (result i64)))"#,
+            "",
+            "(i32.const 8)",
+            "(loop $l (drop (call $now)) (br $l)) (i64.const 0)",
+        );
+        let h = Host::new(host.services.clone(), Limits { fuel: 5_000_000, ..Limits::default() });
+        let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
+        let started = Instant::now();
+        let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert!(err.to_string().contains("fuel"), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(1));
+
+        let h = Host::new(host.services.clone(), Limits { refresh_time: Duration::ZERO, ..Limits::default() });
+        let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
+        let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert!(err.to_string().contains("time limit"), "{err}");
+    }
+
+    #[test]
+    fn over_long_keys_are_an_error_not_a_collision() {
+        let (host, _) = host();
+        let key = "k".repeat(MAX_KEY_BYTES + 1);
+        let wasm = module(
+            r#"(import "lounge" "kv_set" (func $kv_set (param i32 i32 i32 i32)))"#,
+            &format!(r#"(data (i32.const 8192) "{key}")"#),
+            "(i32.const 8)",
+            &format!("(call $kv_set (i32.const 8192) (i32.const {}) (i32.const 8192) (i32.const 4)) (i64.const 0)", key.len()),
+        );
+        let plugin = host.load("x", Manifest::default(), &wasm).unwrap();
+        let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert!(err.to_string().contains("longer than"), "{err}");
     }
 
     #[test]
