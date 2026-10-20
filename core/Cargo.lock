@@ -1023,6 +1023,7 @@ dependencies = [
  "serde",
  "tempfile",
  "thiserror",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -1053,6 +1054,7 @@ version = "0.1.2"
 dependencies = [
  "blake3",
  "crossbeam-channel",
+ "ed25519-dalek",
  "image",
  "libc",
  "lounge-artwork",
@@ -1072,6 +1074,7 @@ dependencies = [
  "tracing-android",
  "tracing-subscriber",
  "uniffi",
+ "wat",
 ]
 
 [[package]]
@@ -1120,6 +1123,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

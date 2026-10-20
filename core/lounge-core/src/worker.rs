@@ -11,12 +11,22 @@ use lounge_artwork::{prepare_many, Prepared, Style};
 use lounge_graph::{Artwork, DeepLink, Item, ItemKind};
 use parking_lot::Mutex;
 use rayon::prelude::*;
-use std::collections::HashMap;
-use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 const SESSION_HISTORY: usize = 20;
+/// The longest the snapshot goes without a rebuild while the screen is on, so relative times
+/// such as "23 minutes left" and what is airing stay true.
+const TICK: Duration = Duration::from_secs(60);
+const HOUSEKEEPING_EVERY: Duration = Duration::from_secs(6 * 3600);
+const FIRST_HOUSEKEEPING: Duration = Duration::from_secs(180);
+/// Prepared pictures nothing has used for this long may be deleted.
+const ART_KEEP: Duration = Duration::from_secs(24 * 3600);
+/// Schedule entries this far ahead get their pictures now; later ones on a later ingest.
+const SCHEDULE_ART_AHEAD_MS: i64 = 12 * 3_600_000;
 
 pub(crate) enum Job {
     /// First job after open: read the stored items and usage into the graph.
@@ -27,12 +37,27 @@ pub(crate) enum Job {
     IngestSessions(Vec<SessionRecord>),
     /// A plugin's refresh finished; its artwork is already on disk.
     PluginItems { plugin: String, items: Vec<ReadyItem> },
+    /// Prepare the next few pictures of ingests that had too many to do at once.
+    MoreArt,
     Usage(Vec<AppUsage>),
     Command(LayoutCommand),
     Permissions(Permissions),
     UpdateNotice(Option<String>),
     UtcOffset(i32),
     Rebuild,
+    /// Delete prepared pictures and downloads nothing uses any more.
+    Housekeeping,
+}
+
+/// Ingests whose pictures did not all fit in one pass. Each pass prepares a few, publishes what
+/// it has, and queues the next, so layout commands and other ingests never wait for long.
+#[derive(Default)]
+pub(crate) struct PendingArt {
+    apps: Option<Vec<AppRecord>>,
+    /// The latest programme records, kept in `State::last_programs`, still want pictures.
+    programs: bool,
+    plugins: HashMap<String, Vec<ReadyItem>>,
+    queued: bool,
 }
 
 pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
@@ -40,14 +65,38 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
         .name("lounge-core".into())
         .spawn(move || {
             let mut utc_offset = inner.config.utc_offset_minutes;
-            while let Ok(job) = rx.recv() {
-                inner.queue_depth.fetch_sub(1, Ordering::Relaxed);
-                let mut pending = vec![job];
+            let mut next_change: Option<i64> = None;
+            let mut housekeeping_at = Instant::now() + FIRST_HOUSEKEEPING;
+            loop {
+                let screen_on = inner.screen_on.load(Ordering::Relaxed);
+                let now = Instant::now();
+                let mut wake = housekeeping_at;
+                if screen_on {
+                    let until_change = next_change
+                        .map(|at| Duration::from_millis((at - now_ms()).max(0) as u64 + 250))
+                        .unwrap_or(TICK)
+                        .min(TICK);
+                    wake = wake.min(now + until_change);
+                }
+                let first = match rx.recv_timeout(wake.saturating_duration_since(now)) {
+                    Ok(job) => {
+                        inner.queue_depth.fetch_sub(1, Ordering::Relaxed);
+                        Some(job)
+                    }
+                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => None,
+                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
+                };
+                let mut pending: Vec<Job> = first.into_iter().collect();
                 while let Ok(next) = rx.try_recv() {
                     inner.queue_depth.fetch_sub(1, Ordering::Relaxed);
                     pending.push(next);
                 }
-                let mut dirty = false;
+                if Instant::now() >= housekeeping_at {
+                    housekeeping_at = Instant::now() + HOUSEKEEPING_EVERY;
+                    pending.push(Job::Housekeeping);
+                }
+                // Nothing arrived: the clock moved on, so what the screen says may have too.
+                let mut dirty = pending.is_empty() && screen_on;
                 for job in pending {
                     match job {
                         Job::LoadGraph => {
@@ -78,6 +127,10 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                             if let Err(e) = ingest_plugin_items(&inner, &plugin, items) {
                                 tracing::error!("ingest plugin {plugin} failed: {e}");
                             }
+                            dirty = true;
+                        }
+                        Job::MoreArt => {
+                            more_art(&inner);
                             dirty = true;
                         }
                         Job::IngestSessions(sessions) => {
@@ -111,10 +164,11 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                             dirty = true;
                         }
                         Job::Rebuild => dirty = true,
+                        Job::Housekeeping => housekeeping(&inner),
                     }
                 }
                 if dirty {
-                    rebuild(&inner, utc_offset);
+                    next_change = rebuild(&inner, utc_offset);
                 }
             }
             tracing::info!("worker thread exiting");
@@ -145,20 +199,26 @@ fn load_graph(inner: &Inner) -> Result<(), lounge_store::StoreError> {
 // in the store keyed by the file's size and mtime so unchanged files cost one lookup.
 // ---------------------------------------------------------------------------
 
-struct ArtPlan {
+pub(crate) struct ArtPlan {
     wants: Vec<(String, Style)>,
     index: HashMap<(String, Style), usize>,
 }
 
+/// The pictures of one ingest: what is ready, and whether some sources had to wait.
+pub(crate) struct ArtDone {
+    pub results: Vec<Option<Prepared>>,
+    pub deferred: bool,
+}
+
 impl ArtPlan {
-    fn new() -> ArtPlan {
+    pub(crate) fn new() -> ArtPlan {
         ArtPlan {
             wants: Vec::new(),
             index: HashMap::new(),
         }
     }
 
-    fn want(&mut self, src: Option<&str>, style: Style) -> Option<usize> {
+    pub(crate) fn want(&mut self, src: Option<&str>, style: Style) -> Option<usize> {
         let src = src?;
         let key = (src.to_string(), style);
         if let Some(&i) = self.index.get(&key) {
@@ -170,39 +230,70 @@ impl ArtPlan {
         Some(i)
     }
 
-    fn run(self, state: &Mutex<State>) -> Vec<Option<Prepared>> {
-        let (art_dir, cached, threads) = {
+    /// Look everything up, then decode at most `sources` of the files that missed, in the order
+    /// they were asked for. The state lock is taken per lookup, never across the whole plan.
+    pub(crate) fn run(self, state: &Mutex<State>, sources: usize) -> ArtDone {
+        let (art_dir, threads) = {
             let st = state.lock();
-            let cached: Vec<Option<Prepared>> = self
-                .wants
-                .iter()
-                .map(|(src, style)| cached(&st.store, src, *style))
-                .collect();
-            (st.art_dir.clone(), cached, st.art_threads)
+            (st.art_dir.clone(), st.art_threads)
         };
-        let misses = cached.iter().filter(|c| c.is_none()).count();
-        if misses == 0 {
-            return cached;
-        }
-        // Every source that missed is decoded once and all its styles are cut from that decode.
-        let mut by_src: HashMap<&str, Vec<(usize, Style)>> = HashMap::new();
-        for (i, ((src, style), hit)) in self.wants.iter().zip(cached.iter()).enumerate() {
-            if hit.is_none() {
-                by_src.entry(src.as_str()).or_default().push((i, *style));
+        let mut signatures: HashMap<&str, Option<(u64, i64)>> = HashMap::new();
+        let mut prepared: Vec<Option<Prepared>> = Vec::with_capacity(self.wants.len());
+        let mut missed: Vec<bool> = Vec::with_capacity(self.wants.len());
+        for (src, style) in &self.wants {
+            let sig = *signatures.entry(src.as_str()).or_insert_with(|| lounge_artwork::file_signature(Path::new(src)).ok());
+            let Some((len, mtime)) = sig else {
+                prepared.push(None);
+                missed.push(false);
+                continue;
+            };
+            let json = state.lock().store.artwork_cached_json(&art_key(src, *style), len, mtime).ok().flatten();
+            match json.as_deref() {
+                // Known not to decode; it is tried again only when the file changes.
+                Some("null") => {
+                    prepared.push(None);
+                    missed.push(false);
+                }
+                Some(j) => match serde_json::from_str::<Prepared>(j) {
+                    Ok(p) if Path::new(&p.path).exists() => {
+                        prepared.push(Some(p));
+                        missed.push(false);
+                    }
+                    _ => {
+                        prepared.push(None);
+                        missed.push(true);
+                    }
+                },
+                None => {
+                    prepared.push(None);
+                    missed.push(true);
+                }
             }
         }
-        let groups: Vec<(&str, Vec<(usize, Style)>)> = by_src.into_iter().collect();
-        let work = |groups: &[(&str, Vec<(usize, Style)>)]| -> Vec<Vec<(usize, Option<Prepared>)>> {
+        // Every source that missed is decoded once and all its styles are cut from that decode.
+        let mut order: Vec<&str> = Vec::new();
+        let mut by_src: HashMap<&str, Vec<(usize, Style)>> = HashMap::new();
+        for (i, (src, style)) in self.wants.iter().enumerate() {
+            if missed[i] {
+                let group = by_src.entry(src.as_str()).or_default();
+                if group.is_empty() {
+                    order.push(src.as_str());
+                }
+                group.push((i, *style));
+            }
+        }
+        if order.is_empty() {
+            return ArtDone { results: prepared, deferred: false };
+        }
+        let deferred = order.len() > sources;
+        let groups: Vec<(&str, Vec<(usize, Style)>)> = order.into_iter().take(sources).map(|src| (src, by_src.remove(src).unwrap_or_default())).collect();
+        let work = |groups: &[(&str, Vec<(usize, Style)>)]| -> Vec<Vec<(usize, Result<Prepared, String>)>> {
             groups
                 .par_iter()
                 .map(|(src, styles)| {
                     let wanted: Vec<Style> = styles.iter().map(|(_, s)| *s).collect();
                     let results = prepare_many(Path::new(src), &art_dir, &wanted);
-                    styles
-                        .iter()
-                        .zip(results)
-                        .map(|((i, style), r)| (*i, r.map_err(|e| tracing::warn!("{} for {src}: {e}", style.slug())).ok()))
-                        .collect()
+                    styles.iter().zip(results).map(|((i, _), r)| (*i, r.map_err(|e| e.to_string()))).collect()
                 })
                 .collect()
         };
@@ -211,24 +302,37 @@ impl ArtPlan {
             Err(_) => work(&groups),
         };
         release_freed_memory();
-        let mut prepared = cached;
         let mut rows = Vec::new();
-        for (i, p) in done.into_iter().flatten() {
-            if let Some(p) = p {
-                let (src, style) = &self.wants[i];
-                if let Ok((len, mtime)) = lounge_artwork::file_signature(Path::new(src)) {
+        for (i, r) in done.into_iter().flatten() {
+            let (src, style) = &self.wants[i];
+            let Some(Some((len, mtime))) = signatures.get(src.as_str()).copied() else { continue };
+            match r {
+                Ok(p) => {
                     if let Ok(json) = serde_json::to_string(&p) {
-                        rows.push((format!("{src}#{}", style.slug()), len, mtime, json));
+                        rows.push((art_key(src, *style), len, mtime, json));
                     }
+                    prepared[i] = Some(p);
                 }
-                prepared[i] = Some(p);
+                Err(e) => {
+                    tracing::warn!("{} for {src}: {e}", style.slug());
+                    rows.push((art_key(src, *style), len, mtime, "null".to_string()));
+                }
             }
         }
         if let Err(e) = state.lock().store.artwork_put_many(&rows) {
             tracing::warn!("remember artwork: {e}");
         }
-        prepared
+        ArtDone { results: prepared, deferred }
     }
+}
+
+fn art_key(src: &str, style: Style) -> String {
+    format!("{src}#{}", style.slug())
+}
+
+/// How many source pictures one pass may decode: a couple of seconds' work on any TV.
+fn art_sources(state: &Mutex<State>) -> usize {
+    6 * state.lock().art_threads.max(1)
 }
 
 /// Returns pages freed after a batch of decodes to the system; otherwise they stay resident for the
@@ -244,13 +348,45 @@ fn release_freed_memory() {
     }
 }
 
-fn cached(store: &lounge_store::Store, src: &str, style: Style) -> Option<Prepared> {
-    let (len, mtime) = lounge_artwork::file_signature(Path::new(src)).ok()?;
-    let prepared: Option<Prepared> = store
-        .artwork_cached(&format!("{src}#{}", style.slug()), len, mtime)
-        .ok()
-        .flatten();
-    prepared.filter(|p| Path::new(&p.path).exists())
+/// Remember an ingest whose pictures are not all ready, and make sure a pass is queued.
+fn defer(inner: &Inner, f: impl FnOnce(&mut PendingArt)) {
+    let queue = {
+        let mut state = inner.state.lock();
+        f(&mut state.pending_art);
+        !std::mem::replace(&mut state.pending_art.queued, true)
+    };
+    if queue {
+        inner.enqueue_job(Job::MoreArt);
+    }
+}
+
+/// The next pass over every ingest still waiting for pictures.
+fn more_art(inner: &Inner) {
+    let pending = {
+        let mut state = inner.state.lock();
+        std::mem::take(&mut state.pending_art)
+    };
+    if let Some(apps) = pending.apps
+        && let Err(e) = ingest_apps(inner, apps)
+    {
+        tracing::error!("ingest apps failed: {e}");
+    }
+    if pending.programs {
+        let programs = inner.state.lock().last_programs.clone();
+        if let Err(e) = ingest_programs(inner, programs) {
+            tracing::error!("ingest programs failed: {e}");
+        }
+    }
+    for (plugin, items) in pending.plugins {
+        if let Err(e) = ingest_plugin_items(inner, &plugin, items) {
+            tracing::error!("ingest plugin {plugin} failed: {e}");
+        }
+    }
+}
+
+/// When each item of `source` was first seen, so a refresh never makes old things look new.
+fn first_seen(state: &State, source: &str) -> HashMap<String, i64> {
+    state.graph.items().filter(|it| it.source == source).filter_map(|it| Some((it.id.clone(), it.added_ms?))).collect()
 }
 
 fn pick<'a>(results: &'a [Option<Prepared>], idx: Option<usize>) -> Option<&'a Prepared> {
@@ -281,7 +417,8 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
             )
         })
         .collect();
-    let art = plan.run(&inner.state);
+    let done = plan.run(&inner.state, art_sources(&inner.state));
+    let art = done.results;
 
     let mut items = Vec::with_capacity(apps.len());
     for (app, (banner, hero, backdrop, icon)) in apps.iter().zip(wants) {
@@ -306,13 +443,19 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
         };
         items.push(it);
     }
-    let mut state = inner.state.lock();
-    let now = now_ms();
-    state.store.replace_items("apps", &items, now)?;
-    let usage = state.store.load_usage()?;
-    state.graph.replace_source("apps", items);
-    for (pkg, ms) in usage {
-        state.graph.set_usage(&pkg, ms);
+    let rows = lounge_store::encode_items(&items)?;
+    {
+        let mut state = inner.state.lock();
+        let now = now_ms();
+        state.store.replace_items_encoded("apps", &rows, now)?;
+        let usage = state.store.load_usage()?;
+        state.graph.replace_source("apps", items);
+        for (pkg, ms) in usage {
+            state.graph.set_usage(&pkg, ms);
+        }
+    }
+    if done.deferred {
+        defer(inner, |p| p.apps = Some(apps));
     }
     Ok(())
 }
@@ -334,28 +477,44 @@ struct ProgramArt {
 }
 
 fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lounge_store::StoreError> {
+    let now = now_ms();
+    let (enabled_channels, seen) = {
+        let state = inner.state.lock();
+        (state.graph.layout.enabled_channels.clone(), first_seen(&state, "tvprovider"))
+    };
     let mut plan = ArtPlan::new();
     let wants: Vec<ProgramArt> = programs
         .iter()
         .map(|p| {
+            // Pictures only for what can be on screen: preview rows the person switched on, and
+            // schedule entries airing in the next few hours.
+            let shown = match p.kind {
+                ProgramKind::Preview => p.channel_id.is_some_and(|c| enabled_channels.contains(&c)),
+                ProgramKind::Schedule => p.end_ms.is_none_or(|e| e > now) && p.start_ms.is_none_or(|s| s < now + SCHEDULE_ART_AHEAD_MS),
+                ProgramKind::WatchNext | ProgramKind::Channel => true,
+            };
+            if !shown {
+                return ProgramArt::default();
+            }
             // A 16:9 thumbnail is the landscape source when there is one; the poster is used
             // in its own orientation and as the Stage's framed art when it is portrait.
             let wide = p.thumbnail_path.as_deref().or(if p.poster_is_portrait { None } else { p.poster_path.as_deref() });
             let portrait = if p.poster_is_portrait { p.poster_path.as_deref() } else { None };
+            let schedule = p.kind == ProgramKind::Schedule;
             ProgramArt {
-                poster: plan.want(portrait, Style::Poster),
+                poster: if schedule { None } else { plan.want(portrait, Style::Poster) },
                 landscape: plan.want(wide.or(p.poster_path.as_deref()), Style::Landscape),
                 hero: plan.want(wide, Style::Hero),
                 hero_fit: plan.want(if wide.is_none() { portrait } else { None }, Style::HeroFit),
                 backdrop: plan.want(wide.or(portrait), Style::Backdrop),
                 band: plan.want(wide, Style::Band),
-                logo: plan.want(p.logo_path.as_deref(), Style::Logo),
+                logo: if schedule { None } else { plan.want(p.logo_path.as_deref(), Style::Logo) },
                 wallpaper: None,
             }
         })
         .collect();
-    let art = plan.run(&inner.state);
-    let now = now_ms();
+    let done = plan.run(&inner.state, art_sources(&inner.state));
+    let art = done.results;
 
     let mut items = Vec::with_capacity(programs.len());
     for (p, w) in programs.iter().zip(wants) {
@@ -414,13 +573,15 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
                 it.subtitle = p.subtitle.clone();
                 it.flags.watch_next = true;
                 it.progress = progress(p.position_ms, p.duration_ms);
-                it.last_used_ms = p.engaged_ms.or(Some(now));
-                it.added_ms = p.engaged_ms;
+                // Without an engagement time there is no telling when it was watched, so it
+                // sorts after everything that says.
+                it.last_used_ms = p.engaged_ms.filter(|&ms| ms > 0);
+                it.added_ms = it.last_used_ms;
             }
             ProgramKind::Preview => {
                 it.subtitle = p.subtitle.clone();
                 it.progress = progress(p.position_ms, p.duration_ms);
-                it.added_ms = Some(now);
+                it.added_ms = Some(seen.get(&p.id).copied().unwrap_or(now));
             }
             ProgramKind::Channel => {
                 it.subtitle = p.channel_number.clone();
@@ -438,9 +599,15 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
     // holds them and the database does not. Persisted items are encoded here, before the lock.
     let persisted: Vec<Item> = items.iter().filter(|it| !(it.kind == ItemKind::Program && it.airing_start_ms.is_some())).cloned().collect();
     let rows = lounge_store::encode_items(&persisted)?;
-    let mut state = inner.state.lock();
-    state.store.replace_items_encoded("tvprovider", &rows, now)?;
-    state.graph.replace_source("tvprovider", items);
+    {
+        let mut state = inner.state.lock();
+        state.store.replace_items_encoded("tvprovider", &rows, now)?;
+        state.graph.replace_source("tvprovider", items);
+        state.last_programs = programs;
+    }
+    if done.deferred {
+        defer(inner, |pending| pending.programs = true);
+    }
     Ok(())
 }
 
@@ -457,6 +624,17 @@ fn progress(position_ms: Option<i64>, duration_ms: Option<i64>) -> Option<f32> {
 
 fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Result<(), lounge_store::StoreError> {
     let source = format!("plugin:{plugin}");
+    let enabled = |state: &State| state.plugins.iter().any(|p| p.id == plugin && p.enabled);
+    // A refresh that finishes after the plugin was turned off or removed is dropped.
+    let seen = {
+        let state = inner.state.lock();
+        if !enabled(&state) {
+            return Ok(());
+        }
+        first_seen(&state, &source)
+    };
+    let mut ids = HashSet::new();
+    let ready: Vec<ReadyItem> = ready.into_iter().filter(|r| ids.insert(r.item.id.clone())).collect();
     let mut plan = ArtPlan::new();
     let wants: Vec<ProgramArt> = ready
         .iter()
@@ -479,7 +657,8 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             }
         })
         .collect();
-    let art = plan.run(&inner.state);
+    let done = plan.run(&inner.state, art_sources(&inner.state));
+    let art = done.results;
     let now = now_ms();
 
     let mut items = Vec::with_capacity(ready.len());
@@ -492,22 +671,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         let landscape = pick(&art, w.landscape);
         let hero = pick(&art, w.hero).or(pick(&art, w.hero_fit));
         let logo = pick(&art, w.logo);
-        let a = &p.action;
-        let deep_link = if let Some(url) = &a.play {
-            DeepLink::Play { url: url.clone(), title: a.title.clone().unwrap_or_else(|| p.title.clone()) }
-        } else if let (Some(uri), Some(pkg)) = (&a.view, &a.fallback_launch) {
-            DeepLink::ViewOrLaunch { uri: uri.clone(), package: pkg.clone() }
-        } else if let Some(uri) = &a.view {
-            DeepLink::ViewUri(uri.clone())
-        } else if let Some(pkg) = &a.launch {
-            DeepLink::LaunchApp { package: pkg.clone(), activity: String::new() }
-        } else if let Some(action) = &a.resolve {
-            DeepLink::PluginResolve { plugin: plugin.to_string(), action: action.clone() }
-        } else if p.kind == PluginItemKind::Wallpaper {
-            DeepLink::None
-        } else {
-            continue;
-        };
+        let Some(deep_link) = plugin_link(plugin, p) else { continue };
         let kind = match p.kind {
             PluginItemKind::Resume => ItemKind::Resume,
             PluginItemKind::Channel => ItemKind::Channel,
@@ -515,7 +679,9 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             PluginItemKind::Program | PluginItemKind::Schedule => ItemKind::Program,
             PluginItemKind::Screensaver => continue,
         };
-        let mut it = Item::content(&format!("plugin:{plugin}:{}", p.id), kind, &source, &p.title, deep_link);
+        let id = format!("plugin:{plugin}:{}", p.id);
+        let a = &p.action;
+        let mut it = Item::content(&id, kind, &source, &p.title, deep_link);
         it.owner = a.fallback_launch.clone().or_else(|| a.launch.clone());
         it.subtitle = p.subtitle.clone();
         it.season = p.season.clone();
@@ -523,7 +689,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         it.duration_ms = p.duration_ms;
         it.progress = p.progress.or_else(|| progress(p.position_ms, p.duration_ms));
         it.last_used_ms = p.last_used_ms;
-        it.added_ms = p.added_ms.or(Some(now));
+        it.added_ms = p.added_ms.or_else(|| seen.get(&id).copied()).or(Some(now));
         it.weight = p.weight;
         it.row = p.row.clone();
         it.flags.is_new = p.is_new;
@@ -561,10 +727,43 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         }
         items.push(it);
     }
-    let mut state = inner.state.lock();
-    state.store.replace_items(&source, &items, now)?;
-    state.graph.replace_source(&source, items);
+    let rows = lounge_store::encode_items(&items)?;
+    {
+        let mut state = inner.state.lock();
+        if !enabled(&state) {
+            return Ok(());
+        }
+        state.store.replace_items_encoded(&source, &rows, now)?;
+        state.graph.replace_source(&source, items);
+    }
+    if done.deferred {
+        let plugin = plugin.to_string();
+        defer(inner, move |pending| {
+            pending.plugins.insert(plugin, ready);
+        });
+    }
     Ok(())
+}
+
+/// What selecting a plugin item does. Wallpapers do nothing; a schedule entry without an action
+/// plays through its channel; anything else needs an action of its own.
+pub(crate) fn plugin_link(plugin: &str, p: &lounge_plugin_api::Item) -> Option<DeepLink> {
+    let a = &p.action;
+    Some(if let Some(url) = &a.play {
+        DeepLink::Play { url: url.clone(), title: a.title.clone().unwrap_or_else(|| p.title.clone()) }
+    } else if let (Some(uri), Some(pkg)) = (&a.view, &a.fallback_launch) {
+        DeepLink::ViewOrLaunch { uri: uri.clone(), package: pkg.clone() }
+    } else if let Some(uri) = &a.view {
+        DeepLink::ViewUri(uri.clone())
+    } else if let Some(pkg) = &a.launch {
+        DeepLink::LaunchApp { package: pkg.clone(), activity: String::new() }
+    } else if let Some(action) = &a.resolve {
+        DeepLink::PluginResolve { plugin: plugin.to_string(), action: action.clone() }
+    } else if p.kind == PluginItemKind::Wallpaper || (p.kind == PluginItemKind::Schedule && p.channel_id.is_some()) {
+        DeepLink::None
+    } else {
+        return None;
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -626,10 +825,12 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
             )
         })
         .collect();
-    let art = plan.run(&inner.state);
+    let art = plan.run(&inner.state, art_sources(&inner.state)).results;
     let now = now_ms();
 
     let mut items = Vec::new();
+    // Only something playing counts as using its app; a session paused yesterday does not.
+    let mut playing: Vec<(String, i64)> = Vec::new();
     let mut now_playing: Option<(NowPlaying, (bool, i64))> = None;
     for (s, (landscape, hero, hero_fit, backdrop, band)) in titled.iter().zip(wants) {
         let title = s.title.clone().unwrap_or_default();
@@ -657,6 +858,9 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
         it.duration_ms = s.duration_ms;
         it.last_used_ms = Some(s.updated_ms);
         it.added_ms = Some(s.updated_ms);
+        if s.status == PlaybackStatus::Playing {
+            playing.push((s.package.clone(), s.updated_ms.min(now)));
+        }
         it.art_aspect = art_aspect;
         let band = if art_aspect >= 1.2 { pick(&art, band) } else { None };
         it.artwork = Artwork {
@@ -697,14 +901,11 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
         }
     }
 
+    let offset = inner.utc_offset_minutes.load(Ordering::Relaxed);
     let mut state = inner.state.lock();
     if !items.is_empty() {
         state.store.upsert_items(&items, now)?;
-        let usage: Vec<(String, i64)> = items.iter().filter_map(|it| Some((it.owner.clone()?, it.last_used_ms?))).collect();
-        state.store.set_usage(&usage)?;
-        for (pkg, ms) in &usage {
-            state.graph.set_usage(pkg, *ms);
-        }
+        record_usage(&mut state, &playing, offset)?;
         for it in items {
             state.graph.upsert(it);
         }
@@ -732,10 +933,22 @@ fn slug(s: &str) -> String {
 
 fn apply_usage(inner: &Inner, usage: Vec<AppUsage>) -> Result<(), lounge_store::StoreError> {
     let pairs: Vec<(String, i64)> = usage.into_iter().map(|u| (u.package, u.last_used_ms)).collect();
+    let offset = inner.utc_offset_minutes.load(Ordering::Relaxed);
     let mut state = inner.state.lock();
-    state.store.set_usage(&pairs)?;
-    for (pkg, ms) in &pairs {
+    record_usage(&mut state, &pairs, offset)
+}
+
+/// Remember when apps were used, in the store, the graph and the habits behind explanations.
+fn record_usage(state: &mut State, usage: &[(String, i64)], utc_offset_minutes: i32) -> Result<(), lounge_store::StoreError> {
+    if usage.is_empty() {
+        return Ok(());
+    }
+    let counted = state.store.set_usage(usage, |ms| engine::local_hour(ms, utc_offset_minutes))?;
+    for (pkg, ms) in usage {
         state.graph.set_usage(pkg, *ms);
+    }
+    for (pkg, hour) in counted {
+        state.habits.entry(pkg).or_insert([0; 24])[hour as usize % 24] += 1;
     }
     Ok(())
 }
@@ -761,22 +974,30 @@ fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::
         }
         LayoutCommand::EnableChannel { channel_id } => {
             state.graph.layout.enabled_channels.insert(channel_id);
+            // Its programmes had no pictures while the row was off; a pass prepares them now.
+            state.pending_art.programs = true;
+            if !std::mem::replace(&mut state.pending_art.queued, true) {
+                inner.enqueue_job(Job::MoreArt);
+            }
         }
         LayoutCommand::DisableChannel { channel_id } => {
             state.graph.layout.enabled_channels.remove(&channel_id);
         }
     }
+    state.graph.layout.normalise();
     let layout = state.graph.layout.clone();
     state.store.save_layout(&layout)?;
     Ok(())
 }
 
-fn rebuild(inner: &Inner, utc_offset_minutes: i32) {
+/// Build and publish the snapshot. Returns when what is airing next changes, if anything does.
+fn rebuild(inner: &Inner, utc_offset_minutes: i32) -> Option<i64> {
     let started = std::time::Instant::now();
-    let snapshot = {
+    let (snapshot, next_change) = {
         let mut state = inner.state.lock();
         state.revision += 1;
-        engine::build(&state, &inner.config, utc_offset_minutes)
+        let snapshot = engine::build(&state, &inner.config, utc_offset_minutes);
+        (snapshot, state.graph.next_airing_change(now_ms()))
     };
     inner
         .last_build_micros
@@ -785,10 +1006,14 @@ fn rebuild(inner: &Inner, utc_offset_minutes: i32) {
     // listener, no recomposition. Revision and time stamp are not part of "what the screen shows".
     let unchanged = {
         let prev = inner.snapshot.read();
-        prev.revision > 0 && prev.stage == snapshot.stage && prev.rows == snapshot.rows && prev.now_playing == snapshot.now_playing
+        prev.revision > 0
+            && prev.stage == snapshot.stage
+            && prev.rows == snapshot.rows
+            && prev.now_playing == snapshot.now_playing
+            && prev.wallpapers == snapshot.wallpapers
     };
     if unchanged {
-        return;
+        return next_change;
     }
     match serde_json::to_string(&snapshot) {
         Ok(json) => {
@@ -807,6 +1032,54 @@ fn rebuild(inner: &Inner, utc_offset_minutes: i32) {
     if let Some(c) = inner.companion.lock().as_ref() {
         c.notify();
     }
+    next_change
+}
+
+/// Delete prepared pictures no item uses and that have not been written for a day, forget the
+/// store's memory of them, and drop art folders of plugins that are gone.
+fn housekeeping(inner: &Inner) {
+    let started = Instant::now();
+    let (art_dir, used, installed) = {
+        let state = inner.state.lock();
+        let used: HashSet<PathBuf> = state.graph.items().flat_map(|it| artwork_paths(&it.artwork)).map(PathBuf::from).collect();
+        let installed: Vec<String> = state.plugins.iter().map(|p| p.id.clone()).collect();
+        (state.art_dir.clone(), used, installed)
+    };
+    let cutoff = std::time::SystemTime::now() - ART_KEEP;
+    let mut removed = 0usize;
+    if let Ok(entries) = std::fs::read_dir(&art_dir) {
+        for e in entries.flatten() {
+            let path = e.path();
+            if used.contains(&path) {
+                continue;
+            }
+            let old = e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < cutoff);
+            if old && std::fs::remove_file(&path).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    let rows = inner.state.lock().store.artwork_rows().unwrap_or_default();
+    let forget: Vec<String> = rows
+        .into_iter()
+        .filter(|(key, json)| {
+            let source_gone = key.rsplit_once('#').is_none_or(|(src, _)| !Path::new(src).exists());
+            let output_gone = serde_json::from_str::<Prepared>(json).is_ok_and(|p| !Path::new(&p.path).exists());
+            source_gone || output_gone
+        })
+        .map(|(key, _)| key)
+        .collect();
+    if !forget.is_empty()
+        && let Err(e) = inner.state.lock().store.artwork_forget(&forget)
+    {
+        tracing::warn!("forget artwork: {e}");
+    }
+    inner.plugins.prune_orphan_art(&installed);
+    tracing::info!("housekeeping: {removed} pictures and {} records removed in {} ms", forget.len(), started.elapsed().as_millis());
+}
+
+fn artwork_paths(a: &Artwork) -> impl Iterator<Item = &String> {
+    [&a.poster, &a.landscape, &a.hero, &a.backdrop, &a.logo, &a.band, &a.wallpaper].into_iter().flatten()
 }
 
 #[cfg(test)]

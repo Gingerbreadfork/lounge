@@ -171,6 +171,7 @@ impl CompanionActions for CoreActions {
             if let Some(channels) = patch.enabled_channels {
                 state.graph.layout.enabled_channels = channels.into_iter().collect();
             }
+            state.graph.layout.normalise();
             let layout = state.graph.layout.clone();
             state.store.save_layout(&layout).map_err(|e| e.to_string())?;
         }
@@ -196,7 +197,7 @@ impl CompanionActions for CoreActions {
                 if !inner.state.lock().plugins.iter().any(|p| p.id == id) {
                     return Err("plugin is not installed".into());
                 }
-                let _ = inner.plugins.tx.send(crate::plugins::PluginJob::Refresh(id.to_string()));
+                inner.plugins.refresh_soon(id);
             }
             "remove" => inner.plugin_remove(id),
             other => return Err(format!("unknown command {other}")),
@@ -259,10 +260,12 @@ impl CompanionActions for CoreActions {
             return Err(format!("backup version {} is not supported", backup.version));
         }
         let inner = self.inner()?;
+        let mut layout = backup.layout.clone();
+        layout.normalise();
         {
             let mut state = inner.state.lock();
-            state.graph.layout = backup.layout.clone();
-            state.store.save_layout(&backup.layout).map_err(|e| e.to_string())?;
+            state.graph.layout = layout.clone();
+            state.store.save_layout(&layout).map_err(|e| e.to_string())?;
             for p in &backup.plugins {
                 for (k, v) in &p.settings {
                     let _ = state.store.plugin_setting_set(&p.id, k, Some(v));
@@ -292,7 +295,9 @@ impl CompanionActions for CoreActions {
     fn download(&self, url: &str, into: &Path) -> Result<(), String> {
         let dir = into.parent().ok_or("bad path")?;
         // A bundle the user asked for by address, from the phone: any host they named is fine.
-        let fetched = lounge_plugins::http::Fetcher::new().download(url, dir, 16 * 1024 * 1024, &|_| true).map_err(|e| e.to_string())?;
-        std::fs::rename(&fetched, into).map_err(|e| e.to_string())
+        let fetched = lounge_plugins::http::Fetcher::new()
+            .download(url, dir, 16 * 1024 * 1024, std::time::Duration::from_secs(20), &|_| true)
+            .map_err(|e| e.to_string())?;
+        std::fs::rename(&fetched.path, into).map_err(|e| e.to_string())
     }
 }

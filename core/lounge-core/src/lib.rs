@@ -7,6 +7,7 @@ mod companion;
 mod engine;
 mod plugins;
 mod screensavers;
+mod search;
 mod worker;
 
 use lounge_graph::Graph;
@@ -569,6 +570,8 @@ pub(crate) struct Inner {
     pub plugins: Arc<plugins::PluginManager>,
     pub companion: Mutex<Option<lounge_companion::Companion>>,
     pub started_ms: i64,
+    /// What the tiles of the latest plugin search open, by tile id.
+    pub search_links: Mutex<std::collections::HashMap<String, lounge_graph::DeepLink>>,
 }
 
 impl Inner {
@@ -595,6 +598,12 @@ pub(crate) struct State {
     pub loaded: bool,
     /// Installed plugins with their manifests, for rows and refresh scheduling.
     pub plugins: Vec<plugins::PluginEntry>,
+    /// How often each app was opened in each local hour, for honest "usually" explanations.
+    pub habits: std::collections::HashMap<String, [u32; 24]>,
+    /// Ingests whose pictures are still being prepared, a few at a time.
+    pub pending_art: worker::PendingArt,
+    /// The latest TvProvider records, for preparing pictures later.
+    pub last_programs: Vec<ProgramRecord>,
 }
 
 #[derive(uniffi::Object)]
@@ -628,7 +637,8 @@ impl Core {
         let art_dir = lounge_artwork::out_dir_for(&PathBuf::from(&config.cache_dir));
         let art_threads = match config.tier { DeviceTier::A => 2, _ => 1 };
         let plugin_entries = plugins::entries_from_rows(&store.plugins()?);
-        let (plugin_manager, plugin_rx, plugin_services) =
+        let habits = store.load_habits()?;
+        let (plugin_manager, refresh_rx, calls_rx, plugin_services) =
             plugins::PluginManager::new(&PathBuf::from(&config.data_dir), &PathBuf::from(&config.cache_dir));
         let utc_offset = config.utc_offset_minutes;
 
@@ -647,6 +657,9 @@ impl Core {
                 now_playing: None,
                 loaded: false,
                 plugins: plugin_entries,
+                habits,
+                pending_art: Default::default(),
+                last_programs: Vec::new(),
             }),
             snapshot: RwLock::new(snapshot),
             snapshot_json: Mutex::new(String::new()),
@@ -662,11 +675,12 @@ impl Core {
             plugins: plugin_manager,
             companion: Mutex::new(None),
             started_ms: now_ms(),
+            search_links: Mutex::new(std::collections::HashMap::new()),
         });
         inner.queue_depth.fetch_add(1, Ordering::Relaxed);
         let _ = inner.tx.send(worker::Job::LoadGraph);
         worker::spawn(Arc::clone(&inner), rx);
-        plugins::spawn(Arc::clone(&inner), plugin_rx, plugin_services);
+        plugins::spawn(Arc::clone(&inner), refresh_rx, calls_rx, plugin_services);
         tracing::info!("core opened, revision {}", inner.state.lock().revision);
         Ok(Arc::new(Core { inner }))
     }
@@ -854,7 +868,15 @@ impl Core {
 
     pub fn refresh_plugin(&self, id: String) {
         self.count();
-        let _ = self.inner.plugins.tx.send(plugins::PluginJob::Refresh(id));
+        self.inner.plugins.refresh_soon(&id);
+    }
+
+    /// Ask the enabled search plugins about `query`: one row per plugin that found something.
+    /// It can take a few seconds, so call it off the main thread; when a newer search starts,
+    /// one still waiting returns nothing.
+    pub fn search_plugins(&self, query: String) -> Vec<Row> {
+        self.count();
+        search::run(&self.inner, query.trim())
     }
 
     /// The plugin's recent log lines, oldest first.

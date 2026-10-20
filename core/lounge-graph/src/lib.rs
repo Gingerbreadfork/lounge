@@ -227,6 +227,18 @@ impl Layout {
         "allapps",
     ];
 
+    /// Drop repeats from the ordered lists, keeping each entry's first place; the home keys rows
+    /// and tiles by id, so a repeat must never reach it.
+    pub fn normalise(&mut self) {
+        fn dedupe(v: &mut Vec<String>) {
+            let mut seen = HashSet::new();
+            v.retain(|x| seen.insert(x.clone()));
+        }
+        dedupe(&mut self.row_order);
+        dedupe(&mut self.pinned_apps);
+        dedupe(&mut self.stage_pins);
+    }
+
     pub fn row_order_or_default(&self) -> Vec<String> {
         if self.row_order.is_empty() {
             Self::DEFAULT_ROWS.iter().map(|s| s.to_string()).collect()
@@ -243,7 +255,8 @@ pub struct Graph {
 }
 
 impl Graph {
-    pub fn new(layout: Layout) -> Graph {
+    pub fn new(mut layout: Layout) -> Graph {
+        layout.normalise();
         Graph {
             items: HashMap::new(),
             layout,
@@ -328,6 +341,7 @@ impl Graph {
 
     pub fn set_row_order(&mut self, rows: Vec<String>) {
         self.layout.row_order = rows;
+        self.layout.normalise();
     }
 
     pub fn reset_layout(&mut self) {
@@ -473,6 +487,22 @@ impl Graph {
         out
     }
 
+    /// The next moment after `now_ms` when a programme starts or ends.
+    pub fn next_airing_change(&self, now_ms: i64) -> Option<i64> {
+        self.items
+            .values()
+            .filter(|it| it.kind == ItemKind::Program)
+            .flat_map(|it| [it.airing_start_ms, it.airing_end_ms])
+            .flatten()
+            .filter(|&t| t > now_ms)
+            .min()
+    }
+
+    /// The channel a schedule entry belongs to.
+    pub fn channel_for(&self, channel_id: i64) -> Option<&Item> {
+        self.items.values().find(|it| it.kind == ItemKind::Channel && it.channel_id == Some(channel_id))
+    }
+
     /// What is airing on `channel_id` at `now_ms`, if the schedule says.
     pub fn airing_now(&self, channel_id: i64, now_ms: i64) -> Option<&Item> {
         self.items
@@ -544,6 +574,9 @@ impl Graph {
     pub fn stage_candidates(&self, cap: usize) -> Vec<&Item> {
         let mut out: Vec<&Item> = Vec::new();
         for id in &self.layout.stage_pins {
+            if out.len() >= cap {
+                break;
+            }
             if let Some(it) = self.items.get(id) {
                 if !self.is_hidden(&it.id) {
                     out.push(it);
@@ -695,6 +728,42 @@ mod tests {
         assert_eq!(g.airing_now(2, 150).map(|i| i.title.as_str()), Some("News"));
         assert!(g.airing_now(2, 250).is_none());
         assert_eq!(g.schedule(2, 0, 1000).len(), 1);
+    }
+
+    #[test]
+    fn layouts_never_repeat_an_entry() {
+        let mut l = Layout { row_order: vec!["apps".into(), "live".into(), "apps".into()], pinned_apps: vec!["a".into(), "a".into()], stage_pins: vec!["x".into(), "y".into(), "x".into()], ..Default::default() };
+        l.normalise();
+        assert_eq!(l.row_order, vec!["apps", "live"]);
+        assert_eq!(l.pinned_apps, vec!["a"]);
+        assert_eq!(l.stage_pins, vec!["x", "y"]);
+        let mut g = Graph::new(Layout::default());
+        g.set_row_order(vec!["a".into(), "a".into()]);
+        assert_eq!(g.layout.row_order, vec!["a"]);
+    }
+
+    #[test]
+    fn stage_pins_respect_the_cap() {
+        let mut g = Graph::default();
+        let apps: Vec<Item> = (0..5).map(|i| app(&format!("p{i}"), "A", None)).collect();
+        g.replace_source("apps", apps);
+        g.layout.stage_pins = (0..5).map(|i| format!("app:p{i}")).collect();
+        assert_eq!(g.stage_candidates(3).len(), 3);
+    }
+
+    #[test]
+    fn the_next_change_is_the_nearest_boundary() {
+        let mut g = Graph::default();
+        let mut a = Item::content("p:1", ItemKind::Program, "t", "A", DeepLink::None);
+        a.airing_start_ms = Some(100);
+        a.airing_end_ms = Some(200);
+        let mut b = Item::content("p:2", ItemKind::Program, "t", "B", DeepLink::None);
+        b.airing_start_ms = Some(200);
+        b.airing_end_ms = Some(400);
+        g.replace_source("t", vec![a, b]);
+        assert_eq!(g.next_airing_change(150), Some(200));
+        assert_eq!(g.next_airing_change(250), Some(400));
+        assert_eq!(g.next_airing_change(400), None);
     }
 
     #[test]

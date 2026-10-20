@@ -32,8 +32,9 @@ fn normalise(title: &str) -> String {
         .to_lowercase()
 }
 
-/// Why an item is in the spotlight, in the product's voice.
-pub fn explanation(item: &Item, now_ms: i64, hour_local: u32) -> Option<String> {
+/// Why an item is in the spotlight, in the product's voice. `source_name` is what to call the
+/// item's source, such as Jellyfin; `habit` counts the app's sittings in each local hour.
+pub fn explanation(item: &Item, now_ms: i64, hour_local: u32, source_name: &str, habit: Option<&[u32; 24]>) -> Option<String> {
     if item.kind == ItemKind::MediaSession {
         return item.last_used_ms.map(|used| format!("You played this {}", when_word(now_ms - used)));
     }
@@ -43,28 +44,28 @@ pub fn explanation(item: &Item, now_ms: i64, hour_local: u32) -> Option<String> 
     if let Some(added) = item.added_ms {
         let age = now_ms - added;
         if (0..86_400_000).contains(&age) && !matches!(item.source.as_str(), "apps" | "tvprovider" | "sessions" | "inputs") {
-            return Some(format!("Added to {} today", source_label(&item.source)));
+            return Some(format!("Added to {source_name} today"));
         }
     }
     if item.progress.is_some() {
         return Some("You were watching this".to_string());
     }
-    if let Some(used) = item.last_used_ms {
-        let age = now_ms - used;
-        if age < 3 * 86_400_000 {
-            return Some(format!("You usually open this around {}", clock_word(hour_local)));
+    if let Some(hour) = habit.and_then(usual_hour) {
+        let apart = (hour as i32 - hour_local as i32).rem_euclid(24);
+        if apart <= 1 || apart >= 23 {
+            let verb = if item.flags.is_game || item.kind == ItemKind::Game { "play" } else { "watch" };
+            return Some(format!("Because you {verb} at {}", clock_word(hour)));
         }
     }
     None
 }
 
-fn source_label(source: &str) -> &str {
-    match source {
-        "jellyfin" => "Jellyfin",
-        "plex" => "Plex",
-        "emby" => "Emby",
-        other => other,
-    }
+/// The hour of day an app is usually opened, when there is a real pattern: at least three
+/// sittings in that hour and two in five of all sittings.
+pub fn usual_hour(habit: &[u32; 24]) -> Option<u32> {
+    let total: u32 = habit.iter().sum();
+    let (hour, &count) = habit.iter().enumerate().max_by_key(|(h, c)| (**c, std::cmp::Reverse(*h)))?;
+    (count >= 3 && count * 5 >= total * 2).then_some(hour as u32)
 }
 
 fn when_word(age_ms: i64) -> &'static str {
@@ -116,6 +117,33 @@ mod tests {
         let mut v = vec![&a, &b];
         dedupe_by_title(&mut v);
         assert_eq!(v.len(), 1);
+    }
+
+    #[test]
+    fn habits_need_a_real_pattern() {
+        let mut h = [0u32; 24];
+        h[21] = 2;
+        assert_eq!(usual_hour(&h), None);
+        h[21] = 4;
+        h[9] = 2;
+        assert_eq!(usual_hour(&h), Some(21));
+        h[13] = 9;
+        assert_eq!(usual_hour(&h), Some(13));
+        let even = [1u32; 24];
+        assert_eq!(usual_hour(&even), None);
+    }
+
+    #[test]
+    fn explanations_say_only_what_is_known() {
+        let mut app = it("Netflix", Some(1_000));
+        let mut habit = [0u32; 24];
+        habit[21] = 5;
+        assert_eq!(explanation(&app, 2_000, 21, "Apps", Some(&habit)).as_deref(), Some("Because you watch at 9 pm"));
+        assert_eq!(explanation(&app, 2_000, 3, "Apps", Some(&habit)), None);
+        assert_eq!(explanation(&app, 2_000, 21, "Apps", None), None);
+        app.source = "plugin:tv.lounge.jellyfin".into();
+        app.added_ms = Some(1_500);
+        assert_eq!(explanation(&app, 2_000, 21, "Jellyfin", None).as_deref(), Some("Added to Jellyfin today"));
     }
 
     #[test]

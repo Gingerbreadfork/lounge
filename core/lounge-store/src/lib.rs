@@ -88,6 +88,12 @@ CREATE TABLE IF NOT EXISTS plugin_settings (
     value TEXT NOT NULL,
     PRIMARY KEY (plugin, key)
 );
+CREATE TABLE IF NOT EXISTS usage_hours (
+    package TEXT NOT NULL,
+    hour INTEGER NOT NULL,
+    count INTEGER NOT NULL,
+    PRIMARY KEY (package, hour)
+);
 "#;
 
 const SCHEMA_VERSION: i64 = 3;
@@ -214,8 +220,9 @@ impl Store {
         let tx = self.conn.transaction()?;
         tx.execute("DELETE FROM items WHERE source = ?1", params![source])?;
         {
+            // A repeated id keeps its first row rather than failing the whole write.
             let mut stmt = tx.prepare_cached(
-                "INSERT INTO items(id, source, kind, json, updated_ms) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO items(id, source, kind, json, updated_ms) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(id) DO NOTHING",
             )?;
             for r in rows {
                 stmt.execute(params![r.id, source, r.kind, r.json, now_ms])?;
@@ -265,29 +272,73 @@ impl Store {
         Ok(removed)
     }
 
+    /// Every stored item this build can read. A row it cannot read, such as one a newer version
+    /// wrote, is skipped rather than failing the load.
     pub fn load_items(&self) -> Result<Vec<Item>> {
-        let mut stmt = self.conn.prepare("SELECT json FROM items")?;
-        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        let mut stmt = self.conn.prepare("SELECT id, json FROM items")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         let mut out = Vec::new();
-        for json in rows {
-            out.push(serde_json::from_str(&json?)?);
+        let mut unreadable = 0;
+        for row in rows {
+            let (id, json) = row?;
+            match serde_json::from_str(&json) {
+                Ok(item) => out.push(item),
+                Err(e) => {
+                    unreadable += 1;
+                    if unreadable == 1 {
+                        tracing::warn!("stored item {id} is unreadable: {e}");
+                    }
+                }
+            }
+        }
+        if unreadable > 1 {
+            tracing::warn!("{unreadable} stored items were unreadable and skipped");
         }
         Ok(out)
     }
 
-    pub fn set_usage(&mut self, usage: &[(String, i64)]) -> Result<()> {
+    /// Record when apps were last used. A use newer than the one stored also counts towards the
+    /// app's habit at `local_hour(ms)`; each package and hour counted is returned.
+    pub fn set_usage(&mut self, usage: &[(String, i64)], local_hour: impl Fn(i64) -> u32) -> Result<Vec<(String, u32)>> {
         let tx = self.conn.transaction()?;
+        let mut counted = Vec::new();
         {
+            let mut prev = tx.prepare("SELECT last_used_ms FROM app_usage WHERE package = ?1")?;
             let mut stmt = tx.prepare(
                 "INSERT INTO app_usage(package, last_used_ms) VALUES (?1, ?2)
                  ON CONFLICT(package) DO UPDATE SET last_used_ms = MAX(last_used_ms, excluded.last_used_ms)",
             )?;
+            let mut habit = tx.prepare(
+                "INSERT INTO usage_hours(package, hour, count) VALUES (?1, ?2, 1)
+                 ON CONFLICT(package, hour) DO UPDATE SET count = count + 1",
+            )?;
             for (pkg, ms) in usage {
+                let before: Option<i64> = prev.query_row(params![pkg], |r| r.get(0)).optional()?;
+                // Uses less than ten minutes apart are one sitting, not two.
+                if before.is_none_or(|b| *ms > b + 600_000) {
+                    let hour = local_hour(*ms) % 24;
+                    habit.execute(params![pkg, hour])?;
+                    counted.push((pkg.clone(), hour));
+                }
                 stmt.execute(params![pkg, ms])?;
             }
         }
         tx.commit()?;
-        Ok(())
+        Ok(counted)
+    }
+
+    /// How many times each app was opened in each local hour.
+    pub fn load_habits(&self) -> Result<std::collections::HashMap<String, [u32; 24]>> {
+        let mut stmt = self.conn.prepare("SELECT package, hour, count FROM usage_hours")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?)))?;
+        let mut out: std::collections::HashMap<String, [u32; 24]> = std::collections::HashMap::new();
+        for r in rows {
+            let (pkg, hour, count) = r?;
+            if (0..24).contains(&hour) {
+                out.entry(pkg).or_insert([0; 24])[hour as usize] = count.max(0) as u32;
+            }
+        }
+        Ok(out)
     }
 
     pub fn load_usage(&self) -> Result<Vec<(String, i64)>> {
@@ -298,6 +349,39 @@ impl Store {
             out.push(r?);
         }
         Ok(out)
+    }
+
+    /// The remembered result for a source as stored, unparsed: a prepared picture's JSON, or
+    /// `null` for a source that could not be prepared.
+    pub fn artwork_cached_json(&self, src_path: &str, src_len: u64, src_mtime_ms: i64) -> Result<Option<String>> {
+        let mut stmt = self.conn.prepare_cached("SELECT src_len, src_mtime_ms, out_json FROM artwork WHERE src_path = ?1")?;
+        let row: Option<(i64, i64, String)> = stmt
+            .query_row(params![src_path], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .optional()?;
+        Ok(row.filter(|(len, mtime, _)| *len == src_len as i64 && *mtime == src_mtime_ms).map(|(_, _, json)| json))
+    }
+
+    /// Every remembered artwork row, as its source key and JSON.
+    pub fn artwork_rows(&self) -> Result<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare("SELECT src_path, out_json FROM artwork")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    pub fn artwork_forget(&mut self, keys: &[String]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare_cached("DELETE FROM artwork WHERE src_path = ?1")?;
+            for k in keys {
+                stmt.execute(params![k])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn artwork_cached<T: DeserializeOwned>(
@@ -430,6 +514,13 @@ impl Store {
         Ok(())
     }
 
+    pub fn plugin_setting(&self, plugin: &str, key: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT value FROM plugin_settings WHERE plugin = ?1 AND key = ?2", params![plugin, key], |r| r.get(0))
+            .optional()?)
+    }
+
     pub fn plugin_settings(&self, plugin: &str) -> Result<Vec<(String, String)>> {
         let mut stmt = self.conn.prepare("SELECT key, value FROM plugin_settings WHERE plugin = ?1")?;
         let rows = stmt.query_map(params![plugin], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
@@ -525,9 +616,43 @@ mod tests {
     #[test]
     fn usage_keeps_max() {
         let mut s = Store::open_in_memory().unwrap();
-        s.set_usage(&[("p".into(), 10)]).unwrap();
-        s.set_usage(&[("p".into(), 5)]).unwrap();
+        s.set_usage(&[("p".into(), 10)], |_| 0).unwrap();
+        s.set_usage(&[("p".into(), 5)], |_| 0).unwrap();
         assert_eq!(s.load_usage().unwrap(), vec![("p".to_string(), 10)]);
+    }
+
+    #[test]
+    fn habits_count_each_sitting_once() {
+        let mut s = Store::open_in_memory().unwrap();
+        let hour = |ms: i64| ((ms / 3_600_000) % 24) as u32;
+        let nine = 21 * 3_600_000;
+        assert_eq!(s.set_usage(&[("p".into(), nine)], hour).unwrap(), vec![("p".to_string(), 21)]);
+        // The same sitting reported again, and a few minutes later, counts once.
+        assert!(s.set_usage(&[("p".into(), nine)], hour).unwrap().is_empty());
+        assert!(s.set_usage(&[("p".into(), nine + 300_000)], hour).unwrap().is_empty());
+        s.set_usage(&[("p".into(), nine + 86_400_000)], hour).unwrap();
+        assert_eq!(s.load_habits().unwrap()["p"][21], 2);
+    }
+
+    #[test]
+    fn a_repeated_id_does_not_fail_the_write() {
+        let mut s = Store::open_in_memory().unwrap();
+        let mut a = Item::app("a", "A", "First");
+        a.source = "plugin:x".into();
+        let mut b = a.clone();
+        b.title = "Second".into();
+        s.replace_items("plugin:x", &[a, b], 1).unwrap();
+        let items = s.load_items().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "First");
+    }
+
+    #[test]
+    fn unreadable_rows_are_skipped() {
+        let mut s = Store::open_in_memory().unwrap();
+        s.replace_items("apps", &[Item::app("a", "A", "A")], 1).unwrap();
+        s.conn.execute("INSERT INTO items(id, source, kind, json, updated_ms) VALUES ('z', 'x', 'Future', '{\"kind\":\"Hologram\"}', 1)", []).unwrap();
+        assert_eq!(s.load_items().unwrap().len(), 1);
     }
 
     #[test]

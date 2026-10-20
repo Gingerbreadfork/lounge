@@ -12,6 +12,7 @@ pub(crate) struct BuildIndex<'a> {
     airing: HashMap<i64, &'a Item>,
     previews: Vec<(i64, String, Vec<&'a Item>)>,
     plugin_names: HashMap<&'a str, &'a str>,
+    habits: &'a HashMap<String, [u32; 24]>,
 }
 
 impl<'a> BuildIndex<'a> {
@@ -20,6 +21,7 @@ impl<'a> BuildIndex<'a> {
             airing: state.graph.airing_index(now),
             previews: state.graph.preview_channels(),
             plugin_names: state.plugins.iter().map(|p| (p.id.as_str(), p.manifest.name.as_str())).collect(),
+            habits: &state.habits,
         }
     }
 
@@ -190,7 +192,8 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
 /// One plugin row ("<plugin id>:<row id>") with the items the plugin put there, if the plugin is on.
 fn plugin_row(state: &State, key: &str) -> Option<Row> {
     let graph = &state.graph;
-    let (pid, rid) = key.rsplit_once(':')?;
+    // Plugin ids never hold a colon; row ids may.
+    let (pid, rid) = key.split_once(':')?;
     let p = state.plugins.iter().find(|p| p.id == pid && p.enabled)?;
     let spec = p.manifest.rows.iter().find(|r| r.id == rid)?;
     let items = graph.plugin_row(&p.id, &spec.id);
@@ -578,7 +581,11 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
             action: format!("open:{}", it.id),
         },
         secondary,
-        explanation: lounge_graph::rank::explanation(it, now, hour_local),
+        explanation: {
+            let source_name = it.source.strip_prefix("plugin:").map(|id| index.plugin_name(id)).unwrap_or_else(|| it.source.clone());
+            let habit = it.package().and_then(|p| index.habits.get(p));
+            lounge_graph::rank::explanation(it, now, hour_local, &source_name, habit)
+        },
         framed,
         art_aspect: it.art_aspect,
         band_path: if framed { None } else { artwork.band.clone() },
@@ -624,7 +631,7 @@ fn ago_text(ms: i64) -> String {
     }
 }
 
-fn local_hour(now_ms: i64, utc_offset_minutes: i32) -> u32 {
+pub(crate) fn local_hour(now_ms: i64, utc_offset_minutes: i32) -> u32 {
     let local = now_ms + utc_offset_minutes as i64 * 60_000;
     (((local / 3_600_000) % 24 + 24) % 24) as u32
 }
@@ -645,7 +652,14 @@ pub(crate) fn perform(inner: &Inner, action: &str) -> Result<(), CoreError> {
         "open" => {
             let link = {
                 let state = inner.state.lock();
-                state.graph.get(target).map(|it| it.deep_link.clone()).ok_or_else(unknown)?
+                match state.graph.get(target) {
+                    // A schedule entry with nothing of its own to open plays through its channel.
+                    Some(it) if it.deep_link == DeepLink::None && it.channel_id.is_some() => {
+                        it.channel_id.and_then(|c| state.graph.channel_for(c)).map(|ch| ch.deep_link.clone()).unwrap_or(DeepLink::None)
+                    }
+                    Some(it) => it.deep_link.clone(),
+                    None => inner.search_links.lock().get(target).cloned().ok_or_else(unknown)?,
+                }
             };
             dispatch(inner, link)
         }
@@ -704,9 +718,8 @@ fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
             let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
             inner
                 .plugins
-                .tx
-                .send(crate::plugins::PluginJob::Resolve { plugin: plugin.clone(), action, reply: reply_tx })
-                .map_err(|_| CoreError::Plugin { detail: "plugin thread is gone".into() })?;
+                .call(crate::plugins::PluginJob::Resolve { plugin: plugin.clone(), action, reply: reply_tx })
+                .map_err(|detail| CoreError::Plugin { detail })?;
             let resolved = reply_rx
                 .recv_timeout(std::time::Duration::from_secs(15))
                 .map_err(|_| CoreError::Plugin { detail: format!("{plugin} did not answer in time") })?
