@@ -20,8 +20,10 @@ pub enum ArtworkError {
 pub type Result<T> = std::result::Result<T, ArtworkError>;
 
 /// Sources larger than this are not decoded at all; a picture for a TV tile never needs it.
-const MAX_SOURCE_BYTES: usize = 12 * 1024 * 1024;
+const MAX_SOURCE_BYTES: u64 = 12 * 1024 * 1024;
 const MAX_SOURCE_SIDE: u32 = 8192;
+/// Most pixels a source may decode to: 4000×3000, about 48 MB as RGBA.
+const MAX_SOURCE_PIXELS: u64 = 12_000_000;
 /// The lowered Stage's band: full width × 200 at 1080p.
 const BAND_ASPECT: f64 = 1728.0 / 200.0;
 
@@ -137,10 +139,11 @@ pub fn prepare(src: &Path, out_dir: &Path, style: Style) -> Result<Prepared> {
 pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<Prepared>> {
     let shared = (|| -> Result<(String, RgbaImage, Palette, bool, f32)> {
         std::fs::create_dir_all(out_dir)?;
-        let bytes = std::fs::read(src)?;
-        if bytes.len() > MAX_SOURCE_BYTES {
-            return Err(ArtworkError::Resize(format!("{} bytes is too large a picture", bytes.len())));
+        let size = std::fs::metadata(src)?.len();
+        if size > MAX_SOURCE_BYTES {
+            return Err(ArtworkError::Resize(format!("{size} bytes is too large a picture")));
         }
+        let bytes = std::fs::read(src)?;
         let hash = blake3::hash(&bytes).to_hex().to_string();
         let decoded = decode(&bytes)?;
         drop(bytes);
@@ -181,16 +184,25 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
                 if style == Style::Hero {
                     vignette(&mut scaled);
                 }
-                let tmp = out_path.with_extension("tmp");
-                if opaque {
-                    let rgb = image::DynamicImage::ImageRgba8(scaled).to_rgb8();
-                    let file = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
-                    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, 90);
-                    rgb.write_with_encoder(encoder)?;
-                } else {
-                    scaled.save_with_format(&tmp, ImageFormat::Png)?;
+                // Search and the worker can prepare the same picture at once; each writes its own file.
+                static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                let tmp = out_path.with_extension(format!("{}.tmp", NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+                let written = (|| -> Result<()> {
+                    if opaque {
+                        let rgb = image::DynamicImage::ImageRgba8(scaled).to_rgb8();
+                        let file = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
+                        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, 90);
+                        rgb.write_with_encoder(encoder)?;
+                    } else {
+                        scaled.save_with_format(&tmp, ImageFormat::Png)?;
+                    }
+                    std::fs::rename(&tmp, &out_path)?;
+                    Ok(())
+                })();
+                if let Err(e) = written {
+                    let _ = std::fs::remove_file(&tmp);
+                    return Err(e);
                 }
-                std::fs::rename(&tmp, &out_path)?;
             }
             Ok(Prepared {
                 path: out_path.to_string_lossy().into_owned(),
@@ -205,13 +217,34 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
         .collect()
 }
 
-/// Decode with hard limits: a 4 MB file that unpacks to a 500 MB bitmap is refused, not decoded.
+/// Decode with hard limits: a 4 MB file that unpacks to a 500 MB bitmap is refused before
+/// anything is allocated. JPEGs decode straight to RGBA, so no second full-size copy is made.
 fn decode(bytes: &[u8]) -> Result<RgbaImage> {
+    let too_big = |w: u64, h: u64| w > MAX_SOURCE_SIDE as u64 || h > MAX_SOURCE_SIDE as u64 || w * h > MAX_SOURCE_PIXELS;
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions};
+        let options = DecoderOptions::default()
+            .jpeg_set_out_colorspace(ColorSpace::RGBA)
+            .set_max_width(MAX_SOURCE_SIDE as usize)
+            .set_max_height(MAX_SOURCE_SIDE as usize);
+        let mut decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
+        decoder.decode_headers().map_err(|e| ArtworkError::Resize(format!("jpeg: {e:?}")))?;
+        let (w, h) = decoder.dimensions().ok_or_else(|| ArtworkError::Resize("jpeg has no size".into()))?;
+        if too_big(w as u64, h as u64) {
+            return Err(ArtworkError::Resize(format!("{w}×{h} is too large a picture")));
+        }
+        let pixels = decoder.decode().map_err(|e| ArtworkError::Resize(format!("jpeg: {e:?}")))?;
+        return RgbaImage::from_raw(w as u32, h as u32, pixels).ok_or_else(|| ArtworkError::Resize("jpeg buffer size mismatch".into()));
+    }
+    let (w, h) = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?.into_dimensions()?;
+    if too_big(w as u64, h as u64) {
+        return Err(ArtworkError::Resize(format!("{w}×{h} is too large a picture")));
+    }
     let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
     let mut limits = image::Limits::default();
     limits.max_image_width = Some(MAX_SOURCE_SIDE);
     limits.max_image_height = Some(MAX_SOURCE_SIDE);
-    limits.max_alloc = Some(96 << 20);
+    limits.max_alloc = Some(MAX_SOURCE_PIXELS * 4);
     reader.limits(limits);
     let decoded = reader
         .decode()
@@ -224,7 +257,7 @@ fn decode(bytes: &[u8]) -> Result<RgbaImage> {
             )),
             other => ArtworkError::Image(other),
         })?
-        .to_rgba8();
+        .into_rgba8();
     Ok(decoded)
 }
 
@@ -574,6 +607,30 @@ mod tests {
         let centre = out.get_pixel(560, 315)[0];
         let corner = out.get_pixel(4, 4)[0];
         assert!(centre > 190 && corner < 150, "centre {centre} corner {corner}");
+    }
+
+    #[test]
+    fn jpegs_decode_to_the_same_picture() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("photo.jpg");
+        let img = image::DynamicImage::ImageRgba8(synthetic(320, 180)).to_rgb8();
+        img.save(&src).unwrap();
+        let p = prepare(&src, &dir.path().join("art"), Style::Landscape).unwrap();
+        assert_eq!((p.src_width, p.src_height), (320, 180));
+        let out = image::open(&p.path).unwrap().to_rgba8();
+        let left = out.get_pixel(20, 100);
+        assert!(left[0] > 200 && left[2] < 100, "left {left:?}");
+    }
+
+    #[test]
+    fn huge_jpegs_are_refused_before_decoding() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("huge.jpg");
+        // 5000×5000 is under the side limit and over the pixel limit.
+        let img = image::RgbImage::new(5000, 5000);
+        img.save(&src).unwrap();
+        let err = prepare(&src, &dir.path().join("art"), Style::Landscape).unwrap_err();
+        assert!(err.to_string().contains("too large"), "{err}");
     }
 
     #[test]
