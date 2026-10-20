@@ -53,6 +53,7 @@ impl sdk::Plugin for Plex {
                 items.push(item);
             }
         }
+        sdk::dedup_ids(&mut items);
         sdk::info!("{} items from {}", items.len(), server.name);
         Ok(items)
     }
@@ -60,7 +61,7 @@ impl sdk::Plugin for Plex {
     fn search(query: &str, limit: u32) -> Result<Vec<Item>, String> {
         let server = Server::connect()?;
         let hubs: Container = server.get_json(&format!("/hubs/search?query={}&limit={}&includeCollections=0", url_encode(query), limit.clamp(1, 30)))?;
-        let mut out = Vec::new();
+        let mut out: Vec<Item> = Vec::new();
         for hub in hubs.media_container.hub {
             if !matches!(hub.kind.as_str(), "movie" | "show" | "episode") {
                 continue;
@@ -71,6 +72,7 @@ impl sdk::Plugin for Plex {
                 }
             }
         }
+        sdk::dedup_ids(&mut out);
         Ok(out)
     }
 }
@@ -158,21 +160,20 @@ pub struct Metadata {
 }
 
 impl Server {
-    /// Checks the address and token once per refresh and remembers the server's identity.
+    /// Checks the address and token once per refresh and remembers the server's identity. The
+    /// server's root needs the token, unlike `/identity`, so a wrong token is caught here.
     fn connect() -> Result<Server, String> {
         let base = host::required_setting("server", "Server address")?.trim_end_matches('/').to_string();
         let token = host::secret("token").filter(|t| !t.trim().is_empty()).ok_or_else(|| "The Plex token is missing: paste it in the plugin's settings".to_string())?;
         let probe = Server { base, token, machine: String::new(), name: "Plex".into() };
-        let r = host::fetch(&probe.request("/identity"))?;
+        let r = host::fetch(&probe.request("/"))?;
         if r.status == 401 {
             return Err("Plex rejected the token. Copy a fresh X-Plex-Token from Plex Web.".into());
         }
         if !r.ok() {
-            return Err(format!("Plex answered HTTP {} at {}", r.status, probe.base));
+            return Err(format!("Plex answered HTTP {} at {}", r.status, sdk::redact_url(&probe.base)));
         }
-        let identity: Container = serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer from Plex: {e}"))?;
-        let machine = identity.media_container.machine_identifier.unwrap_or_default();
-        let name = identity.media_container.friendly_name.unwrap_or_else(|| "Plex".into());
+        let (machine, name) = identity(&r.body)?;
         Ok(Server { machine, name, ..probe })
     }
 
@@ -267,6 +268,13 @@ impl Server {
     }
 }
 
+/// The machine identifier and friendly name from the server's root.
+fn identity(body: &str) -> Result<(String, String), String> {
+    let root: Container = serde_json::from_str(body).map_err(|e| format!("unexpected answer from Plex: {e}"))?;
+    let c = root.media_container;
+    Ok((c.machine_identifier.unwrap_or_default(), c.friendly_name.filter(|n| !n.is_empty()).unwrap_or_else(|| "Plex".into())))
+}
+
 fn first_sentence(s: &str) -> String {
     let end = s.find(". ").map(|i| i + 1).unwrap_or(s.len()).min(160);
     let cut = s.char_indices().take_while(|(i, _)| *i < end).map(|(i, c)| i + c.len_utf8()).last().unwrap_or(0);
@@ -327,6 +335,15 @@ mod tests {
         assert_eq!(items[0].added_ms, Some(1760000000000));
         assert_eq!((items[1].title.as_str(), items[1].subtitle.as_deref()), ("The Bear", Some("Season 2")));
         assert!(items[1].poster.is_some());
+    }
+
+    #[test]
+    fn the_name_comes_from_the_root_not_identity() {
+        let root = r#"{"MediaContainer": {"size": 25, "allowSync": true, "friendlyName": "Den", "machineIdentifier": "abc123", "version": "1.41.0", "Directory": [{"key": "library", "title": "library"}]}}"#;
+        assert_eq!(identity(root).unwrap(), ("abc123".to_string(), "Den".to_string()));
+        let identity_only = r#"{"MediaContainer": {"size": 0, "claimed": true, "machineIdentifier": "abc123", "version": "1.41.0"}}"#;
+        assert_eq!(identity(identity_only).unwrap().1, "Plex");
+        assert!(identity("<html>").is_err());
     }
 
     #[test]
