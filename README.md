@@ -124,7 +124,8 @@ home screen like an app. The TV serves it itself and remembers the phone until y
 - **What's on** mirrors the home screen. Tap a tile and it opens on the TV.
 - **Remote** is a d-pad, Back, Home, Menu and the media keys, a field that types into whatever
   the TV has focused, voice through the phone's own recogniser, and a place to paste a link that
-  opens on the TV. Sharing a link to Lounge from any other app does the same.
+  opens on the TV. A link shared to Lounge from any other app waits on What's on until you tap
+  Open on the TV.
 - **Layout** reorders the rows and your pinned apps, and shows what is pinned to the Stage.
 - **Plugins** configures the installed plugins and installs new ones from a file or a link.
 - **More** downloads a backup of your layout and settings as one JSON file and restores it,

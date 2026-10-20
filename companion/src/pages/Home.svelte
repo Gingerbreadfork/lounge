@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, argb, art, type Tile } from '../lib/api';
-  import { act, app, connectionLabel } from '../lib/state.svelte';
+  import { act, app, connectionLabel, dismissShare, openShare } from '../lib/state.svelte';
 
   let snapshot = $derived(app.state?.snapshot ?? null);
   let spotlight = $derived(snapshot?.stage.spotlights[0] ?? null);
@@ -29,6 +29,17 @@
 
   {#if app.error}
     <p class="empty">{app.error}</p>
+  {/if}
+
+  {#if app.share}
+    <section class="card share" aria-live="polite">
+      <p class="caption">Shared with Lounge</p>
+      <p class="share-link">{app.share}</p>
+      <div class="share-actions">
+        <button class="btn primary" onclick={openShare}>Open on the TV</button>
+        <button class="btn ghost" onclick={dismissShare}>Not now</button>
+      </div>
+    </section>
   {/if}
 
   {#if np}
@@ -108,6 +119,9 @@
 </main>
 
 <style>
+  .share { display: flex; flex-direction: column; gap: 10px; }
+  .share-link { overflow-wrap: anywhere; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .share-actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .stage { border-radius: var(--radius-l); overflow: hidden; background: var(--curtain); box-shadow: 0 0 0 1px var(--curtain-edge), 0 24px 60px -30px color-mix(in srgb, var(--light) 60%, transparent); }
   .stage-art { aspect-ratio: 16 / 9; background: linear-gradient(135deg, color-mix(in srgb, var(--light) 45%, var(--velvet)), var(--velvet)); }
   .stage-art img { width: 100%; height: 100%; object-fit: cover; display: block; }

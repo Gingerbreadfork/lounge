@@ -9,6 +9,8 @@ export const app = $state({
   state: null as State | null,
   toast: null as string | null,
   error: null as string | null,
+  /** A link shared to the app, waiting for the person to say it should open on the TV. */
+  share: null as string | null,
 });
 
 export type Route = { page: 'home' | 'remote' | 'layout' | 'plugins' | 'more' | 'pair'; id?: string };
@@ -44,8 +46,9 @@ export function sharedLink(): string | null {
   return null;
 }
 
-/** Opens a shared link on the TV once we are paired; the URL is cleaned up either way. */
-async function handleShare() {
+/** Holds a shared link until the person confirms it; any page can put a link in our URL, so
+ *  nothing opens on the TV without a tap. The URL is cleaned up either way. */
+function handleShare() {
   const link = sharedLink();
   if (!link) return;
   history.replaceState(null, '', '/#/home');
@@ -54,7 +57,17 @@ async function handleShare() {
     try { sessionStorage.setItem('lounge.pendingShare', link); } catch { /* ignore */ }
     return;
   }
-  await act('Opened on the TV', () => api.open(`url:${link}`));
+  app.share = link;
+}
+
+export async function openShare() {
+  const link = app.share;
+  app.share = null;
+  if (link) await act('Opened on the TV', () => api.open(`url:${link}`));
+}
+
+export function dismissShare() {
+  app.share = null;
 }
 
 export function start() {
@@ -77,11 +90,18 @@ export function start() {
   connect();
   let pending: string | null = null;
   try { pending = sessionStorage.getItem('lounge.pendingShare'); sessionStorage.removeItem('lounge.pendingShare'); } catch { /* ignore */ }
-  if (pending) act('Opened on the TV', () => api.open(`url:${pending}`));
+  if (pending) app.share = pending;
 }
 
-export function connect() {
+export async function connect() {
   stopLive?.();
+  stopLive = null;
+  // The cookie for pictures and the live socket comes first; without it they would be refused.
+  try {
+    await api.session();
+  } catch (e: any) {
+    if (e?.status === 401) { unpair(); return; }
+  }
   stopLive = liveState(
     (s) => { app.state = s; app.error = null; },
     (c) => { app.connected = c; if (c) app.everConnected = true; },

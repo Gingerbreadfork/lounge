@@ -1,4 +1,6 @@
-// The TV's HTTP API. One bearer token, obtained by pairing, stored in localStorage.
+// The TV's HTTP API. One bearer token, obtained by pairing, stored in localStorage and sent as a
+// header. Pictures, the live socket and the backup load by URL, so they ride on a session cookie
+// the TV sets once the token checks out; the token itself never goes into a URL.
 
 export type Tile = {
   id: string; kind: 'POSTER' | 'LANDSCAPE' | 'APP_BANNER' | 'COMPACT' | string; title: string; subtitle?: string | null;
@@ -60,6 +62,7 @@ async function call<T>(method: string, path: string, body?: unknown, raw?: BodyI
 
 export const api = {
   pair: (code: string) => call<{ token: string; device: string }>('POST', '/api/pair', { code }),
+  session: () => call<void>('POST', '/api/session'),
   state: () => call<State>('GET', '/api/state'),
   key: (key: string) => call<void>('POST', '/api/key', { key }),
   text: (text: string) => call<void>('POST', '/api/text', { text }),
@@ -77,14 +80,14 @@ export const api = {
   diagnostics: () => call<Diagnostics>('GET', '/api/diagnostics'),
   devices: () => call<Device[]>('GET', '/api/devices'),
   revokeDevice: (id: string) => call<void>('DELETE', `/api/devices/${encodeURIComponent(id)}`),
-  backupUrl: () => `/api/backup?token=${encodeURIComponent(token() ?? '')}`,
+  backupUrl: () => '/api/backup',
   restore: (json: string) => call<void>('POST', '/api/restore', undefined, json),
 };
 
 /** Artwork files live on the TV; the server exposes them by path under this route. */
 export function art(path: string | null | undefined): string | undefined {
   if (!path) return undefined;
-  return `/api/art?path=${encodeURIComponent(path)}&token=${encodeURIComponent(token() ?? '')}`;
+  return `/api/art?path=${encodeURIComponent(path)}`;
 }
 
 export function argb(v: number): string {
@@ -100,7 +103,7 @@ export function liveState(onState: (s: State) => void, onStatus: (connected: boo
   const connect = () => {
     if (closed) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${proto}://${location.host}/api/ws?token=${encodeURIComponent(token() ?? '')}`);
+    ws = new WebSocket(`${proto}://${location.host}/api/ws`);
     ws.onopen = () => { delay = 1000; onStatus(true); };
     ws.onmessage = (e) => { try { onState(JSON.parse(e.data)); } catch { /* ignore */ } };
     ws.onclose = () => { onStatus(false); if (!closed) { setTimeout(connect, delay); delay = Math.min(delay * 2, 15000); } };
