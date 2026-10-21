@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-art"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Art mode: paintings from open museum collections become the screensaver"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true

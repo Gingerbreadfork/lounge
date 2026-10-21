@@ -371,6 +371,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-art"
+version = "0.2.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-channels"
 version = "0.2.0"
 dependencies = [
