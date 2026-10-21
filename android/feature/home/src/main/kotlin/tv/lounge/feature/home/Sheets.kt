@@ -397,10 +397,9 @@ fun QuickSettingsSheet(
         )
         SheetRow(icon = LoungeIcons.Refresh, title = "Updates", value = updateStatus, accent = if (updateStatus == "Up to date") colors.signal else colors.dust, onClick = onUpdates)
         SheetRow(icon = LoungeIcons.Info, title = "Diagnostics", value = if (showDiagnostics) "Hide" else "Show", onClick = { showDiagnostics = !showDiagnostics; if (showDiagnostics) diag = diagnostics() })
-        SheetRow(icon = LoungeIcons.Refresh, title = "Run the setup steps again", onClick = onSetupAgain)
         if (showDiagnostics) {
             diag?.let { d ->
-                Column(Modifier.padding(start = 20.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     DiagLine("Items in graph", d.items.toString())
                     DiagLine("Snapshot revision", d.revision.toString())
                     DiagLine("Core calls", d.ffiCalls.toString())
@@ -410,6 +409,7 @@ fun QuickSettingsSheet(
                 }
             }
         }
+        SheetRow(icon = LoungeIcons.Refresh, title = "Run the setup steps again", onClick = onSetupAgain)
     }
     SheetFootnote("Left and Right change a value. Back closes.")
 }
