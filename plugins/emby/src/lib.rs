@@ -198,11 +198,9 @@ impl Session {
     fn open(&self, item: &MediaItem) -> Action {
         Action {
             view: Some(format!("{}/web/index.html#!/item?id={}", self.server, item.id)),
-            launch: None,
-            play: None,
-            resolve: None,
             fallback_launch: Some(APP_PACKAGE.into()),
             title: Some(item.name.clone()),
+            ..Default::default()
         }
     }
 
