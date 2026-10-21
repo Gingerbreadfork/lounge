@@ -435,6 +435,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-kodi"
+version = "0.2.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-nextpvr"
 version = "0.2.0"
 dependencies = [

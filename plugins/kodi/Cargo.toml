@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-kodi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Kodi: continue watching, up next, recently added and Live TV from a Kodi library"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
