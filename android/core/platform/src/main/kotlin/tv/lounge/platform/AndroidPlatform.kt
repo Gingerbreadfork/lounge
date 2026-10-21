@@ -90,7 +90,7 @@ class AndroidPlatform(private val context: Context) : Platform {
             null, Intent.ACTION_VIEW -> Unit
             Intent.ACTION_MAIN -> if (!explicit) throw refused
             // The TV's own search for a title: a query and nothing else.
-            Intent.ACTION_SEARCH, android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH -> {
+            Intent.ACTION_SEARCH, android.app.SearchManager.INTENT_ACTION_GLOBAL_SEARCH, android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH -> {
                 if (explicit || intent.data != null) throw refused
                 val query = intent.getStringExtra(android.app.SearchManager.QUERY) ?: throw refused
                 intent.replaceExtras(android.os.Bundle().apply { putString(android.app.SearchManager.QUERY, query) })

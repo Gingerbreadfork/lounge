@@ -199,11 +199,17 @@ fun AmbientScreen(core: CoreClient) {
  */
 @Composable
 private fun FramedPicture(path: String, filter: androidx.compose.ui.graphics.ColorFilter?, modifier: Modifier) {
-    val painter = coil3.compose.rememberAsyncImagePainter(model = path, contentScale = ContentScale.Fit)
+    val context = LocalContext.current
+    // The file is already prepared at the screen's size, so it is decoded as it is.
+    val request = remember(path) { coil3.request.ImageRequest.Builder(context).data(path).size(coil3.size.Size.ORIGINAL).build() }
+    val painter = coil3.compose.rememberAsyncImagePainter(model = request, contentScale = ContentScale.Fit)
     Box(
         modifier.drawBehind {
             val intrinsic = painter.intrinsicSize
-            if (intrinsic.isUnspecified || intrinsic.width <= 0f || intrinsic.height <= 0f) return@drawBehind
+            if (intrinsic.isUnspecified || intrinsic.width <= 0f || intrinsic.height <= 0f) {
+                with(painter) { draw(this@drawBehind.size, colorFilter = filter) }
+                return@drawBehind
+            }
             val fit = minOf(size.width / intrinsic.width, size.height / intrinsic.height)
             val drawn = androidx.compose.ui.geometry.Size(intrinsic.width * fit, intrinsic.height * fit)
             val dx = (size.width - drawn.width) / 2f
