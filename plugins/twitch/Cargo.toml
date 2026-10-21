@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-twitch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Twitch: the streams you follow that are live now, as channels with a guide"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true

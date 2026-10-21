@@ -498,6 +498,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-twitch"
+version = "0.2.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-youtube"
 version = "0.2.0"
 dependencies = [
