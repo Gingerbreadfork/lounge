@@ -706,6 +706,7 @@ private fun SheetContent(
         Overlay.QuickSettings -> {
             val tvListings = remember { hasTvListings(context) }
             val notifications = remember { hasNotificationAccess(context) }
+            val usage = remember { hasUsageAccess(context) }
             val enabledChannels = remember { core.availableChannels().count { it.enabled } }
             val enabledPlugins = remember { core.plugins().count { it.enabled } }
             QuickSettingsSheet(
@@ -718,6 +719,7 @@ private fun SheetContent(
                 isDefaultHome = isDefaultHome,
                 tvListings = tvListings,
                 notifications = notifications,
+                usage = usage,
                 enabledChannels = enabledChannels,
                 enabledPlugins = enabledPlugins,
                 diagnostics = { core.diagnostics() },

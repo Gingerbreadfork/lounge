@@ -285,6 +285,7 @@ fun QuickSettingsSheet(
     isDefaultHome: Boolean,
     tvListings: Boolean,
     notifications: Boolean,
+    usage: Boolean,
     enabledChannels: Int,
     enabledPlugins: Int,
     diagnostics: () -> Diagnostics,
@@ -370,18 +371,19 @@ fun QuickSettingsSheet(
             accent = if (notifications) colors.signal else colors.dust,
             onClick = { if (!notifications) onRequestPermission("notifications") },
         )
-        SheetRow(icon = LoungeIcons.Tv, title = "Channels from apps", value = if (enabledChannels == 0) "None" else "$enabledChannels on", onClick = onChannels)
-        SheetRow(icon = LoungeIcons.Apps, title = "Plugins", value = if (enabledPlugins == 0) "None on" else "$enabledPlugins on", onClick = onPlugins)
-        SheetRow(icon = LoungeIcons.Phone, title = "Phone companion", value = if (companionOn) "On" else "Off", accent = if (companionOn) colors.signal else colors.dust, onClick = onCompanion)
-        SheetRow(icon = LoungeIcons.Frame, title = "Screensaver", value = if (ambientOn) "Lounge" else "System", accent = if (ambientOn) colors.signal else colors.dust, onClick = onAmbient)
         SheetRow(
-            icon = LoungeIcons.Info,
+            icon = LoungeIcons.Apps,
             title = "Usage access",
-            value = "Open",
+            value = if (usage) "On" else "Allow",
+            accent = if (usage) colors.signal else colors.dust,
             onClick = {
                 runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             },
         )
+        SheetRow(icon = LoungeIcons.Tv, title = "Channels from apps", value = if (enabledChannels == 0) "None" else "$enabledChannels on", onClick = onChannels)
+        SheetRow(icon = LoungeIcons.Apps, title = "Plugins", value = if (enabledPlugins == 0) "None on" else "$enabledPlugins on", onClick = onPlugins)
+        SheetRow(icon = LoungeIcons.Phone, title = "Phone companion", value = if (companionOn) "On" else "Off", accent = if (companionOn) colors.signal else colors.dust, onClick = onCompanion)
+        SheetRow(icon = LoungeIcons.Frame, title = "Screensaver", value = if (ambientOn) "Lounge" else "System", accent = if (ambientOn) colors.signal else colors.dust, onClick = onAmbient)
         Spacer(Modifier.height(16.dp))
         Hairline(Modifier.fillMaxWidth())
         SheetGroup("This TV")
