@@ -68,10 +68,12 @@ import tv.lounge.core.GuideProgramme
 import tv.lounge.design.Dimens
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.argb
+import tv.lounge.design.focusRing
 import tv.lounge.design.lightGlow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private const val HALF_HOUR_MS = 30L * 60_000L
 private const val WINDOW_MS = 5L * HALF_HOUR_MS
@@ -138,19 +140,21 @@ fun GuideSheet(core: CoreClient, visibleState: MutableTransitionState<Boolean>, 
 @Composable
 private fun GuideHeader(g: Guide) {
     val colors = LoungeTheme.colors
+    val format = rememberClockFormat()
     Row(
         Modifier.fillMaxWidth().padding(start = Dimens.safeX, end = Dimens.safeX, top = 24.dp, bottom = 12.dp),
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text("TV guide", style = LoungeTheme.typography.headline, color = colors.limelight)
-        Text("${g.channels.size} channels, ${clock(g.nowMs)}", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text("${g.channels.size} channels, ${clock(g.nowMs, format)}", style = LoungeTheme.typography.meta, color = colors.dust)
     }
 }
 
 @Composable
 private fun TimeRuler(g: Guide) {
     val colors = LoungeTheme.colors
+    val format = rememberClockFormat()
     val gridWidth = 1920.dp - Dimens.safeX * 2 - ChannelColumn
     Row(Modifier.fillMaxWidth().padding(horizontal = Dimens.safeX).height(28.dp)) {
         Spacer(Modifier.width(ChannelColumn))
@@ -158,7 +162,7 @@ private fun TimeRuler(g: Guide) {
             var t = g.fromMs
             while (t < g.fromMs + WINDOW_MS) {
                 val x = gridWidth * ((t - g.fromMs).toFloat() / WINDOW_MS)
-                Text(clock(t), style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.offset(x = x))
+                Text(clock(t, format), style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.offset(x = x))
                 t += HALF_HOUR_MS
             }
         }
@@ -225,6 +229,7 @@ private fun ProgrammeCell(p: GuideProgramme, g: Guide, gridWidth: androidx.compo
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
+    val format = rememberClockFormat()
     val windowEnd = g.fromMs + WINDOW_MS
     val start = p.startMs.coerceAtLeast(g.fromMs)
     val end = p.endMs.coerceAtMost(windowEnd)
@@ -249,15 +254,23 @@ private fun ProgrammeCell(p: GuideProgramme, g: Guide, gridWidth: androidx.compo
             .onFocusChanged { focused = it.isFocused }
             .tilePress(onClick, onClick)
             .focusable()
-            .semantics { role = Role.Button; contentDescription = "${p.title}, ${clock(p.startMs)} to ${clock(p.endMs)}" }
+            .semantics { role = Role.Button; contentDescription = "${p.title}, ${clock(p.startMs, format)} to ${clock(p.endMs, format)}" }
             .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.Center,
     ) {
         Text(p.title, style = LoungeTheme.typography.meta, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("${clock(p.startMs)} – ${clock(p.endMs)}", style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1)
+        Text("${clock(p.startMs, format)} – ${clock(p.endMs, format)}", style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1)
     }
 }
 
-private val clockFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val clock24: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val clock12: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault())
 
-private fun clock(ms: Long): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).format(clockFormat)
+/** The time as the system shows it, so the guide and the top bar agree. */
+@Composable
+private fun rememberClockFormat(): DateTimeFormatter {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return remember { if (android.text.format.DateFormat.is24HourFormat(context)) clock24 else clock12 }
+}
+
+private fun clock(ms: Long, format: DateTimeFormatter): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).format(format)
