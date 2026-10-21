@@ -351,7 +351,9 @@ lgp-tool run mine.lgp --resolve "play:his_girl_friday"
 lgp-tool run mine.wasm --fixtures ./fixtures
 ```
 
-`--set` and `--secret` stand in for the fields the user would fill. `--search` runs `search`
+`--set` and `--secret` stand in for the fields the user would fill. `--state file` keeps the
+key-value store in a JSON file between runs, as the TV keeps it between refreshes, so a sign-in
+that takes a refresh or two can be walked through. `--search` runs `search`
 instead of `refresh`, and `--resolve action` runs `resolve` for one action and prints what came
 back. Each run prints the fuel it used; `--json` prints the items as JSON. `--fixtures dir`
 answers every `fetch` from a file named `<sha256 of the URL>.body` in that directory, so a test

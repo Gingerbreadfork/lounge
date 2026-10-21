@@ -4,12 +4,13 @@
 //! lgp-tool keygen <key-file>                       write a new Ed25519 signing key (hex seed, mode 0600, never over a file)
 //! lgp-tool bundle <plugin.wasm> <key-file> <out.lgp> [--manifest manifest.json]
 //! lgp-tool inspect <bundle.lgp>                    print the manifest and verify the signature
-//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--search query] [--resolve action] [--json]
+//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--state file] [--search query] [--resolve action] [--json]
 //! ```
-//! `run` executes `refresh` (or `search`) with a host that keeps key-values in memory, reads
-//! settings from the flags, and fetches live unless `--fixtures` points at a directory of
-//! fixtures; [`FIXTURES`] describes them. It prints the log, the fuel used and the items, or
-//! with `--json` every item as JSON and the log on stderr.
+//! `run` executes `refresh` (or `search`) with a host that keeps key-values in memory, or in
+//! the `--state` file between runs as the TV keeps them between refreshes, reads settings from
+//! the flags, and fetches live unless `--fixtures` points at a directory of fixtures; [`FIXTURES`]
+//! describes them. It prints the log, the fuel used and the items, or with `--json` every item
+//! as JSON and the log on stderr.
 
 use ed25519_dalek::{Signer, SigningKey};
 use lounge_plugin_api::{HttpRequest, HttpResponse, Manifest, RefreshContext};
@@ -36,7 +37,7 @@ fn main() {
     }
 }
 
-const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--search q] [--resolve action] [--json]";
+const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--state file] [--search q] [--resolve action] [--json]";
 
 const FIXTURES: &str = "fixtures: --fixtures dir answers each fetch from <sha256 of the url, hex>.body in dir.
 The body may be binary, such as a gzip file: as on the TV, it reaches the plugin as text when it is UTF-8 and
@@ -120,7 +121,9 @@ fn run(args: &[String]) -> Result<(), String> {
     } else {
         (None, std::fs::read(path).map_err(|e| format!("{path}: {e}"))?)
     };
+    let state = flag(args, "--state").map(PathBuf::from);
     let services = Arc::new(RunServices {
+        kv: Mutex::new(state.as_deref().map(load_state).transpose()?.unwrap_or_default()),
         settings: Mutex::new(pairs(args, "--set")),
         secrets: Mutex::new(pairs(args, "--secret")),
         fixtures: flag(args, "--fixtures").map(PathBuf::from),
@@ -155,6 +158,9 @@ fn run(args: &[String]) -> Result<(), String> {
         ),
     }
     .inspect_err(|_| print_logs(&services));
+    if let Some(file) = &state {
+        save_state(file, &services.kv.lock())?;
+    }
     let items = items.map_err(|e| e.to_string())?;
     let elapsed = started.elapsed();
     if args.iter().any(|a| a == "--json") {
@@ -226,6 +232,46 @@ impl tracing::Subscriber for FuelMeter {
     }
     fn enter(&self, _: &tracing::span::Id) {}
     fn exit(&self, _: &tracing::span::Id) {}
+}
+
+/// The key-value store as a JSON object: text values as strings, others as `{"base64": …}`.
+fn load_state(file: &Path) -> Result<HashMap<String, Vec<u8>>, String> {
+    let text = match std::fs::read_to_string(file) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(HashMap::new()),
+        Err(e) => return Err(format!("{}: {e}", file.display())),
+    };
+    let map: HashMap<String, serde_json::Value> = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", file.display()))?;
+    map.into_iter()
+        .map(|(k, v)| {
+            let bytes = match v {
+                serde_json::Value::String(s) => s.into_bytes(),
+                serde_json::Value::Object(o) => match o.get("base64").and_then(|b| b.as_str()) {
+                    Some(b) => lounge_plugin_api::base64_decode(b),
+                    None => return Err(format!("{}: {k}: expected a string or {{\"base64\": …}}", file.display())),
+                },
+                _ => return Err(format!("{}: {k}: expected a string or {{\"base64\": …}}", file.display())),
+            };
+            Ok((k, bytes))
+        })
+        .collect()
+}
+
+fn save_state(file: &Path, kv: &HashMap<String, Vec<u8>>) -> Result<(), String> {
+    let mut map = serde_json::Map::new();
+    let mut keys: Vec<&String> = kv.keys().collect();
+    keys.sort();
+    for k in keys {
+        let v = &kv[k];
+        map.insert(
+            k.clone(),
+            match std::str::from_utf8(v) {
+                Ok(s) => serde_json::Value::String(s.to_string()),
+                Err(_) => serde_json::json!({"base64": lounge_plugin_api::base64_encode(v)}),
+            },
+        );
+    }
+    std::fs::write(file, serde_json::to_string_pretty(&map).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", file.display()))
 }
 
 fn flag(args: &[String], name: &str) -> Option<String> {
