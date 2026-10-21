@@ -10,7 +10,8 @@ pub struct YouTube;
 const APP_PACKAGE: &str = "com.google.android.youtube.tv";
 const MAX_FEEDS: usize = 40;
 const ART_KEY: &str = "hd_art";
-const ART_CHECKS: usize = 30;
+/// With `MAX_FEEDS`, stays under the host's fetches per call.
+const ART_CHECKS: usize = 20;
 
 impl sdk::Plugin for YouTube {
     fn manifest() -> Manifest {
