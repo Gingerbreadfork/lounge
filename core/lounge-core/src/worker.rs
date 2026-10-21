@@ -360,6 +360,15 @@ fn defer(inner: &Inner, f: impl FnOnce(&mut PendingArt)) {
     }
 }
 
+/// Ask for the pictures of the latest programme records again: a preview channel the person just
+/// switched on has had none prepared.
+pub(crate) fn want_program_art(inner: &Inner, state: &mut State) {
+    state.pending_art.programs = true;
+    if !std::mem::replace(&mut state.pending_art.queued, true) {
+        inner.enqueue_job(Job::MoreArt);
+    }
+}
+
 /// The next pass over every ingest still waiting for pictures.
 fn more_art(inner: &Inner) {
     let pending = {
@@ -372,8 +381,12 @@ fn more_art(inner: &Inner) {
         tracing::error!("ingest apps failed: {e}");
     }
     if pending.programs {
+        // Nothing has been read from the TV provider yet this time: there is nothing to prepare,
+        // and an empty ingest would throw away what is stored.
         let programs = inner.state.lock().last_programs.clone();
-        if let Err(e) = ingest_programs(inner, programs) {
+        if !programs.is_empty()
+            && let Err(e) = ingest_programs(inner, programs)
+        {
             tracing::error!("ingest programs failed: {e}");
         }
     }
@@ -975,10 +988,7 @@ fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::
         LayoutCommand::EnableChannel { channel_id } => {
             state.graph.layout.enabled_channels.insert(channel_id);
             // Its programmes had no pictures while the row was off; a pass prepares them now.
-            state.pending_art.programs = true;
-            if !std::mem::replace(&mut state.pending_art.queued, true) {
-                inner.enqueue_job(Job::MoreArt);
-            }
+            want_program_art(inner, &mut state);
         }
         LayoutCommand::DisableChannel { channel_id } => {
             state.graph.layout.enabled_channels.remove(&channel_id);

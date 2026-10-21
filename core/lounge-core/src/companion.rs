@@ -169,7 +169,10 @@ impl CompanionActions for CoreActions {
                 state.graph.layout.stage_pins = pins;
             }
             if let Some(channels) = patch.enabled_channels {
-                state.graph.layout.enabled_channels = channels.into_iter().collect();
+                let before = std::mem::replace(&mut state.graph.layout.enabled_channels, channels.into_iter().collect());
+                if state.graph.layout.enabled_channels.difference(&before).next().is_some() {
+                    worker::want_program_art(&inner, &mut state);
+                }
             }
             state.graph.layout.normalise();
             let layout = state.graph.layout.clone();
