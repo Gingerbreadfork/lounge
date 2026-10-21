@@ -19,7 +19,7 @@ export type NowPlaying = {
   durationMs?: number | null; positionMs?: number | null; status: string; canPause: boolean; canPlay: boolean;
   canSkipNext: boolean; canSkipPrevious: boolean; updatedMs: number;
 };
-export type Wallpaper = { artworkPath: string; title: string; source: string };
+export type Wallpaper = { artworkPath: string; title: string; subtitle?: string | null; source: string; framed?: boolean };
 export type Snapshot = { revision: number; generatedAtMs: number; stage: { spotlights: Spotlight[]; strip: Tile[] }; rows: Row[]; nowPlaying?: NowPlaying | null; wallpapers?: Wallpaper[] };
 export type State = { device: { name: string; model: string; version: string; tier: string }; snapshot: Snapshot };
 export type Layout = { rowOrder: string[]; availableRows: { id: string; title: string }[]; hidden: string[]; pinnedApps: string[]; stagePins: string[]; enabledChannels: number[] };

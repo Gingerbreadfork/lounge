@@ -214,7 +214,9 @@ the installer refuses a bundle where the two disagree. The SDK writes both from
 Stage. A `channel` joins Live now and the guide, and `schedule` items fill in what is on it. A
 `program` goes into the row its `row` names; without one it goes nowhere. A `wallpaper` is a
 picture for the screensaver: give it the picture as `thumbnail` (it is prepared at 1920×1080),
-a `title` and, if you like, a `subtitle`; it needs no `action`. A `screensaver` is an abstract
+a `title` and, if you like, a `subtitle`, which goes under the title on the screen; it needs no
+`action`. A wallpaper with `framed: true` is kept whole in its own shape and hung on the dark
+wall with a shadow, as a painting; the rest fill the screen. A `screensaver` is an abstract
 screensaver the TV draws itself; see [Screensavers](#screensavers).
 
 **Ids.** An item's `id` must be unique within one refresh and stay the same from one refresh to
@@ -234,8 +236,9 @@ cropped. Give both `thumbnail` and `poster` when you have them.
 
 **Channels.** A `channel` item carries `channel_id`, `channel_name` and `channel_number`;
 `schedule` items name the same `channel_id` with `start_ms` and `end_ms`. A `schedule` item needs
-no `action`: selecting it plays its channel. The guide window the host wants is in
-`RefreshContext.window_hours`.
+no `action`: selecting it plays its channel. One with a `start_ms` and no `end_ms` is on from its
+start until something else is known, which is what a live stream is; its `subtitle` joins the
+Stage's lines while it is on. The guide window the host wants is in `RefreshContext.window_hours`.
 
 ## Actions
 
@@ -246,7 +249,8 @@ What happens when the user selects an item. The first field that is set wins, in
 | `play` | A stream URL, opened in whatever video player the TV has. `title` is handed to the player. |
 | `view` | An Android URI: a deep link such as `jellyfin://…`, a web address, or an `intent:` string. `fallback_launch` runs if nothing on the TV handles it. |
 | `launch` | A package name to open. |
-| `resolve` | A string handed back to your `resolve` at selection time, which returns one of the above. Use it when the stream URL is only known at the moment of playing. |
+| `resolve` | A string handed back to your `resolve` at selection time, which returns one of the actions here. Use it when the stream URL is only known at the moment of playing, or when the plugin does the work itself, such as telling a player on the network to start: then return an empty action, and nothing more is opened. |
+| `search` | A query for Lounge's own search: for a title that lives in some app the plugin cannot name. A search result never carries one. |
 
 ## Screensavers
 

@@ -253,6 +253,9 @@ pub struct Item {
     pub is_new: bool,
     #[serde(default)]
     pub weight: i32,
+    /// A `wallpaper` shown whole, with the room around it, rather than filling the screen: paintings.
+    #[serde(default)]
+    pub framed: bool,
     /// The program a `screensaver` item draws.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shader: Option<Shader>,
@@ -308,7 +311,9 @@ impl Shader {
 
 /// What selecting an item does. The first field that is set wins, in this order: `play`
 /// (a stream URL for a video player), `view` (an Android URI), `launch` (a package), `resolve`
-/// (ask the plugin at selection time). `fallback_launch` runs if `view` finds no handler.
+/// (ask the plugin at selection time), `search` (Lounge's own search, with this query).
+/// `fallback_launch` runs if `view` finds no handler. An action `resolve` hands back with
+/// nothing set means the plugin has done the work itself.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Action {
     #[serde(default)]
@@ -319,6 +324,8 @@ pub struct Action {
     pub launch: Option<String>,
     #[serde(default)]
     pub resolve: Option<String>,
+    #[serde(default)]
+    pub search: Option<String>,
     #[serde(default)]
     pub fallback_launch: Option<String>,
     /// Title handed to the player.
@@ -336,8 +343,12 @@ impl Action {
     pub fn launch(package: impl Into<String>) -> Action {
         Action { launch: Some(package.into()), ..Default::default() }
     }
+    /// Open Lounge's search with `query`: for things that live in some app the plugin cannot name.
+    pub fn search(query: impl Into<String>) -> Action {
+        Action { search: Some(query.into()), ..Default::default() }
+    }
     pub fn is_empty(&self) -> bool {
-        self.play.is_none() && self.view.is_none() && self.launch.is_none() && self.resolve.is_none()
+        self.play.is_none() && self.view.is_none() && self.launch.is_none() && self.resolve.is_none() && self.search.is_none()
     }
 }
 

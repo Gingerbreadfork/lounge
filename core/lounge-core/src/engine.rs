@@ -108,7 +108,7 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
             .filter_map(|it| {
                 let path = it.artwork.wallpaper.clone().or_else(|| it.artwork.hero.clone()).or_else(|| it.artwork.landscape.clone())?;
                 let source = it.source.strip_prefix("plugin:").map(|id| index.plugin_name(id)).unwrap_or_else(|| it.source.clone());
-                Some(crate::Wallpaper { artwork_path: path, title: it.title.clone(), source })
+                Some(crate::Wallpaper { artwork_path: path, title: it.title.clone(), subtitle: it.subtitle.clone(), source, framed: it.flags.framed })
             })
             .take(80)
             .collect(),
@@ -500,6 +500,10 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
                     artwork.band = prog.artwork.band.clone();
                     artwork.focal_y = prog.artwork.focal_y;
                 }
+                // The programme's own line (an episode title, the game being played), then how long is left.
+                if let Some(s) = prog.subtitle.as_deref().filter(|s| !s.trim().is_empty()) {
+                    lines.push(s.to_string());
+                }
                 if let Some(end) = prog.airing_end_ms {
                     lines.push(left_text(end - now));
                 }
@@ -732,8 +736,11 @@ fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
                 DeepLink::ViewUri(uri)
             } else if let Some(pkg) = resolved.launch {
                 DeepLink::LaunchApp { package: pkg, activity: String::new() }
+            } else if let Some(query) = resolved.search {
+                DeepLink::Control(format!("search:{query}"))
             } else {
-                return Err(CoreError::Plugin { detail: format!("{plugin} returned nothing to open") });
+                // The plugin did the work itself (told a player on the network to start, say).
+                return Ok(());
             };
             dispatch(inner, link)
         }

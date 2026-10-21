@@ -61,6 +61,8 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
             for (r, pick) in g.items.iter().zip(picks) {
                 let it = &r.item;
                 let link = match plugin_link(&g.plugin, it) {
+                    // A result that only opens search again is no result.
+                    Some(DeepLink::Control(c)) if c.starts_with("search:") => None,
                     // A programme with no action of its own plays through its channel.
                     Some(DeepLink::None) => it
                         .channel_id

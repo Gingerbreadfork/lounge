@@ -32,9 +32,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -69,13 +73,16 @@ internal const val LATE_AFTER_MS = 30 * 60_000L
 internal const val LATE_DIM_MS = 60_000L
 internal const val LATE_DIM_STEPS = 20
 
-/** One picture for the screensaver and the two lines under the clock that say what it is. */
-data class AmbientSlide(val art: String, val title: String, val category: String)
+/**
+ * One picture for the screensaver and the two lines under the clock that say what it is. A
+ * [framed] picture is shown whole in its own shape with the room around it, as a painting would be.
+ */
+data class AmbientSlide(val art: String, val title: String, val category: String, val framed: Boolean = false)
 
-/** The Stage's artwork first, then landscape tiles, without repeats: what the home screen already knows. */
+/** Plugin pictures first, then the Stage's artwork and landscape tiles, without repeats: what the home screen already knows. */
 fun ambientSlides(snapshot: HomeSnapshot): List<AmbientSlide> {
     val out = LinkedHashMap<String, AmbientSlide>()
-    for (w in snapshot.wallpapers) out.putIfAbsent(w.artworkPath, AmbientSlide(w.artworkPath, w.title, w.source))
+    for (w in snapshot.wallpapers) out.putIfAbsent(w.artworkPath, AmbientSlide(w.artworkPath, w.title, w.subtitle ?: w.source, w.framed))
     if (out.size >= 12) return out.values.toList()
     for (s in snapshot.stage.spotlights) {
         val art = s.artworkPath ?: continue
@@ -146,17 +153,33 @@ fun AmbientScreen(core: CoreClient) {
                             if (t >= 1f) break
                         }
                     }
-                    AsyncImage(
-                        model = s.art,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        colorFilter = filter,
-                        modifier = Modifier.fillMaxSize().graphicsLayer {
-                            scaleX = scale.floatValue
-                            scaleY = scale.floatValue
-                            transformOrigin = origin
-                        },
-                    )
+                    if (s.framed) {
+                        // A painting hangs whole on the dark wall, with air around it and a shadow.
+                        FramedPicture(
+                            s.art,
+                            filter,
+                            Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 160.dp, vertical = 100.dp)
+                                .graphicsLayer {
+                                    scaleX = scale.floatValue
+                                    scaleY = scale.floatValue
+                                    transformOrigin = TransformOrigin.Center
+                                },
+                        )
+                    } else {
+                        AsyncImage(
+                            model = s.art,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            colorFilter = filter,
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                scaleX = scale.floatValue
+                                scaleY = scale.floatValue
+                                transformOrigin = origin
+                            },
+                        )
+                    }
                 } else {
                     Box(
                         Modifier.fillMaxSize().background(
@@ -168,6 +191,33 @@ fun AmbientScreen(core: CoreClient) {
             AmbientCaption(clock, slide?.title, slide?.category, IntOffset.Zero)
         }
     }
+}
+
+/**
+ * A picture fitted whole inside its box and centred, with a soft shadow just outside its own
+ * edges, so a portrait painting hangs as a painting and not as a cropped still.
+ */
+@Composable
+private fun FramedPicture(path: String, filter: androidx.compose.ui.graphics.ColorFilter?, modifier: Modifier) {
+    val painter = coil3.compose.rememberAsyncImagePainter(model = path, contentScale = ContentScale.Fit)
+    Box(
+        modifier.drawBehind {
+            val intrinsic = painter.intrinsicSize
+            if (intrinsic.isUnspecified || intrinsic.width <= 0f || intrinsic.height <= 0f) return@drawBehind
+            val fit = minOf(size.width / intrinsic.width, size.height / intrinsic.height)
+            val drawn = androidx.compose.ui.geometry.Size(intrinsic.width * fit, intrinsic.height * fit)
+            val dx = (size.width - drawn.width) / 2f
+            val dy = (size.height - drawn.height) / 2f
+            // The shadow: a few rectangles stepping out and fading, cheaper than a blur and as soft from the sofa.
+            val step = 5.dp.toPx()
+            for (i in 1..8) {
+                val a = 0.16f * (1f - (i - 1) / 8f)
+                val grow = step * i
+                drawRect(Color.Black.copy(alpha = a), topLeft = Offset(dx - grow, dy - grow + step * 2), size = androidx.compose.ui.geometry.Size(drawn.width + grow * 2, drawn.height + grow * 2))
+            }
+            translate(dx, dy) { with(painter) { draw(drawn, colorFilter = filter) } }
+        },
+    )
 }
 
 /** The time, updated on the minute. */

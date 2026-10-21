@@ -656,7 +656,8 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             let wide = r.thumbnail.as_deref();
             let portrait = r.poster.as_deref();
             if r.item.kind == PluginItemKind::Wallpaper {
-                return ProgramArt { wallpaper: plan.want(wide.or(portrait), Style::Wallpaper), ..Default::default() };
+                let style = if r.item.framed { Style::WallpaperFit } else { Style::Wallpaper };
+                return ProgramArt { wallpaper: plan.want(wide.or(portrait), style), ..Default::default() };
             }
             ProgramArt {
                 poster: plan.want(portrait, Style::Poster),
@@ -706,6 +707,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         it.weight = p.weight;
         it.row = p.row.clone();
         it.flags.is_new = p.is_new;
+        it.flags.framed = p.framed;
         it.channel_id = p.channel_id.as_deref().map(|c| channel_key(plugin, c));
         it.channel_name = p.channel_name.clone();
         it.art_aspect = aspect(hero.or(landscape).or(poster));
@@ -772,6 +774,8 @@ pub(crate) fn plugin_link(plugin: &str, p: &lounge_plugin_api::Item) -> Option<D
         DeepLink::LaunchApp { package: pkg.clone(), activity: String::new() }
     } else if let Some(action) = &a.resolve {
         DeepLink::PluginResolve { plugin: plugin.to_string(), action: action.clone() }
+    } else if let Some(query) = &a.search {
+        DeepLink::Control(format!("search:{query}"))
     } else if p.kind == PluginItemKind::Wallpaper || (p.kind == PluginItemKind::Schedule && p.channel_id.is_some()) {
         DeepLink::None
     } else {

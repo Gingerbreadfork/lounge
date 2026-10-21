@@ -52,6 +52,8 @@ pub enum Style {
     Logo,
     /// A screensaver picture at the full 1920×1080, nothing baked in.
     Wallpaper,
+    /// A screensaver picture fitted whole inside 1920×1080, its own shape kept: a painting.
+    WallpaperFit,
 }
 
 impl Style {
@@ -69,12 +71,13 @@ impl Style {
             Style::Icon => (160, 160),
             Style::Logo => (160, 160),
             Style::Wallpaper => (1920, 1080),
+            Style::WallpaperFit => (1920, 1080),
         }
     }
 
     /// Styles that fit the whole image inside the target instead of cover-cropping it.
     fn fits(self) -> bool {
-        matches!(self, Style::HeroFit | Style::Logo)
+        matches!(self, Style::HeroFit | Style::Logo | Style::WallpaperFit)
     }
 
     pub fn slug(self) -> &'static str {
@@ -91,6 +94,7 @@ impl Style {
             Style::Icon => "icon",
             Style::Logo => "logo",
             Style::Wallpaper => "wall",
+            Style::WallpaperFit => "wallfit",
         }
     }
 
@@ -564,6 +568,15 @@ mod tests {
         let p = prepare(&src, &dir.path().join("art"), Style::HeroFit).unwrap();
         assert_eq!((p.width, p.height), (420, 630));
         assert_eq!((p.src_width, p.src_height), (400, 600));
+    }
+
+    #[test]
+    fn a_fitted_wallpaper_keeps_its_shape() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("portrait.png");
+        synthetic(600, 800).save(&src).unwrap();
+        let p = prepare(&src, &dir.path().join("art"), Style::WallpaperFit).unwrap();
+        assert_eq!((p.width, p.height), (810, 1080));
     }
 
     #[test]

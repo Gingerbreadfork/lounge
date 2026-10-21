@@ -77,6 +77,9 @@ pub struct Flags {
     /// An input or device with a live connection (as opposed to cabled but in standby).
     #[serde(default)]
     pub connected: bool,
+    /// A wallpaper shown whole with the room around it, not filling the screen.
+    #[serde(default)]
+    pub framed: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -427,14 +430,7 @@ impl Graph {
 
     /// Channels with something airing now (or with no schedule at all), most recently watched first.
     pub fn live_now(&self, now_ms: i64) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self
-            .channels()
-            .into_iter()
-            .filter(|it| match (it.airing_start_ms, it.airing_end_ms) {
-                (Some(s), Some(e)) => s <= now_ms && now_ms < e,
-                _ => true,
-            })
-            .collect();
+        let mut v: Vec<&Item> = self.channels().into_iter().filter(|it| it.airing_start_ms.is_none() || airing_at(it, now_ms)).collect();
         v.sort_by(|a, b| b.last_used_ms.cmp(&a.last_used_ms));
         v
     }
@@ -445,10 +441,7 @@ impl Graph {
             .items
             .values()
             .filter(|it| it.kind == ItemKind::Program && it.channel_id == Some(channel_id) && !it.flags.watch_next)
-            .filter(|it| match (it.airing_start_ms, it.airing_end_ms) {
-                (Some(s), Some(e)) => e > from_ms && s < to_ms,
-                _ => false,
-            })
+            .filter(|it| airing_within(it, from_ms, to_ms))
             .collect();
         v.sort_by_key(|it| it.airing_start_ms);
         v
@@ -462,7 +455,7 @@ impl Graph {
                 continue;
             }
             let Some(ch) = it.channel_id else { continue };
-            if matches!((it.airing_start_ms, it.airing_end_ms), (Some(s), Some(e)) if s <= now_ms && now_ms < e) {
+            if airing_at(it, now_ms) {
                 out.entry(ch).or_insert(it);
             }
         }
@@ -477,7 +470,7 @@ impl Graph {
                 continue;
             }
             let Some(ch) = it.channel_id else { continue };
-            if matches!((it.airing_start_ms, it.airing_end_ms), (Some(s), Some(e)) if e > from_ms && s < to_ms) {
+            if airing_within(it, from_ms, to_ms) {
                 out.entry(ch).or_default().push(it);
             }
         }
@@ -505,10 +498,7 @@ impl Graph {
 
     /// What is airing on `channel_id` at `now_ms`, if the schedule says.
     pub fn airing_now(&self, channel_id: i64, now_ms: i64) -> Option<&Item> {
-        self.items
-            .values()
-            .filter(|it| it.kind == ItemKind::Program && it.channel_id == Some(channel_id))
-            .find(|it| matches!((it.airing_start_ms, it.airing_end_ms), (Some(s), Some(e)) if s <= now_ms && now_ms < e))
+        self.items.values().filter(|it| it.kind == ItemKind::Program && it.channel_id == Some(channel_id)).find(|it| airing_at(it, now_ms))
     }
 
     /// Items a plugin published into one of its rows, by weight then recency.
@@ -623,6 +613,25 @@ impl Graph {
     }
 }
 
+/// Whether a schedule entry is on at `now_ms`. One with a start and no end, a live stream, is
+/// on from its start until something else is known.
+fn airing_at(it: &Item, now_ms: i64) -> bool {
+    match (it.airing_start_ms, it.airing_end_ms) {
+        (Some(s), Some(e)) => s <= now_ms && now_ms < e,
+        (Some(s), None) => s <= now_ms,
+        _ => false,
+    }
+}
+
+/// Whether a schedule entry overlaps `[from_ms, to_ms)`.
+fn airing_within(it: &Item, from_ms: i64, to_ms: i64) -> bool {
+    match (it.airing_start_ms, it.airing_end_ms) {
+        (Some(s), Some(e)) => e > from_ms && s < to_ms,
+        (Some(s), None) => s < to_ms,
+        _ => false,
+    }
+}
+
 fn channel_number_key(s: &str) -> Option<f64> {
     let mut parts = s.split(['-', '.']);
     let major: f64 = parts.next()?.trim().parse().ok().filter(|f: &f64| f.is_finite())?;
@@ -728,6 +737,23 @@ mod tests {
         assert_eq!(g.airing_now(2, 150).map(|i| i.title.as_str()), Some("News"));
         assert!(g.airing_now(2, 250).is_none());
         assert_eq!(g.schedule(2, 0, 1000).len(), 1);
+    }
+
+    #[test]
+    fn a_stream_with_no_end_is_on_from_its_start() {
+        let mut g = Graph::default();
+        let mut ch = Item::content("chan:tw", ItemKind::Channel, "plugin:tw", "Someone", DeepLink::None);
+        ch.channel_id = Some(7);
+        let mut live = Item::content("prog:tw", ItemKind::Program, "plugin:tw", "Speedruns", DeepLink::None);
+        live.channel_id = Some(7);
+        live.airing_start_ms = Some(100);
+        g.replace_source("plugin:tw", vec![ch, live]);
+        assert!(g.airing_now(7, 50).is_none());
+        assert_eq!(g.airing_now(7, 5_000_000).map(|i| i.title.as_str()), Some("Speedruns"));
+        assert_eq!(g.live_now(5_000_000).len(), 1);
+        assert_eq!(g.schedule_index(1_000, 2_000).get(&7).map(Vec::len), Some(1));
+        assert_eq!(g.next_airing_change(50), Some(100));
+        assert_eq!(g.next_airing_change(200), None);
     }
 
     #[test]

@@ -437,7 +437,13 @@ pub struct ShaderUniform {
 pub struct Wallpaper {
     pub artwork_path: String,
     pub title: String,
+    /// The line under the title, when the plugin gave one; otherwise the screensaver names the source.
+    #[serde(default)]
+    pub subtitle: Option<String>,
     pub source: String,
+    /// Shown whole with the room around it, in its own shape, rather than filling the screen.
+    #[serde(default)]
+    pub framed: bool,
 }
 
 impl HomeSnapshot {

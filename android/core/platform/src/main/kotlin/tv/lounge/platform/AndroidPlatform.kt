@@ -71,8 +71,8 @@ class AndroidPlatform(private val context: Context) : Platform {
     /**
      * An `intent:` or `android-app:` string (what TvProvider rows carry) is an Intent serialised
      * by `toUri`; anything else is a plain link to view. They come from other apps and plugins, so
-     * only a view, or a launch of a named app, gets through: no selector, clip data or URI grants,
-     * no installs, and only into another app's exported activity.
+     * only a view, a search by name, or a launch of a named app gets through: no selector, clip
+     * data or URI grants, no installs, and only into another app's exported activity.
      */
     private fun intentFor(uri: String): Intent {
         val intent = try {
@@ -89,6 +89,12 @@ class AndroidPlatform(private val context: Context) : Platform {
         when (intent.action) {
             null, Intent.ACTION_VIEW -> Unit
             Intent.ACTION_MAIN -> if (!explicit) throw refused
+            // The TV's own search for a title: a query and nothing else.
+            Intent.ACTION_SEARCH, android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH -> {
+                if (explicit || intent.data != null) throw refused
+                val query = intent.getStringExtra(android.app.SearchManager.QUERY) ?: throw refused
+                intent.replaceExtras(android.os.Bundle().apply { putString(android.app.SearchManager.QUERY, query) })
+            }
             else -> throw refused
         }
         intent.selector = null
