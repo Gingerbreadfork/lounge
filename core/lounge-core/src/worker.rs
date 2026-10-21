@@ -786,7 +786,7 @@ fn ingest_inputs(inner: &Inner, inputs: Vec<InputRecord>) -> Result<(), lounge_s
                 _ => "Input",
             };
             let subtitle = match (&i.custom_label, i.state) {
-                (Some(c), InputState::Standby) if c != &i.label => format!("{} · Standby", i.label),
+                (Some(c), InputState::Standby) if c != &i.label => format!("{}, standby", i.label),
                 (Some(c), _) if c != &i.label => i.label.clone(),
                 (_, InputState::Standby) => "Standby".to_string(),
                 _ => kind_label.to_string(),
