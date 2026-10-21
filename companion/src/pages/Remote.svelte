@@ -72,11 +72,10 @@
     <button class="key labelled" onpointerdown={() => key('menu')}><Icon name="menu" size={22} /><span>Menu</span></button>
   </section>
 
-  <section class="keys" aria-label="Playback and volume">
+  <section class="keys media" aria-label="Playback and volume">
     <button class="key" onpointerdown={() => key('rewind')} aria-label="Rewind"><Icon name="rewind" /></button>
-    <button class="key wide" onpointerdown={() => key('play_pause')} aria-label="Play or pause"><Icon name="play_pause" size={26} /></button>
+    <button class="key" onpointerdown={() => key('play_pause')} aria-label="Play or pause"><Icon name="play_pause" size={26} /></button>
     <button class="key" onpointerdown={() => key('fast_forward')} aria-label="Fast forward"><Icon name="fast_forward" /></button>
-    <span class="gap"></span>
     <button class="key" onpointerdown={() => key('volume_down')} aria-label="Volume down"><Icon name="volume_down" /></button>
     <button class="key" onpointerdown={() => key('mute')} aria-label="Mute"><Icon name="mute" /></button>
     <button class="key" onpointerdown={() => key('volume_up')} aria-label="Volume up"><Icon name="volume_up" /></button>
@@ -85,7 +84,7 @@
   <section class="card type">
     <label class="caption" for="type">Type on the TV</label>
     <div class="type-row">
-      <input id="type" bind:value={text} placeholder="Goes into the field the TV has focused" enterkeyhint="send" onkeydown={(e) => { if (e.key === 'Enter') send(); }} autocapitalize="off" autocorrect="off" />
+      <input id="type" bind:value={text} placeholder="Lands in the TV's focused field" enterkeyhint="send" onkeydown={(e) => { if (e.key === 'Enter') send(); }} autocapitalize="off" autocorrect="off" />
       {#if Speech}<button class="round" class:listening onclick={voice} aria-label={listening ? 'Stop listening' : 'Speak'}><Icon name="mic" size={22} /></button>{/if}
     </div>
     <div class="type-actions">
@@ -109,11 +108,13 @@
   .pad.ok { border-radius: 50%; background: var(--light); color: var(--velvet); font-family: var(--headline); font-size: 22px; font-weight: 600; box-shadow: 0 10px 40px -14px var(--light); }
   .pad.up { grid-area: up; } .pad.down { grid-area: down; } .pad.left { grid-area: left; } .pad.right { grid-area: right; } .pad.ok { grid-area: ok; }
   .keys { display: flex; justify-content: center; align-items: center; gap: 10px; }
-  .key { min-width: 52px; height: 52px; padding: 0 12px; border-radius: 26px; background: var(--curtain); color: var(--limelight); display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: inset 0 0 0 1px var(--curtain-edge); touch-action: manipulation; user-select: none; transition: transform 90ms ease-out, background 90ms ease-out; }
+  /* Six keys share the width whatever the phone, with a breath between playback and volume. */
+  .keys.media { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+  .keys.media .key:nth-child(4) { margin-left: 8px; }
+  .keys.media .key:nth-child(3) { margin-right: 8px; }
+  .key { min-width: 44px; height: 52px; padding: 0 10px; border-radius: 26px; background: var(--curtain); color: var(--limelight); display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: inset 0 0 0 1px var(--curtain-edge); touch-action: manipulation; user-select: none; transition: transform 90ms ease-out, background 90ms ease-out; }
   .key:active { transform: scale(0.95); background: var(--curtain-edge); }
-  .key.wide { min-width: 76px; }
   .key.labelled { padding: 0 18px 0 14px; font-weight: 600; }
-  .gap { width: 6px; }
   .type { display: flex; flex-direction: column; gap: 10px; }
   .type-row { display: flex; gap: 8px; align-items: center; }
   .type-row input { flex: 1; min-width: 0; min-height: 50px; padding: 0 14px; border-radius: var(--radius); background: var(--velvet); border: 1px solid var(--curtain-edge); color: var(--limelight); outline: none; }

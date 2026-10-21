@@ -83,7 +83,7 @@
   {#if snapshot}
     {#if snapshot.stage.strip.length}
       <section class="section">
-        <div class="section-head"><h3>Stage</h3><span class="caption">{snapshot.stage.strip.length}</span></div>
+        <div class="section-head"><h3>Stage</h3></div>
         <div class="row-scroller">
           {#each snapshot.stage.strip as t (t.id)}
             <button class="tile landscape" style="--light: {argb(t.lightArgb)}" onclick={() => open(t)}>
