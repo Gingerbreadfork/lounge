@@ -59,13 +59,15 @@ fun TileMenuPopover(
     val motion = LoungeTheme.motion
     val firstFocus = remember { FocusRequester() }
     val leaving = !visibleState.targetState
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val screenWidth = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width
 
     Box(Modifier.fillMaxSize()) {
         Layout(
             content = {
                 // Placed to the right of the tile unless it would run off the screen; the
                 // transform origin follows, so the menu always grows out of the tile's side.
-                val toRight = anchor.right + 24.dp.value * 2 + 360.dp.value <= 1920f - 48f
+                val toRight = with(density) { anchor.right + (24.dp * 2 + 360.dp).toPx() <= screenWidth - 48.dp.toPx() }
                 AnimatedVisibility(
                     visibleState,
                     enter = fadeIn(motion.snap()) +
