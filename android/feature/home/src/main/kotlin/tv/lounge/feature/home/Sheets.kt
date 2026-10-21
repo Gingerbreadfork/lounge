@@ -432,7 +432,7 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
     }
     LaunchedEffect(enabled) {
         if (enabled && !core.companionStatus().running) {
-            core.startCompanion(8787).onFailure { error = it.message }
+            core.startCompanion(CoreClient.COMPANION_PORT).onFailure { error = it.message }
         }
         if (!enabled) { core.stopCompanion(); pairing = null }
         refresh()

@@ -281,7 +281,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** When the current activity instance started; the home screen logs its first composition against it. */
         @Volatile var activityStartedAt: Long = 0L
-        const val COMPANION_PORT = 8787
+        const val COMPANION_PORT = CoreClient.COMPANION_PORT
     }
 
     override fun onResume() {

@@ -479,7 +479,7 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
     var url by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(uiPrefs.companionEnabled) {
         if (!uiPrefs.companionEnabled) { pairing = null; return@LaunchedEffect }
-        if (!core.companionStatus().running) core.startCompanion(8787)
+        if (!core.companionStatus().running) core.startCompanion(CoreClient.COMPANION_PORT)
         url = core.companionStatus().url
         while (true) {
             val p = pairing

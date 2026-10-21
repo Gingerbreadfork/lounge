@@ -76,4 +76,9 @@ class CoreClient(val core: Core) : SnapshotListener {
     fun availableChannels(): List<ChannelInfo> = core.availableChannels()
 
     fun diagnostics(): Diagnostics = core.diagnostics()
+
+    companion object {
+        /** The port the phone companion listens on; the pairing page and the README name it. */
+        const val COMPANION_PORT = 8787
+    }
 }
