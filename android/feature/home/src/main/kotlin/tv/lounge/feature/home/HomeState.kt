@@ -66,6 +66,8 @@ class HomeState(private val tierA: Boolean = true) {
     var overlay by mutableStateOf<Overlay>(Overlay.None)
     var idle by mutableStateOf(false)
     var lastInputAt by mutableStateOf(System.currentTimeMillis())
+    /** When Home was last pressed with Lounge in front; not read by composition. */
+    var lastHomeAt: Long = System.currentTimeMillis()
 
     val playbillFocus = FocusRequester()
     val topBar = TopBarFocus()

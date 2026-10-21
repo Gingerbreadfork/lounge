@@ -74,6 +74,8 @@ import tv.lounge.platform.Prefs
 import tv.lounge.platform.UiCommand
 
 private const val IDLE_AFTER_MS = 20_000L
+/** Home within this long of the last Home press keeps the strip's selection; later it starts over. */
+private const val HOME_KEEPS_PLACE_MS = 10 * 60_000L
 
 /** Set once per process: the lamp warms up on a cold start only, not on every return home. */
 private var lampLit = false
@@ -267,8 +269,15 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     state.pendingSearch = cmd.query
                     if (state.overlay != Overlay.Search) openOverlay(Overlay.Search)
                 }
-                // Home from another app: the rows are already home when the window appears.
+                // Home from another app: the rows are already home when the window appears. After
+                // a while away the Stage opens on its first tile again (DESIGN.md 6.4).
                 UiCommand.GoHome -> {
+                    val now = System.currentTimeMillis()
+                    if (now - state.lastHomeAt > HOME_KEEPS_PLACE_MS) {
+                        state.stageTileId = null
+                        state.stageIndex = 0
+                    }
+                    state.lastHomeAt = now
                     clearOverlays()
                     goToStage(snap = true)
                 }
