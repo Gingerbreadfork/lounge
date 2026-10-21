@@ -12,6 +12,7 @@ export type Spotlight = {
   id: string; kind: string; category: string; title: string; lines: string[]; progress?: number | null;
   artworkPath?: string | null; backdropPath?: string | null; lightArgb: number;
   primary: { label: string; action: string }; secondary?: { label: string; action: string } | null; explanation?: string | null;
+  source?: string | null;
 };
 export type NowPlaying = {
   package: string; appLabel: string; title: string; subtitle?: string | null; artPath?: string | null; lightArgb: number;

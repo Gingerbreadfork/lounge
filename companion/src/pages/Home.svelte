@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, argb, art, type Tile } from '../lib/api';
+  import Icon from '../lib/Icon.svelte';
   import { act, app, connectionLabel, dismissShare, openShare } from '../lib/state.svelte';
 
   let snapshot = $derived(app.state?.snapshot ?? null);
@@ -50,9 +51,9 @@
         <p class="np-title">{np.title}</p>
         {#if np.subtitle}<p class="meta">{np.subtitle}</p>{/if}
         <div class="np-controls">
-          <button class="round" disabled={!np.canSkipPrevious} onclick={() => media('previous')} aria-label="Previous">⏮</button>
-          <button class="round big" onclick={() => media('play-pause')} aria-label={np.status === 'PLAYING' ? 'Pause' : 'Play'}>{np.status === 'PLAYING' ? '❚❚' : '▶'}</button>
-          <button class="round" disabled={!np.canSkipNext} onclick={() => media('next')} aria-label="Next">⏭</button>
+          <button class="round" disabled={!np.canSkipPrevious} onclick={() => media('previous')} aria-label="Previous"><Icon name="skip_previous" size={20} /></button>
+          <button class="round big" onclick={() => media('play-pause')} aria-label={np.status === 'PLAYING' ? 'Pause' : 'Play'}><Icon name={np.status === 'PLAYING' ? 'pause' : 'play'} size={24} /></button>
+          <button class="round" disabled={!np.canSkipNext} onclick={() => media('next')} aria-label="Next"><Icon name="skip_next" size={20} /></button>
         </div>
       </div>
     </section>
@@ -64,7 +65,7 @@
         {#if spotlight.artworkPath}<img src={art(spotlight.artworkPath)} alt="" />{/if}
       </div>
       <div class="stage-text">
-        <p class="meta">{spotlight.category}</p>
+        <p class="meta">{spotlight.category}{#if spotlight.source}<span class="source"> · {spotlight.source}</span>{/if}</p>
         <h2>{spotlight.title}</h2>
         {#each spotlight.lines as line}<p class="meta">{line}</p>{/each}
         {#if progressPct(spotlight.progress) != null}
@@ -74,6 +75,7 @@
           <button class="btn primary" onclick={() => act(`${spotlight!.primary.label} on the TV`, () => api.open(spotlight!.primary.action))}>{spotlight.primary.label}</button>
           {#if spotlight.secondary}<button class="btn" onclick={() => act('', () => api.open(spotlight!.secondary!.action))}>{spotlight.secondary.label}</button>{/if}
         </div>
+        {#if spotlight.explanation}<p class="caption">{spotlight.explanation}</p>{/if}
       </div>
     </section>
   {/if}
@@ -136,8 +138,9 @@
   .np-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .np-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .np-controls { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-  .round { width: 40px; height: 40px; border-radius: 50%; background: var(--velvet); color: var(--limelight); font-size: 14px; display: grid; place-items: center; }
-  .round.big { width: 48px; height: 48px; background: var(--light); color: var(--velvet); font-size: 16px; }
+  .round { width: 40px; height: 40px; border-radius: 50%; background: var(--velvet); color: var(--limelight); display: grid; place-items: center; }
+  .round.big { width: 48px; height: 48px; background: var(--light); color: var(--velvet); }
+  .source { color: var(--dust); }
   .round:disabled { opacity: 0.35; }
   .tile .fill { position: absolute; inset: 0; }
   .tile .icon { width: 28px; height: 28px; border-radius: 7px; flex: none; object-fit: cover; }
