@@ -55,6 +55,7 @@ import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.Swap
 import tv.lounge.design.argb
+import tv.lounge.design.focusRing
 import tv.lounge.design.lightGlow
 import kotlin.math.sin
 import java.time.LocalTime
@@ -132,6 +133,7 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
                 if (a > 0.001f) drawRoundRect(colors.curtainEdge.copy(alpha = a), cornerRadius = CornerRadius(size.height / 2f))
             }
             .clip(RoundedCornerShape(24.dp))
+            .focusRing(colors, { focused }, 24.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) focus.last = requester
@@ -183,6 +185,7 @@ private fun NowPlayingChip(np: NowPlaying, idle: Boolean, onClick: () -> Unit, f
                 if (a > 0.001f) drawRoundRect(colors.curtainEdge.copy(alpha = a), cornerRadius = CornerRadius(size.height / 2f))
             }
             .clip(RoundedCornerShape(24.dp))
+            .focusRing(colors, { focused }, 24.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) focus.last = focus.nowPlaying

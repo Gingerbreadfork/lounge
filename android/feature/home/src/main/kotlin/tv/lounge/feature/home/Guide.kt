@@ -246,6 +246,7 @@ private fun ProgrammeCell(p: GuideProgramme, g: Guide, gridWidth: androidx.compo
             .lightGlow(colors.houselight, { glow.value }, radius = 24.dp, cornerRadius = 10.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(if (focused) colors.curtainEdge else if (p.isNow) colors.velvet.copy(alpha = 0.6f) else colors.velvet.copy(alpha = 0.35f))
+            .focusRing(colors, { focused }, 10.dp)
             .drawBehind {
                 if (p.isNow && !focused) {
                     drawLine(colors.houselight, Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), strokeWidth = 2f)

@@ -20,6 +20,8 @@ data class LoungeColors(
     val spillScale: Float,
     /** The backdrop's far corner: the light field runs `velvet` into this toward the bottom right. */
     val horizon: Color = velvet,
+    /** Focus also draws a 3 px `limelight` ring and the glow doubles: the high-contrast theme only. */
+    val focusRing: Boolean = false,
 ) {
     /** A tile's light. The core's fallback is tungsten; here it becomes this theme's own lamp. */
     fun light(argb: UInt): Color = if (argb == CORE_FALLBACK_LIGHT) houselight else argb(argb)
@@ -157,6 +159,7 @@ data class LoungeColors(
             velvet = Color(0xFF000000),
             dust = Color(0xFFD5CBD1),
             spillScale = 1f,
+            focusRing = true,
         )
     }
 }

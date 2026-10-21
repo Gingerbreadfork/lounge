@@ -72,6 +72,7 @@ import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LocalSwapSlotActive
 import tv.lounge.design.Swap
 import tv.lounge.design.sounds
+import tv.lounge.design.focusRing
 import tv.lounge.design.lightGlow
 import tv.lounge.platform.Prefs
 
@@ -177,6 +178,7 @@ fun SheetRow(
                 if (a > 0.001f) drawRoundRect(colors.curtainEdge.copy(alpha = colors.curtainEdge.alpha * a), cornerRadius = CornerRadius(16.dp.toPx()))
             }
             .clip(RoundedCornerShape(16.dp))
+            .focusRing(colors, { focused }, 16.dp)
             .onFocusChanged { focused = it.isFocused }
             .then(
                 if (onCycle != null) {

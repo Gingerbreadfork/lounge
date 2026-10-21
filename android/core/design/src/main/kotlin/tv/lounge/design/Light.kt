@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -283,6 +284,26 @@ object GlowMasks {
         val image = bmp.asImageBitmap()
         cache.put(key, image)
         return image
+    }
+}
+
+/**
+ * The high-contrast theme's focus ring: 3 px of `limelight` just inside the element's edge, over
+ * its content (DESIGN.md §11). Nothing on the other themes. Goes after the element's clip.
+ */
+fun Modifier.focusRing(colors: LoungeColors, shown: () -> Boolean, cornerRadius: Dp): Modifier {
+    if (!colors.focusRing) return this
+    return drawWithContent {
+        drawContent()
+        if (!shown()) return@drawWithContent
+        val stroke = 3.dp.toPx()
+        drawRoundRect(
+            colors.limelight,
+            topLeft = Offset(stroke / 2f, stroke / 2f),
+            size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius((cornerRadius.toPx() - stroke / 2f).coerceAtLeast(0f)),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+        )
     }
 }
 

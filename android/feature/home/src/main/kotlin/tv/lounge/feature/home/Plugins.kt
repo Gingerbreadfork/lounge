@@ -44,6 +44,7 @@ import tv.lounge.core.PluginSettingInfo
 import tv.lounge.design.Hairline
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.focusRing
 import tv.lounge.design.lightGlow
 
 /** Installed plugins: one row each with its state. Selecting one opens its detail sheet. */

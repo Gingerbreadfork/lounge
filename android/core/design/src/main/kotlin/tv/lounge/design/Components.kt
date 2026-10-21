@@ -110,6 +110,7 @@ fun LoungeButton(
             .lightGlow(light, { glow.value }, cornerRadius = 28.dp)
             .clip(shape)
             .background(background)
+            .focusRing(colors, { focused }, 28.dp)
             .then(if (kind == ButtonKind.Secondary) Modifier.border(1.dp, colors.curtainEdge, shape) else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)

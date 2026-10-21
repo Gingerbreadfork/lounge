@@ -77,6 +77,7 @@ import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.ProgressBar
 import tv.lounge.design.argb
+import tv.lounge.design.focusRing
 import tv.lounge.design.lightGlow
 import tv.lounge.design.lightState
 import tv.lounge.design.lightsFilter
@@ -204,6 +205,7 @@ fun TileView(
                 this.shape = shape
                 clip = true
             }
+            .focusRing(colors, { focused || held }, Dimens.tileRadius)
             .size(size)
             .then(if (needsCurtain) Modifier.background(colors.curtain) else Modifier),
     ) {

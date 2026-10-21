@@ -63,6 +63,7 @@ import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.ProgressBar
 import tv.lounge.design.argb
+import tv.lounge.design.focusRing
 import tv.lounge.design.lightGlow
 
 /**
@@ -183,6 +184,7 @@ private fun TransportButton(
             .lightGlow(light, { glow.value }, radius = 32.dp, cornerRadius = 28.dp)
             .clip(CircleShape)
             .background(fill)
+            .focusRing(colors, { focused }, 28.dp)
             .alpha(if (enabled) 1f else 0.4f)
             .onFocusChanged { focused = it.isFocused }
             .then(if (enabled) Modifier.tilePress(onClick, onClick) else Modifier)

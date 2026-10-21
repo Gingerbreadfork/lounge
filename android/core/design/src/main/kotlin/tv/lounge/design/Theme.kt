@@ -97,6 +97,7 @@ fun LoungeTheme(
     content: @Composable () -> Unit,
 ) {
     val colors = variant.colors()
+    val lit = if (colors.focusRing) visuals.copy(glowAlpha = (visuals.glowAlpha * 2f).coerceAtMost(1f)) else visuals
     val motion = if (reducedMotion) LoungeMotion.Reduced else LoungeMotion.Default
     val designDensity = designDensity()
     val fontResolver = LoungeFonts.resolver(LocalContext.current)
@@ -106,7 +107,7 @@ fun LoungeTheme(
         LocalLoungeColors provides colors,
         LocalLoungeTypography provides LoungeTypography.Default,
         LocalLoungeMotion provides motion,
-        LocalLoungeVisuals provides visuals,
+        LocalLoungeVisuals provides lit,
         LocalContentColor provides colors.limelight,
         LocalTextStyle provides LoungeTypography.Default.body,
         LocalIndication provides NoIndication,
