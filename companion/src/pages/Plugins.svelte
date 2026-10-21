@@ -99,21 +99,22 @@
           <div class="field">
             <label for={st.key}>{st.label}{st.required ? '' : ' (optional)'}</label>
             {#if st.kind === 'toggle'}
-              <button class="list-row" onclick={() => act('Saved', () => api.pluginSetting(current!.id, st.key, st.value === 'true' ? 'false' : 'true')).then(load)}>
-                <span class="grow title">{st.value === 'true' ? 'On' : 'Off'}</span><span class="toggle" class:on={st.value === 'true'}></span>
+              {@const on = (st.value ?? st.defaultValue) === 'true'}
+              <button class="list-row" onclick={() => act('Saved', () => api.pluginSetting(current!.id, st.key, on ? 'false' : 'true')).then(load)}>
+                <span class="grow title">{on ? 'On' : 'Off'}</span><span class="toggle" class:on></span>
               </button>
             {:else}
               <input
                 id={st.key}
                 type={st.kind === 'password' ? 'password' : st.kind === 'url' ? 'url' : st.kind === 'number' ? 'number' : 'text'}
-                placeholder={st.kind === 'password' && st.hasValue ? '•••••••• (saved)' : (st.help ?? '')}
+                placeholder={st.kind === 'password' && st.hasValue ? '•••••••• (saved)' : (st.defaultValue ?? st.help ?? '')}
                 value={drafts[st.key] ?? st.value ?? ''}
                 oninput={(e) => (drafts[st.key] = (e.target as HTMLInputElement).value)}
                 onblur={() => commit(current!, st.key)}
                 onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                 autocapitalize="off" autocorrect="off" spellcheck="false"
               />
-              {#if st.help && st.kind !== 'password'}<p class="caption">{st.help}</p>{/if}
+              {#if st.help}<p class="caption">{st.help}</p>{/if}
             {/if}
           </div>
         {/each}

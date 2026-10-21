@@ -518,6 +518,7 @@ pub(crate) fn info_for(row: &PluginRow, manifest: &Manifest, settings: &[(String
                 kind: format!("{:?}", s.kind).to_lowercase(),
                 required: s.required,
                 help: s.help.clone(),
+                default_value: if s.kind.is_secret() { None } else { s.default.clone() },
                 has_value: value.as_ref().map(|v| !v.is_empty()).unwrap_or(false),
                 value: if s.kind.is_secret() { None } else { value },
             }

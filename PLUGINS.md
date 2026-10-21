@@ -181,7 +181,7 @@ nothing. Downloads a refresh no longer names are deleted.
 | `fetch_hosts` | Hosts `fetch` may reach, including on redirects. `*` means any host and is shown to the user as such; a plugin that talks to a server the user names must declare it. The TV checks the address every name resolves to: loopback and the TV's own addresses are reachable only through an entry that is literally `localhost` or an IP address, never through `*` or any other name. |
 | `refresh_minutes` | How often `refresh` runs while the screen is on; at least 5, 0 means the host's default. |
 | `rows` | Rows of your own, in order. `style` is `landscape` (16:9 tiles), `poster` (portrait) or `compact`. Items name a row by its `id`. |
-| `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `url`, `password`, `number` or `toggle`. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. |
+| `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `url`, `password`, `number` or `toggle`. A `toggle` is stored as `true` or `false`. A `default` is what `setting` returns while nothing is set, and the TV and the phone show it in the field. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. |
 | `homepage` | A link shown on the plugin's page. |
 
 The manifest ships as `manifest.json` in the bundle and is also returned by `lg_manifest`;

@@ -225,6 +225,8 @@ pub struct PluginSettingInfo {
     pub kind: String,
     pub required: bool,
     pub help: Option<String>,
+    /// What the plugin uses when nothing is set, as the manifest gives it.
+    pub default_value: Option<String>,
     pub value: Option<String>,
     pub has_value: bool,
 }

@@ -198,7 +198,7 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
     val colors = LoungeTheme.colors
     val visuals = LoungeTheme.visuals
     if (setting.kind == "toggle") {
-        val on = setting.value == "true"
+        val on = (setting.value ?: setting.defaultValue) == "true"
         SheetRow(icon = null, title = setting.label, value = if (on) "On" else "Off", onClick = { onToggle(!on) })
         return
     }
@@ -213,7 +213,7 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
     }
     fun commit() {
         val text = field.text
-        if (text != committed || (secret && text.isNotEmpty())) {
+        if (text != committed) {
             committed = text
             onCommit(text.ifBlank { null })
         }
@@ -231,12 +231,13 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
                 .lightGlow(colors.houselight, if (focused) visuals.glowAlpha * 0.8f else 0f, cornerRadius = 12.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (focused) colors.curtainEdge else colors.velvet)
+                .focusRing(colors, { focused }, 12.dp)
                 .padding(horizontal = 16.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             val placeholder = when {
-                secret && setting.hasValue && field.text.isEmpty() -> "•••••••• (saved)"
-                setting.help != null -> setting.help!!
+                secret && setting.hasValue -> "•••••••• (saved)"
+                setting.defaultValue != null -> setting.defaultValue!!
                 else -> "Not set"
             }
             if (field.text.isEmpty()) Text(placeholder, style = LoungeTheme.typography.title, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -262,5 +263,6 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
                     .onFocusChanged { if (focused && !it.isFocused) commit(); focused = it.isFocused },
             )
         }
+        setting.help?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust) }
     }
 }
