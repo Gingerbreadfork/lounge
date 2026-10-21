@@ -48,7 +48,7 @@
 - **WebAssembly in a sandbox.** A plugin runs inside the core with a fuel budget, a memory cap, no file system, no sockets, and reaches only the hosts its manifest names.
 - **Signed bundles.** Ed25519-signed `.lgp` files; the TV pins the publisher's key on first install and refuses an update from anyone else.
 - **Keeps itself current**: Lounge checks its GitHub releases twice a day and installs updates on its own where Android allows it, with a confirmation only when it must ask.
-- **Eleven plugins built in**: Jellyfin, Emby, Plex, IPTV, HDHomeRun, Tvheadend, Channels DVR, NextPVR, YouTube channels, the Internet Archive and Immich photos. Plus a sample library to try things with, an SDK, and a command-line tool that bundles, signs and runs a plugin on your computer against fixtures.
+- **Fifteen plugins built in**: Jellyfin, Emby, Plex, Kodi, Trakt, IPTV, HDHomeRun, Tvheadend, Channels DVR, NextPVR, Twitch, YouTube channels, the Internet Archive, Immich photos and Art mode, which hangs paintings from the Met and the Cleveland Museum of Art on the screensaver. Plus a sample library to try things with, an SDK, and a command-line tool that bundles, signs and runs a plugin on your computer against fixtures.
 - **Any language** that targets core WebAssembly: the interface is eight imports and six exports with JSON in between.
 
 **Setting up and staying out of the way**
@@ -140,7 +140,7 @@ the only things it can do are fetch from the hosts its manifest names, keep a sm
 store, read its settings, and log. What it publishes becomes tiles, Stage spotlights, channels in
 the guide, or rows of its own. Its settings become fields on the TV and on the phone.
 
-Eleven ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
+Fifteen ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
 use from the phone or the TV's settings; each asks only for what it needs.
 
 - **Jellyfin**, **Emby** and **Plex** put your server's resume points into Continue watching and
@@ -156,8 +156,20 @@ use from the phone or the TV's settings; each asks only for what it needs.
 - **Internet Archive** fills rows with free feature films, cartoons and television from
   archive.org, played on the TV, and searches its films.
 - **Immich photos** turns an album shared from your Immich server into the screensaver.
+- **Kodi** reads a Kodi library over its own remote control: half-watched films and episodes in
+  Continue watching, the next episode of each show, what was added lately, and Live TV channels
+  with their guide. Selecting something tells Kodi to play it, on this TV or on a box across the
+  room.
+- **Trakt** brings what you paused, the next episode of every show you are watching and your
+  watchlist from Trakt, whichever service they live on; selecting one searches for it. Sign-in is
+  a code you enter on your phone.
+- **Twitch** puts the channels you follow that are live now into Live now and the guide, with the
+  game and the viewers, and opens them in the Twitch app.
+- **Art mode** hangs public-domain paintings from the Met and the Cleveland Museum of Art on the
+  screensaver, whole and in their own shape, with the painter, the year and the museum under the
+  clock. The wall changes with every refresh; a painter or a subject narrows it.
 
-A twelfth, **Sample library**, lives in the repository but not the APK: eighteen public-domain
+A sixteenth, **Sample library**, lives in the repository but not the APK: eighteen public-domain
 films with their posters, a few left part-watched, so you can see Lounge with something on it.
 The pictures in this file use it. [PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin
 on your TV and covers the whole interface.

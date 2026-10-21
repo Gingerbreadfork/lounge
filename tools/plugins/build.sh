@@ -15,7 +15,7 @@ if [ ! -f "$KEY" ]; then
   mkdir -p "$(dirname "$KEY")"
   "$TOOL" keygen "$KEY"
 fi
-SHIPPED="iptv jellyfin emby plex youtube archive immich hdhomerun tvheadend channels nextpvr"
+SHIPPED="iptv jellyfin emby plex youtube archive immich hdhomerun tvheadend channels nextpvr art trakt kodi twitch"
 # shellcheck disable=SC2086
 cargo build -q --release --target wasm32-unknown-unknown $(for n in $SHIPPED sample; do printf -- '-p lounge-plugin-%s ' "$n"; done)
 mkdir -p "$OUT"
