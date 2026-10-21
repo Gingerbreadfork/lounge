@@ -373,9 +373,9 @@ pub struct Listed {
     pub show: Option<Media>,
 }
 
-/// The TV's own search for a title, as the intent other apps answer.
+/// The TV's own search for a title: the intent its global search provider answers.
 pub fn tv_search_action(title: &str) -> Action {
-    Action { view: Some(format!("intent:#Intent;action=android.media.action.MEDIA_PLAY_FROM_SEARCH;S.query={};end", uri_encode(title))), ..Default::default() }
+    Action { view: Some(format!("intent:#Intent;action=android.search.action.GLOBAL_SEARCH;S.query={};end", uri_encode(title))), ..Default::default() }
 }
 
 pub fn resume_item(p: &Playback, open: &dyn Fn(&str) -> Action) -> Option<Item> {
@@ -531,7 +531,7 @@ mod tests {
         assert_eq!(item.row.as_deref(), Some("upnext"));
         assert_eq!(item.subtitle.as_deref(), Some("Who Is Alive?"));
         assert_eq!(item.thumbnail.as_deref(), Some("https://walter.trakt.tv/f.jpg"));
-        assert_eq!(item.action.view.as_deref(), Some("intent:#Intent;action=android.media.action.MEDIA_PLAY_FROM_SEARCH;S.query=Severance;end"));
+        assert_eq!(item.action.view.as_deref(), Some("intent:#Intent;action=android.search.action.GLOBAL_SEARCH;S.query=Severance;end"));
         let done: Progress = serde_json::from_str(r#"{"aired": 19, "completed": 19, "next_episode": null}"#).unwrap();
         assert!(up_next_item(&w, done.next_episode.as_ref(), 5, &open).is_none());
 
