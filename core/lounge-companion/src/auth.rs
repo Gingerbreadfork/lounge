@@ -178,8 +178,9 @@ impl TokenStore {
         self.save(&devices);
     }
 
-    /// Is this token one we handed out (either registered or still pending from a QR link)?
-    pub fn authenticate(&self, token: &str, now_ms: i64) -> bool {
+    /// Is this token one we handed out (either registered or still pending from a QR link)? A
+    /// token from a QR link registers its phone on first use, under `device_name`.
+    pub fn authenticate(&self, token: &str, now_ms: i64, device_name: &str) -> bool {
         let h = hash(token);
         {
             let mut devices = self.devices.lock();
@@ -198,7 +199,7 @@ impl TokenStore {
         if let Some(code) = matched {
             pending.remove(&code);
             drop(pending);
-            self.register(token, "Phone", now_ms);
+            self.register(token, device_name, now_ms);
             return true;
         }
         false
@@ -259,11 +260,11 @@ mod tests {
         let token = store.redeem(&p.code, "Pixel", PHONE, 2_000).unwrap();
         assert_eq!(token, p.token);
         assert!(store.redeem(&p.code, "Pixel", PHONE, 2_000).is_err());
-        assert!(store.authenticate(&token, 3_000));
-        assert!(!store.authenticate("nope", 3_000));
+        assert!(store.authenticate(&token, 3_000, "Phone"));
+        assert!(!store.authenticate("nope", 3_000, "Phone"));
         assert_eq!(store.count(), 1);
         let reopened = TokenStore::open(dir.path());
-        assert!(reopened.authenticate(&token, 4_000));
+        assert!(reopened.authenticate(&token, 4_000, "Phone"));
     }
 
     fn wrong_code(p: &PairingInfo) -> &'static str {
@@ -297,7 +298,7 @@ mod tests {
         }
         assert_eq!(store.redeem(&p.code, "x", PHONE, 20), Err(RedeemError::LockedOut));
         // The QR link still pairs, and typed codes work again once the window has passed.
-        assert!(store.authenticate(&p.token, 30));
+        assert!(store.authenticate(&p.token, 30, "Phone"));
         let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 100);
         assert!(store.redeem(&p2.code, "x", PHONE, CODE_TTL_MS + 200).is_ok());
     }
@@ -311,7 +312,7 @@ mod tests {
         if old.code != new.code {
             assert_eq!(store.redeem(&old.code, "x", PHONE, 20), Err(RedeemError::Wrong));
         }
-        assert!(!store.authenticate(&old.token, 20));
+        assert!(!store.authenticate(&old.token, 20, "Phone"));
         assert!(store.redeem(&new.code, "x", PHONE, 30).is_ok());
     }
 
@@ -320,9 +321,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::open(dir.path());
         let p = store.new_pairing("http://tv:8787", 0);
-        assert!(!store.authenticate(&p.token, CODE_TTL_MS + 1));
+        assert!(!store.authenticate(&p.token, CODE_TTL_MS + 1, "Phone"));
         let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 1);
-        assert!(store.authenticate(&p2.token, CODE_TTL_MS + 10));
-        assert!(store.authenticate(&p2.token, 2 * CODE_TTL_MS + 10));
+        assert!(store.authenticate(&p2.token, CODE_TTL_MS + 10, "Pixel 8 · Chrome"));
+        assert!(store.authenticate(&p2.token, 2 * CODE_TTL_MS + 10, "Phone"));
+        assert_eq!(store.devices(None)[0]["name"], "Pixel 8 · Chrome");
     }
 }

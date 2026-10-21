@@ -206,7 +206,8 @@ async fn require_token(State(app): State<Shared>, mut req: Request, next: Next) 
     let Some(token) = token else {
         return ApiError(StatusCode::UNAUTHORIZED, "pair this phone with the TV first".into()).into_response();
     };
-    if !app.tokens.authenticate(&token, now_ms()) {
+    let name = headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).map(device_name).unwrap_or_else(|| "Phone".to_string());
+    if !app.tokens.authenticate(&token, now_ms(), &name) {
         return ApiError(StatusCode::UNAUTHORIZED, "this phone is no longer paired".into()).into_response();
     }
     req.extensions_mut().insert(Paired(token));
