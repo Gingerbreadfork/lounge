@@ -157,12 +157,16 @@ class MainActivity : ComponentActivity() {
             platform.commands.collect { cmd ->
                 when (cmd) {
                     is UiCommand.RequestPermission -> requestAccess(cmd.name)
-                    // Phone keys only reach Lounge's own window while it is in front; text goes to the
-                    // focused field through the home screen.
+                    // Phone keys reach Lounge's own window while it is in front, and whatever app is
+                    // in front through Power Setup; text goes to the focused field through the home screen.
                     is UiCommand.Key -> if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                         val now = android.os.SystemClock.uptimeMillis()
                         dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_DOWN, cmd.keyCode, 0))
                         dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_UP, cmd.keyCode, 0))
+                    } else {
+                        power.inputKey(cmd.keyCode)?.let { action ->
+                            lifecycleScope.launch(Dispatchers.IO) { runCatching { power.run(action) }.onFailure { android.util.Log.w("Lounge", "key through Power Setup: ${it.message}") } }
+                        }
                     }
                     UiCommand.InstallUpdate -> updates.interact(this@MainActivity, lifecycleScope)
                     else -> Unit

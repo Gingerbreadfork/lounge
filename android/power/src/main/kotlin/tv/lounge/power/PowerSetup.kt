@@ -156,6 +156,12 @@ class PowerSetup(private val context: Context) {
         return PowerAction("media_$key", "Media: $key", "Dispatches a media key to the active session.", "cmd media_session dispatch ${shellQuote(key)}")
     }
 
+    /** A remote key for whatever is in front, while Lounge is not; only the d-pad, Back, Home and Menu, anything else is refused. */
+    fun inputKey(keyCode: Int): PowerAction? {
+        val name = REMOTE_KEYS[keyCode] ?: return null
+        return PowerAction("key_$name", "Remote: $name", "Presses a remote key for the app in front.", "input keyevent $name", timeoutMs = 5_000)
+    }
+
     /** Raise, lower or same; anything else is refused. */
     fun volume(direction: String): PowerAction {
         require(direction in VOLUME_DIRECTIONS) { "Unknown volume direction: $direction" }
@@ -220,6 +226,15 @@ class PowerSetup(private val context: Context) {
 
     companion object {
         private val MEDIA_KEYS = setOf("play", "pause", "play-pause", "mute", "stop", "next", "previous", "rewind", "record", "fast-forward")
+        private val REMOTE_KEYS = mapOf(
+            android.view.KeyEvent.KEYCODE_DPAD_UP to "KEYCODE_DPAD_UP",
+            android.view.KeyEvent.KEYCODE_DPAD_DOWN to "KEYCODE_DPAD_DOWN",
+            android.view.KeyEvent.KEYCODE_DPAD_LEFT to "KEYCODE_DPAD_LEFT",
+            android.view.KeyEvent.KEYCODE_DPAD_RIGHT to "KEYCODE_DPAD_RIGHT",
+            android.view.KeyEvent.KEYCODE_DPAD_CENTER to "KEYCODE_DPAD_CENTER",
+            android.view.KeyEvent.KEYCODE_BACK to "KEYCODE_BACK",
+            android.view.KeyEvent.KEYCODE_MENU to "KEYCODE_MENU",
+        )
         private val VOLUME_DIRECTIONS = setOf("raise", "lower", "same")
 
         /** The enabled flag [useAmbient] printed before switching: "1", "0" or "null", else null. */
