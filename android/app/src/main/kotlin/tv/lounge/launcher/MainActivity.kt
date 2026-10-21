@@ -251,8 +251,10 @@ class MainActivity : ComponentActivity() {
             var ok = true
             for (name in names.filter { it.endsWith(".lgp") }) {
                 val out = java.io.File(dir, name)
-                runCatching { assets.open("plugins/$name").use { input -> out.outputStream().use { input.copyTo(it) } } }
+                val copied = runCatching { assets.open("plugins/$name").use { input -> out.outputStream().use { input.copyTo(it) } } }
                     .onFailure { ok = false; android.util.Log.w("Lounge", "copy $name", it) }
+                    .isSuccess
+                if (!copied) continue
                 core.installPlugin(out.absolutePath, builtIn = true)
                     .onFailure { ok = false; android.util.Log.w("Lounge", "install $name: ${it.message}") }
             }
