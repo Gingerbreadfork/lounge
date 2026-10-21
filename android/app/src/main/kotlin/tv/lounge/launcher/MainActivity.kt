@@ -37,7 +37,9 @@ import tv.lounge.core.CoreClient
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LoungeThemeVariant
 import tv.lounge.design.LoungeVisuals
+import tv.lounge.design.colors
 import tv.lounge.design.systemReducedMotion
+import tv.lounge.design.toArgbInt
 import tv.lounge.core.DeviceTier
 import tv.lounge.feature.home.HomeScreen
 import tv.lounge.platform.AndroidPlatform
@@ -86,8 +88,12 @@ class MainActivity : ComponentActivity() {
 
         tv.lounge.feature.home.startupReference = { activityStartedAt }
         val tier = DeviceTierDetector.detect(this)
+        // The preferences read at process start, so the first frame is already in the chosen
+        // theme and the window behind it matches.
+        val startPrefs = (application as LoungeApplication).startPrefs ?: Prefs.UiPrefs()
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(LoungeThemeVariant.valueOf(startPrefs.theme.name).colors().velvet.toArgbInt()))
         setContent {
-            val uiPrefs by prefs.all.collectAsState(initial = Prefs.UiPrefs())
+            val uiPrefs by prefs.all.collectAsState(initial = startPrefs)
             val reduced = uiPrefs.reducedMotion ?: systemReducedMotion()
             val visuals = when {
                 uiPrefs.liteMode == true -> LoungeVisuals.Lite

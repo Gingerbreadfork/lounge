@@ -14,8 +14,10 @@ import tv.lounge.core.DeviceTier
 import tv.lounge.design.GlowMasks
 import tv.lounge.design.LoungeFonts
 import tv.lounge.design.SpillMask
+import kotlinx.coroutines.flow.first
 import tv.lounge.platform.AndroidPlatform
 import tv.lounge.platform.DeviceTierDetector
+import tv.lounge.platform.Prefs
 
 @HiltAndroidApp
 class LoungeApplication : Application(), SingletonImageLoader.Factory {
@@ -31,6 +33,10 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
     }
     @Volatile private var core: CoreClient? = null
     @Volatile private var coreError: Throwable? = null
+    val prefs: Prefs by lazy { Prefs(this) }
+    /** The preferences as they were at process start, once read; the first frame is drawn in that theme. */
+    @Volatile var startPrefs: Prefs.UiPrefs? = null
+        private set
 
     override fun onCreate() {
         startedAt = android.os.SystemClock.uptimeMillis()
@@ -47,6 +53,9 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
                 coreReady.countDown()
             }
         }, "lounge-open").start()
+        Thread({
+            startPrefs = kotlinx.coroutines.runBlocking { prefs.all.first() }
+        }, "lounge-prefs").start()
         Thread({
             val t0 = android.os.SystemClock.uptimeMillis()
             LoungeFonts.warmUp(this)

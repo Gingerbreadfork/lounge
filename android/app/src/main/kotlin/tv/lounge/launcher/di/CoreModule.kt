@@ -34,7 +34,7 @@ object CoreModule {
 
     @Provides
     @Singleton
-    fun prefs(@ApplicationContext context: Context): Prefs = Prefs(context)
+    fun prefs(@ApplicationContext context: Context): Prefs = (context as LoungeApplication).prefs
 
     @Provides
     @Singleton

@@ -18,6 +18,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LoungeThemeVariant
 import tv.lounge.design.LoungeVisuals
+import tv.lounge.design.systemReducedMotion
 import tv.lounge.feature.home.Screensaver
 import tv.lounge.platform.Prefs
 
@@ -40,16 +41,16 @@ class AmbientDreamService : DreamService(), LifecycleOwner, SavedStateRegistryOw
         isInteractive = false
         isFullscreen = true
         val app = application as LoungeApplication
-        val prefs = Prefs(this)
+        val prefs = app.prefs
         val view = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@AmbientDreamService)
             setViewTreeSavedStateRegistryOwner(this@AmbientDreamService)
             setViewTreeViewModelStoreOwner(this@AmbientDreamService)
             setContent {
-                val uiPrefs by prefs.all.collectAsState(initial = Prefs.UiPrefs())
+                val uiPrefs by prefs.all.collectAsState(initial = app.startPrefs ?: Prefs.UiPrefs())
                 LoungeTheme(
                     variant = LoungeThemeVariant.valueOf(uiPrefs.theme.name),
-                    reducedMotion = uiPrefs.reducedMotion ?: false,
+                    reducedMotion = uiPrefs.reducedMotion ?: systemReducedMotion(),
                     visuals = LoungeVisuals.Lite,
                 ) {
                     Screensaver(app.awaitCore(), prefs)
