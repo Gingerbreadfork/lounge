@@ -46,6 +46,17 @@ object LoungeIcons {
         }
     }
 
+    /** A programme grid: a channel column and two rows of time. */
+    val Guide: ImageVector by lazy {
+        icon("guide") {
+            stroke { moveTo(5.5f, 5f); lineTo(22.5f, 5f); arcTo(2.5f, 2.5f, 0f, false, true, 25f, 7.5f); lineTo(25f, 20.5f); arcTo(2.5f, 2.5f, 0f, false, true, 22.5f, 23f); lineTo(5.5f, 23f); arcTo(2.5f, 2.5f, 0f, false, true, 3f, 20.5f); lineTo(3f, 7.5f); arcTo(2.5f, 2.5f, 0f, false, true, 5.5f, 5f); close() }
+            stroke { moveTo(10f, 5f); lineTo(10f, 23f) }
+            stroke { moveTo(10f, 11f); lineTo(25f, 11f) }
+            stroke { moveTo(10f, 17f); lineTo(25f, 17f) }
+            stroke { moveTo(16f, 11f); lineTo(16f, 17f) }
+        }
+    }
+
     val Settings: ImageVector by lazy {
         icon("settings") {
             stroke { moveTo(4f, 8f); lineTo(24f, 8f) }

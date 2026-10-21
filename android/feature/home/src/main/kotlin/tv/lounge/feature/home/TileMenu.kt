@@ -166,7 +166,7 @@ fun menuItemsFor(
     } else if (isApp && rowId == "allapps") {
         items += MenuItem(if (isPinned) "Unpin from Your apps" else "Pin to Your apps", LoungeIcons.Pin, onSelect = if (isPinned) onUnpin else onPin)
     }
-    if (tile.id.startsWith("chan:")) items += MenuItem("TV guide", LoungeIcons.Tv, onSelect = onGuide)
+    if (tile.id.startsWith("chan:")) items += MenuItem("TV guide", LoungeIcons.Guide, onSelect = onGuide)
     items += if (isStagePinned) MenuItem("Unpin from Stage", LoungeIcons.Pin, onSelect = onUnpinStage) else MenuItem("Pin to Stage", LoungeIcons.Pin, onSelect = onPinStage)
     items += MenuItem("Hide", LoungeIcons.Hide, onSelect = onHide)
     if (isApp) {

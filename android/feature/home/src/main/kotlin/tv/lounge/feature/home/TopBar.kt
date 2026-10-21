@@ -94,7 +94,7 @@ fun TopBar(
         Mark()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             TopBarButton(LoungeIcons.Search, "Search", onSearch, focus, focus.search)
-            if (showGuide) TopBarButton(LoungeIcons.Tv, "Guide", onGuide, focus, focus.guide)
+            if (showGuide) TopBarButton(LoungeIcons.Guide, "Guide", onGuide, focus, focus.guide)
             if (showTvControls) TopBarButton(LoungeIcons.Tv, "TV controls", onTvControls, focus, focus.tvControls)
             if (nowPlaying != null) NowPlayingChip(nowPlaying, idle, onNowPlaying, focus)
             TopBarButton(LoungeIcons.Settings, "Settings", onSettings, focus, focus.settings)
