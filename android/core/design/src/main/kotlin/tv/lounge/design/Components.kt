@@ -58,8 +58,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -461,7 +463,8 @@ fun LoungeToastHost(toasts: ToastController, modifier: Modifier = Modifier) {
                     .clip(RoundedCornerShape(16.dp))
                     .background(colors.curtain)
                     .border(1.dp, colors.curtainEdge, RoundedCornerShape(16.dp))
-                    .padding(horizontal = 24.dp, vertical = 18.dp),
+                    .padding(horizontal = 24.dp, vertical = 18.dp)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
             ) {
                 Text(shown, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }

@@ -52,7 +52,10 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -229,7 +232,13 @@ fun SheetRow(
 fun SheetHeading(title: String, subtitle: String? = null) {
     val colors = LoungeTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = LoungeTheme.typography.headline, color = colors.limelight)
+        // A heading and a live region: TalkBack says it when the sheet opens.
+        Text(
+            title,
+            style = LoungeTheme.typography.headline,
+            color = colors.limelight,
+            modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite },
+        )
         if (subtitle != null) Text(subtitle, style = LoungeTheme.typography.meta, color = colors.dust)
     }
     Spacer(Modifier.height(32.dp))
