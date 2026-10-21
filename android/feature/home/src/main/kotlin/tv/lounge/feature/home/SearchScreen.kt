@@ -203,7 +203,7 @@ fun SearchScreen(
                             when {
                                 query.isBlank() -> "Type with the remote. Results update as you type."
                                 results.isEmpty() -> "Nothing matches \"$query\" yet."
-                                else -> "Press down to open the first result."
+                                else -> "Press down for the results."
                             },
                             style = LoungeTheme.typography.meta,
                             color = colors.dust,
