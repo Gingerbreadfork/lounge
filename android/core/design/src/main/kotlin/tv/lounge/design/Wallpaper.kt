@@ -37,8 +37,9 @@ import androidx.compose.ui.unit.Constraints
 import java.util.Calendar
 import kotlinx.coroutines.delay
 
-// The lit backdrop in one pass: slow clouds over the ground, the focused tile's spill, the
-// playbill's light from the artwork edge, and a little grain against banding.
+// The lit backdrop in one pass: slow clouds over the ground, the focused tile's spill and the
+// playbill's light from the artwork edge. It is drawn small and scaled up; the dither against
+// banding is laid over it at the screen's own resolution.
 private const val LIGHT_FIELD_SKSL = """
 uniform float2 size;
 uniform float time;
@@ -74,9 +75,8 @@ half4 main(float2 frag) {
     float2 uv = frag / size;
     float t = time * 0.018;
     float clouds = noise(uv * float2(2.6, 1.6) + float2(t, -t * 0.6));
-    float grain = (hash(frag) - 0.5) * 0.012;
     half3 ground = mix(base.rgb, horizon.rgb, half(clamp((uv.x + uv.y) * 0.5, 0.0, 1.0)));
-    half3 col = ground + tint.rgb * half((clouds - 0.5) * 0.09 * amp) + half(grain);
+    half3 col = ground + tint.rgb * half((clouds - 0.5) * 0.09 * amp);
     float ds = length(frag - spill) / spillR;
     float s = pow(clamp(1.0 - ds / 0.7, 0.0, 1.0), 1.8) * spillAlpha;
     col = mix(col, spillColor.rgb, half(s));
@@ -112,9 +112,10 @@ fun LightField(state: LightState, modifier: Modifier = Modifier) {
 }
 
 /**
- * Grain at the screen's own resolution over the field. The field is drawn small and scaled up,
- * which smooths its own grain away, and its slow dark gradients then show as moving contour
- * lines on an 8-bit panel; two levels of noise per pixel break the contours up.
+ * The dither over the field, at the screen's own resolution: one level of blue noise on half the
+ * pixels. The field is drawn small and scaled up, so its slow dark gradients would otherwise
+ * quantise into contour lines that drift with the clouds on an 8-bit panel. Blue noise has no
+ * clumps, so at one level it reads as a smooth surface rather than grain.
  */
 @Composable
 private fun Grain(modifier: Modifier) {
@@ -123,11 +124,14 @@ private fun Grain(modifier: Modifier) {
 }
 
 private object GrainTexture {
+    /** A 64 × 64 blue-noise tile at half density, made by void-and-cluster so it wraps without a seam, one bit a pixel. */
+    private const val TILE = "q2K4mWl1TJtGLSXqrLKZSnXJawVKjWNxlLtkem1ifSsmSVbOqz6LTPOKTRHQRWRqiHOprh/xVuOutnRy4g2lDFaKJ4VaWrVqmbWouRPxLVuwpabttRdhKC7K3QZkzFbLRzRJbJZymW3YtarjWROrVVqK0xiz3GYwSrYqlswjKc910tT6jd3akqIYjoSyUEaazWexbOVPNXU7SjZTndyVipDZYrQUEfVpz1ObWvPWIS1zLTqHjHKfRCR1QXAnFdT12cVWXeqsoxYvFPuLWOa4q2DfCmIvJQ7I20CkvYRJ5Vsae23G+fxapqlKrBBLQxRZppaD9zY9s8U5MvgbYkCmdTdtK6Cr62oNgWSm9Zoeq9m+i8gOtuBUUkm8P6jCp91npSXAa1lag6wsqldLLpT0NfN3Wrpi1hWpFUCRk7VlJaalPW6SRiv6OVZGkl17fAmk0ujaswEBba87WtLC/teqFMhWrl5ieityl8JFTIlCkqZ4Ouphvy3Wbae2W61BujUFEoFZWTTS6+ncv0NVtiUEPSsiukrLuXuCcWombGWHTLsVqcpNGHoxq00XO+HvKUaI61CpHiNnbXdQ3tSxdJRxqK8gx1tLSw4LCrc4plx623m5lWWpo4TRpaRollyoqYysW09VFu+vNbNTktPiCHJsKlhsWFrnJkmzVU2PKy2TZ0o="
+
     val bitmap: ImageBitmap by lazy {
-        val n = 128
-        val random = java.util.Random(7)
-        val px = IntArray(n * n) {
-            val v = random.nextInt(3)
+        val n = 64
+        val bits = android.util.Base64.decode(TILE, android.util.Base64.DEFAULT)
+        val px = IntArray(n * n) { i ->
+            val v = (bits[i / 8].toInt() shr (7 - i % 8)) and 1
             (0xFF shl 24) or (v shl 16) or (v shl 8) or v
         }
         android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
