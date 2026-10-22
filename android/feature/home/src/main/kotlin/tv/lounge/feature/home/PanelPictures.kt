@@ -60,6 +60,8 @@ fun PanelPictures(
             SurfaceView(context).apply {
                 holder.setFixedSize(panel.width, panel.height)
                 holder.addCallback(renderer)
+                // Over a live background's surface, still under the window.
+                setZOrderMediaOverlay(true)
             }
         },
         modifier = modifier,
@@ -83,7 +85,9 @@ private class PictureRenderer(private val panel: PanelSize, window: PanelSize, p
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     /** Design pixels to panel pixels: 2 on a 2160p panel drawn at 1080p. */
     private val k = if (window.width > 0) panel.width.toFloat() / window.width else 1f
-    private var holder: SurfaceHolder? = null
+    /** Held while a frame is drawn, so the surface is never used after it is destroyed. */
+    private val drawing = java.util.concurrent.locks.ReentrantLock()
+    @Volatile private var holder: SurfaceHolder? = null
     private var loop: Job? = null
     private var current: Hung? = null
     private var previous: Hung? = null
@@ -139,8 +143,9 @@ private class PictureRenderer(private val panel: PanelSize, window: PanelSize, p
     }
 
     override fun surfaceCreated(h: SurfaceHolder) {
+        holder = h
         scope.launch {
-            holder = h
+            loop?.cancel()
             loop = launch {
                 while (true) {
                     draw()
@@ -155,15 +160,13 @@ private class PictureRenderer(private val panel: PanelSize, window: PanelSize, p
     }
 
     override fun surfaceDestroyed(h: SurfaceHolder) {
-        // The surface is gone once this returns; the drawing thread must be past its last frame.
-        val done = java.util.concurrent.CountDownLatch(1)
-        scope.launch {
-            loop?.cancel()
-            loop = null
+        // Waits for at most the frame in flight; the loop finds no holder afterwards.
+        drawing.lock()
+        try {
             holder = null
-            done.countDown()
+        } finally {
+            drawing.unlock()
         }
-        done.await()
     }
 
     private fun now() = System.currentTimeMillis()
@@ -171,6 +174,15 @@ private class PictureRenderer(private val panel: PanelSize, window: PanelSize, p
     private fun fading() = previous != null && !reducedMotion && now() - fadeStart < FADE_MS
 
     private fun draw() {
+        drawing.lock()
+        try {
+            drawLocked()
+        } finally {
+            drawing.unlock()
+        }
+    }
+
+    private fun drawLocked() {
         val h = holder ?: return
         val canvas = try {
             h.lockHardwareCanvas()

@@ -257,7 +257,8 @@ What happens when the user selects an item. The first field that is set wins, in
 
 A plugin can add abstract screensavers that the TV draws on its own GPU. The plugin never draws:
 it publishes a program and values for the program's uniforms, and Lounge runs it behind the clock
-thirty times a second. Settings, Screensaver, Style lists them next to Lounge's own, and Preview it
+thirty times a second. The same scene can be chosen as the home's live background, dimmed, with
+the room's light over it. Settings, Screensaver, Style lists them next to Lounge's own, and Preview it
 now shows one straight away.
 
 ```rust

@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -104,6 +105,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     val lite = uiPrefs.liteMode
     val reduced = uiPrefs.reducedMotion
     val showMobile = uiPrefs.showMobileApps
+    val liveBackdrops = LoungeTheme.visuals.shaderWallpaper && !motion.reducedMotion
     var isDefaultHome by remember { mutableStateOf(isDefaultHome(context)) }
     val uiSounds = LoungeTheme.sounds
     LaunchedEffect(sounds) { uiSounds?.enabled = sounds }
@@ -394,7 +396,21 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 }
             },
     ) {
-        LightField(light)
+        // A live scene behind the room when one is chosen and this TV can draw it; the still
+        // field otherwise, and again when a scene proves too heavy.
+        val liveStyle = remember(uiPrefs.backdrop, liveBackdrops) {
+            if (!liveBackdrops || uiPrefs.backdrop == Prefs.STILL_BACKDROP) null else ShaderStyles.find(context, core, uiPrefs.backdrop)
+        }
+        var liveFailed by remember(uiPrefs.backdrop) { mutableStateOf(false) }
+        if (liveStyle != null && !liveFailed && android.os.Build.VERSION.SDK_INT >= 33) {
+            LiveBackdrop(liveStyle, light, onUnusable = { why ->
+                android.util.Log.w("Lounge", "background: ${liveStyle.id} falls back to the still field: $why")
+                liveFailed = true
+                say("${liveStyle.name} is too heavy for this TV, so the background is still")
+            })
+        } else {
+            LightField(light)
+        }
 
         Column(Modifier.fillMaxSize()) {
             TopBar(
@@ -735,6 +751,8 @@ private fun SheetContent(
     val updateAuto by updates.autoCheck.collectAsStateWithLifecycle()
     when (overlay) {
         Overlay.QuickSettings -> {
+            val backdrops by produceState(emptyList<ShaderStyle>()) { value = withContext(Dispatchers.IO) { ShaderStyles.all(context, core) } }
+            val liveBackdrops = LoungeTheme.visuals.shaderWallpaper && !LoungeTheme.motion.reducedMotion
             val tvListings = remember { hasTvListings(context) }
             val notifications = remember { hasNotificationAccess(context) }
             val usage = remember { hasUsageAccess(context) }
@@ -773,6 +791,10 @@ private fun SheetContent(
                 onUpdates = { open(Overlay.Updates) },
                 updateStatus = updateStatusWord(updateState, updateAuto),
                 firstFocus = first,
+                backdrop = uiPrefs.backdrop,
+                backdrops = backdrops,
+                liveBackdrops = liveBackdrops,
+                onSetBackdrop = { id -> scope.launch { prefs.setBackdrop(id) } },
             )
         }
         Overlay.Updates -> UpdatesSheet(updates = updates, firstFocus = first)

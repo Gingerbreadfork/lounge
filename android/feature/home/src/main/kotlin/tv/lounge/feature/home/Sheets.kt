@@ -309,6 +309,10 @@ fun QuickSettingsSheet(
     onUpdates: () -> Unit,
     updateStatus: String,
     firstFocus: FocusRequester,
+    backdrop: String = Prefs.STILL_BACKDROP,
+    backdrops: List<ShaderStyle> = emptyList(),
+    liveBackdrops: Boolean = true,
+    onSetBackdrop: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val colors = LoungeTheme.colors
@@ -326,6 +330,16 @@ fun QuickSettingsSheet(
             onClick = { sounds0?.tick(); onSetTheme(theme.step(1)) },
             onCycle = { by -> sounds0?.tick(); onSetTheme(theme.step(by)) },
             focusRequester = firstFocus,
+        )
+        val scenes = listOf(Triple(Prefs.STILL_BACKDROP, "Still", "The room's own light")) + backdrops.map { Triple(it.id, it.name, it.description ?: it.origin) }
+        val sceneAt = scenes.indexOfFirst { it.first == backdrop }.coerceAtLeast(0)
+        SheetRow(
+            icon = LoungeIcons.Frame,
+            title = "Background",
+            value = scenes[sceneAt].second,
+            subtitle = if (!liveBackdrops && sceneAt > 0) "Still while Lite mode or Reduce motion is on" else scenes[sceneAt].third,
+            onClick = { sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + 1).mod(scenes.size)].first) },
+            onCycle = { by -> sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + by).mod(scenes.size)].first) },
         )
         SheetRow(
             icon = LoungeIcons.Volume,

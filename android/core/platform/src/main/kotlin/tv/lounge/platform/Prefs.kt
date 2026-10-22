@@ -26,6 +26,8 @@ class Prefs(private val context: Context) {
         val showMobileApps: Boolean = false,
         val onboardingDone: Boolean = false,
         val companionEnabled: Boolean = false,
+        /** The home's background: "still" for the light field, or the id of an abstract scene drawn live. */
+        val backdrop: String = STILL_BACKDROP,
         /** False only for the placeholder used before the store has been read. */
         val loaded: Boolean = false,
     )
@@ -39,6 +41,7 @@ class Prefs(private val context: Context) {
             showMobileApps = p[SHOW_MOBILE_APPS] ?: false,
             onboardingDone = p[ONBOARDING_DONE] ?: false,
             companionEnabled = p[COMPANION_ENABLED] ?: false,
+            backdrop = p[BACKDROP] ?: STILL_BACKDROP,
             loaded = true,
         )
     }
@@ -60,6 +63,7 @@ class Prefs(private val context: Context) {
     /** The screensaver's style: "pictures", or the id of an abstract scene. */
     val ambientStyle: Flow<String> = context.dataStore.data.map { it[AMBIENT_STYLE] ?: "pictures" }
     suspend fun setAmbientStyle(id: String) { context.dataStore.edit { it[AMBIENT_STYLE] = id } }
+    suspend fun setBackdrop(id: String) { context.dataStore.edit { it[BACKDROP] = id } }
     suspend fun setPreviousScreensaver(component: String?) {
         context.dataStore.edit { if (component.isNullOrBlank()) it.remove(PREVIOUS_SCREENSAVER) else it[PREVIOUS_SCREENSAVER] = component }
     }
@@ -82,17 +86,19 @@ class Prefs(private val context: Context) {
     suspend fun setOnboardingDone(done: Boolean) { context.dataStore.edit { it[ONBOARDING_DONE] = done } }
     suspend fun setReducedMotion(on: Boolean?) { context.dataStore.edit { if (on == null) it.remove(REDUCED_MOTION) else it[REDUCED_MOTION] = on } }
 
-    private companion object {
-        val THEME = stringPreferencesKey("theme")
-        val SOUNDS = booleanPreferencesKey("sounds")
-        val LITE_MODE = booleanPreferencesKey("lite_mode")
-        val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
-        val REDUCED_MOTION = booleanPreferencesKey("reduced_motion")
-        val SHOW_MOBILE_APPS = booleanPreferencesKey("show_mobile_apps")
-        val BUNDLED_PLUGINS_STAMP = longPreferencesKey("bundled_plugins_stamp")
-        val COMPANION_ENABLED = booleanPreferencesKey("companion_enabled")
-        val PREVIOUS_SCREENSAVER = stringPreferencesKey("previous_screensaver")
-        val PREVIOUS_SCREENSAVER_ENABLED = stringPreferencesKey("previous_screensaver_enabled")
-        val AMBIENT_STYLE = stringPreferencesKey("ambient_style")
+    companion object {
+        const val STILL_BACKDROP = "still"
+        private val THEME = stringPreferencesKey("theme")
+        private val SOUNDS = booleanPreferencesKey("sounds")
+        private val LITE_MODE = booleanPreferencesKey("lite_mode")
+        private val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+        private val REDUCED_MOTION = booleanPreferencesKey("reduced_motion")
+        private val SHOW_MOBILE_APPS = booleanPreferencesKey("show_mobile_apps")
+        private val BUNDLED_PLUGINS_STAMP = longPreferencesKey("bundled_plugins_stamp")
+        private val COMPANION_ENABLED = booleanPreferencesKey("companion_enabled")
+        private val PREVIOUS_SCREENSAVER = stringPreferencesKey("previous_screensaver")
+        private val PREVIOUS_SCREENSAVER_ENABLED = stringPreferencesKey("previous_screensaver_enabled")
+        private val AMBIENT_STYLE = stringPreferencesKey("ambient_style")
+        private val BACKDROP = stringPreferencesKey("backdrop")
     }
 }
