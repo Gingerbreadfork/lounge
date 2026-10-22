@@ -286,6 +286,7 @@ shading language. Its entry point is `half4 main(float2 coord)`, called for ever
 | `uniform float time` | Seconds since the screensaver started. |
 | `uniform float hour` | The local time of day, from 0 to 24. |
 | `layout(color) uniform half4 velvet` | The theme's background. `horizon`, `curtain`, `houselight`, `ember`, `signal` and `dust` are the theme's other colours (DESIGN.md §3), so a scene follows whichever theme the person picked. |
+| `uniform shader noise` | Three smooth noises that tile, in the red, green and blue of one 256-pixel square: `noise.eval(p * 16.0).r` reads one noise cell per unit of `p`. Sample it for noise and fbm instead of computing them; a TV's GPU fetches a texture far faster than it does the arithmetic. The only `shader` input a program may declare. |
 
 Every other uniform takes its value from `shader.uniforms`: a number for a `float` or `int`, a
 list of numbers for vectors, matrices and arrays, as many as the uniform holds, and a colour such

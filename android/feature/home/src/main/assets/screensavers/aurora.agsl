@@ -1,6 +1,7 @@
 // Aurora: northern lights over the hills. Three curtains of light, each hanging from a wandering line.
 uniform float2 resolution;
 uniform float time;
+uniform shader noise;
 layout(color) uniform half4 velvet;
 layout(color) uniform half4 horizon;
 layout(color) uniform half4 signal;
@@ -12,12 +13,8 @@ float hash(float2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
-float noise(float2 p) {
-    float2 i = floor(p);
-    float2 f = fract(p);
-    float2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + float2(1.0, 0.0)), u.x),
-               mix(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), u.x), u.y);
+float n(float2 p) {
+    return float(noise.eval(p * 16.0).b);
 }
 
 half4 main(float2 coord) {
@@ -30,16 +27,16 @@ half4 main(float2 coord) {
         float fi = float(i);
         float x = p.x * (1.2 + 0.4 * fi) + fi * 3.3;
         float base = 0.42 + 0.08 * fi
-            + 0.14 * (noise(float2(x * 0.8 + t * (0.7 + 0.25 * fi), fi * 5.0)) - 0.5)
+            + 0.14 * (n(float2(x * 0.8 + t * (0.7 + 0.25 * fi), fi * 5.0)) - 0.5)
             + 0.035 * sin(x * 4.0 + t * 3.0 + fi * 2.0)
             + 0.015 * sin(x * 11.0 - t * 5.0);
         float d = p.y - base;
         float hang = smoothstep(-0.06, 0.0, d) * exp(-max(d, 0.0) * (3.2 + 1.2 * fi));
-        float rays = 0.4 + 0.6 * noise(float2(x * 28.0 + t * 2.0, fi * 7.0 + t * 0.5));
+        float rays = 0.4 + 0.6 * n(float2(x * 28.0 + t * 2.0, fi * 7.0 + t * 0.5));
         half3 c = mix(signal.rgb * 1.1, ember.rgb * 0.75, half(smoothstep(0.03, 0.32, d)));
         col += c * half(hang * rays * (0.5 - 0.1 * fi));
     }
-    float ridge = 0.13 + 0.05 * noise(float2(p.x * 2.2, 3.0)) + 0.02 * noise(float2(p.x * 9.0, 7.0));
+    float ridge = 0.13 + 0.05 * n(float2(p.x * 2.2, 3.0)) + 0.02 * n(float2(p.x * 9.0, 7.0));
     col = mix(col, velvet.rgb * 0.35, half(smoothstep(ridge + 0.004, ridge - 0.004, p.y)));
     return half4(col, 1.0);
 }

@@ -9,7 +9,7 @@ import tv.lounge.core.CoreClient
 /** A value for one of a program's own uniforms: floats, or a colour as ARGB. */
 class ShaderValue(val name: String, val floats: FloatArray = FloatArray(0), val color: Int? = null)
 
-/** An abstract screensaver: an AGSL program, values for its uniforms, and where it came from. */
+/** An abstract scene: an AGSL program, values for its uniforms, and where it came from. */
 data class ShaderStyle(
     val id: String,
     val name: String,
@@ -30,7 +30,13 @@ object ShaderSource {
     const val MAX_BYTES = 32 * 1024
 
     /** The uniforms Lounge sets on every program that declares them. */
-    val PROVIDED = setOf("resolution", "time", "hour", "velvet", "horizon", "curtain", "houselight", "ember", "signal", "dust")
+    val PROVIDED = setOf("resolution", "time", "hour", "velvet", "horizon", "curtain", "houselight", "ember", "signal", "dust", "noise")
+    /** The one input a program may declare: Lounge's tileable noise texture. */
+    const val NOISE = "noise"
+    private val noiseInput = Regex("uniform\\s+shader\\s+noise\\s*;")
+
+    /** Whether the program samples the noise texture. */
+    fun wantsNoise(source: String): Boolean = noiseInput.containsMatchIn(source.replace(comments, " "))
 
     private val comments = Regex("//[^\\n]*|/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)
     private val uniform = Regex("""(layout\s*\(\s*color\s*\)\s*)?uniform\s+(\w+)\s+(\w+)\s*(?:\[\s*(\d+)\s*])?\s*;""")
@@ -48,7 +54,8 @@ object ShaderSource {
         val code = source.replace(comments, " ")
         if (!entry.containsMatchIn(code)) return "the program has no main function"
         uniform.findAll(code).forEach { m ->
-            if (componentsOf(m.groupValues[2]) == null) return "uniform ${m.groupValues[3]} is a ${m.groupValues[2]}, which a screensaver cannot be given"
+            if (m.groupValues[2] == "shader" && m.groupValues[3] == NOISE) return@forEach
+            if (componentsOf(m.groupValues[2]) == null) return "uniform ${m.groupValues[3]} is a ${m.groupValues[2]}, which a scene cannot be given"
         }
         return null
     }
@@ -85,7 +92,7 @@ object ShaderSource {
     }
 }
 
-/** Every abstract screensaver this TV can show: Lounge's own, those from plugins, and local files. */
+/** Every abstract scene this TV can show, as a screensaver or a live background: Lounge's own, those from plugins, and local files. */
 object ShaderStyles {
     const val PICTURES = "pictures"
 

@@ -1,31 +1,19 @@
-// Ink: light moving through ink in water. Noise fed through noise, after Inigo Quilez's warping.
+// Ink: light moving through ink in water. Noise fed through noise, after Inigo Quilez's warping,
+// read from Lounge's noise texture.
 uniform float2 resolution;
 uniform float time;
+uniform shader noise;
 layout(color) uniform half4 velvet;
 layout(color) uniform half4 horizon;
 layout(color) uniform half4 houselight;
 layout(color) uniform half4 ember;
 
-float hash(float2 p) {
-    float3 p3 = fract(float3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-}
-
-float noise(float2 p) {
-    float2 i = floor(p);
-    float2 f = fract(p);
-    float2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + float2(1.0, 0.0)), u.x),
-               mix(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), u.x), u.y);
-}
-
 float fbm(float2 p) {
     float v = 0.0;
     float a = 0.5;
     for (int i = 0; i < 4; i++) {
-        v += a * noise(p);
-        p = float2(1.6 * p.x + 1.2 * p.y, -1.2 * p.x + 1.6 * p.y) + float2(17.0, 7.0);
+        v += a * float(noise.eval(p * 16.0).r);
+        p = float2(1.6 * p.x + 1.2 * p.y, -1.2 * p.x + 1.6 * p.y) + float2(5.3, 1.7);
         a *= 0.5;
     }
     return v;

@@ -36,6 +36,9 @@ class ShaderSourceTest {
         assertNull(ShaderSource.problem(program))
         assertEquals("the program has no main function", ShaderSource.problem("uniform float time;"))
         assertTrue(ShaderSource.problem("uniform shader image; half4 main(float2 p) { return image.eval(p); }")!!.contains("image"))
+        assertNull(ShaderSource.problem("uniform shader noise; half4 main(float2 p) { return noise.eval(p); }"))
+        assertTrue(ShaderSource.wantsNoise("uniform shader noise;\nhalf4 main(float2 p) { return noise.eval(p); }"))
+        assertTrue(!ShaderSource.wantsNoise("// uniform shader noise;\nhalf4 main(float2 p) { return half4(1); }"))
         assertTrue(ShaderSource.problem("x".repeat(ShaderSource.MAX_BYTES + 1))!!.contains("larger"))
     }
 

@@ -105,37 +105,39 @@ fun LightField(state: LightState, modifier: Modifier = Modifier) {
     val visuals = LoungeTheme.visuals
     if (visuals.shaderWallpaper && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         LightFieldImpl(state, modifier)
-        Grain(modifier)
+        BlueNoiseDither(modifier)
     } else {
         BackdropSpill(state, modifier)
     }
 }
 
 /**
- * The dither over the field, at the screen's own resolution: one level of blue noise on half the
- * pixels. The field is drawn small and scaled up, so its slow dark gradients would otherwise
- * quantise into contour lines that drift with the clouds on an 8-bit panel. Blue noise has no
- * clumps, so at one level it reads as a smooth surface rather than grain.
+ * Dither at the screen's own resolution over anything drawn small and scaled up: one level of
+ * blue noise on half the pixels. Without it a slow dark gradient quantises into contour lines
+ * that drift on an 8-bit panel. Blue noise has no clumps, so at one level it reads as a smooth
+ * surface rather than grain.
  */
 @Composable
-private fun Grain(modifier: Modifier) {
-    val brush = remember { ShaderBrush(ImageShader(GrainTexture.bitmap, TileMode.Repeated, TileMode.Repeated)) }
+fun BlueNoiseDither(modifier: Modifier = Modifier) {
+    val brush = remember { ShaderBrush(ImageShader(BlueNoise.image, TileMode.Repeated, TileMode.Repeated)) }
     Canvas(modifier.fillMaxSize()) { drawRect(brush, blendMode = BlendMode.Plus) }
 }
 
-private object GrainTexture {
-    /** A 64 × 64 blue-noise tile at half density, made by void-and-cluster so it wraps without a seam, one bit a pixel. */
+/** A 64 × 64 blue-noise tile at half density: one level on half the pixels, wrapping without a seam. */
+object BlueNoise {
+    /** Made by void-and-cluster, one bit a pixel. */
     private const val TILE = "q2K4mWl1TJtGLSXqrLKZSnXJawVKjWNxlLtkem1ifSsmSVbOqz6LTPOKTRHQRWRqiHOprh/xVuOutnRy4g2lDFaKJ4VaWrVqmbWouRPxLVuwpabttRdhKC7K3QZkzFbLRzRJbJZymW3YtarjWROrVVqK0xiz3GYwSrYqlswjKc910tT6jd3akqIYjoSyUEaazWexbOVPNXU7SjZTndyVipDZYrQUEfVpz1ObWvPWIS1zLTqHjHKfRCR1QXAnFdT12cVWXeqsoxYvFPuLWOa4q2DfCmIvJQ7I20CkvYRJ5Vsae23G+fxapqlKrBBLQxRZppaD9zY9s8U5MvgbYkCmdTdtK6Cr62oNgWSm9Zoeq9m+i8gOtuBUUkm8P6jCp91npSXAa1lag6wsqldLLpT0NfN3Wrpi1hWpFUCRk7VlJaalPW6SRiv6OVZGkl17fAmk0ujaswEBba87WtLC/teqFMhWrl5ieityl8JFTIlCkqZ4Ouphvy3Wbae2W61BujUFEoFZWTTS6+ncv0NVtiUEPSsiukrLuXuCcWombGWHTLsVqcpNGHoxq00XO+HvKUaI61CpHiNnbXdQ3tSxdJRxqK8gx1tLSw4LCrc4plx623m5lWWpo4TRpaRollyoqYysW09VFu+vNbNTktPiCHJsKlhsWFrnJkmzVU2PKy2TZ0o="
 
-    val bitmap: ImageBitmap by lazy {
+    val bitmap: android.graphics.Bitmap by lazy {
         val n = 64
         val bits = android.util.Base64.decode(TILE, android.util.Base64.DEFAULT)
         val px = IntArray(n * n) { i ->
             val v = (bits[i / 8].toInt() shr (7 - i % 8)) and 1
             (0xFF shl 24) or (v shl 16) or (v shl 8) or v
         }
-        android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+        android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888)
     }
+    val image: ImageBitmap by lazy { bitmap.asImageBitmap() }
 }
 
 private fun isNight(): Boolean {

@@ -6,28 +6,35 @@ layout(color) uniform half4 horizon;
 layout(color) uniform half4 houselight;
 layout(color) uniform half4 ember;
 
-float field(float2 p, float t) {
+// The wax field and its slope in one pass: each blob adds its own, so no second sample is needed.
+float3 field(float2 p, float t) {
     float v = 0.0;
-    for (int i = 0; i < 7; i++) {
+    float2 g = float2(0.0);
+    for (int i = 0; i < 6; i++) {
         float fi = float(i);
         float2 c = float2(0.62 * sin(fi * 2.4 + t * 0.045 * (1.0 + 0.21 * fi)),
                           0.44 * sin(t * (0.10 + 0.021 * fi) + fi * 1.9));
         float r = 0.11 + 0.035 * fract(fi * 0.618);
         float2 d = p - c;
         d.y *= 0.8;
-        d.x += 0.015 * sin(p.y * 14.0 + t * 0.6 + fi);
-        v += exp(-dot(d, d) / (r * r));
+        float e = exp(-dot(d, d) / (r * r));
+        v += e;
+        g -= 2.0 * d * float2(1.0, 0.8) / (r * r) * e;
     }
     float bottom = p.y + 0.56;
     float top = p.y - 0.57;
-    return v + exp(-bottom * bottom / 0.006) + 0.8 * exp(-top * top / 0.003);
+    float eb = exp(-bottom * bottom / 0.006);
+    float et = 0.8 * exp(-top * top / 0.003);
+    v += eb + et;
+    g.y -= 2.0 * bottom / 0.006 * eb + 2.0 * top / 0.003 * et;
+    return float3(v, g);
 }
 
 half4 main(float2 coord) {
     float2 p = float2(coord.x - 0.5 * resolution.x, 0.5 * resolution.y - coord.y) / resolution.y;
-    float v = field(p, time);
-    float e = 1.5 / resolution.y;
-    float2 g = float2(field(p + float2(e, 0.0), time) - v, field(p + float2(0.0, e), time) - v) / e;
+    float3 f = field(p, time);
+    float v = f.x;
+    float2 g = f.yz;
 
     float heat = exp(-(p.y + 0.5) * 2.6);
     half3 oil = mix(velvet.rgb * 0.8, horizon.rgb * 1.5, half(clamp(0.6 - p.y, 0.0, 1.0)));
