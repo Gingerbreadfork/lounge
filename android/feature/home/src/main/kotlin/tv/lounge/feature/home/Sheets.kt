@@ -174,7 +174,7 @@ fun SheetRow(
         modifier
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .fillMaxWidth()
-            .then(if (subtitle != null) Modifier.heightIn(min = height) else Modifier.height(height))
+            .heightIn(min = height)
             .lightGlow(colors.houselight, { glow.value }, cornerRadius = 16.dp)
             .drawBehind {
                 val a = lift.value
@@ -209,11 +209,12 @@ fun SheetRow(
         if (icon != null) Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(28.dp))
         if (subtitle != null) {
             Column(Modifier.weight(1f).padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(subtitle, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         } else {
-            Text(title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            // A long title wraps to a second line and the row grows, rather than losing its end.
+            Text(title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
         }
         if (value != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
