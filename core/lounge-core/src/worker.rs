@@ -656,7 +656,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             let wide = r.thumbnail.as_deref();
             let portrait = r.poster.as_deref();
             if r.item.kind == PluginItemKind::Wallpaper {
-                let style = if r.item.framed { Style::WallpaperFit } else { Style::Wallpaper };
+                let style = Style::wallpaper(r.item.framed, inner.config.uhd_wallpapers());
                 return ProgramArt { wallpaper: plan.want(wide.or(portrait), style), ..Default::default() };
             }
             ProgramArt {

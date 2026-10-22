@@ -62,12 +62,13 @@ import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LoungeVisuals
 import tv.lounge.design.lightsFilter
 import tv.lounge.design.sounds
+import tv.lounge.platform.PanelSize
 import tv.lounge.platform.Prefs
 import tv.lounge.power.PowerSetup
 import tv.lounge.power.PowerStatus
 import tv.lounge.power.PrivilegedException
 
-private const val SLIDE_MS = 45_000L
+internal const val SLIDE_MS = 45_000L
 private const val DRIFT_MS = 60_000L
 internal const val LATE_AFTER_MS = 30 * 60_000L
 internal const val LATE_DIM_MS = 60_000L
@@ -135,6 +136,28 @@ fun AmbientScreen(core: CoreClient) {
     }
 
     val slide = slides.getOrNull(index % slides.size.coerceAtLeast(1))
+    // A panel with more pixels than the TV draws its apps at gets the pictures on a surface of
+    // its own size; the captions stay in Compose over it.
+    val panel = remember { PanelSize.of(context) }
+    val window = remember { PanelSize.window(context) }
+    val onPanel = panel.height > window.height && panel.width > 0
+    if (onPanel) {
+        Box(Modifier.fillMaxSize()) {
+            PanelPictures(
+                slide = slide,
+                slideIndex = index,
+                brightness = brightness,
+                drift = drift,
+                panel = panel,
+                window = window,
+                stepMs = if (visuals === LoungeVisuals.TierA) 250L else 500L,
+                reducedMotion = motion.reducedMotion,
+                modifier = Modifier.fillMaxSize(),
+            )
+            AmbientCaption(clock, slide?.title, slide?.category, drift)
+        }
+        return
+    }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Box(Modifier.fillMaxSize().offset { drift }) {
             Crossfade(targetState = slide, animationSpec = tween(if (motion.reducedMotion) 0 else 2_400, easing = FastOutSlowInEasing), label = "ambient") { s ->

@@ -213,9 +213,10 @@ the installer refuses a bundle where the two disagree. The SDK writes both from
 **Where an item goes.** A `resume` item joins Continue watching and is a candidate for the
 Stage. A `channel` joins Live now and the guide, and `schedule` items fill in what is on it. A
 `program` goes into the row its `row` names; without one it goes nowhere. A `wallpaper` is a
-picture for the screensaver: give it the picture as `thumbnail` (it is prepared at 1920×1080),
-a `title` and, if you like, a `subtitle`, which goes under the title on the screen; it needs no
-`action`. A wallpaper with `framed: true` is kept whole in its own shape and hung on the dark
+picture for the screensaver: give it the picture as `thumbnail`, a `title` and, if you like, a
+`subtitle`, which goes under the title on the screen; it needs no `action`. The picture is
+prepared for the panel, at 1920×1080 or 3840×2160, and never made larger than it came, so send
+the largest picture you have up to 12 MB and 13 million pixels. A wallpaper with `framed: true` is kept whole in its own shape and hung on the dark
 wall with a shadow, as a painting; the rest fill the screen. A `screensaver` is an abstract
 screensaver the TV draws itself; see [Screensavers](#screensavers).
 

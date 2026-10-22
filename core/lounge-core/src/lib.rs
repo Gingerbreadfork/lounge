@@ -39,6 +39,17 @@ pub struct CoreConfig {
     pub utc_offset_minutes: i32,
     pub has_tv_controls: bool,
     pub device_name: String,
+    /// The panel's own pixels, which can be more than the TV draws its apps at: screensaver
+    /// pictures are prepared for the panel. Zero when unknown.
+    pub screen_width: u32,
+    pub screen_height: u32,
+}
+
+impl CoreConfig {
+    /// A panel taller than 1080p gets screensaver pictures prepared at 2160p.
+    pub fn uhd_wallpapers(&self) -> bool {
+        self.screen_height >= 2000
+    }
 }
 
 #[derive(Clone, Debug, uniffi::Record)]

@@ -17,6 +17,7 @@ import tv.lounge.design.SpillMask
 import kotlinx.coroutines.flow.first
 import tv.lounge.platform.AndroidPlatform
 import tv.lounge.platform.DeviceTierDetector
+import tv.lounge.platform.PanelSize
 import tv.lounge.platform.Prefs
 
 @HiltAndroidApp
@@ -76,14 +77,19 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
         return core ?: throw IllegalStateException("core failed to open", coreError)
     }
 
-    private fun coreConfig() = CoreConfig(
-        dataDir = filesDir.absolutePath,
-        cacheDir = cacheDir.absolutePath,
-        tier = DeviceTierDetector.detect(this),
-        utcOffsetMinutes = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000,
-        hasTvControls = power.hasTvControls,
-        deviceName = android.os.Build.MODEL,
-    )
+    private fun coreConfig(): CoreConfig {
+        val panel = PanelSize.of(this)
+        return CoreConfig(
+            dataDir = filesDir.absolutePath,
+            cacheDir = cacheDir.absolutePath,
+            tier = DeviceTierDetector.detect(this),
+            utcOffsetMinutes = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000,
+            hasTvControls = power.hasTvControls,
+            deviceName = android.os.Build.MODEL,
+            screenWidth = panel.width.coerceAtLeast(0).toUInt(),
+            screenHeight = panel.height.coerceAtLeast(0).toUInt(),
+        )
+    }
 
     companion object {
         @Volatile var startedAt: Long = android.os.SystemClock.uptimeMillis()

@@ -142,6 +142,8 @@ fn a_dvr_plugin_fills_the_guide_and_answers_search() {
         utc_offset_minutes: 0,
         has_tv_controls: false,
         device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
     };
     let platform = Arc::new(Recorder::default());
     let core = Core::open(config, platform.clone()).unwrap();

@@ -155,7 +155,8 @@ use from the phone or the TV's settings; each asks only for what it needs.
   needed, and opens videos in the YouTube app.
 - **Internet Archive** fills rows with free feature films, cartoons and television from
   archive.org, played on the TV, and searches its films.
-- **Immich photos** turns an album shared from your Immich server into the screensaver.
+- **Immich photos** turns an album shared from your Immich server into the screensaver, at
+  Immich's preview size.
 - **Kodi** reads a Kodi library over its own remote control: half-watched films and episodes in
   Continue watching, the next episode of each show, what was added lately, and Live TV channels
   with their guide. Selecting something tells Kodi to play it, on this TV or on a box across the
@@ -167,7 +168,8 @@ use from the phone or the TV's settings; each asks only for what it needs.
   game and the viewers, and opens them in the Twitch app.
 - **Art mode** hangs public-domain paintings from the Met and the Cleveland Museum of Art on the
   screensaver, whole and in their own shape, with the painter, the year and the museum under the
-  clock. The wall changes with every refresh; a painter or a subject narrows it.
+  clock, from the museums' large pictures. The wall changes with every refresh; a painter or a
+  subject narrows it.
 
 A sixteenth, **Sample library**, lives in the repository but not the APK: eighteen public-domain
 films with their posters, a few left part-watched, so you can see Lounge with something on it.

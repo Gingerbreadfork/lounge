@@ -22,8 +22,8 @@ pub type Result<T> = std::result::Result<T, ArtworkError>;
 /// Sources larger than this are not decoded at all; a picture for a TV tile never needs it.
 const MAX_SOURCE_BYTES: u64 = 12 * 1024 * 1024;
 const MAX_SOURCE_SIDE: u32 = 8192;
-/// Most pixels a source may decode to: 4000×3000, about 48 MB as RGBA.
-const MAX_SOURCE_PIXELS: u64 = 12_000_000;
+/// Most pixels a source may decode to: a 12 megapixel photo, about 52 MB as RGBA.
+const MAX_SOURCE_PIXELS: u64 = 13_000_000;
 /// The lowered Stage's band: full width × 200 at 1080p.
 const BAND_ASPECT: f64 = 1728.0 / 200.0;
 
@@ -54,6 +54,10 @@ pub enum Style {
     Wallpaper,
     /// A screensaver picture fitted whole inside 1920×1080, its own shape kept: a painting.
     WallpaperFit,
+    /// [`Style::Wallpaper`] for a 2160p panel.
+    WallpaperUhd,
+    /// [`Style::WallpaperFit`] for a 2160p panel.
+    WallpaperFitUhd,
 }
 
 impl Style {
@@ -72,12 +76,30 @@ impl Style {
             Style::Logo => (160, 160),
             Style::Wallpaper => (1920, 1080),
             Style::WallpaperFit => (1920, 1080),
+            Style::WallpaperUhd => (3840, 2160),
+            Style::WallpaperFitUhd => (3840, 2160),
+        }
+    }
+
+    /// The wallpaper styles for a panel: 2160p ones when `uhd`.
+    pub fn wallpaper(framed: bool, uhd: bool) -> Style {
+        match (framed, uhd) {
+            (false, false) => Style::Wallpaper,
+            (true, false) => Style::WallpaperFit,
+            (false, true) => Style::WallpaperUhd,
+            (true, true) => Style::WallpaperFitUhd,
         }
     }
 
     /// Styles that fit the whole image inside the target instead of cover-cropping it.
     fn fits(self) -> bool {
-        matches!(self, Style::HeroFit | Style::Logo | Style::WallpaperFit)
+        matches!(self, Style::HeroFit | Style::Logo | Style::WallpaperFit | Style::WallpaperFitUhd)
+    }
+
+    /// A screensaver picture is never made larger than it came: the panel scales it as well as
+    /// the resampler would, and the file stays small.
+    fn never_upsamples(self) -> bool {
+        matches!(self, Style::Wallpaper | Style::WallpaperFit | Style::WallpaperUhd | Style::WallpaperFitUhd)
     }
 
     pub fn slug(self) -> &'static str {
@@ -95,6 +117,8 @@ impl Style {
             Style::Logo => "logo",
             Style::Wallpaper => "wall",
             Style::WallpaperFit => "wallfit",
+            Style::WallpaperUhd => "walluhd",
+            Style::WallpaperFitUhd => "wallfituhd",
         }
     }
 
@@ -172,9 +196,19 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
             let (mut tw, mut th) = style.target();
             let out_path = out_dir.join(format!("{}-{}.{}", &hash[..20], style.slug(), if opaque { "jpg" } else { "png" }));
             if style.fits() && sw > 0 && sh > 0 {
-                let scale = (tw as f64 / sw as f64).min(th as f64 / sh as f64);
+                let mut scale = (tw as f64 / sw as f64).min(th as f64 / sh as f64);
+                if style.never_upsamples() {
+                    scale = scale.min(1.0);
+                }
                 tw = ((sw as f64 * scale).round() as u32).max(1);
                 th = ((sh as f64 * scale).round() as u32).max(1);
+            } else if style.never_upsamples() && sw > 0 && sh > 0 {
+                // The target's shape at the source's own scale, when the source is smaller.
+                let scale = (tw as f64 / sw as f64).max(th as f64 / sh as f64);
+                if scale > 1.0 {
+                    tw = ((tw as f64 / scale).round() as u32).max(1);
+                    th = ((th as f64 / scale).round() as u32).max(1);
+                }
             }
             if !out_path.exists() {
                 let mut scaled = if style == Style::Band {
@@ -571,10 +605,27 @@ mod tests {
     }
 
     #[test]
+    fn a_wallpaper_is_never_made_larger_than_it_came() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("small.png");
+        RgbaImage::from_pixel(1280, 960, Rgba([120, 90, 60, 255])).save(&src).unwrap();
+        let p = prepare(&src, dir.path(), Style::WallpaperUhd).unwrap();
+        assert_eq!((p.width, p.height), (1280, 720));
+        let p = prepare(&src, dir.path(), Style::WallpaperFitUhd).unwrap();
+        assert_eq!((p.width, p.height), (1280, 960));
+        assert_eq!(Style::wallpaper(true, true), Style::WallpaperFitUhd);
+        assert_eq!(Style::wallpaper(false, false), Style::Wallpaper);
+    }
+
+    #[test]
     fn a_fitted_wallpaper_keeps_its_shape() {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("portrait.png");
         synthetic(600, 800).save(&src).unwrap();
+        let p = prepare(&src, &dir.path().join("art"), Style::WallpaperFit).unwrap();
+        assert_eq!((p.width, p.height), (600, 800));
+        let src = dir.path().join("tall.png");
+        synthetic(1500, 2000).save(&src).unwrap();
         let p = prepare(&src, &dir.path().join("art"), Style::WallpaperFit).unwrap();
         assert_eq!((p.width, p.height), (810, 1080));
     }
