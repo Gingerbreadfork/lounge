@@ -477,6 +477,9 @@ private fun StageStrip(
                     onFocused = { focused, _ -> if (focused) onStripFocused(index, tile) },
                     onClick = { onStripClick(tile) },
                     onLongPress = { bounds -> onStripLongPress(tile, bounds, stripRequester(index)) },
+                    // On the tile itself: a lowered strip's tiles lie below the rows in layout
+                    // and a search downward from the last row would otherwise land on one.
+                    modifier = Modifier.focusProperties { if (!canTakeFocus()) canFocus = false },
                     chrome = false,
                 )
             }

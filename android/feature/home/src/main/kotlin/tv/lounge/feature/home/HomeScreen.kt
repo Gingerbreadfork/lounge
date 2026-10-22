@@ -33,6 +33,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
@@ -42,8 +43,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -337,10 +340,29 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
 
     // While an anchored menu is open the room dims around its tile (the rows dim their tiles).
     val roomAlpha = animateFloatAsState(if (homeMenu != null) 0.5f else 1f, motion.settle(), label = "roomAlpha")
+    val focusManager = LocalFocusManager.current
 
     Box(
         Modifier
             .fillMaxSize()
+            .onKeyEvent { e ->
+                // A d-pad move that finds nothing stays where it is. Left to Compose, a failed
+                // search clears focus and starts over from the first element, which from the last
+                // row looked like a loop back to the top.
+                val direction = when (e.key) {
+                    Key.DirectionUp -> FocusDirection.Up
+                    Key.DirectionDown -> FocusDirection.Down
+                    Key.DirectionLeft -> FocusDirection.Left
+                    Key.DirectionRight -> FocusDirection.Right
+                    else -> null
+                }
+                if (direction != null && e.type == KeyEventType.KeyDown) {
+                    focusManager.moveFocus(direction)
+                    true
+                } else {
+                    false
+                }
+            }
             .focusProperties {
                 onEnter = {
                     if (hasStrip && state.overlay == Overlay.None && state.region == FocusRegion.Stage) {
@@ -412,6 +434,11 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                                 clip = true
                             }
                             .onFocusChanged { if (it.hasFocus) state.region = FocusRegion.Rows }
+                            .onPreviewKeyEvent { e ->
+                                // Down from the last row stays there: the lowered Stage's strip
+                                // sits below it in layout and must not be found.
+                                e.key == Key.DirectionDown && e.type == KeyEventType.KeyDown && state.focusedRowId == snapshot.rows.lastOrNull()?.id
+                            }
                             .focusGroup(),
                     ) {
                     items(snapshot.rows, key = { it.id }) { row ->
@@ -445,7 +472,11 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                             // system launcher, instead of whichever tile happens to sit underneath.
                             val firstRow = snapshot.rows.firstOrNull()
                             if (e.key == Key.DirectionDown && e.type == KeyEventType.KeyDown && !state.playbillFocused && firstRow != null) {
-                                scope.launch { state.focusRow(firstRow.id) }
+                                scope.launch {
+                                    // The first row has to be composed to take focus.
+                                    if (listState.firstVisibleItemIndex > 0) listState.scrollToItem(0)
+                                    state.focusRow(firstRow.id)
+                                }
                                 true
                             } else {
                                 false
