@@ -1,7 +1,7 @@
 //! Art mode: public-domain paintings from the Met and the Cleveland Museum of Art become the
 //! screensaver, each hung whole with the painter, the year and the museum under the clock. Every
 //! refresh brings a few more into the gallery, and the wall shows a different selection each time.
-use lounge_plugin_sdk::{self as sdk, host, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 
 pub struct Art;
@@ -9,8 +9,13 @@ pub struct Art;
 const GALLERY_KEY: &str = "gallery";
 /// Paintings remembered between refreshes; the oldest go when the gallery is full.
 const GALLERY_CAP: usize = 300;
-/// Met objects looked up per refresh: one fetch each, inside the host's budget with room to spare.
-const MET_PER_REFRESH: usize = 36;
+/// Met objects looked up per refresh: two fetches each, inside the host's budget with room to spare.
+const MET_PER_REFRESH: usize = 28;
+/// The TV prepares a picture of up to 12 MB and 13 million pixels; the Met's originals run
+/// about two thirds of a byte a pixel, so this many bytes stays inside both.
+const MET_ORIGINAL_MAX_BYTES: u64 = 7_500_000;
+const PICTURE_MAX_BYTES: u64 = 12 * 1024 * 1024;
+const PICTURE_MAX_PIXELS: u64 = 13_000_000;
 const MET_PAGE: usize = 40;
 const CMA_PAGE: usize = 60;
 const MET: &str = "The Met";
@@ -217,6 +222,8 @@ pub struct MetObject {
     pub date: String,
     #[serde(rename = "primaryImageSmall", default)]
     pub image: String,
+    #[serde(rename = "primaryImage", default)]
+    pub original: String,
     #[serde(rename = "isPublicDomain", default)]
     pub public_domain: bool,
     #[serde(default)]
@@ -249,18 +256,34 @@ fn met_slice(query: &str, offset: usize, gallery: &Gallery) -> Result<(Vec<Paint
                 continue;
             }
         };
-        if let Some(p) = serde_json::from_str::<MetObject>(&body).ok().and_then(met_painting) {
+        if let Some(p) = serde_json::from_str::<MetObject>(&body).ok().and_then(|o| met_painting(o, &mut met_original_fits)) {
             found.push(p);
         }
     }
     Ok((found, next))
 }
 
-pub fn met_painting(o: MetObject) -> Option<Painting> {
+/// Whether the original is small enough for the TV to prepare: one HEAD request. The small
+/// picture the Met offers otherwise is a few hundred pixels across.
+fn met_original_fits(url: &str) -> bool {
+    let req = HttpRequest { method: "HEAD".into(), url: url.to_string(), headers: Default::default(), body: None, timeout_ms: 0 };
+    match host::fetch(&req) {
+        Ok(r) if (200..300).contains(&r.status) => r
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("content-length"))
+            .and_then(|(_, v)| v.trim().parse::<u64>().ok())
+            .is_some_and(|n| n <= MET_ORIGINAL_MAX_BYTES),
+        _ => false,
+    }
+}
+
+pub fn met_painting(o: MetObject, original_fits: &mut dyn FnMut(&str) -> bool) -> Option<Painting> {
     if !o.public_domain || o.image.is_empty() || !o.classification.starts_with("Paintings") || o.title.trim().is_empty() {
         return None;
     }
-    Some(Painting { id: format!("met:{}", o.object_id), title: clip(o.title.trim(), 80), line: line(&o.artist, &o.date, MET), url: o.image, museum: MET.into() })
+    let url = if !o.original.is_empty() && original_fits(&o.original) { o.original } else { o.image };
+    Some(Painting { id: format!("met:{}", o.object_id), title: clip(o.title.trim(), 80), line: line(&o.artist, &o.date, MET), url, museum: MET.into() })
 }
 
 // ---------------------------------------------------------------------------
@@ -305,12 +328,32 @@ pub struct CmaCreator {
 pub struct CmaImages {
     #[serde(default)]
     pub web: Option<CmaImage>,
+    #[serde(default)]
+    pub print: Option<CmaImage>,
 }
 
+/// Cleveland gives sizes as strings.
 #[derive(Deserialize, Default)]
 pub struct CmaImage {
     #[serde(default)]
     pub url: String,
+    #[serde(default)]
+    pub width: String,
+    #[serde(default)]
+    pub height: String,
+    #[serde(default)]
+    pub filesize: String,
+}
+
+impl CmaImage {
+    /// A print-size picture the TV can prepare: inside its byte and pixel limits.
+    fn fits(&self) -> bool {
+        let n = |s: &str| s.trim().parse::<u64>().ok();
+        match (n(&self.width), n(&self.height), n(&self.filesize)) {
+            (Some(w), Some(h), Some(bytes)) => w * h <= PICTURE_MAX_PIXELS && bytes <= PICTURE_MAX_BYTES,
+            _ => false,
+        }
+    }
 }
 
 fn cma_slice(query: &str, skip: usize) -> Result<(Vec<Painting>, usize), String> {
@@ -322,7 +365,9 @@ fn cma_slice(query: &str, skip: usize) -> Result<(Vec<Painting>, usize), String>
 }
 
 pub fn cma_painting(w: CmaWork) -> Option<Painting> {
-    let url = w.images.and_then(|i| i.web).map(|i| i.url).filter(|u| u.starts_with("https://"))?;
+    let images = w.images?;
+    let print = images.print.filter(|p| p.fits() && p.url.starts_with("https://"));
+    let url = print.or(images.web).map(|i| i.url).filter(|u| u.starts_with("https://"))?;
     if w.title.trim().is_empty() {
         return None;
     }
@@ -361,36 +406,45 @@ mod tests {
         let o: MetObject = serde_json::from_str(r#"{"objectID": 436535, "isHighlight": true, "isPublicDomain": true, "primaryImage": "https://images.metmuseum.org/CRDImages/ep/original/DP-42549-001.jpg",
             "primaryImageSmall": "https://images.metmuseum.org/CRDImages/ep/web-large/DP-42549-001.jpg", "department": "European Paintings", "objectName": "Painting",
             "title": "Wheat Field with Cypresses", "artistDisplayName": "Vincent van Gogh", "objectDate": "1889", "classification": "Paintings"}"#).unwrap();
-        let p = met_painting(o).unwrap();
+        let mut small = |_: &str| false;
+        let p = met_painting(o, &mut small).unwrap();
         assert_eq!(p.id, "met:436535");
         assert_eq!(p.line, "Vincent van Gogh, 1889, The Met");
         assert!(p.url.contains("web-large"));
+        let o: MetObject = serde_json::from_str(r#"{"objectID": 436535, "isPublicDomain": true, "primaryImage": "https://images.metmuseum.org/CRDImages/ep/original/DP-42549-001.jpg",
+            "primaryImageSmall": "https://images.metmuseum.org/CRDImages/ep/web-large/DP-42549-001.jpg", "title": "Wheat Field with Cypresses", "classification": "Paintings"}"#).unwrap();
+        let mut large = |u: &str| u.contains("original");
+        assert!(met_painting(o, &mut large).unwrap().url.contains("/original/"));
         let item = p.to_item(3);
         assert_eq!(item.kind, ItemKind::Wallpaper);
         assert!(item.framed);
         assert_eq!(item.subtitle.as_deref(), Some("Vincent van Gogh, 1889, The Met"));
 
         let drawing: MetObject = serde_json::from_str(r#"{"objectID": 1, "isPublicDomain": true, "primaryImageSmall": "https://images.metmuseum.org/x.jpg", "title": "Study", "classification": "Drawings"}"#).unwrap();
-        assert!(met_painting(drawing).is_none());
+        assert!(met_painting(drawing, &mut small).is_none());
         let copyrighted: MetObject = serde_json::from_str(r#"{"objectID": 2, "isPublicDomain": false, "primaryImageSmall": "https://images.metmuseum.org/x.jpg", "title": "Late", "classification": "Paintings"}"#).unwrap();
-        assert!(met_painting(copyrighted).is_none());
+        assert!(met_painting(copyrighted, &mut small).is_none());
         let anonymous: MetObject = serde_json::from_str(r#"{"objectID": 3, "isPublicDomain": true, "primaryImageSmall": "https://images.metmuseum.org/x.jpg", "title": "Saint", "objectDate": "ca. 1300", "classification": "Paintings"}"#).unwrap();
-        assert_eq!(met_painting(anonymous).unwrap().line, "ca. 1300, The Met");
+        assert_eq!(met_painting(anonymous, &mut small).unwrap().line, "ca. 1300, The Met");
     }
 
     #[test]
     fn a_cleveland_work_becomes_a_painting() {
         let page: CmaPage = serde_json::from_str(r#"{"info": {"total": 3907}, "data": [
             {"id": 94979, "title": "Nathaniel Hurd", "creation_date": "c. 1765",
-             "images": {"web": {"url": "https://openaccess-cdn.clevelandart.org/1915.534/1915.534_web.jpg", "width": "748", "height": "893"}},
+             "images": {"web": {"url": "https://openaccess-cdn.clevelandart.org/1915.534/1915.534_web.jpg", "width": "748", "height": "893", "filesize": "402404"},
+                        "print": {"url": "https://openaccess-cdn.clevelandart.org/1915.534/1915.534_print.jpg", "width": "2849", "height": "3400", "filesize": "5904910"}},
              "creators": [{"description": "John Singleton Copley (American, born The Thirteen Colonies, 1738–1815)", "role": "artist"}]},
+            {"id": 2, "title": "Huge print", "images": {"web": {"url": "https://openaccess-cdn.clevelandart.org/w.jpg"}, "print": {"url": "https://openaccess-cdn.clevelandart.org/p.jpg", "width": "6000", "height": "4000", "filesize": "9000000"}}},
             {"id": 1, "title": "No picture", "creators": []}
         ]}"#).unwrap();
         assert_eq!(page.info.total, 3907);
         let paintings: Vec<Painting> = page.data.into_iter().filter_map(cma_painting).collect();
-        assert_eq!(paintings.len(), 1);
+        assert_eq!(paintings.len(), 2);
         assert_eq!(paintings[0].id, "cma:94979");
+        assert!(paintings[0].url.ends_with("_print.jpg"));
         assert_eq!(paintings[0].line, "John Singleton Copley, c. 1765, Cleveland Museum of Art");
+        assert!(paintings[1].url.ends_with("/w.jpg"));
     }
 
     fn painting(id: &str) -> Painting {
