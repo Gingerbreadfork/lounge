@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.Animatable
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,9 +22,14 @@ import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
@@ -99,8 +105,32 @@ fun LightField(state: LightState, modifier: Modifier = Modifier) {
     val visuals = LoungeTheme.visuals
     if (visuals.shaderWallpaper && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         LightFieldImpl(state, modifier)
+        Grain(modifier)
     } else {
         BackdropSpill(state, modifier)
+    }
+}
+
+/**
+ * Grain at the screen's own resolution over the field. The field is drawn small and scaled up,
+ * which smooths its own grain away, and its slow dark gradients then show as moving contour
+ * lines on an 8-bit panel; two levels of noise per pixel break the contours up.
+ */
+@Composable
+private fun Grain(modifier: Modifier) {
+    val brush = remember { ShaderBrush(ImageShader(GrainTexture.bitmap, TileMode.Repeated, TileMode.Repeated)) }
+    Canvas(modifier.fillMaxSize()) { drawRect(brush, blendMode = BlendMode.Plus) }
+}
+
+private object GrainTexture {
+    val bitmap: ImageBitmap by lazy {
+        val n = 128
+        val random = java.util.Random(7)
+        val px = IntArray(n * n) {
+            val v = random.nextInt(3)
+            (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+        }
+        android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
     }
 }
 
@@ -169,6 +199,8 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
         }
     }
     val idleLevel = rememberIdleLevel(state.idle)
+    // The spill goes and comes back over `settle` when nothing holds the light, not in a frame.
+    val activeLevel = animateFloatAsState(if (state.active) 1f else 0f, if (state.active) motion.snap() else motion.settle(), label = "spillActive")
     val spillAlpha = 0.20f * colors.spillScale
     val ampBase = colors.spillScale * (if (night) 1f else 0.7f)
     val billAlpha = 0.22f * colors.spillScale
@@ -208,7 +240,7 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
         shader.setColorUniform("tint", android.graphics.Color.valueOf(sc.red, sc.green, sc.blue, 1f))
         shader.setFloatUniform("spill", c.x / scale, c.y / scale)
         shader.setFloatUniform("spillR", Dimens.spillRadius.toPx() / scale)
-        shader.setFloatUniform("spillAlpha", if (state.active) spillAlpha * level else 0f)
+        shader.setFloatUniform("spillAlpha", spillAlpha * level * activeLevel.value)
         shader.setColorUniform("spillColor", android.graphics.Color.valueOf(sc.red, sc.green, sc.blue, 1f))
         if (bill != null) {
             shader.setFloatUniform("bill", bill.center.x / scale, bill.center.y / scale)
