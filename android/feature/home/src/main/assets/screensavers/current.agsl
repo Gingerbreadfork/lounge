@@ -1,0 +1,36 @@
+// Current: slow water with something in it, silt or oil, folding over itself under one light.
+uniform float2 resolution;
+uniform float time;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 signal;
+layout(color) uniform half4 dust;
+
+half4 main(float2 coord) {
+    float2 p = (coord - 0.5 * resolution) / resolution.y * 2.2;
+    float t = time * 0.05;
+    float2 q = p;
+    float stretch = 0.0;
+    // The field is bent again and again by slow waves, the way a stream carries whatever is in it.
+    for (int i = 0; i < 5; i++) {
+        float fi = float(i) + 1.0;
+        float2 w = float2(sin(q.y * (0.9 + 0.35 * fi) + t * (0.7 + 0.15 * fi) + fi * 1.7),
+                          cos(q.x * (0.8 + 0.3 * fi) - t * (0.5 + 0.12 * fi) + fi * 0.9));
+        q += w * (0.42 / fi);
+        stretch += dot(w, w) / fi;
+    }
+    float stream = 0.5 + 0.5 * sin(q.x * 2.2 + q.y * 1.4);
+    float threads = 0.5 + 0.5 * sin(q.x * 5.0 - q.y * 3.0 + 1.0);
+    float t3 = threads * threads * threads;
+    float ridges = stream * stream * stream;
+    float lamp = smoothstep(1.8, 0.1, length(p - float2(0.4, -0.3)));
+
+    half3 silt = mix(dust.rgb, houselight.rgb, half(0.35));
+    half3 body = mix(velvet.rgb * 0.9, mix(horizon.rgb * 2.4, silt, half(0.45)), half(smoothstep(0.05, 0.95, stream)));
+    half3 col = body;
+    col += signal.rgb * half(0.6 * t3 * t3 * stream);
+    col += silt * half(0.6 * ridges * (0.4 + 0.6 * lamp));
+    col *= half(0.95 - 0.25 * length(p * float2(0.6, 1.0)) + 0.05 * stretch);
+    return half4(col, 1.0);
+}

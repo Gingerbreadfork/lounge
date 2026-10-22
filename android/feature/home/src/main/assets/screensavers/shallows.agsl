@@ -1,0 +1,35 @@
+// Shallows: light on the floor of a pool, with the surface above it never quite still.
+uniform float2 resolution;
+uniform float time;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 signal;
+
+half4 main(float2 coord) {
+    float2 uv = coord / resolution.y * 1.4;
+    // Far from the origin the folded sines cross often, which is what makes the net of light.
+    float2 p = mod(uv * 6.28318, 6.28318) - 250.0;
+    float2 i = p;
+    float t = time * 0.3;
+    float c = 0.0;
+    for (int n = 0; n < 3; n++) {
+        float tn = t * (1.0 - 3.5 / (float(n) + 1.0));
+        i = p + float2(cos(tn - i.x) + sin(tn + i.y), sin(tn - i.y) + cos(tn + i.x));
+        c += 1.0 / length(float2(p.x / (sin(i.x + tn) * 200.0), p.y / (cos(i.y + tn) * 200.0)));
+    }
+    c /= 3.0;
+    c = 1.17 - pow(c, 1.4);
+    // Only the crossings light up: a net of thin lines over a dark floor.
+    float caustic = smoothstep(0.93, 1.17, abs(c));
+    caustic *= caustic;
+
+    float2 q = (coord - 0.5 * resolution) / resolution.y;
+    float depth = smoothstep(-0.6, 0.6, q.y * 0.9 - q.x * 0.25);
+    half3 floor = mix(horizon.rgb * 1.4, velvet.rgb * 0.7, half(depth));
+    half3 col = floor * half(0.8 + 0.2 * (1.0 - depth));
+    col += signal.rgb * half(0.9 * caustic);
+    col += houselight.rgb * half(0.35 * caustic * caustic);
+    col *= half(1.0 - 0.3 * smoothstep(0.55, 1.1, length(q * float2(0.6, 1.0))));
+    return half4(col, 1.0);
+}

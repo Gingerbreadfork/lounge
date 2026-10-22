@@ -1,0 +1,44 @@
+// Embers: sparks lifting off a fire that has burned down, each on its own slow way up and out.
+uniform float2 resolution;
+uniform float time;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+
+float2 hash2(float2 p) {
+    float3 p3 = fract(float3(p.xyx) * float3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+// One layer of sparks: a cell may hold one, which rises with the layer, sways more as it goes,
+// flickers, and goes out before its cell comes round again.
+float sparks(float2 p, float t, float scale, float speed, float size) {
+    float2 c = p * scale;
+    c.y -= t * speed;
+    float2 id = floor(c);
+    float2 f = fract(c) - 0.5;
+    float2 rnd = hash2(id);
+    float present = step(0.5, rnd.x);
+    float life = fract(t * (0.07 + 0.08 * rnd.y) + rnd.x * 9.0);
+    float sway = 0.3 * sin(t * (0.6 + rnd.y) + rnd.x * 20.0) * (0.3 + life);
+    float2 d = f - float2(sway, 0.0);
+    float glow = exp(-dot(d, d) / (size * size));
+    float flicker = 0.7 + 0.3 * sin(t * (9.0 + 14.0 * rnd.y) + rnd.x * 30.0);
+    float alive = smoothstep(0.0, 0.1, life) * (1.0 - smoothstep(0.55, 1.0, life));
+    return glow * flicker * alive * present;
+}
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 1.0 - coord.y / resolution.y);
+    float t = time;
+    float breathe = 0.8 + 0.2 * sin(t * 1.3 + p.x * 7.0) * sin(t * 0.7 - p.x * 3.0);
+    half3 col = velvet.rgb * half(0.7) + horizon.rgb * half(0.6 * exp(-p.y * 3.0));
+    col += ember.rgb * half(0.3 * exp(-p.y * 2.2) * breathe);
+
+    float s = 1.3 * sparks(p, t, 7.0, 0.9, 0.05) + 0.8 * sparks(p + float2(3.1, 0.0), t * 0.85, 13.0, 0.55, 0.032);
+    half3 spark = mix(ember.rgb, houselight.rgb, half(0.6));
+    col += spark * half(s * (1.0 - smoothstep(0.4, 1.6, p.y)));
+    return half4(col, 1.0);
+}

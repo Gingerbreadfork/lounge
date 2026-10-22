@@ -1,5 +1,10 @@
 [
   { "id": "ink", "name": "Ink", "description": "Light moving through ink in water", "file": "ink.agsl" },
+  { "id": "current", "name": "Current", "description": "Slow water folding over itself under one light", "file": "current.agsl" },
+  { "id": "rain", "name": "Rain", "description": "A window at night, drops running down the glass", "file": "rain.agsl" },
+  { "id": "smoke", "name": "Smoke", "description": "Wisps rising and thinning as they climb", "file": "smoke.agsl" },
+  { "id": "embers", "name": "Embers", "description": "Sparks lifting off a fire that has burned down", "file": "embers.agsl" },
+  { "id": "shallows", "name": "Shallows", "description": "Light on the floor of a pool", "file": "shallows.agsl" },
   { "id": "lava", "name": "Lava", "description": "A lava lamp, slowly", "file": "lava.agsl" },
   { "id": "aurora", "name": "Aurora", "description": "Northern lights over the hills", "file": "aurora.agsl" },
   { "id": "silk", "name": "Silk", "description": "Folds of satin turning under the lamp", "file": "silk.agsl" }
