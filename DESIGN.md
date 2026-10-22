@@ -370,7 +370,7 @@ No sound on Home, on scroll end, or on errors (the toast is enough).
 | Idle dim | On | On | On (free) |
 | Light field clock | 333 ms steps; sleeps after 60 s idle | 500 ms steps; sleeps after 60 s idle | Off |
 | Screensaver push-in | Stepped at 4 Hz | Stepped at 2 Hz | Off |
-| Abstract scenes | 30 fps, a third of the resolution down to a sixth by GPU time | Same | Same; Android 13 or later |
+| Abstract scenes | 30 fps, half the resolution down to a sixth by GPU time | Same | Same; Android 13 or later |
 
 ## 13. Streamer-specific (primary device)
 
