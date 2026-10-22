@@ -207,7 +207,7 @@ on it, and never show it smaller than 36 dp wide.
 
 | State | Brightness | Saturation | Notes |
 |---|---|---|---|
-| Focused | 1.00 | 1.00 | Glow + spill + scale |
+| Focused | 1.00 | 1.00 | Glow + spill + scale, and a 2 px `limelight` rim at 62 % just inside the tile's edge |
 | Neighbour (±1 in the same row) | 0.86 | 1.00 | Lit from the side |
 | Rested (same row) | 0.78 | 0.92 | |
 | Other rows | 0.70 | 0.88 | |

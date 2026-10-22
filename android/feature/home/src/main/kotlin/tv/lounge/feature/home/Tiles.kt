@@ -77,7 +77,7 @@ import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.ProgressBar
 import tv.lounge.design.argb
-import tv.lounge.design.focusRing
+import tv.lounge.design.focusRim
 import tv.lounge.design.lightGlow
 import tv.lounge.design.lightState
 import tv.lounge.design.lightsFilter
@@ -147,6 +147,7 @@ fun TileView(
         },
         label = "tileGlow",
     )
+    val rim = animateFloatAsState(if (lit) 1f else 0f, if (lit) motion.snap() else motion.settle(), label = "tileRim")
     val initial = remember { (if (lit) Lights.Focused else lights.value).dimmed(idle) }
     val animBrightness = remember { Animatable(initial.first) }
     val animSaturation = remember { Animatable(initial.second) }
@@ -205,7 +206,7 @@ fun TileView(
                 this.shape = shape
                 clip = true
             }
-            .focusRing(colors, { focused || held }, Dimens.tileRadius)
+            .focusRim(colors, { rim.value }, Dimens.tileRadius)
             .size(size)
             .then(if (needsCurtain) Modifier.background(colors.curtain) else Modifier),
     ) {

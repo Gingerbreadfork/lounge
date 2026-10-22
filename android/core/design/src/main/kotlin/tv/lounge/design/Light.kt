@@ -307,6 +307,25 @@ fun Modifier.focusRing(colors: LoungeColors, shown: () -> Boolean, cornerRadius:
     }
 }
 
+/**
+ * The rim on a focused tile: 2 px of `limelight` at 62 % just inside the edge, over the content,
+ * so the lit tile also reads at a glance from across the room (DESIGN.md §6.1). On the
+ * high-contrast theme it is that theme's full 3 px ring. [shown] is 0 to 1, read while drawing.
+ */
+fun Modifier.focusRim(colors: LoungeColors, shown: () -> Float, cornerRadius: Dp): Modifier = drawWithContent {
+    drawContent()
+    val a = shown()
+    if (a <= 0.001f) return@drawWithContent
+    val stroke = (if (colors.focusRing) 3.dp else 2.dp).toPx()
+    drawRoundRect(
+        colors.limelight.copy(alpha = if (colors.focusRing) 1f else 0.62f * a),
+        topLeft = Offset(stroke / 2f, stroke / 2f),
+        size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius((cornerRadius.toPx() - stroke / 2f).coerceAtLeast(0f)),
+        style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+    )
+}
+
 /** House-lights brightness states (DESIGN.md §6.1), as a colour matrix so blacks stay black. */
 enum class Lights(val brightness: Float, val saturation: Float) {
     Focused(1f, 1f),
