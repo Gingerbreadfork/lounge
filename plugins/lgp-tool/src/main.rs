@@ -16,7 +16,7 @@ use ed25519_dalek::{Signer, SigningKey};
 use lounge_plugin_api::{HttpRequest, HttpResponse, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
 use lounge_plugins::host::{Host, Limits, Services};
-use lounge_plugins::http::Fetcher;
+use lounge_plugins::http::{host_permitted, reach, Fetcher};
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -134,6 +134,7 @@ fn run(args: &[String]) -> Result<(), String> {
         Some(m) => m,
         None => host.manifest_of(&host.load("probe", Manifest::default(), &wasm).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?,
     };
+    let _ = services.manifest.set(manifest.clone());
     let plugin = host.load(&manifest.id.clone(), manifest, &wasm).map_err(|e| e.to_string())?;
     let fuel_used = Arc::new(Mutex::new(None));
     let _ = tracing::subscriber::set_global_default(FuelMeter(fuel_used.clone()));
@@ -297,6 +298,8 @@ struct RunServices {
     secrets: Mutex<HashMap<String, String>>,
     logs: Mutex<Vec<String>>,
     fixtures: Option<PathBuf>,
+    /// The plugin's manifest once it is known, for the TV's rules on where fetches may go.
+    manifest: std::sync::OnceLock<Manifest>,
 }
 
 impl Services for RunServices {
@@ -320,10 +323,14 @@ impl Services for RunServices {
         self.logs.lock().push(format!("{tag}: {message}"));
     }
     fn fetch(&self, _p: &str, request: &HttpRequest) -> Result<HttpResponse, String> {
-        match &self.fixtures {
-            Some(dir) => fixture(dir, &request.url),
-            None => Fetcher::new().fetch(request, &|_| true).map_err(|e| e.to_string()),
+        if let Some(dir) = &self.fixtures {
+            return fixture(dir, &request.url);
         }
+        let manifest = self.manifest.get().ok_or("nothing may be fetched while the manifest is read")?;
+        // The TV's own rules: the allow list on every hop, and loopback and the home network
+        // only where the TV would let the plugin reach them.
+        let setting = |key: &str| self.settings.lock().get(key).cloned();
+        Fetcher::guarded(reach(manifest, &setting)).fetch(request, &|host| host_permitted(manifest, host, &setting)).map_err(|e| e.to_string())
     }
 }
 

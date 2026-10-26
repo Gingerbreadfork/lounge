@@ -6,7 +6,7 @@ use crate::{now_ms, screensavers, worker, Inner, PluginInfo, PluginSettingInfo};
 use lounge_plugin_api::{valid_plugin_id, Action, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
 use lounge_plugins::host::{Host, Limits, LoadedPlugin, Services};
-use lounge_plugins::http::{Fetcher, Reach};
+use lounge_plugins::http::{host_permitted, reach, Fetcher, Reach};
 use lounge_store::PluginRow;
 use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -96,25 +96,6 @@ impl Fetchers {
     }
 }
 
-/// Where a plugin's fetches may lead besides the public internet, with its settings filled in.
-fn reach(manifest: &Manifest, setting: &dyn Fn(&str) -> Option<String>) -> Reach {
-    Reach { this_device: local_hosts(manifest), home: manifest.home_hosts(setting), any_home_name: manifest.reaches_local_network() }
-}
-
-/// Hosts that may lead back into the TV: only loopback names and address literals the plugin
-/// lists itself, so no DNS name can point a plugin at the TV's own services.
-fn local_hosts(manifest: &Manifest) -> Vec<String> {
-    let mut hosts: Vec<String> = manifest
-        .fetch_hosts
-        .iter()
-        .map(|h| h.trim().trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase())
-        .filter(|h| h == "localhost" || h.ends_with(".localhost") || h.parse::<std::net::IpAddr>().is_ok())
-        .collect();
-    hosts.sort();
-    hosts.dedup();
-    hosts
-}
-
 pub(crate) struct PluginManager {
     host: Host,
     dir: PathBuf,
@@ -178,19 +159,6 @@ impl Services for CoreServices {
         let fetcher = self.fetchers.for_plugin(plugin, &manifest, &setting);
         fetcher.fetch(request, &|host| host_permitted(&manifest, host, &setting)).map_err(|e| e.to_string())
     }
-}
-
-/// The manifest's allow list, with the plugin's settings for its `$key` entries, applied to every
-/// hop by name. The fetcher then checks the address each name resolves to, so loopback, the TV's
-/// own addresses and the home network stay out of reach whatever the name; this check keeps the
-/// obvious spellings from even being tried.
-pub(crate) fn host_permitted(manifest: &Manifest, host: &str, setting: &dyn Fn(&str) -> Option<String>) -> bool {
-    if !manifest.allows_host_with(host, setting) {
-        return false;
-    }
-    let h = host.to_ascii_lowercase();
-    let local = h == "localhost" || h == "0.0.0.0" || h == "::1" || h == "::" || h.starts_with("127.") || h.ends_with(".localhost");
-    !local || manifest.fetch_hosts.iter().any(|allowed| allowed.eq_ignore_ascii_case(&h))
 }
 
 /// Stores one of a plugin's settings. Moving an address setting to another host forgets the
@@ -854,12 +822,6 @@ mod tests {
         let (kept, dropped) = unique_by_id(vec![a, b, c]);
         assert_eq!(dropped, 1);
         assert_eq!(kept.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), vec!["First", "Other"]);
-    }
-
-    #[test]
-    fn only_literal_local_names_may_reach_the_tv() {
-        let m = Manifest { fetch_hosts: vec!["*".into(), "localhost".into(), "[::1]".into(), "192.168.1.5".into(), "evil.example".into(), "*.local".into()], ..Default::default() };
-        assert_eq!(local_hosts(&m), vec!["192.168.1.5", "::1", "localhost"]);
     }
 
     #[test]

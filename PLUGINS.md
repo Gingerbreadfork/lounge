@@ -355,7 +355,9 @@ lgp-tool run mine.lgp --resolve "play:his_girl_friday"
 lgp-tool run mine.wasm --fixtures ./fixtures
 ```
 
-`--set` and `--secret` stand in for the fields the user would fill. `--state file` keeps the
+`--set` and `--secret` stand in for the fields the user would fill. Live fetches follow the
+TV's rules, the allow list on every redirect and loopback and the home network only where the TV
+would allow them, so a host refused here is refused on the TV too. `--state file` keeps the
 key-value store in a JSON file between runs, as the TV keeps it between refreshes, so a sign-in
 that takes a refresh or two can be walked through. `--search` runs `search`
 instead of `refresh`, and `--resolve action` runs `resolve` for one action and prints what came
