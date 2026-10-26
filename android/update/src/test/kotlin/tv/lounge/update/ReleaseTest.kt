@@ -31,6 +31,19 @@ class ReleaseTest {
     }
 
     @Test
+    fun aReleaseThatKeepsFailingIsLeftAlone() {
+        var f = Failures(null, 0)
+        repeat(Failures.MAX_TRIES - 1) { f = f.after("v0.3.2", final = false) }
+        assertFalse(f.gaveUpOn("v0.3.2"))
+        f = f.after("v0.3.2", final = false)
+        assertTrue(f.gaveUpOn("v0.3.2"))
+        // A newer release starts afresh; one that can never install is left at once.
+        assertFalse(f.after("v0.3.3", final = false).gaveUpOn("v0.3.3"))
+        assertTrue(Failures(null, 0).after("v0.3.3", final = true).gaveUpOn("v0.3.3"))
+        assertFalse(Failures(null, 0).after("v0.3.3", final = true).gaveUpOn("v0.3.4"))
+    }
+
+    @Test
     fun theLatestReleaseIsRead() {
         val release = Release.parse(LATEST)!!
         assertEquals("v0.1.2", release.tag)

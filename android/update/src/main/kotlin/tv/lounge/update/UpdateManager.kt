@@ -110,6 +110,7 @@ class UpdateManager(
         return when {
             checked == 0L -> UpdateState.Idle(0L)
             release == null || installed == null || release.version <= installed -> UpdateState.UpToDate(checked)
+            failures.gaveUpOn(release.tag) -> UpdateState.Failed(gaveUpMessage(release), release, checked)
             else -> readyIfDownloaded(release) ?: UpdateState.Available(release)
         }
     }
@@ -183,6 +184,7 @@ class UpdateManager(
                     // Power Setup can report success without Android replacing the app; give up and retry later.
                     if (now - installingSince > INSTALL_TIMEOUT_MS) {
                         Log.w(TAG, "updates: the install of ${s.release.tag} never finished")
+                        noteFailure(s.release, final = false)
                         _state.value = UpdateState.Failed("The install did not finish", s.release, now)
                     }
                     return
@@ -190,6 +192,7 @@ class UpdateManager(
                 s is UpdateState.Checking || s is UpdateState.Downloading -> return
                 // Due checks run from every resting state, so a newer release replaces one still waiting.
                 now - lastAttemptMs > CHECK_EVERY_MS -> work.withLock { checkLocked(quiet = s.isWaiting()) }
+                s is UpdateState.Failed && s.release != null && failures.gaveUpOn(s.release.tag) -> return
                 s is UpdateState.Failed && now - s.atMs > RETRY_AFTER_MS -> if (s.release != null) download(s.release) else check()
                 s is UpdateState.Available -> download(s.release)
                 // A quiet install waits until the home is off screen; one that needs a confirmation
@@ -236,6 +239,7 @@ class UpdateManager(
                 when {
                     release == null -> UpdateState.UpToDate(now)
                     installed != null && release.version <= installed -> UpdateState.UpToDate(now)
+                    failures.gaveUpOn(release.tag) -> UpdateState.Failed(gaveUpMessage(release), release, now)
                     before.isWaiting() && before.release?.version == release.version -> before
                     else -> readyIfDownloaded(release) ?: UpdateState.Available(release)
                 }
@@ -254,7 +258,10 @@ class UpdateManager(
             val result = runCatching { fetchApk(release) }
             val next = result.fold(
                 onSuccess = { (file, hash) -> UpdateState.Ready(release, file, hash, currentPath()) },
-                onFailure = { UpdateState.Failed(it.message ?: "The download failed", release, System.currentTimeMillis()) },
+                onFailure = {
+                    noteFailure(release, final = false)
+                    UpdateState.Failed(it.message ?: "The download failed", release, System.currentTimeMillis())
+                },
             )
             _state.value = next
             next
@@ -278,11 +285,14 @@ class UpdateManager(
             _state.value = ready.copy(path = path)
             return _state.value
         }
-        val fail = { message: String -> UpdateState.Failed(message, ready.release, System.currentTimeMillis()).also { _state.value = it } }
+        val fail = { message: String, final: Boolean ->
+            noteFailure(ready.release, final)
+            UpdateState.Failed(message, ready.release, System.currentTimeMillis()).also { _state.value = it }
+        }
         runCatching { verify(ready.file, ready.sha256, ready.release) }.onFailure { e ->
             Log.w(TAG, "updates: ${ready.file.name} failed its check: ${e.message}")
             ready.file.delete()
-            return fail(e.message ?: "The update did not check out")
+            return fail(e.message ?: "The update did not check out", e is NotInstallable)
         }
         _state.value = UpdateState.Installing(ready.release)
         installingSince = System.currentTimeMillis()
@@ -303,10 +313,10 @@ class UpdateManager(
                 return _state.value
             }
             Log.w(TAG, "updates: Power Setup install failed: ${r.exceptionOrNull()?.message ?: r.getOrNull()?.output}")
-            if (!canRequestInstalls()) return fail("Power Setup could not install it")
+            if (!canRequestInstalls()) return fail("Power Setup could not install it", false)
         }
         runCatching { commitSession(ready.release, ready.file, ready.sha256, silent = path == InstallPath.Silent) }
-            .onFailure { fail(it.message ?: "The install failed") }
+            .onFailure { fail(it.message ?: "The install failed", false) }
         return _state.value
     }
 
@@ -405,15 +415,31 @@ class UpdateManager(
         checkPackage(file, release)
     }
 
+    /** The file matches what was published, so anything wrong with it stays wrong for this release. */
     private fun checkPackage(file: File, release: Release) {
         val pm = context.packageManager
-        val archive = archiveInfo(file) ?: throw IllegalStateException("The update is not an app Android can read")
-        if (archive.packageName != context.packageName) throw IllegalStateException("The update is not Lounge")
+        val archive = archiveInfo(file) ?: throw NotInstallable("The update is not an app Android can read")
+        if (archive.packageName != context.packageName) throw NotInstallable("The update is not Lounge")
         @Suppress("DEPRECATION")
         val installedInfo = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES)
-        if (!signedLike(signers(installedInfo, withHistory = false), signers(archive, withHistory = true))) throw IllegalStateException("The update is not signed like this copy of Lounge")
-        versionProblem(release.version, archive.versionName, archive.longVersionCode, installedInfo.longVersionCode)?.let { throw IllegalStateException(it) }
+        if (!signedLike(signers(installedInfo, withHistory = false), signers(archive, withHistory = true))) throw NotInstallable("The update is not signed like this copy of Lounge")
+        versionProblem(release.version, archive.versionName, archive.longVersionCode, installedInfo.longVersionCode)?.let { throw NotInstallable(it) }
     }
+
+    /** A release that can never install here, whatever is tried again. */
+    private class NotInstallable(message: String) : IllegalStateException(message)
+
+    private var failures: Failures
+        get() = Failures(prefs.getString(KEY_FAILED_TAG, null), prefs.getInt(KEY_FAILED_TRIES, 0))
+        set(value) {
+            prefs.edit().putString(KEY_FAILED_TAG, value.tag).putInt(KEY_FAILED_TRIES, value.tries).apply()
+        }
+
+    private fun noteFailure(release: Release?, final: Boolean) {
+        if (release != null) failures = failures.after(release.tag, final)
+    }
+
+    private fun gaveUpMessage(release: Release): String = "Lounge ${release.version} did not install here, so it waits for the next release"
 
     private fun archiveInfo(file: File): PackageInfo? {
         // Signatures too: some versions only read an archive's certificates when asked for them.
@@ -613,6 +639,8 @@ class UpdateManager(
                     else -> message ?: "The install failed"
                 }
                 Log.w(TAG, "updates: install status $status: $message")
+                val final = status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE || status == PackageInstaller.STATUS_FAILURE_CONFLICT || status == PackageInstaller.STATUS_FAILURE_INVALID
+                noteFailure(release, final)
                 if (pendingSilent) prefs.edit().putBoolean(KEY_SILENT_BLOCKED, true).apply()
                 // Cancelled or refused: a later quiet update must not pull Lounge to the front.
                 prefs.edit().remove(KEY_RETURN).apply()
@@ -636,6 +664,8 @@ class UpdateManager(
         private const val KEY_RELEASE_JSON = "release_json"
         private const val KEY_SILENT_BLOCKED = "silent_blocked"
         private const val KEY_APK_HASH = "apk_hash"
+        private const val KEY_FAILED_TAG = "failed_tag"
+        private const val KEY_FAILED_TRIES = "failed_tries"
         private const val FIRST_DELAY_MS = 45_000L
         private const val TICK_MS = 15 * 60_000L
         private const val CHECK_EVERY_MS = 12 * 3_600_000L

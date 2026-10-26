@@ -104,6 +104,20 @@ fun versionProblem(release: Version, apkVersionName: String?, apkVersionCode: Lo
     else -> null
 }
 
+/**
+ * How often one release has failed here. After [MAX_TRIES] failures, or one that cannot change
+ * such as the wrong signer, it is not tried again on its own; a newer release starts afresh.
+ */
+data class Failures(val tag: String?, val tries: Int) {
+    fun after(tag: String, final: Boolean): Failures = Failures(tag, if (final) MAX_TRIES else (if (tag == this.tag) tries else 0) + 1)
+
+    fun gaveUpOn(tag: String): Boolean = tag == this.tag && tries >= MAX_TRIES
+
+    companion object {
+        const val MAX_TRIES = 3
+    }
+}
+
 /** How a downloaded update can be installed on this device. */
 enum class InstallPath {
     /** No prompt: Lounge installed the current build and Android trusts it to update itself. */
