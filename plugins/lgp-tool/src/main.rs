@@ -238,7 +238,7 @@ fn check_artwork(items: &[Item], manifest: &Manifest, services: &RunServices, do
     if urls.is_empty() {
         return Vec::new();
     }
-    let setting = |key: &str| services.settings.lock().get(key).cloned();
+    let setting = |key: &str| services.value(key);
     let permitted = |host: &str| host_permitted(manifest, host, &setting);
     let fetcher = Fetcher::guarded(reach(manifest, &setting));
     let dir = std::env::temp_dir().join(format!("lgp-tool-art-{}", std::process::id()));
@@ -385,6 +385,13 @@ struct RunServices {
     manifest: std::sync::OnceLock<Manifest>,
 }
 
+impl RunServices {
+    /// A setting or secret, as the TV's rules on where fetches may go read them.
+    fn value(&self, key: &str) -> Option<String> {
+        self.settings.lock().get(key).cloned().or_else(|| self.secrets.lock().get(key).cloned())
+    }
+}
+
 impl Services for RunServices {
     fn kv_get(&self, _p: &str, key: &str) -> Option<Vec<u8>> {
         self.kv.lock().get(key).cloned()
@@ -412,7 +419,7 @@ impl Services for RunServices {
         let manifest = self.manifest.get().ok_or("nothing may be fetched while the manifest is read")?;
         // The TV's own rules: the allow list on every hop, and loopback and the home network
         // only where the TV would let the plugin reach them.
-        let setting = |key: &str| self.settings.lock().get(key).cloned();
+        let setting = |key: &str| self.value(key);
         Fetcher::guarded(reach(manifest, &setting)).fetch(request, &|host| host_permitted(manifest, host, &setting)).map_err(|e| e.to_string())
     }
 }

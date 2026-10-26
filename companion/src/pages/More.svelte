@@ -67,7 +67,7 @@
 
   <section class="section">
     <div class="section-head"><h3>Back up</h3></div>
-    <p class="caption">Your layout, hidden items, pins and plugin settings as one JSON file. Passwords are not included.</p>
+    <p class="caption">Your layout, hidden items, pins and plugin settings as one JSON file. Passwords and private addresses are not included.</p>
     <div class="actions">
       <a class="btn" href={api.backupUrl()} download="lounge-backup.json">Download backup</a>
       <label class="btn">{restoring ? 'Restoring…' : 'Restore from file'}<input type="file" accept="application/json,.json" onchange={restore} hidden /></label>

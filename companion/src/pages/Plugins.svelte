@@ -123,8 +123,8 @@
             {:else}
               <input
                 id={st.key}
-                type={st.kind === 'password' ? 'password' : st.kind === 'url' ? 'url' : st.kind === 'number' ? 'number' : 'text'}
-                placeholder={st.kind === 'password' && st.hasValue ? '•••••••• (saved)' : (st.defaultValue ?? st.help ?? '')}
+                type={st.kind === 'password' ? 'password' : st.kind === 'url' || st.kind === 'secret_url' ? 'url' : st.kind === 'number' ? 'number' : 'text'}
+                placeholder={(st.kind === 'password' || st.kind === 'secret_url') && st.hasValue ? '•••••••• (saved)' : (st.defaultValue ?? st.help ?? '')}
                 value={drafts[st.key] ?? st.value ?? ''}
                 oninput={(e) => (drafts[st.key] = (e.target as HTMLInputElement).value)}
                 onblur={() => commit(current!, st.key)}

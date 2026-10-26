@@ -237,7 +237,9 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
         SheetRow(icon = null, title = setting.label, value = if (on) "On" else "Off", onClick = { onToggle(!on) })
         return
     }
-    val secret = setting.kind == "password"
+    // A secret is never shown back; a password is also masked while it is typed.
+    val secret = setting.kind == "password" || setting.kind == "secret_url"
+    val masked = setting.kind == "password"
     var field by remember(setting.key) { mutableStateOf(TextFieldValue(setting.value ?: "")) }
     var committed by remember(setting.key) { mutableStateOf(setting.value ?: "") }
     var focused by remember { mutableStateOf(false) }
@@ -282,11 +284,11 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
                 singleLine = true,
                 textStyle = LoungeTheme.typography.title.copy(color = colors.limelight),
                 cursorBrush = SolidColor(colors.houselight),
-                visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
+                visualTransformation = if (masked) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardOptions = KeyboardOptions(
                     imeAction = ImeAction.Done,
                     keyboardType = when (setting.kind) {
-                        "url" -> KeyboardType.Uri
+                        "url", "secret_url" -> KeyboardType.Uri
                         "number" -> KeyboardType.Number
                         "password" -> KeyboardType.Password
                         else -> KeyboardType.Text

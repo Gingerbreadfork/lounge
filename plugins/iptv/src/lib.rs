@@ -32,8 +32,8 @@ impl sdk::Plugin for Iptv {
             refresh_minutes: 60,
             rows: Vec::new(),
             settings: vec![
-                SettingSpec { key: "playlist_url".into(), label: "Playlist URL (M3U)".into(), kind: SettingKind::Url, required: true, help: Some("The .m3u or .m3u8 playlist your provider gave you.".into()), default: None },
-                SettingSpec { key: "epg_url".into(), label: "Guide URL (XMLTV)".into(), kind: SettingKind::Url, required: false, help: Some("Optional. Plain or .gz XMLTV; channel ids must match the playlist's tvg-id.".into()), default: None },
+                SettingSpec { key: "playlist_url".into(), label: "Playlist URL (M3U)".into(), kind: SettingKind::SecretUrl, required: true, help: Some("The .m3u or .m3u8 playlist your provider gave you.".into()), default: None },
+                SettingSpec { key: "epg_url".into(), label: "Guide URL (XMLTV)".into(), kind: SettingKind::SecretUrl, required: false, help: Some("Optional. Plain or .gz XMLTV; channel ids must match the playlist's tvg-id.".into()), default: None },
                 SettingSpec { key: "group".into(), label: "Only this group".into(), kind: SettingKind::Text, required: false, help: Some("Optional group-title filter, for very large playlists.".into()), default: None },
             ],
             homepage: None,
@@ -41,7 +41,8 @@ impl sdk::Plugin for Iptv {
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let playlist_url = host::required_setting("playlist_url", "Playlist URL")?;
+        // Provider links often carry the account's user name and password, so both are secrets.
+        let playlist_url = host::secret("playlist_url").filter(|v| !v.trim().is_empty()).ok_or("Playlist URL is not set")?;
         let group = host::setting("group");
         let (channels, total) = parse_m3u(&host::get_text(&playlist_url)?, group.as_deref(), sdk::MAX_ITEMS);
         if channels.is_empty() {
@@ -57,7 +58,7 @@ impl sdk::Plugin for Iptv {
 
         let mut items: Vec<Item> = channels.iter().map(Channel::to_item).collect();
         let budget = sdk::MAX_ITEMS - items.len();
-        match host::setting("epg_url") {
+        match host::secret("epg_url") {
             Some(_) if budget == 0 => sdk::warn!("the channels fill all {} places the TV keeps, so the guide is left out", sdk::MAX_ITEMS),
             Some(epg_url) => match guide(&epg_url, &channels, ctx, budget) {
                 Ok(schedule) => items.extend(schedule),

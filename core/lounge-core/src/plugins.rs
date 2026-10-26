@@ -508,7 +508,7 @@ pub(crate) fn info_for(row: &PluginRow, manifest: &Manifest, settings: &[(String
             PluginSettingInfo {
                 key: s.key.clone(),
                 label: s.label.clone(),
-                kind: format!("{:?}", s.kind).to_lowercase(),
+                kind: serde_json::to_value(s.kind).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default(),
                 required: s.required,
                 help: s.help.clone(),
                 default_value: if s.kind.is_secret() { None } else { s.default.clone() },

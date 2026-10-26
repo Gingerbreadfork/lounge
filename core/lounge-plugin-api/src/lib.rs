@@ -279,11 +279,15 @@ pub enum SettingKind {
     Password,
     Number,
     Toggle,
+    /// An address that carries credentials, such as an IPTV provider's playlist link.
+    #[serde(rename = "secret_url")]
+    SecretUrl,
 }
 
 impl SettingKind {
+    /// Read only through `secret`, never shown back or written into a backup.
     pub fn is_secret(self) -> bool {
-        self == SettingKind::Password
+        matches!(self, SettingKind::Password | SettingKind::SecretUrl)
     }
 }
 
@@ -565,6 +569,14 @@ pub fn base64_decode(s: &str) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_secret_url_is_kept_like_a_password() {
+        let k: SettingKind = serde_json::from_str("\"secret_url\"").unwrap();
+        assert_eq!(k, SettingKind::SecretUrl);
+        assert_eq!(serde_json::to_string(&k).unwrap(), "\"secret_url\"");
+        assert!(k.is_secret() && SettingKind::Password.is_secret() && !SettingKind::Url.is_secret());
+    }
 
     #[test]
     fn pack_roundtrip() {

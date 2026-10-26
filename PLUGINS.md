@@ -182,7 +182,7 @@ already downloaded cost nothing. Downloads a refresh no longer names are deleted
 | `fetch_hosts` | Hosts `fetch` may reach, including on redirects, each shown to the user in words. A name or IP address is that host; `*.example.com` is its subdomains; `*` is any host on the public internet. `$key` is whatever host the user enters in the setting `key`, which is how a plugin reaches a server they name, at home or not. `local-network` is any home-network IP address or local name, for a plugin that finds devices itself, such as a tuner; a local name is one label, or one under `.local`, `.lan`, `.home.arpa` or `.internal`. The TV checks the address every name resolves to. The home network is reachable only through `$key`, `local-network`, or an entry that is itself an IP address or a local name, never through a wildcard or a public name. Loopback and the TV's own addresses are reachable only through an entry that is literally `localhost` or an IP address. |
 | `refresh_minutes` | How often `refresh` runs while the screen is on; at least 5, 0 means the host's default. |
 | `rows` | Rows of your own, in order. `style` is `landscape` (16:9 tiles), `poster` (portrait) or `compact`. Items name a row by its `id`. |
-| `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `url`, `password`, `number` or `toggle`. A `toggle` is stored as `true` or `false`. A `default` is what `setting` returns while nothing is set, and the TV and the phone show it in the field. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. |
+| `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `url`, `secret_url`, `password`, `number` or `toggle`. A `toggle` is stored as `true` or `false`. A `default` is what `setting` returns while nothing is set, and the TV and the phone show it in the field. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. A `secret_url` is an address that carries credentials, such as a provider's playlist link: it is a secret in the same way, but shown while it is typed. Both stay out of backups. |
 | `homepage` | A link shown on the plugin's page. |
 
 The manifest ships as `manifest.json` in the bundle and is also returned by `lg_manifest`;
@@ -333,7 +333,7 @@ Everything a plugin can do, as the SDK exposes it under `host`:
 | `kv_get`, `kv_get_string`, `kv_set`, `kv_delete` | A private store: 256 keys of up to 256 KB each. Survives restarts and updates; cleared when the plugin is removed. Cache tokens and the last refresh's result here. |
 | `setting(key)` | A setting's value, or its manifest default. Nothing for a `password`. |
 | `required_setting(key, label)` | The same, or an error naming the field for the user. |
-| `secret(key)` | A `password` setting's value. Only keys the manifest declares as passwords. |
+| `secret(key)` | A `password` or `secret_url` setting's value. Only keys the manifest declares as one of those. |
 | `now_ms()` | Milliseconds since the epoch. |
 | `log(level, message)` | 0 debug, 1 info, 2 warn, 3 error. `sdk::info!`, `warn!` and `error!` format for you. Shown on the plugin's page on the TV and by `lgp-tool run`. |
 
@@ -351,7 +351,7 @@ large JSON array one entry at a time.
 ## Testing without a TV
 
 ```sh
-lgp-tool run mine.wasm --set playlist_url=https://example.com/list.m3u --secret password=hunter2
+lgp-tool run mine.wasm --secret playlist_url=https://example.com/list.m3u --secret password=hunter2
 lgp-tool run mine.lgp --search "bear"
 lgp-tool run mine.lgp --resolve "play:his_girl_friday"
 lgp-tool run mine.wasm --fixtures ./fixtures --now 1767225600000
