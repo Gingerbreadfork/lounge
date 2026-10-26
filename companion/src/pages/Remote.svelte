@@ -11,6 +11,33 @@
     if (navigator.vibrate) navigator.vibrate(8);
     act('', () => api.key(k));
   }
+
+  // A key is sent when it is let go, so a scroll that starts on one sends nothing, and keyboard
+  // and switch users press it like any button. Arrows, volume and seeking repeat while held.
+  let repeat: ReturnType<typeof setTimeout> | undefined;
+  let repeated = false;
+  function stop() {
+    clearTimeout(repeat);
+    repeat = undefined;
+  }
+  function press(k: string, repeats = false) {
+    return {
+      onclick: () => {
+        if (repeated) repeated = false;
+        else key(k);
+      },
+      onpointerdown: () => {
+        repeated = false;
+        stop();
+        if (!repeats) return;
+        const tick = (wait: number) => (repeat = setTimeout(() => { repeated = true; key(k); tick(120); }, wait));
+        tick(450);
+      },
+      onpointerup: stop,
+      onpointercancel: () => { stop(); repeated = false; },
+      onpointerleave: stop,
+    };
+  }
   function send() {
     if (!text.trim()) return;
     const t = text;
@@ -65,26 +92,26 @@
   </header>
 
   <section class="dpad" aria-label="Direction pad">
-    <button class="pad up" onpointerdown={() => key('up')} aria-label="Up"><Icon name="up" size={28} /></button>
-    <button class="pad left" onpointerdown={() => key('left')} aria-label="Left"><Icon name="left" size={28} /></button>
-    <button class="pad ok" onpointerdown={() => key('center')} aria-label="Select">OK</button>
-    <button class="pad right" onpointerdown={() => key('right')} aria-label="Right"><Icon name="right" size={28} /></button>
-    <button class="pad down" onpointerdown={() => key('down')} aria-label="Down"><Icon name="down" size={28} /></button>
+    <button class="pad up" {...press('up', true)} aria-label="Up"><Icon name="up" size={28} /></button>
+    <button class="pad left" {...press('left', true)} aria-label="Left"><Icon name="left" size={28} /></button>
+    <button class="pad ok" {...press('center')} aria-label="Select">OK</button>
+    <button class="pad right" {...press('right', true)} aria-label="Right"><Icon name="right" size={28} /></button>
+    <button class="pad down" {...press('down', true)} aria-label="Down"><Icon name="down" size={28} /></button>
   </section>
 
   <section class="keys">
-    <button class="key labelled" onpointerdown={() => key('back')}><Icon name="back" size={22} /><span>Back</span></button>
-    <button class="key labelled" onpointerdown={() => key('home')}><Icon name="home" size={22} /><span>Home</span></button>
-    <button class="key labelled" onpointerdown={() => key('menu')}><Icon name="menu" size={22} /><span>Menu</span></button>
+    <button class="key labelled" {...press('back')}><Icon name="back" size={22} /><span>Back</span></button>
+    <button class="key labelled" {...press('home')}><Icon name="home" size={22} /><span>Home</span></button>
+    <button class="key labelled" {...press('menu')}><Icon name="menu" size={22} /><span>Menu</span></button>
   </section>
 
   <section class="keys media" aria-label="Playback and volume">
-    <button class="key" onpointerdown={() => key('rewind')} aria-label="Rewind"><Icon name="rewind" /></button>
-    <button class="key" onpointerdown={() => key('play_pause')} aria-label="Play or pause"><Icon name="play_pause" size={26} /></button>
-    <button class="key" onpointerdown={() => key('fast_forward')} aria-label="Fast forward"><Icon name="fast_forward" /></button>
-    <button class="key" onpointerdown={() => key('volume_down')} aria-label="Volume down"><Icon name="volume_down" /></button>
-    <button class="key" onpointerdown={() => key('mute')} aria-label="Mute"><Icon name="mute" /></button>
-    <button class="key" onpointerdown={() => key('volume_up')} aria-label="Volume up"><Icon name="volume_up" /></button>
+    <button class="key" {...press('rewind', true)} aria-label="Rewind"><Icon name="rewind" /></button>
+    <button class="key" {...press('play_pause')} aria-label="Play or pause"><Icon name="play_pause" size={26} /></button>
+    <button class="key" {...press('fast_forward', true)} aria-label="Fast forward"><Icon name="fast_forward" /></button>
+    <button class="key" {...press('volume_down', true)} aria-label="Volume down"><Icon name="volume_down" /></button>
+    <button class="key" {...press('mute')} aria-label="Mute"><Icon name="mute" /></button>
+    <button class="key" {...press('volume_up', true)} aria-label="Volume up"><Icon name="volume_up" /></button>
   </section>
 
   <section class="card type">
