@@ -734,9 +734,15 @@ impl Inner {
         valid_plugin_id(id) && self.state.lock().plugins.iter().any(|p| p.id == id)
     }
 
-    pub(crate) fn plugin_remove(&self, id: &str) {
+    /// Removes a plugin and everything it stored. One that comes with Lounge is only turned off,
+    /// since removing it would also free its id for another publisher's bundle.
+    pub(crate) fn plugin_remove(&self, id: &str) -> Result<(), String> {
         if !self.installed(id) {
-            return;
+            return Ok(());
+        }
+        let built_in = self.state.lock().store.plugins().unwrap_or_default().iter().any(|r| r.id == id && r.built_in);
+        if built_in {
+            return Err("A plugin that comes with Lounge can be turned off but not removed".into());
         }
         {
             let mut state = self.state.lock();
@@ -748,6 +754,7 @@ impl Inner {
         }
         self.plugins.remove_files(id);
         self.enqueue_job(worker::Job::Rebuild);
+        Ok(())
     }
 
     pub(crate) fn plugin_set_enabled(&self, id: &str, enabled: bool) {

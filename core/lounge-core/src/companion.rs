@@ -202,7 +202,7 @@ impl CompanionActions for CoreActions {
                 }
                 inner.plugins.refresh_soon(id);
             }
-            "remove" => inner.plugin_remove(id),
+            "remove" => inner.plugin_remove(id)?,
             other => return Err(format!("unknown command {other}")),
         }
         Ok(())

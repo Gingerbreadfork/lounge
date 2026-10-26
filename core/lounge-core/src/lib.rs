@@ -869,7 +869,9 @@ impl Core {
 
     pub fn remove_plugin(&self, id: String) {
         self.count();
-        self.inner.plugin_remove(&id);
+        if let Err(e) = self.inner.plugin_remove(&id) {
+            tracing::warn!("plugin {id}: {e}");
+        }
     }
 
     pub fn set_plugin_enabled(&self, id: String, enabled: bool) {
