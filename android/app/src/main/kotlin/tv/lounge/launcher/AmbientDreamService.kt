@@ -1,8 +1,13 @@
 package tv.lounge.launcher
 
 import android.service.dreams.DreamService
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -53,7 +58,9 @@ class AmbientDreamService : DreamService(), LifecycleOwner, SavedStateRegistryOw
                     reducedMotion = uiPrefs.reducedMotion ?: systemReducedMotion(),
                     visuals = LoungeVisuals.Lite,
                 ) {
-                    Screensaver(app.awaitCore(), prefs)
+                    val core = remember { app.awaitCoreOrNull() }
+                    // Without a core there is nothing to show, but the panel still rests in the dark.
+                    if (core != null) Screensaver(core, prefs) else Box(Modifier.fillMaxSize().background(LoungeTheme.colors.velvet))
                 }
             }
         }

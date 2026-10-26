@@ -2,19 +2,37 @@ package tv.lounge.platform
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "lounge")
+// A corrupt file starts over with the defaults instead of failing every read.
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "lounge",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
 
 /** UI-only preferences. Durable data lives in the core. */
 class Prefs(private val context: Context) {
+    /** The stored preferences, or the defaults while the file cannot be read. */
+    private val data: Flow<Preferences> = context.dataStore.data.catch { e ->
+        if (e is IOException) {
+            android.util.Log.w("Lounge", "preferences unreadable, using the defaults", e)
+            emit(emptyPreferences())
+        } else {
+            throw e
+        }
+    }
+
     enum class Theme { Dusk, House, Hearth, Opera, Marquee, GreenRoom, Moonlight, Graphite, Blackout, HighContrast }
 
     /** Every UI preference at once, so the screen recomposes once per change rather than once per key. */
@@ -32,7 +50,7 @@ class Prefs(private val context: Context) {
         val loaded: Boolean = false,
     )
 
-    val all: Flow<UiPrefs> = context.dataStore.data.map { p ->
+    val all: Flow<UiPrefs> = data.map { p ->
         UiPrefs(
             theme = runCatching { Theme.valueOf(p[THEME] ?: Theme.Dusk.name) }.getOrDefault(Theme.Dusk),
             sounds = p[SOUNDS] ?: true,
@@ -46,22 +64,22 @@ class Prefs(private val context: Context) {
         )
     }
 
-    val theme: Flow<Theme> = context.dataStore.data.map { p ->
+    val theme: Flow<Theme> = data.map { p ->
         runCatching { Theme.valueOf(p[THEME] ?: Theme.Dusk.name) }.getOrDefault(Theme.Dusk)
     }
-    val sounds: Flow<Boolean> = context.dataStore.data.map { it[SOUNDS] ?: true }
-    val liteMode: Flow<Boolean?> = context.dataStore.data.map { it[LITE_MODE] }
-    val onboardingDone: Flow<Boolean> = context.dataStore.data.map { it[ONBOARDING_DONE] ?: false }
-    val reducedMotionOverride: Flow<Boolean?> = context.dataStore.data.map { it[REDUCED_MOTION] }
-    val showMobileApps: Flow<Boolean> = context.dataStore.data.map { it[SHOW_MOBILE_APPS] ?: false }
+    val sounds: Flow<Boolean> = data.map { it[SOUNDS] ?: true }
+    val liteMode: Flow<Boolean?> = data.map { it[LITE_MODE] }
+    val onboardingDone: Flow<Boolean> = data.map { it[ONBOARDING_DONE] ?: false }
+    val reducedMotionOverride: Flow<Boolean?> = data.map { it[REDUCED_MOTION] }
+    val showMobileApps: Flow<Boolean> = data.map { it[SHOW_MOBILE_APPS] ?: false }
 
-    val companionEnabled: Flow<Boolean> = context.dataStore.data.map { it[COMPANION_ENABLED] ?: false }
+    val companionEnabled: Flow<Boolean> = data.map { it[COMPANION_ENABLED] ?: false }
 
     /** The system screensaver component that was set before Lounge took over, to give back. */
-    val previousScreensaver: Flow<String?> = context.dataStore.data.map { it[PREVIOUS_SCREENSAVER] }
+    val previousScreensaver: Flow<String?> = data.map { it[PREVIOUS_SCREENSAVER] }
 
     /** The screensaver's style: "pictures", or the id of an abstract scene. */
-    val ambientStyle: Flow<String> = context.dataStore.data.map { it[AMBIENT_STYLE] ?: "pictures" }
+    val ambientStyle: Flow<String> = data.map { it[AMBIENT_STYLE] ?: "pictures" }
     suspend fun setAmbientStyle(id: String) { context.dataStore.edit { it[AMBIENT_STYLE] = id } }
     suspend fun setBackdrop(id: String) { context.dataStore.edit { it[BACKDROP] = id } }
     suspend fun setPreviousScreensaver(component: String?) {
@@ -69,14 +87,14 @@ class Prefs(private val context: Context) {
     }
 
     /** The screensaver's enabled flag before Lounge took over: "1", "0", "null" for unset, or null when unknown. */
-    val previousScreensaverEnabled: Flow<String?> = context.dataStore.data.map { it[PREVIOUS_SCREENSAVER_ENABLED] }
+    val previousScreensaverEnabled: Flow<String?> = data.map { it[PREVIOUS_SCREENSAVER_ENABLED] }
     suspend fun setPreviousScreensaverEnabled(value: String?) {
         context.dataStore.edit { if (value == null) it.remove(PREVIOUS_SCREENSAVER_ENABLED) else it[PREVIOUS_SCREENSAVER_ENABLED] = value }
     }
     suspend fun setCompanionEnabled(on: Boolean) { context.dataStore.edit { it[COMPANION_ENABLED] = on } }
 
     /** The APK update time the bundled plugins were last installed from; they re-install after an update. */
-    val bundledPluginsStamp: Flow<Long> = context.dataStore.data.map { it[BUNDLED_PLUGINS_STAMP] ?: 0L }
+    val bundledPluginsStamp: Flow<Long> = data.map { it[BUNDLED_PLUGINS_STAMP] ?: 0L }
     suspend fun setBundledPluginsStamp(stamp: Long) { context.dataStore.edit { it[BUNDLED_PLUGINS_STAMP] = stamp } }
 
     suspend fun setShowMobileApps(on: Boolean) { context.dataStore.edit { it[SHOW_MOBILE_APPS] = on } }

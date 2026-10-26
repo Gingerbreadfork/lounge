@@ -11,6 +11,7 @@ import tv.lounge.core.Core
 import tv.lounge.core.CoreClient
 import tv.lounge.core.CoreConfig
 import tv.lounge.core.DeviceTier
+import tv.lounge.core.setStorageAside
 import tv.lounge.design.GlowMasks
 import tv.lounge.design.LoungeFonts
 import tv.lounge.design.SpillMask
@@ -33,7 +34,9 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
         tv.lounge.update.UpdateManager(this, power, version)
     }
     @Volatile private var core: CoreClient? = null
-    @Volatile private var coreError: Throwable? = null
+    /** Why the core did not open, while it has not. */
+    @Volatile var coreError: Throwable? = null
+        private set
     val prefs: Prefs by lazy { Prefs(this) }
     /** The preferences as they were at process start, once read; the first frame is drawn in that theme. */
     @Volatile var startPrefs: Prefs.UiPrefs? = null
@@ -49,32 +52,58 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
             try {
                 core = CoreClient(Core.open(coreConfig(), platform))
             } catch (t: Throwable) {
+                android.util.Log.e("Lounge", "core failed to open", t)
                 coreError = t
             } finally {
                 coreReady.countDown()
             }
         }, "lounge-open").start()
+        // Neither thread is needed to start, so a failure in one is logged rather than ending the process.
         Thread({
-            startPrefs = kotlinx.coroutines.runBlocking { prefs.all.first() }
+            startPrefs = runCatching { kotlinx.coroutines.runBlocking { prefs.all.first() } }
+                .onFailure { android.util.Log.w("Lounge", "startup: preferences unreadable", it) }
+                .getOrNull()
         }, "lounge-prefs").start()
         Thread({
-            val t0 = android.os.SystemClock.uptimeMillis()
-            LoungeFonts.warmUp(this)
-            SpillMask.warmUp()
-            GlowMasks.warmUp(resources.displayMetrics.widthPixels / 1920f)
-            android.util.Log.i("Lounge", "startup: fonts and masks warm in ${android.os.SystemClock.uptimeMillis() - t0} ms")
+            runCatching {
+                val t0 = android.os.SystemClock.uptimeMillis()
+                LoungeFonts.warmUp(this)
+                SpillMask.warmUp()
+                GlowMasks.warmUp(resources.displayMetrics.widthPixels / 1920f)
+                android.util.Log.i("Lounge", "startup: fonts and masks warm in ${android.os.SystemClock.uptimeMillis() - t0} ms")
+            }.onFailure { android.util.Log.w("Lounge", "startup: warm-up failed", it) }
         }, "lounge-warmup").start()
         updates.start(appScope)
         android.util.Log.i("Lounge", "startup: application onCreate took ${android.os.SystemClock.uptimeMillis() - startedAt} ms")
     }
 
-    /** The core, opened at process start; blocks only if the activity got here first. */
-    fun awaitCore(): CoreClient {
+    /** The core, opened at process start, or null if it failed to open; blocks only if the caller got here first. */
+    fun awaitCoreOrNull(): CoreClient? {
         val t0 = android.os.SystemClock.uptimeMillis()
         coreReady.await()
         val waited = android.os.SystemClock.uptimeMillis() - t0
         if (waited > 1) android.util.Log.i("Lounge", "startup: waited ${waited} ms for the core")
-        return core ?: throw IllegalStateException("core failed to open", coreError)
+        return core
+    }
+
+    /**
+     * Opens the core again after it failed to, first setting its database aside when [fresh].
+     * Returns the error if it still fails. Blocks, so call it off the main thread.
+     */
+    @Synchronized
+    fun reopenCore(fresh: Boolean): Throwable? {
+        if (core != null) return null
+        return try {
+            // With no file to move, opening again is still worth trying.
+            if (fresh) runCatching { setStorageAside(filesDir.absolutePath) }.onFailure { android.util.Log.w("Lounge", "set the database aside", it) }
+            core = CoreClient(Core.open(coreConfig(), platform))
+            coreError = null
+            null
+        } catch (t: Throwable) {
+            android.util.Log.e("Lounge", "core failed to open again", t)
+            coreError = t
+            t
+        }
     }
 
     private fun coreConfig(): CoreConfig {

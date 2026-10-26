@@ -1,6 +1,7 @@
 package tv.lounge.launcher
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -32,8 +33,10 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tv.lounge.collector.apps.AppsCollector
 import tv.lounge.core.CoreClient
+import tv.lounge.core.CoreException
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LoungeThemeVariant
 import tv.lounge.design.LoungeVisuals
@@ -42,6 +45,9 @@ import tv.lounge.design.systemReducedMotion
 import tv.lounge.design.toArgbInt
 import tv.lounge.core.DeviceTier
 import tv.lounge.feature.home.HomeScreen
+import tv.lounge.feature.home.OtherHome
+import tv.lounge.feature.home.RecoveryReason
+import tv.lounge.feature.home.RecoveryScreen
 import tv.lounge.platform.AndroidPlatform
 import tv.lounge.platform.DeviceTierDetector
 import tv.lounge.platform.Prefs
@@ -52,7 +58,8 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject lateinit var core: CoreClient
+    /** Unset while the recovery screen stands in for the home. */
+    private lateinit var core: CoreClient
     @Inject lateinit var power: tv.lounge.power.PowerSetup
     @Inject lateinit var updates: tv.lounge.update.UpdateManager
     @Inject lateinit var apps: AppsCollector
@@ -90,8 +97,10 @@ class MainActivity : ComponentActivity() {
         val tier = DeviceTierDetector.detect(this)
         // The preferences read at process start, so the first frame is already in the chosen
         // theme and the window behind it matches.
-        val startPrefs = (application as LoungeApplication).startPrefs ?: Prefs.UiPrefs()
+        val app = application as LoungeApplication
+        val startPrefs = app.startPrefs ?: Prefs.UiPrefs()
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(LoungeThemeVariant.valueOf(startPrefs.theme.name).colors().velvet.toArgbInt()))
+        core = app.awaitCoreOrNull() ?: return showRecovery(app, startPrefs)
         setContent {
             val uiPrefs by prefs.all.collectAsState(initial = startPrefs)
             val reduced = uiPrefs.reducedMotion ?: systemReducedMotion()
@@ -247,6 +256,63 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Stands in for the home when the core will not open: try again, start fresh, or leave for another home. */
+    private fun showRecovery(app: LoungeApplication, startPrefs: Prefs.UiPrefs) {
+        val problem = mutableStateOf(app.coreError)
+        val otherHomes = otherHomes()
+        setContent {
+            LoungeTheme(
+                variant = LoungeThemeVariant.valueOf(startPrefs.theme.name),
+                reducedMotion = startPrefs.reducedMotion ?: systemReducedMotion(),
+                visuals = LoungeVisuals.Lite,
+            ) {
+                val error = problem.value
+                RecoveryScreen(
+                    reason = when {
+                        filesDir.usableSpace < LOW_STORAGE_BYTES -> RecoveryReason.StorageFull
+                        error is CoreException.Storage -> RecoveryReason.Storage
+                        else -> RecoveryReason.Other
+                    },
+                    detail = (error as? CoreException.Storage)?.detail ?: error?.message,
+                    otherHomes = otherHomes,
+                    onTryAgain = { fresh ->
+                        val failed = withContext(Dispatchers.IO) { app.reopenCore(fresh) }
+                        if (failed == null) recreate() else problem.value = failed
+                    },
+                    onOpenSettings = { openSettings(android.provider.Settings.ACTION_SETTINGS, "Open Settings from the TV's own menu.") },
+                    onOtherHome = ::openOtherHome,
+                )
+            }
+        }
+    }
+
+    /**
+     * Home screens other than this one that are switched on, or whose whole app is switched off,
+     * leaving out the system's stand-in homes.
+     */
+    private fun otherHomes(): List<OtherHome> {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val query = { flags: Int -> runCatching { packageManager.queryIntentActivities(intent, flags) }.getOrDefault(emptyList()) }
+        val enabled = query(0).map { it.activityInfo.packageName }.toSet()
+        return query(PackageManager.MATCH_DISABLED_COMPONENTS)
+            .filter { it.priority >= 0 && it.activityInfo.packageName != packageName }
+            .filter { it.activityInfo.packageName in enabled || !it.activityInfo.applicationInfo.enabled }
+            .distinctBy { it.activityInfo.packageName }
+            .map { OtherHome(it.activityInfo.packageName, it.loadLabel(packageManager).toString(), it.activityInfo.packageName in enabled) }
+    }
+
+    private fun openOtherHome(home: OtherHome) {
+        val intent = if (home.enabled) {
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(home.packageName)
+        } else {
+            // Android's page for the app has the button that turns it back on.
+            Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", home.packageName, null))
+        }
+        runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure {
+            android.widget.Toast.makeText(this, "Open Settings, then Apps, to find ${home.label}.", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     /** The first-party plugins ship in the APK; (re)install them once per APK build. */
     private fun installBundledPlugins() {
         lifecycleScope.launch(Dispatchers.IO) {
@@ -288,10 +354,14 @@ class MainActivity : ComponentActivity() {
         /** When the current activity instance started; the home screen logs its first composition against it. */
         @Volatile var activityStartedAt: Long = 0L
         const val COMPANION_PORT = CoreClient.COMPANION_PORT
+        /** With less free space than this, the recovery screen says the storage is full. */
+        private const val LOW_STORAGE_BYTES = 32L * 1024 * 1024
     }
 
     override fun onResume() {
         super.onResume()
+        // The recovery screen does not count as the home being in front, so a quiet update can still install.
+        if (!::core.isInitialized) return
         core.setScreenState(true)
         updates.noteForeground(true)
         core.setUtcOffsetMinutes(TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
@@ -309,6 +379,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        if (!::core.isInitialized) return
         core.setScreenState(false)
         updates.noteForeground(false)
     }

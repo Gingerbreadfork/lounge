@@ -10,7 +10,6 @@ import tv.lounge.collector.apps.AppsCollector
 import tv.lounge.collector.inputs.InputsCollector
 import tv.lounge.collector.media.MediaSessionsCollector
 import tv.lounge.collector.tvprovider.TvProviderCollector
-import tv.lounge.core.CoreClient
 import tv.lounge.launcher.LoungeApplication
 import tv.lounge.platform.AndroidPlatform
 import tv.lounge.platform.Prefs
@@ -23,10 +22,6 @@ object CoreModule {
     @Provides
     @Singleton
     fun platform(@ApplicationContext context: Context): AndroidPlatform = (context as LoungeApplication).platform
-
-    @Provides
-    @Singleton
-    fun core(@ApplicationContext context: Context): CoreClient = (context as LoungeApplication).awaitCore()
 
     @Provides
     @Singleton
