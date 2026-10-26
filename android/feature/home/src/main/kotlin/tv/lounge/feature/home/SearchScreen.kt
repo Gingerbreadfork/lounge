@@ -84,6 +84,7 @@ fun SearchScreen(
     /** A tile's menu sits over the screen. */
     covered: Boolean = false,
     heldTileId: String? = null,
+    heldRowId: String? = null,
     /** Rows from the search plugins for a query; may take seconds. */
     searchPlugins: suspend (String) -> List<CoreRow> = { emptyList() },
 ) {
@@ -231,6 +232,7 @@ fun SearchScreen(
                         // A plugin's result is not on the home, so there is nothing to pin or hide.
                         onTileLongPress = { tile, bounds, fr -> if (!tile.id.startsWith("search:")) onTileLongPress(tile, row.id, bounds, fr) },
                         heldTileId = heldTileId,
+                        heldRowId = heldRowId,
                         modifier = Modifier.animateItem(
                             fadeInSpec = tween(120),
                             placementSpec = tween(motion.travelMs, easing = motion.travelEasing),

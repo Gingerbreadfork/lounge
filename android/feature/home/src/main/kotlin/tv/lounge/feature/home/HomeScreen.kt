@@ -485,6 +485,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                             onTileClick = { perform(it) },
                             onTileLongPress = { tile, bounds, fr -> openMenu(tile, row.id, bounds, fr) },
                             heldTileId = homeMenu?.tile?.id,
+                            heldRowId = homeMenu?.rowId,
                         )
                     }
                 }
@@ -595,6 +596,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     onQueryTaken = { state.pendingSearch = null },
                     covered = menu != null,
                     heldTileId = menu?.tile?.id,
+                    heldRowId = menu?.rowId,
                     onTileFocused = { _, _ -> },
                     onTileClick = { perform(it) },
                     onTileLongPress = { tile, rowId, bounds, fr -> openMenu(tile, rowId, bounds, fr) },

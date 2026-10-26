@@ -66,7 +66,8 @@ fun rememberRowRequesters(count: Int): (Int) -> FocusRequester {
 /**
  * A content row: a header with an optional badge and a pivot-scrolling tile list that remembers its
  * focused child (DESIGN.md §5.3). The header follows the light, the list keeps glow room, the
- * focused tile nudges at either end, and the room dims while a menu is open on [heldTileId].
+ * focused tile nudges at either end, and the room dims while a menu is open on [heldTileId] in
+ * the row [heldRowId].
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -81,6 +82,7 @@ fun ContentRow(
     onTileLongPress: (Tile, Rect, FocusRequester) -> Unit,
     modifier: Modifier = Modifier,
     heldTileId: String? = null,
+    heldRowId: String? = null,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -142,7 +144,8 @@ fun ContentRow(
                     .focusGroup(),
             ) {
                 itemsIndexed(row.tiles, key = { _, t -> t.id }) { index, tile ->
-                    val held = heldTileId == tile.id
+                    // The same app can sit in several rows; only the one the menu came from is held.
+                    val held = heldTileId == tile.id && heldRowId == row.id
                     // Each tile's light is a derived State: moving focus along the row changes
                     // neighbours' brightness without recomposing a single tile.
                     val lights = remember(index, roomDim) {
