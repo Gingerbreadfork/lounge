@@ -366,7 +366,8 @@ class UpdateManager(
 
     fun currentPath(): InstallPath = installPath(
         sdk = Build.VERSION.SDK_INT,
-        selfIsInstaller = selfIsInstaller() && !prefs.getBoolean(KEY_SILENT_BLOCKED, false),
+        // A block holds for the version it happened on; the next one may be allowed again.
+        selfIsInstaller = selfIsInstaller() && prefs.getString(KEY_SILENT_BLOCKED_AT, null) != currentVersion,
         powerReady = power.status.value is PowerStatus.Ready,
         canRequestInstalls = canRequestInstalls(),
     )
@@ -641,7 +642,8 @@ class UpdateManager(
                 Log.w(TAG, "updates: install status $status: $message")
                 val final = status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE || status == PackageInstaller.STATUS_FAILURE_CONFLICT || status == PackageInstaller.STATUS_FAILURE_INVALID
                 noteFailure(release, final)
-                if (pendingSilent) prefs.edit().putBoolean(KEY_SILENT_BLOCKED, true).apply()
+                // Only Android refusing a quiet install says quiet installs do not work here; storage or a cancel does not.
+                if (pendingSilent && status == PackageInstaller.STATUS_FAILURE_BLOCKED) prefs.edit().putString(KEY_SILENT_BLOCKED_AT, currentVersion).apply()
                 // Cancelled or refused: a later quiet update must not pull Lounge to the front.
                 prefs.edit().remove(KEY_RETURN).apply()
                 _state.value = UpdateState.Failed(text, release, System.currentTimeMillis())
@@ -662,7 +664,7 @@ class UpdateManager(
         private const val KEY_LAST_CHECK = "last_check"
         private const val KEY_SEEN_VERSION = "seen_version"
         private const val KEY_RELEASE_JSON = "release_json"
-        private const val KEY_SILENT_BLOCKED = "silent_blocked"
+        private const val KEY_SILENT_BLOCKED_AT = "silent_blocked_at"
         private const val KEY_APK_HASH = "apk_hash"
         private const val KEY_FAILED_TAG = "failed_tag"
         private const val KEY_FAILED_TRIES = "failed_tries"
