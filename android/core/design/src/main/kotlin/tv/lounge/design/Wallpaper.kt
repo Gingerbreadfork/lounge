@@ -162,7 +162,7 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
     // The clouds step a few times a second and each step recomposites the screen, so the clock
     // stops under an opaque screen and a minute after the last key.
     val time = remember { mutableFloatStateOf(0f) }
-    val stepMs = if (visuals === LoungeVisuals.TierA) 333L else 500L
+    val stepMs = if (visuals.tierA) 333L else 500L
     var night by remember { mutableStateOf(isNight()) }
     if (!motion.reducedMotion) {
         LaunchedEffect(stepMs) {

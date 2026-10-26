@@ -69,7 +69,6 @@ import tv.lounge.design.FieldSleep
 import tv.lounge.design.LightField
 import tv.lounge.design.LocalLightState
 import tv.lounge.design.LoungeTheme
-import tv.lounge.design.LoungeVisuals
 import tv.lounge.design.LoungeToastHost
 import tv.lounge.design.Presence
 import tv.lounge.design.ToastController
@@ -96,7 +95,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     val scope = rememberCoroutineScope()
     val powerStatus by power.status.collectAsStateWithLifecycle()
     val snapshot by core.snapshots.collectAsStateWithLifecycle()
-    val tierA = LoungeTheme.visuals === LoungeVisuals.TierA
+    val tierA = LoungeTheme.visuals.tierA
     val state = remember { HomeState(tierA) }
     val toasts = remember { ToastController() }
     val light = LocalLightState.current

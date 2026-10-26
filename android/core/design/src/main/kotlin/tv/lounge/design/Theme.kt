@@ -43,9 +43,11 @@ data class LoungeVisuals(
     val parallax: Boolean,
     val shaderWallpaper: Boolean,
     val previews: Boolean,
+    /** A Tier A TV, with room for the faster light clock, more prefetching and a smoother push-in. */
+    val tierA: Boolean = false,
 ) {
     companion object {
-        val TierA = LoungeVisuals(spill = true, glowAlpha = 0.34f, parallax = true, shaderWallpaper = true, previews = true)
+        val TierA = LoungeVisuals(spill = true, glowAlpha = 0.34f, parallax = true, shaderWallpaper = true, previews = true, tierA = true)
         val TierB = LoungeVisuals(spill = true, glowAlpha = 0.34f, parallax = true, shaderWallpaper = true, previews = true)
         val Lite = LoungeVisuals(spill = false, glowAlpha = 0.24f, parallax = false, shaderWallpaper = false, previews = false)
     }

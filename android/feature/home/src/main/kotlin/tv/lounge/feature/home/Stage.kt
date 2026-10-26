@@ -82,7 +82,6 @@ import tv.lounge.design.LocalSwapSlotActive
 import tv.lounge.design.LoungeButton
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
-import tv.lounge.design.LoungeVisuals
 import tv.lounge.design.ProgressBar
 import tv.lounge.design.BillLight
 import tv.lounge.design.LocalLightState
@@ -212,7 +211,7 @@ fun StageView(
 @Composable
 private fun PrefetchStageArt(stage: Stage, selectedIndex: Int) {
     val context = LocalContext.current
-    val all = LoungeTheme.visuals === LoungeVisuals.TierA
+    val all = LoungeTheme.visuals.tierA
     val key = if (all) stage.spotlights.map { it.artworkPath } else listOf(selectedIndex, stage.spotlights.map { it.artworkPath })
     LaunchedEffect(key) {
         val loader = SingletonImageLoader.get(context)

@@ -59,7 +59,6 @@ import tv.lounge.core.HomeSnapshot
 import tv.lounge.core.TileKind
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
-import tv.lounge.design.LoungeVisuals
 import tv.lounge.design.lightsFilter
 import tv.lounge.design.sounds
 import tv.lounge.platform.PanelSize
@@ -150,7 +149,7 @@ fun AmbientScreen(core: CoreClient) {
                 drift = drift,
                 panel = panel,
                 window = window,
-                stepMs = if (visuals === LoungeVisuals.TierA) 250L else 500L,
+                stepMs = if (visuals.tierA) 250L else 500L,
                 reducedMotion = motion.reducedMotion,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -164,7 +163,7 @@ fun AmbientScreen(core: CoreClient) {
                 if (s != null) {
                     // 6 % over the slide, in steps too small to see; nothing re-renders between steps.
                     val scale = remember(s.art) { mutableFloatStateOf(1f) }
-                    val stepMs = if (visuals === LoungeVisuals.TierA) 250L else 500L
+                    val stepMs = if (visuals.tierA) 250L else 500L
                     val origin = remember(s.art) { if (slides.indexOf(s) % 2 == 0) TransformOrigin(0.35f, 0.4f) else TransformOrigin(0.65f, 0.55f) }
                     LaunchedEffect(s.art) {
                         if (motion.reducedMotion) return@LaunchedEffect
