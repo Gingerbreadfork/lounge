@@ -284,16 +284,6 @@ Lounge talks to the network only where you sent it: a media server, a playlist, 
 installed, the artwork the TV's other apps publish in their rows, and GitHub twice a day to look
 for an update, which Settings, Updates turns off. There are no accounts and no analytics.
 
-## Where it is
-
-In daily use on a Google TV Streamer and a TCL television. The Stage, rows, live
-TV, inputs, search, the phone, plugins, Power Setup, the screensaver and the setup steps all
-work on real data. Still ahead: a place to find other people's plugins, profiles and a kids
-mode, remapping remote buttons, and Android 16 picture profiles. The Now playing card has had
-less time with music apps than with everything else, and the Google TV Streamer's startup is
-still being measured properly. If something is off, open an issue with the TV and its Android
-version.
-
 ## Building from source
 
 You need JDK 21, the Android SDK with platform 37 and NDK 27, stable Rust with `cargo-ndk` and
