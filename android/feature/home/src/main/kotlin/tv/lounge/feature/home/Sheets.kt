@@ -312,6 +312,7 @@ fun QuickSettingsSheet(
     onUpdates: () -> Unit,
     updateStatus: String,
     firstFocus: FocusRequester,
+    cameFrom: Overlay? = null,
     backdrop: String = Prefs.STILL_BACKDROP,
     backdrops: List<ShaderStyle> = emptyList(),
     liveBackdrops: Boolean = true,
@@ -322,6 +323,10 @@ fun QuickSettingsSheet(
     val sounds0 = LoungeTheme.sounds
     var showDiagnostics by remember { mutableStateOf(false) }
     var diag by remember { mutableStateOf<Diagnostics?>(null) }
+    // Back from one of its pages puts focus on the row that opened it.
+    val pages = listOf(Overlay.Channels, Overlay.Plugins, Overlay.Companion, Overlay.Ambient, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates)
+    val returnTo = cameFrom?.takeIf { it in pages }
+    fun focusFor(page: Overlay?) = firstFocus.takeIf { page == returnTo }
 
     SheetHeading("Settings")
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -332,7 +337,7 @@ fun QuickSettingsSheet(
             value = theme.title,
             onClick = { sounds0?.tick(); onSetTheme(theme.step(1)) },
             onCycle = { by -> sounds0?.tick(); onSetTheme(theme.step(by)) },
-            focusRequester = firstFocus,
+            focusRequester = focusFor(null),
         )
         val scenes = listOf(Triple(Prefs.STILL_BACKDROP, "Still", "The room's own light")) + backdrops.map { Triple(it.id, it.name, it.description ?: it.origin) }
         val sceneAt = scenes.indexOfFirst { it.first == backdrop }.coerceAtLeast(0)
@@ -398,10 +403,10 @@ fun QuickSettingsSheet(
                 runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             },
         )
-        SheetRow(icon = LoungeIcons.Tv, title = "Channels from apps", value = if (enabledChannels == 0) "None" else "$enabledChannels on", onClick = onChannels)
-        SheetRow(icon = LoungeIcons.Apps, title = "Plugins", value = if (enabledPlugins == 0) "None on" else "$enabledPlugins on", onClick = onPlugins)
-        SheetRow(icon = LoungeIcons.Phone, title = "Phone companion", value = if (companionOn) "On" else "Off", accent = if (companionOn) colors.signal else colors.dust, onClick = onCompanion)
-        SheetRow(icon = LoungeIcons.Frame, title = "Screensaver", value = if (ambientOn) "Lounge" else "System", accent = if (ambientOn) colors.signal else colors.dust, onClick = onAmbient)
+        SheetRow(icon = LoungeIcons.Tv, title = "Channels from apps", value = if (enabledChannels == 0) "None" else "$enabledChannels on", onClick = onChannels, focusRequester = focusFor(Overlay.Channels))
+        SheetRow(icon = LoungeIcons.Apps, title = "Plugins", value = if (enabledPlugins == 0) "None on" else "$enabledPlugins on", onClick = onPlugins, focusRequester = focusFor(Overlay.Plugins))
+        SheetRow(icon = LoungeIcons.Phone, title = "Phone companion", value = if (companionOn) "On" else "Off", accent = if (companionOn) colors.signal else colors.dust, onClick = onCompanion, focusRequester = focusFor(Overlay.Companion))
+        SheetRow(icon = LoungeIcons.Frame, title = "Screensaver", value = if (ambientOn) "Lounge" else "System", accent = if (ambientOn) colors.signal else colors.dust, onClick = onAmbient, focusRequester = focusFor(Overlay.Ambient))
         Spacer(Modifier.height(16.dp))
         Hairline(Modifier.fillMaxWidth())
         SheetGroup("This TV")
@@ -411,6 +416,7 @@ fun QuickSettingsSheet(
             value = if (isDefaultHome) "Lounge" else "Set up",
             accent = if (isDefaultHome) colors.signal else colors.dust,
             onClick = onRecheckHome,
+            focusRequester = focusFor(Overlay.HomeRole),
         )
         SheetRow(
             icon = LoungeIcons.Power,
@@ -423,8 +429,9 @@ fun QuickSettingsSheet(
             },
             accent = if (powerStatus is tv.lounge.power.PowerStatus.Ready) colors.signal else colors.dust,
             onClick = onPowerSetup,
+            focusRequester = focusFor(Overlay.PowerSetup),
         )
-        SheetRow(icon = LoungeIcons.Refresh, title = "Updates", value = updateStatus, accent = if (updateStatus == "Up to date") colors.signal else colors.dust, onClick = onUpdates)
+        SheetRow(icon = LoungeIcons.Refresh, title = "Updates", value = updateStatus, accent = if (updateStatus == "Up to date") colors.signal else colors.dust, onClick = onUpdates, focusRequester = focusFor(Overlay.Updates))
         SheetRow(icon = LoungeIcons.Info, title = "Diagnostics", value = if (showDiagnostics) "Hide" else "Show", onClick = { showDiagnostics = !showDiagnostics; if (showDiagnostics) diag = diagnostics() })
         if (showDiagnostics) {
             diag?.let { d ->

@@ -81,6 +81,9 @@ class HomeState(private val tierA: Boolean = true) {
     /** The sheets under the open one, so Back returns to the sheet that opened it. */
     val sheetTrail = ArrayList<Overlay>()
 
+    /** The sheet Back last left, so the sheet under it can focus the row that opened it. */
+    var sheetLeft: Overlay? = null
+
     /** The requester for whatever has focus on the home now. */
     fun currentFocus(): FocusRequester? = when (region) {
         FocusRegion.TopBar -> topBar.last

@@ -225,6 +225,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         state.overlay = Overlay.None
         state.opener = null
         state.sheetTrail.clear()
+        state.sheetLeft = null
         state.pendingSearch = null
     }
 
@@ -236,6 +237,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
             state.opener = state.currentFocus()
         }
         state.sheetTrail.clear()
+        state.sheetLeft = null
         state.overlay = next
     }
 
@@ -254,8 +256,10 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
             val back = state.sheetTrail.lastIndexOf(next)
             if (back >= 0) {
                 while (state.sheetTrail.size > back) state.sheetTrail.removeAt(state.sheetTrail.lastIndex)
+                state.sheetLeft = current
             } else {
                 state.sheetTrail += current
+                state.sheetLeft = null
             }
         }
         state.overlay = next
@@ -535,6 +539,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     val previous = state.sheetTrail.removeLastOrNull()
                     if (previous != null) {
                         close()
+                        state.sheetLeft = ov
                         state.overlay = previous
                     } else {
                         closeOverlay()
@@ -545,6 +550,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     SheetContent(
                         overlay = shown,
                         first = first,
+                        cameFrom = state.sheetLeft,
                         core = core,
                         platform = platform,
                         prefs = prefs,
@@ -741,6 +747,7 @@ internal fun isDefaultHome(context: android.content.Context): Boolean {
 private fun SheetContent(
     overlay: Overlay,
     first: FocusRequester,
+    cameFrom: Overlay?,
     core: CoreClient,
     platform: AndroidPlatform,
     prefs: Prefs,
@@ -806,6 +813,7 @@ private fun SheetContent(
                 onUpdates = { open(Overlay.Updates) },
                 updateStatus = updateStatusWord(updateState, updateAuto),
                 firstFocus = first,
+                cameFrom = cameFrom,
                 backdrop = uiPrefs.backdrop,
                 backdrops = backdrops,
                 liveBackdrops = liveBackdrops,
