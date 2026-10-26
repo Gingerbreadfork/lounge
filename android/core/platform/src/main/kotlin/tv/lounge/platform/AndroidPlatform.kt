@@ -101,6 +101,11 @@ class AndroidPlatform(private val context: Context) : Platform {
         intent.clipData = null
         intent.flags = intent.flags and URI_GRANTS.inv()
         if (intent.type == APK_TYPE || intent.data?.scheme?.lowercase() in setOf("package", "file")) throw refused
+        // A content link with no type can still be an APK by its provider's say, so the type the
+        // provider gives and the activity the link would open are checked as well.
+        if (intent.data?.scheme?.lowercase() == "content" && runCatching { intent.resolveType(context) }.getOrNull() == APK_TYPE) throw refused
+        val target = runCatching { context.packageManager.resolveActivity(intent, 0)?.activityInfo?.packageName }.getOrNull()
+        if (target != null && target == installerPackage()) throw refused
         val own = context.packageName
         if (intent.`package` == own) throw refused
         intent.component?.let { component ->
@@ -114,6 +119,12 @@ class AndroidPlatform(private val context: Context) : Platform {
         }
         return intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
+
+    /** The app that installs packages on this device, which no link may open. */
+    private fun installerPackage(): String? = runCatching {
+        val probe = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://tv.lounge.probe/update.apk"), APK_TYPE)
+        context.packageManager.resolveActivity(probe, 0)?.activityInfo?.packageName?.takeIf { it != "android" }
+    }.getOrNull()
 
     /** Home was pressed while Lounge was already in front. */
     fun goHome() {
