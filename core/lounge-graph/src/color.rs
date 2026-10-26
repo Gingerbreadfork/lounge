@@ -29,14 +29,6 @@ pub fn light_from_palette(p: &Palette) -> u32 {
     hsl_to_argb(h, s, l)
 }
 
-/// Text colour that contrasts with `light`: limelight or velvet.
-pub fn text_on(light: u32) -> u32 {
-    if contrast_ratio(light, VELVET) >= 4.5 {
-        VELVET
-    } else {
-        LIMELIGHT
-    }
-}
 
 pub fn chroma(argb: u32) -> f32 {
     let (r, g, b) = rgb_f(argb);
@@ -151,7 +143,6 @@ mod tests {
         let c = contrast_ratio(HOUSELIGHT, VELVET);
         assert!(c > 9.5 && c < 10.5, "{c}");
         assert!(contrast_ratio(LIMELIGHT, VELVET) > 15.0);
-        assert_eq!(text_on(HOUSELIGHT), VELVET);
     }
 
     #[test]

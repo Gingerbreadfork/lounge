@@ -812,7 +812,7 @@ mod tests {
         p.airing_end_ms = Some(60 * 60_000);
         g.replace_source("tvprovider", vec![ch.clone(), p]);
         let ch = g.get("chan:2").unwrap();
-        let tile = live_tile(&g, g.airing_now(2, 30 * 60_000), ch, 30 * 60_000);
+        let tile = live_tile(&g, g.airing_index(30 * 60_000).get(&2).copied(), ch, 30 * 60_000);
         assert_eq!(tile.title, "News");
         assert_eq!(tile.subtitle.as_deref(), Some("Now, 30 minutes left"));
         assert_eq!(tile.progress, Some(0.5));

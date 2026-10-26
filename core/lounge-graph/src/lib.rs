@@ -439,18 +439,6 @@ impl Graph {
         v
     }
 
-    /// Schedule entries for a channel in `[from_ms, to_ms)`, in airing order.
-    pub fn schedule(&self, channel_id: i64, from_ms: i64, to_ms: i64) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self
-            .items
-            .values()
-            .filter(|it| it.kind == ItemKind::Program && it.channel_id == Some(channel_id) && !it.flags.watch_next)
-            .filter(|it| airing_within(it, from_ms, to_ms))
-            .collect();
-        v.sort_by_key(|it| it.airing_start_ms);
-        v
-    }
-
     /// What is airing on every channel at `now_ms`, in one pass over the items. Where a guide's
     /// entries overlap, the one that started last wins, the same one every rebuild.
     pub fn airing_index(&self, now_ms: i64) -> HashMap<i64, &Item> {
@@ -502,11 +490,6 @@ impl Graph {
     /// The channel a schedule entry belongs to.
     pub fn channel_for(&self, channel_id: i64) -> Option<&Item> {
         self.items.values().find(|it| it.kind == ItemKind::Channel && it.channel_id == Some(channel_id))
-    }
-
-    /// What is airing on `channel_id` at `now_ms`, if the schedule says.
-    pub fn airing_now(&self, channel_id: i64, now_ms: i64) -> Option<&Item> {
-        self.items.values().filter(|it| it.kind == ItemKind::Program && it.channel_id == Some(channel_id)).find(|it| airing_at(it, now_ms))
     }
 
     /// Items a plugin published into one of its rows, by weight then recency.
@@ -753,9 +736,9 @@ mod tests {
         g.replace_source("tvprovider", vec![c10, c2, p]);
         let ids: Vec<&str> = g.channels().iter().map(|i| i.id.as_str()).collect();
         assert_eq!(ids, vec!["chan:2", "chan:10"]);
-        assert_eq!(g.airing_now(2, 150).map(|i| i.title.as_str()), Some("News"));
-        assert!(g.airing_now(2, 250).is_none());
-        assert_eq!(g.schedule(2, 0, 1000).len(), 1);
+        assert_eq!(g.airing_index(150).get(&2).map(|i| i.title.as_str()), Some("News"));
+        assert!(!g.airing_index(250).contains_key(&2));
+        assert_eq!(g.schedule_index(0, 1000).get(&2).map(Vec::len), Some(1));
     }
 
     #[test]
@@ -767,8 +750,8 @@ mod tests {
         live.channel_id = Some(7);
         live.airing_start_ms = Some(100);
         g.replace_source("plugin:tw", vec![ch, live]);
-        assert!(g.airing_now(7, 50).is_none());
-        assert_eq!(g.airing_now(7, 5_000_000).map(|i| i.title.as_str()), Some("Speedruns"));
+        assert!(!g.airing_index(50).contains_key(&7));
+        assert_eq!(g.airing_index(5_000_000).get(&7).map(|i| i.title.as_str()), Some("Speedruns"));
         assert_eq!(g.live_now().len(), 1);
         assert_eq!(g.schedule_index(1_000, 2_000).get(&7).map(Vec::len), Some(1));
         assert_eq!(g.next_airing_change(50), Some(100));

@@ -2,7 +2,6 @@
 
 use lounge_graph::{Item, Layout};
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::{de::DeserializeOwned, Serialize};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, thiserror::Error)]
@@ -191,10 +190,6 @@ impl Store {
             self.set_meta("schema_version", &SCHEMA_VERSION.to_string())?;
         }
         Ok(())
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
     }
 
     pub fn db_bytes(&self) -> u64 {
@@ -425,34 +420,6 @@ impl Store {
         }
         tx.commit()?;
         Ok(())
-    }
-
-    pub fn artwork_cached<T: DeserializeOwned>(
-        &self,
-        src_path: &str,
-        src_len: u64,
-        src_mtime_ms: i64,
-    ) -> Result<Option<T>> {
-        let mut stmt = self.conn.prepare_cached("SELECT src_len, src_mtime_ms, out_json FROM artwork WHERE src_path = ?1")?;
-        let row: Option<(i64, i64, String)> = stmt
-            .query_row(params![src_path], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-            .optional()?;
-        Ok(match row {
-            Some((len, mtime, json)) if len == src_len as i64 && mtime == src_mtime_ms => {
-                Some(serde_json::from_str(&json)?)
-            }
-            _ => None,
-        })
-    }
-
-    pub fn artwork_put<T: Serialize>(
-        &self,
-        src_path: &str,
-        src_len: u64,
-        src_mtime_ms: i64,
-        out: &T,
-    ) -> Result<()> {
-        self.artwork_put_many(&[(src_path.to_string(), src_len, src_mtime_ms, serde_json::to_string(out)?)])
     }
 
     /// Remember several prepared pictures in one transaction: (source path key, length, mtime, JSON).
@@ -746,11 +713,9 @@ mod tests {
     #[test]
     fn artwork_cache_invalidates_on_change() {
         let s = Store::open_in_memory().unwrap();
-        s.artwork_put("x.png", 100, 1, &vec!["a".to_string()]).unwrap();
-        let hit: Option<Vec<String>> = s.artwork_cached("x.png", 100, 1).unwrap();
-        assert_eq!(hit, Some(vec!["a".to_string()]));
-        let miss: Option<Vec<String>> = s.artwork_cached("x.png", 101, 1).unwrap();
-        assert!(miss.is_none());
+        s.artwork_put_many(&[("x.png".to_string(), 100, 1, "[\"a\"]".to_string())]).unwrap();
+        assert_eq!(s.artwork_cached_json("x.png", 100, 1).unwrap().as_deref(), Some("[\"a\"]"));
+        assert!(s.artwork_cached_json("x.png", 101, 1).unwrap().is_none());
     }
 
     #[test]

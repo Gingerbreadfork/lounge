@@ -966,10 +966,7 @@ impl Core {
     }
 
     fn enqueue(&self, job: worker::Job) {
-        self.inner.queue_depth.fetch_add(1, Ordering::Relaxed);
-        if self.inner.tx.send(job).is_err() {
-            tracing::error!("worker thread is gone; job dropped");
-        }
+        self.inner.enqueue_job(job);
     }
 }
 
