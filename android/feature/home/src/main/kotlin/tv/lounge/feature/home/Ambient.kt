@@ -309,7 +309,17 @@ fun Screensaver(core: CoreClient, prefs: Prefs, preview: Boolean = false) {
         Box(Modifier.fillMaxSize().background(Color.Black))
         return
     }
-    val style = remember(id) { if (id == ShaderStyles.PICTURES) null else ShaderStyles.find(context, core, id) }
+    // Read off the main thread; the screen stays black until it is known, so pictures never flash
+    // before a scene.
+    val found by produceState<Pair<String, ShaderStyle?>?>(null, id) {
+        value = id to if (id == ShaderStyles.PICTURES) null else withContext(Dispatchers.IO) { ShaderStyles.find(context, core, id) }
+    }
+    val loaded = found
+    if (loaded == null || loaded.first != id) {
+        Box(Modifier.fillMaxSize().background(Color.Black))
+        return
+    }
+    val style = loaded.second
     var unusable by remember(id) { mutableStateOf(false) }
     if (style == null || unusable) {
         AmbientScreen(core)

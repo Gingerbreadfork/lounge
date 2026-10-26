@@ -399,9 +399,11 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     ) {
         // A live scene behind the room when one is chosen and this TV can draw it; the still
         // field otherwise, and again when a scene proves too heavy.
-        val liveStyle = remember(uiPrefs.backdrop, liveBackdrops) {
-            if (!liveBackdrops || uiPrefs.backdrop == Prefs.STILL_BACKDROP) null else ShaderStyles.find(context, core, uiPrefs.backdrop)
+        // Read off the main thread; the still field shows until the scene is known.
+        val chosenStyle by produceState<ShaderStyle?>(null, uiPrefs.backdrop, liveBackdrops) {
+            value = if (!liveBackdrops || uiPrefs.backdrop == Prefs.STILL_BACKDROP) null else withContext(Dispatchers.IO) { ShaderStyles.find(context, core, uiPrefs.backdrop) }
         }
+        val liveStyle = chosenStyle
         var liveFailed by remember(uiPrefs.backdrop) { mutableStateOf(false) }
         if (liveStyle != null && !liveFailed && android.os.Build.VERSION.SDK_INT >= 33) {
             LiveBackdrop(liveStyle, light, onUnusable = { why ->
@@ -757,8 +759,9 @@ private fun SheetContent(
             val tvListings = remember { hasTvListings(context) }
             val notifications = remember { hasNotificationAccess(context) }
             val usage = remember { hasUsageAccess(context) }
-            val enabledChannels = remember { core.availableChannels().count { it.enabled } }
-            val enabledPlugins = remember { core.plugins().count { it.enabled } }
+            // Both wait on the core, which may still be loading, so they are read off the main thread.
+            val enabledChannels by produceState(0) { value = withContext(Dispatchers.IO) { core.availableChannels().count { it.enabled } } }
+            val enabledPlugins by produceState(0) { value = withContext(Dispatchers.IO) { core.plugins().count { it.enabled } } }
             QuickSettingsSheet(
                 prefs = prefs,
                 theme = theme,
@@ -816,7 +819,8 @@ private fun SheetContent(
             firstFocus = first,
         )
         Overlay.Channels -> {
-            var channels by remember { mutableStateOf(core.availableChannels()) }
+            var channels by remember { mutableStateOf(emptyList<tv.lounge.core.ChannelInfo>()) }
+            LaunchedEffect(Unit) { channels = withContext(Dispatchers.IO) { core.availableChannels() } }
             ChannelsSheet(
                 channels = channels,
                 onToggle = { ch ->

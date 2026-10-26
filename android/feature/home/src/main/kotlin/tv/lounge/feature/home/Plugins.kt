@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,7 +38,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tv.lounge.core.CoreClient
 import tv.lounge.core.PluginInfo
 import tv.lounge.core.PluginSettingInfo
@@ -52,10 +56,11 @@ import tv.lounge.design.lightGlow
 fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
     var plugins by remember { mutableStateOf(core.plugins()) }
+    // Each read waits on the core's lock, which a big refresh can hold, so the polls run off the main thread.
     LaunchedEffect(Unit) {
         while (true) {
             delay(2000)
-            plugins = core.plugins()
+            plugins = withContext(Dispatchers.IO) { core.plugins() }
         }
     }
     SheetHeading("Plugins", "Sources that add rows, channels and guide data. Each runs in its own sandbox.")
@@ -95,11 +100,12 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
     var info by remember { mutableStateOf(core.plugins().firstOrNull { it.id == pluginId }) }
     var showLog by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf<List<String>>(emptyList()) }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(pluginId) {
         while (true) {
             delay(1500)
-            info = core.plugins().firstOrNull { it.id == pluginId }
-            if (showLog) log = core.pluginLog(pluginId)
+            info = withContext(Dispatchers.IO) { core.plugins().firstOrNull { it.id == pluginId } }
+            if (showLog) log = withContext(Dispatchers.IO) { core.pluginLog(pluginId) }
         }
     }
     val p = info ?: run {
@@ -126,7 +132,14 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
                 else -> "Set up first"
             },
             accent = if (p.enabled) colors.signal else colors.dust,
-            onClick = { if (p.enabled || p.configured) core.setPluginEnabled(p.id, !p.enabled); info = core.plugins().firstOrNull { it.id == pluginId } },
+            onClick = {
+                scope.launch {
+                    info = withContext(Dispatchers.IO) {
+                        if (p.enabled || p.configured) core.setPluginEnabled(p.id, !p.enabled)
+                        core.plugins().firstOrNull { it.id == pluginId }
+                    }
+                }
+            },
             focusRequester = firstFocus,
         )
         if (p.settings.isNotEmpty()) {
@@ -157,7 +170,8 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             Spacer(Modifier.height(8.dp))
             Hairline(Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
-            SheetRow(icon = LoungeIcons.Trash, title = "Remove", accent = colors.ember, onClick = { core.removePlugin(p.id); onRemoved() })
+            // Removing deletes the plugin's files, so it runs off the main thread.
+            SheetRow(icon = LoungeIcons.Trash, title = "Remove", accent = colors.ember, onClick = { scope.launch { withContext(Dispatchers.IO) { core.removePlugin(p.id) }; onRemoved() } })
         }
     }
     SheetFootnote(
