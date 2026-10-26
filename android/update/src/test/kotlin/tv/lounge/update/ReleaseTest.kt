@@ -5,8 +5,33 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
+import java.security.MessageDigest
 
 class ReleaseTest {
+    @Test
+    fun theInstallScriptInstallsOnlyACopyThatStillMatches() {
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        val apk = File(dir, "it's.apk").apply { writeBytes(ByteArray(4096) { it.toByte() }) }
+        val sha256 = hex(MessageDigest.getInstance("SHA-256").digest(apk.readBytes()))
+        val sha1 = hex(MessageDigest.getInstance("SHA-1").digest(apk.readBytes()))
+        val copy = File(dir, "copy.apk")
+        fun run(sha256: String, sha1: String): Pair<Int, String> {
+            val script = UpdateManager.installCommand(apk.path, sha256, sha1, "echo installed; cmp ${apk.path.replace("'", "'\\''").let { "'$it'" }}", copy.path)
+            val p = ProcessBuilder("sh", "-c", script).redirectErrorStream(true).start()
+            val out = p.inputStream.bufferedReader().readText().trim()
+            return p.waitFor() to out
+        }
+        assertEquals(0 to "installed", run(sha256, sha1))
+        val (code, out) = run("0".repeat(64), "0".repeat(40))
+        assertEquals(1, code)
+        assertEquals("The update changed before it was installed", out)
+        assertFalse(copy.exists())
+        dir.deleteRecursively()
+    }
+
+    private fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
+
     @Test
     fun versionsParseAndOrder() {
         assertEquals(Version(0, 1, 2), Version.parse("v0.1.2"))

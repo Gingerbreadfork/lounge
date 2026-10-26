@@ -303,7 +303,7 @@ class UpdateManager(
             val r = runCatching {
                 val staged = stage(ready.file, ready.sha256, ready.release)
                 try {
-                    power.run(installAction(staged))
+                    power.run(installAction(staged, ready.sha256, digest(ready.file, "SHA-1")))
                 } finally {
                     staged.delete()
                 }
@@ -394,8 +394,10 @@ class UpdateManager(
 
     private fun fileFor(release: Release): File = File(downloadDir(), release.apkName)
 
-    private fun sha256(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
+    private fun sha256(file: File): String = digest(file, "SHA-256")
+
+    private fun digest(file: File, algorithm: String): String {
+        val digest = MessageDigest.getInstance(algorithm)
         file.inputStream().use { input ->
             val buf = ByteArray(64 * 1024)
             while (true) {
@@ -485,11 +487,11 @@ class UpdateManager(
         return staged
     }
 
-    private fun installAction(file: File): PowerAction = PowerAction(
+    private fun installAction(file: File, sha256: String, sha1: String): PowerAction = PowerAction(
         "install_update",
         "Install an update",
         "Installs the downloaded Lounge update without a prompt.",
-        "pm install -r -i ${context.packageName} ${shellQuote(file.absolutePath)}",
+        installCommand(file.absolutePath, sha256, sha1, "pm install -r -i ${context.packageName}"),
         timeoutMs = 3 * 60_000,
     )
 
@@ -678,6 +680,26 @@ class UpdateManager(
         @Volatile internal var current: UpdateManager? = null
 
         internal fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+        /**
+         * Copies the staged APK into the shell user's own directory and checks that copy before
+         * [install] reads it: on Android 10 and earlier other apps can write to shared storage, but
+         * not there, and the copy is the shell user's alone. A toybox without sha256sum checks [sha1]
+         * instead.
+         */
+        internal fun installCommand(source: String, sha256: String, sha1: String, install: String, copy: String = "/data/local/tmp/lounge-update.apk"): String {
+            val t = shellQuote(copy)
+            return listOf(
+                "umask 077",
+                "rm -f $t",
+                "cp ${shellQuote(source)} $t || exit 1",
+                "if command -v sha256sum >/dev/null; then set -- \$(sha256sum $t); want=$sha256; else set -- \$(sha1sum $t); want=$sha1; fi",
+                "if [ \"\$1\" != \"\$want\" ]; then rm -f $t; echo 'The update changed before it was installed'; exit 1; fi",
+                "$install $t; r=\$?",
+                "rm -f $t",
+                "exit \$r",
+            ).joinToString("\n")
+        }
 
         /** Whether an update signed by [update] may replace an app signed by [installed]: every current signer must be among them. */
         internal fun signedLike(installed: Set<String>, update: Set<String>): Boolean =
