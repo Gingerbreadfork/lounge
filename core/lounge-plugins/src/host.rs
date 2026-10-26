@@ -73,9 +73,17 @@ impl Default for Limits {
 const MAX_KEY_BYTES: usize = 256;
 /// Longest log line, in bytes; anything after it is dropped.
 const MAX_LOG_BYTES: usize = 4096;
-/// Most items read from one answer; the rest are counted but never built. Twice what the core
+/// Most items read from one answer; the rest are counted but never built. Twice what the TV
 /// keeps, so ids a plugin repeats rarely cost it an item.
 pub const ITEMS_READ: usize = 4_000;
+/// Most items the TV keeps from one refresh.
+pub const MAX_ITEMS: usize = 2000;
+/// Results the TV asks of each plugin per search.
+pub const SEARCH_LIMIT: u32 = 12;
+/// Hours of guide the TV asks a refresh for.
+pub const WINDOW_HOURS: u32 = 12;
+/// The largest picture a tile may show; a wallpaper may be larger.
+pub const MAX_ARTWORK_BYTES: usize = 4 * 1024 * 1024;
 /// The most an answer to `fetch` may come to as JSON. Ordinary escaping adds little to an 8 MB
 /// body, but control characters grow six-fold, and such an answer is refused before it is built.
 const MAX_ANSWER_BYTES: usize = 16 * 1024 * 1024;
@@ -603,6 +611,39 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
     Ok(())
 }
 
+
+/// What the TV keeps of a refresh: the first item with each id, at most [MAX_ITEMS] of them,
+/// and sentences for the plugin's log about anything left out.
+pub fn kept(items: Vec<Item>, sent: usize) -> (Vec<Item>, Vec<String>) {
+    let mut notes = Vec::new();
+    let (mut items, repeats) = unique_by_id(items);
+    if repeats > 0 {
+        notes.push(format!("{repeats} items repeated an id and were left out; ids must be unique"));
+    }
+    if items.len() > MAX_ITEMS || sent > ITEMS_READ {
+        notes.push(format!("{sent} items sent; only the first {MAX_ITEMS} are kept"));
+        items.truncate(MAX_ITEMS);
+    }
+    (items, notes)
+}
+
+/// What the TV keeps of a search: the first titled item with each id, never a screensaver or
+/// wallpaper, at most [SEARCH_LIMIT] of them.
+pub fn kept_results(items: Vec<Item>) -> Vec<Item> {
+    let (mut items, _) = unique_by_id(items);
+    items.retain(|it| !it.title.trim().is_empty() && it.kind != api::ItemKind::Screensaver && it.kind != api::ItemKind::Wallpaper);
+    items.truncate(SEARCH_LIMIT as usize);
+    items
+}
+
+/// The first item with each id, and how many repeats were left out.
+pub fn unique_by_id(items: Vec<Item>) -> (Vec<Item>, usize) {
+    let before = items.len();
+    let mut seen = std::collections::HashSet::new();
+    let kept: Vec<Item> = items.into_iter().filter(|it| seen.insert(it.id.clone())).collect();
+    let dropped = before - kept.len();
+    (kept, dropped)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -692,6 +733,20 @@ mod tests {
     fn host() -> (Host, Arc<FakeServices>) {
         let services = Arc::new(FakeServices { kv: Mutex::new(HashMap::new()), logs: Mutex::new(Vec::new()) });
         (Host::new(services.clone(), Limits::default()), services)
+    }
+
+    #[test]
+    fn a_refresh_keeps_the_first_of_each_id_up_to_the_cap() {
+        let item = |id: &str, title: &str| Item { id: id.into(), title: title.into(), ..Default::default() };
+        let (kept_items, notes) = kept(vec![item("x", "First"), item("x", "Second"), item("y", "Other")], 3);
+        assert_eq!(kept_items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), vec!["First", "Other"]);
+        assert!(notes[0].contains("1 items repeated an id"));
+        let many: Vec<Item> = (0..MAX_ITEMS + 5).map(|n| item(&n.to_string(), "T")).collect();
+        let (kept_items, notes) = kept(many, MAX_ITEMS + 5);
+        assert_eq!(kept_items.len(), MAX_ITEMS);
+        assert!(notes[0].contains("only the first 2000"));
+        let results: Vec<Item> = (0..20).map(|n| item(&n.to_string(), if n == 0 { " " } else { "T" })).collect();
+        assert_eq!(kept_results(results).len(), SEARCH_LIMIT as usize);
     }
 
     #[test]

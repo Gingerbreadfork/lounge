@@ -5,7 +5,7 @@
 use crate::{now_ms, screensavers, worker, Inner, PluginInfo, PluginSettingInfo};
 use lounge_plugin_api::{valid_plugin_id, Action, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
-use lounge_plugins::host::{Host, Limits, LoadedPlugin, Services};
+use lounge_plugins::host::{kept, kept_results, Host, Limits, LoadedPlugin, Services, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
 use lounge_plugins::http::{host_permitted, reach, Fetcher, Reach};
 use lounge_store::PluginRow;
 use parking_lot::Mutex;
@@ -17,8 +17,6 @@ use std::time::{Duration, Instant};
 
 const LOG_LINES: usize = 200;
 const LOG_LINE_BYTES: usize = 4096;
-const MAX_ITEMS: usize = 2000;
-const MAX_ARTWORK_BYTES: usize = 4 * 1024 * 1024;
 /// A wallpaper fills the panel, so its picture may be as large as the decoder will take.
 const MAX_WALLPAPER_BYTES: usize = lounge_artwork::MAX_SOURCE_BYTES as usize;
 /// What one refresh may download: new pictures, their bytes, and the time it may spend.
@@ -26,8 +24,7 @@ const ART_DOWNLOADS: usize = 600;
 const ART_BYTES: u64 = 192 * 1024 * 1024;
 const ART_TIME: Duration = Duration::from_secs(120);
 const ART_THREADS: usize = 4;
-/// Results asked of each plugin per search, and the time their pictures may take.
-const SEARCH_LIMIT: u32 = 12;
+/// The time a search's pictures may take.
 const SEARCH_ART_TIME: Duration = Duration::from_secs(4);
 
 pub(crate) enum PluginJob {
@@ -317,15 +314,7 @@ impl PluginManager {
     fn refresh(&self, entry: &PluginEntry, ctx: &RefreshContext) -> Result<(Vec<ReadyItem>, Vec<String>), String> {
         let plugin = self.loaded(&entry.id, &entry.manifest)?;
         let (items, sent) = self.host.refresh_counted(&plugin, ctx).map_err(|e| e.to_string())?;
-        let mut notes = Vec::new();
-        let (mut items, repeats) = unique_by_id(items);
-        if repeats > 0 {
-            notes.push(format!("{repeats} items repeated an id and were left out; ids must be unique"));
-        }
-        if items.len() > MAX_ITEMS || sent > lounge_plugins::host::ITEMS_READ {
-            notes.push(format!("{sent} items sent; only the first {MAX_ITEMS} are kept"));
-            items.truncate(MAX_ITEMS);
-        }
+        let (items, mut notes) = kept(items, sent);
         let dir = self.plugin_art_dir(&entry.id).ok_or_else(|| format!("invalid plugin id {:?}", entry.id))?;
         let settings = self.settings_of(&entry.id);
         let setting = |key: &str| settings.get(key).cloned();
@@ -369,9 +358,7 @@ impl PluginManager {
                                 return None;
                             }
                         };
-                        let (mut items, _) = unique_by_id(items);
-                        items.retain(|it| !it.title.trim().is_empty() && it.kind != ApiItemKind::Screensaver && it.kind != ApiItemKind::Wallpaper);
-                        items.truncate(SEARCH_LIMIT as usize);
+                        let mut items = kept_results(items);
                         if items.is_empty() {
                             return None;
                         }
@@ -411,14 +398,6 @@ fn single_component(root: &Path, id: &str) -> Option<PathBuf> {
 }
 
 /// The first item for each id, and how many repeats were dropped.
-fn unique_by_id(items: Vec<ApiItem>) -> (Vec<ApiItem>, usize) {
-    let before = items.len();
-    let mut seen = HashSet::new();
-    let kept: Vec<ApiItem> = items.into_iter().filter(|it| seen.insert(it.id.clone())).collect();
-    let dropped = before - kept.len();
-    (kept, dropped)
-}
-
 struct ArtBudget {
     downloads: usize,
     bytes: u64,
@@ -662,7 +641,7 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
         utc_offset_minutes: inner.utc_offset_minutes.load(Ordering::Relaxed),
         tier: format!("{:?}", inner.config.tier).to_lowercase(),
         since_ms: since,
-        window_hours: 12,
+        window_hours: WINDOW_HOURS,
     };
     let started = Instant::now();
     // A panic while running the plugin or fetching its pictures is that refresh's error, so the
@@ -812,16 +791,6 @@ mod tests {
         assert!(a < 0);
         assert_eq!(a, channel_key("tv.lounge.iptv", "abc.au"));
         assert_ne!(a, channel_key("tv.lounge.iptv", "sbs.au"));
-    }
-
-    #[test]
-    fn repeated_ids_keep_the_first() {
-        let a = ApiItem { id: "x".into(), title: "First".into(), ..Default::default() };
-        let b = ApiItem { id: "x".into(), title: "Second".into(), ..Default::default() };
-        let c = ApiItem { id: "y".into(), title: "Other".into(), ..Default::default() };
-        let (kept, dropped) = unique_by_id(vec![a, b, c]);
-        assert_eq!(dropped, 1);
-        assert_eq!(kept.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), vec!["First", "Other"]);
     }
 
     #[test]

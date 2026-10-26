@@ -15,7 +15,7 @@
 use ed25519_dalek::{Signer, SigningKey};
 use lounge_plugin_api::{HttpRequest, HttpResponse, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
-use lounge_plugins::host::{Host, Limits, Services};
+use lounge_plugins::host::{kept, kept_results, Host, Limits, Services, SEARCH_LIMIT, WINDOW_HOURS};
 use lounge_plugins::http::{host_permitted, reach, Fetcher};
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashMap};
@@ -145,18 +145,25 @@ fn run(args: &[String]) -> Result<(), String> {
         println!("resolved in {:.0} ms: {resolved:?}", started.elapsed().as_secs_f64() * 1000.0);
         return Ok(());
     }
+    // What the TV would keep of the answer, with the notes it would put in the plugin's log.
     let items = match flag(args, "--search") {
-        Some(q) => host.search(&plugin, &q, 20),
-        None => host.refresh(
-            &plugin,
-            &RefreshContext {
-                now_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0),
-                utc_offset_minutes: 0,
-                tier: "a".into(),
-                since_ms: None,
-                window_hours: 6,
-            },
-        ),
+        Some(q) => host.search(&plugin, &q, SEARCH_LIMIT).map(kept_results),
+        None => host
+            .refresh_counted(
+                &plugin,
+                &RefreshContext {
+                    now_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0),
+                    utc_offset_minutes: 0,
+                    tier: "a".into(),
+                    since_ms: None,
+                    window_hours: WINDOW_HOURS,
+                },
+            )
+            .map(|(items, sent)| {
+                let (items, notes) = kept(items, sent);
+                services.logs.lock().extend(notes.into_iter().map(|n| format!("tv: {n}")));
+                items
+            }),
     }
     .inspect_err(|_| print_logs(&services));
     if let Some(file) = &state {
