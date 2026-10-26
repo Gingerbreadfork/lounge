@@ -525,6 +525,14 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
 
 internal fun hasUsageAccess(context: Context): Boolean {
     val appOps = context.getSystemService(AppOpsManager::class.java) ?: return false
-    val mode = runCatching { appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName) }.getOrDefault(AppOpsManager.MODE_ERRORED)
+    // unsafeCheckOpNoThrow arrived in Android 10; Android 9 has only the older name.
+    val mode = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
+        }
+    }.getOrDefault(AppOpsManager.MODE_ERRORED)
     return mode == AppOpsManager.MODE_ALLOWED
 }
