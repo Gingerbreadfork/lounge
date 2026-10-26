@@ -310,7 +310,12 @@ pub struct Programme {
     pub description: Option<String>,
     pub start_ms: i64,
     pub end_ms: i64,
+    /// The guide gave no stop, so it ends where the next programme on its channel starts.
+    open: bool,
 }
+
+/// The end of a programme with no stop and no programme after it yet.
+const OPEN_END: i64 = i64::MAX;
 
 impl Programme {
     fn to_item(&self, ch: &Channel) -> Item {
@@ -416,7 +421,8 @@ impl<'a> Guide<'a> {
         let channel = channel?;
         let bucket = *self.by_id.get(&*channel).or_else(|| self.aliases.get(&*channel))?;
         self.matched += 1;
-        let (start_ms, end_ms) = (start?, stop?);
+        // XMLTV's stop is optional; such a programme is closed off once the next one is known.
+        let (start_ms, end_ms) = (start?, stop.unwrap_or(OPEN_END));
         if end_ms <= self.window.0 || start_ms >= self.window.1 || end_ms <= start_ms {
             return None;
         }
@@ -434,7 +440,7 @@ impl<'a> Guide<'a> {
             return;
         }
         let description = p.desc.or(p.sub_title).map(|d| truncate(&d, DESCRIPTION_CHARS));
-        self.programmes[p.bucket].push(Programme { title, description, start_ms: p.start_ms, end_ms: p.end_ms });
+        self.programmes[p.bucket].push(Programme { title, description, start_ms: p.start_ms, end_ms: p.end_ms, open: p.end_ms == OPEN_END });
         self.stored += 1;
         if self.stored > 2 * self.budget + self.buckets.len() + 256 {
             self.trim();
@@ -445,9 +451,16 @@ impl<'a> Guide<'a> {
     /// shrinks as programmes arrive, and a channel never ends up with more than one past it, so
     /// anything beyond that is safe to drop now.
     fn trim(&mut self) {
+        let from = self.window.0;
         for list in &mut self.programmes {
             list.sort_by_key(|p| p.start_ms);
             list.dedup_by_key(|p| p.start_ms);
+            for i in 0..list.len() {
+                if list[i].open {
+                    list[i].end_ms = list.get(i + 1).map_or(OPEN_END, |next| next.start_ms);
+                }
+            }
+            list.retain(|p| p.end_ms > from);
         }
         let counts: Vec<usize> = self.programmes.iter().zip(&self.buckets).flat_map(|(list, twins)| std::iter::repeat_n(list.len(), twins.len())).collect();
         self.keep = sdk::fair_share(&counts, self.budget) + 1;
@@ -460,6 +473,10 @@ impl<'a> Guide<'a> {
     /// Schedule items for every playlist channel, at most `budget` of them, shared evenly.
     pub fn into_items(mut self) -> Vec<Item> {
         self.trim();
+        // A last programme with no stop has no known end, so it is left out.
+        for list in &mut self.programmes {
+            list.retain(|p| p.end_ms != OPEN_END);
+        }
         let mut items = Vec::new();
         for (list, twins) in self.programmes.iter().zip(&self.buckets) {
             for &t in twins {
@@ -857,6 +874,27 @@ mod tests {
         let mut guide = Guide::new(channels, window, budget);
         read_guide(xml.as_bytes(), &mut guide, MAX_GUIDE_BYTES).unwrap();
         guide.into_items()
+    }
+
+    #[test]
+    fn a_programme_without_a_stop_ends_where_the_next_one_starts() {
+        let xml = r#"<tv>
+<programme start="20260101180000 +0000" channel="abc"><title>News</title></programme>
+<programme start="20260101190000 +0000" channel="abc"><title>Quiz</title></programme>
+<programme start="20260101193000 +0000" channel="abc"><title>Late</title></programme>
+<programme start="20260101120000 +0000" channel="abc"><title>Over</title></programme>
+<programme start="20260101150000 +0000" channel="abc"><title>Afternoon</title></programme>
+</tv>"#;
+        let items = read(xml, &[channel("abc", "ABC")], (at("20260101170000 +0000"), at("20260102050000 +0000")), 100);
+        let got: Vec<(&str, i64, i64)> = items.iter().map(|i| (i.title.as_str(), i.start_ms.unwrap(), i.end_ms.unwrap())).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Afternoon", at("20260101150000 +0000"), at("20260101180000 +0000")),
+                ("News", at("20260101180000 +0000"), at("20260101190000 +0000")),
+                ("Quiz", at("20260101190000 +0000"), at("20260101193000 +0000")),
+            ]
+        );
     }
 
     #[test]
