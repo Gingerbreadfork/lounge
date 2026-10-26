@@ -7,7 +7,7 @@ use crate::{PluginError, Result};
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use wasmi::{Caller, Config, Engine, Extern, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder};
+use wasmi::{Caller, Config, Engine, Extern, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc, TypedResumableCall, WasmParams, WasmResults};
 
 /// What the host provides to plugins. Implemented by the core (storage) and by the test tool.
 pub trait Services: Send + Sync {
@@ -69,6 +69,9 @@ impl Default for Limits {
 const MAX_KEY_BYTES: usize = 256;
 /// Longest log line, in bytes; anything after it is dropped.
 const MAX_LOG_BYTES: usize = 4096;
+/// Fuel is handed to a call this much at a time and the clock is read between slices, so a loop
+/// that never calls the host still stops at its deadline. A slice is well under a second on a TV.
+const FUEL_SLICE: u64 = 10_000_000;
 
 pub struct LoadedPlugin {
     pub id: String,
@@ -94,6 +97,8 @@ struct State {
     fetches_left: u32,
     fetch_deadline: Instant,
     deadline: Instant,
+    /// Fuel not yet handed to the call.
+    fuel_reserve: u64,
     /// Set while the host waits on the plugin's `lg_alloc`, which may not call back into the host.
     in_alloc: bool,
 }
@@ -158,6 +163,8 @@ impl Host {
     fn call_json<I: Serialize, O: DeserializeOwned>(&self, plugin: &LoadedPlugin, export: &str, input: Option<&I>, time: Duration) -> Result<Outcome<O>> {
         let started = Instant::now();
         let deadline = started + time;
+        // The start function cannot be paused, so it runs on the first slice alone.
+        let first_slice = self.limits.fuel.min(FUEL_SLICE);
         let state = State {
             plugin: plugin.id.clone(),
             manifest: plugin.manifest.clone(),
@@ -176,11 +183,12 @@ impl Host {
             fetches_left: self.limits.max_fetches,
             fetch_deadline: (started + self.limits.fetch_budget).min(deadline),
             deadline,
+            fuel_reserve: self.limits.fuel - first_slice,
             in_alloc: false,
         };
         let mut store = Store::new(&self.engine, state);
         store.limiter(|s| &mut s.limits);
-        store.set_fuel(self.limits.fuel).map_err(wasm_err)?;
+        store.set_fuel(first_slice).map_err(wasm_err)?;
 
         let mut linker = Linker::<State>::new(&self.engine);
         link_host_functions(&mut linker)?;
@@ -193,14 +201,14 @@ impl Host {
             Some(value) => {
                 let bytes = serde_json::to_vec(value)?;
                 let alloc = instance.get_typed_func::<i32, i32>(&store, exports::ALLOC).map_err(wasm_err)?;
-                let ptr = alloc.call(&mut store, bytes.len() as i32).map_err(trap_err)? as u32;
+                let ptr = call_metered(&mut store, &alloc, bytes.len() as i32, export, time)? as u32;
                 memory.write(&mut store, ptr as usize, &bytes).map_err(|e| PluginError::Wasm(e.to_string()))?;
                 let f = instance.get_typed_func::<(i32, i32), i64>(&store, export).map_err(wasm_err)?;
-                f.call(&mut store, (ptr as i32, bytes.len() as i32)).map_err(trap_err)?
+                call_metered(&mut store, &f, (ptr as i32, bytes.len() as i32), export, time)?
             }
             None => {
                 let f = instance.get_typed_func::<(), i64>(&store, export).map_err(wasm_err)?;
-                f.call(&mut store, ()).map_err(trap_err)?
+                call_metered(&mut store, &f, (), export, time)?
             }
         };
         if Instant::now() > deadline {
@@ -218,9 +226,9 @@ impl Host {
         let mut out = vec![0u8; len as usize];
         memory.read(&store, ptr as usize, &mut out).map_err(|e| PluginError::Wasm(e.to_string()))?;
         if let Ok(free) = instance.get_typed_func::<(i32, i32), ()>(&store, exports::FREE) {
-            let _ = free.call(&mut store, (ptr as i32, len as i32));
+            let _ = call_metered(&mut store, &free, (ptr as i32, len as i32), export, time);
         }
-        let used = self.limits.fuel.saturating_sub(store.get_fuel().unwrap_or(0));
+        let used = self.limits.fuel.saturating_sub(store.get_fuel().unwrap_or(0) + store.data().fuel_reserve);
         tracing::debug!("plugin {} {export}: {} fuel", plugin.id, used);
         Ok(serde_json::from_slice(&out)?)
     }
@@ -230,7 +238,36 @@ fn wasm_err(e: wasmi::Error) -> PluginError {
     PluginError::Wasm(e.to_string())
 }
 
-fn trap_err(e: wasmi::Error) -> PluginError {
+/// Runs `f` a slice of fuel at a time, stopping it once its deadline or its fuel is gone.
+fn call_metered<P: WasmParams, R: WasmResults>(store: &mut Store<State>, f: &TypedFunc<P, R>, params: P, export: &str, time: Duration) -> Result<R> {
+    let mut call = f.call_resumable(&mut *store, params).map_err(|e| trap_err(&e))?;
+    loop {
+        call = match call {
+            TypedResumableCall::Finished(results) => return Ok(results),
+            TypedResumableCall::HostTrap(t) => return Err(trap_err(t.host_error())),
+            TypedResumableCall::OutOfFuel(paused) => {
+                refuel(store, export, time)?;
+                paused.resume(&mut *store).map_err(|e| trap_err(&e))?
+            }
+        };
+    }
+}
+
+/// Gives a paused call its next slice, unless its time or its fuel has run out.
+fn refuel(store: &mut Store<State>, export: &str, time: Duration) -> Result<()> {
+    if Instant::now() > store.data().deadline {
+        return Err(PluginError::Trap(format!("{export} ran past its {} s limit", time.as_secs())));
+    }
+    let slice = store.data().fuel_reserve.min(FUEL_SLICE);
+    if slice == 0 {
+        return Err(PluginError::Trap("out of fuel: the plugin took too long".into()));
+    }
+    store.data_mut().fuel_reserve -= slice;
+    let left = store.get_fuel().map_err(wasm_err)?;
+    store.set_fuel(left + slice).map_err(wasm_err)
+}
+
+fn trap_err(e: &wasmi::Error) -> PluginError {
     match e.as_trap_code() {
         Some(wasmi::TrapCode::OutOfFuel) => PluginError::Trap("out of fuel: the plugin took too long".into()),
         Some(code) => PluginError::Trap(format!("{code:?}")),
@@ -260,11 +297,23 @@ fn enter(caller: &mut Caller<'_, State>, bytes: usize) -> std::result::Result<()
         return Err(wasmi::Error::new("the plugin ran past its time limit"));
     }
     let cost = st.host_call_fuel.saturating_add(bytes as u64);
+    charge(caller, cost)
+}
+
+/// Takes `cost` fuel from the call, drawing on fuel not yet handed out when the current slice is
+/// short, so a large host call costs the same whichever slice it lands in.
+fn charge(caller: &mut Caller<'_, State>, cost: u64) -> std::result::Result<(), wasmi::Error> {
     let fuel = caller.get_fuel()?;
-    if fuel < cost {
+    if fuel >= cost {
+        return caller.set_fuel(fuel - cost);
+    }
+    let st = caller.data_mut();
+    let need = cost - fuel;
+    if st.fuel_reserve < need {
         return Err(wasmi::Error::from(wasmi::TrapCode::OutOfFuel));
     }
-    caller.set_fuel(fuel - cost)
+    st.fuel_reserve -= need;
+    caller.set_fuel(0)
 }
 
 fn read_guest(caller: &Caller<'_, State>, ptr: i32, len: i32) -> std::result::Result<Vec<u8>, wasmi::Error> {
@@ -325,8 +374,7 @@ fn write_guest(caller: &mut Caller<'_, State>, bytes: &[u8]) -> std::result::Res
 
 /// Charge for the bytes a call hands back, then copy them into the plugin.
 fn hand_back(caller: &mut Caller<'_, State>, bytes: &[u8]) -> std::result::Result<i64, wasmi::Error> {
-    let fuel = caller.get_fuel()?;
-    caller.set_fuel(fuel.saturating_sub(bytes.len() as u64))?;
+    charge(caller, bytes.len() as u64)?;
     write_guest(caller, bytes)
 }
 
@@ -595,6 +643,37 @@ mod tests {
         let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
         let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
         assert!(matches!(&err, PluginError::Trap(msg) if msg.contains("fuel")), "{err}");
+    }
+
+    #[test]
+    fn a_loop_that_never_calls_the_host_stops_at_its_deadline() {
+        let (host, _) = host();
+        let spin = module("", "", "(i32.const 8)", "(loop $l (br $l)) (i64.const 0)");
+        let fill = module("", "", "(i32.const 8)", "(loop $l (memory.fill (i32.const 0) (i32.const 0) (i32.const 131072)) (br $l)) (i64.const 0)");
+        let h = Host::new(host.services.clone(), Limits { refresh_time: Duration::from_millis(300), ..Limits::default() });
+        for wasm in [spin, fill] {
+            let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
+            let started = Instant::now();
+            let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+            assert!(matches!(&err, PluginError::Trap(msg) if msg.contains("limit")), "{err}");
+            assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
+        }
+    }
+
+    #[test]
+    fn work_longer_than_one_slice_still_finishes() {
+        let (host, _) = host();
+        let wasm = module(
+            "",
+            "",
+            "(i32.const 8)",
+            "(local $n i32) (local.set $n (i32.const 6000000))
+             (loop $l (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $l (local.get $n)))
+             (i64.const 0)",
+        );
+        let plugin = host.load("x", Manifest::default(), &wasm).unwrap();
+        let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert!(matches!(&err, PluginError::Failed(msg) if msg.contains("returned nothing")), "{err}");
     }
 
     /// A minimal module whose `lg_refresh` body is `body`; `lg_alloc` is `alloc`.

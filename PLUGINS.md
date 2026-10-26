@@ -386,7 +386,7 @@ kept, and the plugin refreshes.
 | | |
 |---|---|
 | Memory | 32 MB of linear memory per call, one memory, tables of up to 100,000 entries |
-| Fuel | 20 billion instructions per call; a runaway loop ends with "out of fuel" |
+| Fuel | 20 billion instructions per call, handed out in slices; a runaway loop ends at its time limit or with "out of fuel". A start function gets the first 10 million |
 | Host calls | 10,000 fuel each, plus one per byte they move |
 | Time | 3 minutes for a refresh, 12 s for `search`, `resolve` and the manifest |
 | Fetches | 64 per call, 60 s of waiting in total, 20 s and 8 MB each |
