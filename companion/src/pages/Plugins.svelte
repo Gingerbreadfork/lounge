@@ -32,8 +32,11 @@
   async function commit(p: Plugin, key: string) {
     const value = drafts[key];
     if (value === undefined) return;
-    await act('Saved', () => api.pluginSetting(p.id, key, value.trim() ? value.trim() : null));
-    delete drafts[key];
+    // A password is sent as typed; spaces at its ends can be part of it.
+    const typed = p.settings.find((s) => s.key === key)?.kind === 'password' ? value : value.trim();
+    const saved = await act('Saved', () => api.pluginSetting(p.id, key, typed ? typed : null).then(() => true));
+    // A save that failed keeps what was typed, so it can be tried again.
+    if (saved) delete drafts[key];
     load();
   }
   async function install(e: Event) {

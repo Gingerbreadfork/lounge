@@ -177,7 +177,9 @@ fn older(a: &str, b: &str) -> bool {
 /// plugin's passwords, so a password only ever goes to the server it was entered for, whoever
 /// changes the address.
 pub(crate) fn store_setting(store: &lounge_store::Store, manifest: &Manifest, id: &str, key: &str, value: Option<&str>) {
-    let value = value.map(str::trim).filter(|v| !v.is_empty());
+    // A password is kept exactly as typed, since spaces at its ends can be part of it.
+    let password = manifest.settings.iter().any(|s| s.key == key && s.kind == lounge_plugin_api::SettingKind::Password);
+    let value = value.map(|v| if password { v } else { v.trim() }).filter(|v| !v.is_empty());
     if manifest.decides_origin(key) {
         let old = store.plugin_setting(id, key).ok().flatten();
         let host = |v: Option<&str>| v.and_then(lounge_plugin_api::host_in_setting);
@@ -904,6 +906,11 @@ mod tests {
         assert_eq!(password(&store).as_deref(), Some("hunter2"));
         store_setting(&store, &m, "p", "server", Some("http://attacker.example"));
         assert_eq!(password(&store), None);
+        // A password keeps its spaces; an address is tidied.
+        store_setting(&store, &m, "p", "password", Some(" pass phrase "));
+        assert_eq!(password(&store).as_deref(), Some(" pass phrase "));
+        store_setting(&store, &m, "p", "server", Some("  http://192.168.0.10:8096 "));
+        assert_eq!(store.plugin_setting("p", "server").unwrap().as_deref(), Some("http://192.168.0.10:8096"));
     }
 
     #[test]
