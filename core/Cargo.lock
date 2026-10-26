@@ -1033,6 +1033,8 @@ dependencies = [
  "axum",
  "getrandom 0.3.4",
  "hex",
+ "hyper",
+ "hyper-util",
  "image",
  "mime_guess",
  "parking_lot",
@@ -1044,6 +1046,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tower",
  "tower-http",
  "tracing",
 ]

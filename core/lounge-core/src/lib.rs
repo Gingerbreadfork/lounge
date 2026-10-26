@@ -913,7 +913,9 @@ impl Core {
 
     pub fn stop_companion(&self) {
         self.count();
-        *self.inner.companion.lock() = None;
+        // Taken out first, so the server stops without the lock held.
+        let stopped = self.inner.companion.lock().take();
+        drop(stopped);
     }
 
     pub fn companion_status(&self) -> CompanionStatus {

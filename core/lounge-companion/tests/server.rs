@@ -129,6 +129,54 @@ fn the_server_checks_before_it_listens() {
     assert_eq!(status, 413);
 }
 
+#[test]
+fn connections_are_capped_and_stopping_does_not_wait_for_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    // A dozen connections that never finish a request fill one address's share.
+    let mut stalled: Vec<TcpStream> = (0..12)
+        .map(|_| {
+            let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            s.write_all(b"GET /api/state HTTP/1.1\r\n").unwrap();
+            s
+        })
+        .collect();
+    std::thread::sleep(Duration::from_millis(200));
+    let mut extra = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    extra.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+    let mut buf = [0u8; 16];
+    assert_eq!(extra.read(&mut buf).unwrap_or(0), 0, "one more is closed unanswered");
+
+    // Once one goes, the next request is answered again.
+    drop(stalled.pop());
+    std::thread::sleep(Duration::from_millis(200));
+    let (status, _) = send(port, &format!("GET /api/state HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n"));
+    assert_eq!(status, 401);
+
+    // Stopping does not wait for the stalled ones, and the port is free straight after.
+    let started = Instant::now();
+    drop(companion);
+    assert!(started.elapsed() < Duration::from_secs(2), "took {:?}", started.elapsed());
+    assert!(std::net::TcpListener::bind(("0.0.0.0", port)).is_ok());
+}
+
+#[test]
+fn the_live_socket_upgrades() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let token = companion.new_pairing(&format!("http://{host}"), now()).token;
+    let (status, _) = send(
+        port,
+        &format!(
+            "GET /api/ws HTTP/1.1\r\nHost: {host}\r\nCookie: lounge_session={token}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+        ),
+    );
+    assert_eq!(status, 101);
+}
+
 fn now() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
 }

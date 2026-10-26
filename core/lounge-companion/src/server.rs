@@ -16,10 +16,13 @@ use axum::routing::{delete, get, post, put};
 use axum::{Extension, Json, Router};
 use rust_embed::RustEmbed;
 use serde::Deserialize;
-use std::net::SocketAddr;
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
+use tower::ServiceExt;
 
 #[derive(RustEmbed)]
 #[folder = "$CARGO_MANIFEST_DIR/../../companion/dist/"]
@@ -38,6 +41,15 @@ const SESSION_COOKIE: &str = "lounge_session";
 const BODY_LIMIT: usize = 64 * 1024;
 const BUNDLE_LIMIT: usize = 16 * 1024 * 1024;
 const BACKUP_LIMIT: usize = 2 * 1024 * 1024;
+/// Most connections at once, and from one address; a phone's browser opens a handful.
+const MAX_CONNECTIONS: usize = 48;
+const MAX_PER_ADDRESS: usize = 12;
+/// A request's head must arrive within this, and a connection idle for this long is closed.
+const HEAD_TIMEOUT: Duration = Duration::from_secs(10);
+/// What one connection may hold while its request's head is still arriving.
+const MAX_BUFFER: usize = 16 * 1024;
+/// How long open connections get to finish once the server is told to stop.
+const GRACE: Duration = Duration::from_secs(2);
 
 type Shared = Arc<App>;
 
@@ -48,8 +60,8 @@ pub struct Companion {
     revision: tokio::sync::watch::Sender<u64>,
     counter: AtomicU64,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
-    thread: Option<std::thread::JoinHandle<()>>,
-    bound: Arc<parking_lot::Mutex<Option<Result<u16, String>>>>,
+    /// Set while the port is held, so stopping can wait for it to be free and no longer.
+    listening: Arc<AtomicBool>,
 }
 
 impl Companion {
@@ -60,7 +72,9 @@ impl Companion {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         let bound = Arc::new(parking_lot::Mutex::new(None));
         let bound_for_thread = Arc::clone(&bound);
-        let thread = std::thread::Builder::new()
+        let listening = Arc::new(AtomicBool::new(false));
+        let listening_for_thread = Arc::clone(&listening);
+        std::thread::Builder::new()
             .name("lounge-companion".into())
             .spawn(move || {
                 let rt = match tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build() {
@@ -79,12 +93,12 @@ impl Companion {
                         }
                     };
                     let actual = listener.local_addr().map(|a| a.port()).unwrap_or(port);
+                    listening_for_thread.store(true, Ordering::Release);
                     *bound_for_thread.lock() = Some(Ok(actual));
-                    let router = routes(app);
-                    let _ = axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
-                        .with_graceful_shutdown(async { let _ = shutdown_rx.await; })
-                        .await;
+                    serve(listener, routes(app), shutdown_rx, &listening_for_thread).await;
                 });
+                // A handler may still be inside a call into the launcher; leave it rather than wait.
+                rt.shutdown_timeout(Duration::from_secs(1));
             })?;
         // Wait briefly for the bind result so a port clash is reported to the caller.
         let started = std::time::Instant::now();
@@ -98,7 +112,7 @@ impl Companion {
             std::thread::sleep(std::time::Duration::from_millis(10));
         };
         let actual = actual.map_err(CompanionError::Other)?;
-        Ok(Companion { port: actual, tokens, revision, counter: AtomicU64::new(0), shutdown: Some(shutdown_tx), thread: Some(thread), bound })
+        Ok(Companion { port: actual, tokens, revision, counter: AtomicU64::new(0), shutdown: Some(shutdown_tx), listening })
     }
 
     /// Tell connected phones the snapshot changed.
@@ -121,14 +135,99 @@ impl Companion {
 }
 
 impl Drop for Companion {
+    /// Stops accepting and waits only until the port is free, so a stop never blocks the caller
+    /// on a connection that will not finish; the server's thread winds down on its own.
     fn drop(&mut self) {
         if let Some(tx) = self.shutdown.take() {
             let _ = tx.send(());
         }
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
+        let started = std::time::Instant::now();
+        while self.listening.load(Ordering::Acquire) && started.elapsed() < Duration::from_secs(1) {
+            std::thread::sleep(Duration::from_millis(5));
         }
-        let _ = &self.bound;
+    }
+}
+
+/// Accepts connections until told to stop, within the limits above, then gives open ones the
+/// grace period to finish.
+async fn serve(listener: tokio::net::TcpListener, router: Router, mut shutdown: tokio::sync::oneshot::Receiver<()>, listening: &AtomicBool) {
+    let open = Arc::new(tokio::sync::Semaphore::new(MAX_CONNECTIONS));
+    let per_address = Arc::new(parking_lot::Mutex::new(HashMap::new()));
+    let (stop, stopped) = tokio::sync::watch::channel(false);
+    let mut connections = tokio::task::JoinSet::new();
+    loop {
+        let (stream, peer) = tokio::select! {
+            _ = &mut shutdown => break,
+            accepted = listener.accept() => match accepted {
+                Ok(accepted) => accepted,
+                // Out of file descriptors and the like: wait rather than spin.
+                Err(_) => {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+            },
+        };
+        while connections.try_join_next().is_some() {}
+        // Over either limit, the connection is dropped unanswered.
+        let Ok(permit) = Arc::clone(&open).try_acquire_owned() else { continue };
+        let Some(slot) = AddressSlot::take(&per_address, peer.ip()) else { continue };
+        let router = router.clone();
+        let mut stopped = stopped.clone();
+        connections.spawn(async move {
+            let _held = (permit, slot);
+            let service = hyper::service::service_fn(move |mut req: Request<hyper::body::Incoming>| {
+                req.extensions_mut().insert(ConnectInfo(peer));
+                router.clone().oneshot(req)
+            });
+            let conn = hyper::server::conn::http1::Builder::new()
+                .timer(hyper_util::rt::TokioTimer::new())
+                .header_read_timeout(HEAD_TIMEOUT)
+                .max_buf_size(MAX_BUFFER)
+                .serve_connection(hyper_util::rt::TokioIo::new(stream), service)
+                .with_upgrades();
+            tokio::pin!(conn);
+            tokio::select! {
+                _ = conn.as_mut() => {}
+                _ = stopped.changed() => {
+                    conn.as_mut().graceful_shutdown();
+                    let _ = conn.await;
+                }
+            }
+        });
+    }
+    drop(listener);
+    listening.store(false, Ordering::Release);
+    let _ = stop.send(true);
+    let _ = tokio::time::timeout(GRACE, async { while connections.join_next().await.is_some() {} }).await;
+}
+
+/// One connection's place in its address's count, given back when the connection ends.
+struct AddressSlot {
+    counts: Arc<parking_lot::Mutex<HashMap<IpAddr, usize>>>,
+    ip: IpAddr,
+}
+
+impl AddressSlot {
+    fn take(counts: &Arc<parking_lot::Mutex<HashMap<IpAddr, usize>>>, ip: IpAddr) -> Option<AddressSlot> {
+        let mut c = counts.lock();
+        let n = c.entry(ip).or_insert(0);
+        if *n >= MAX_PER_ADDRESS {
+            return None;
+        }
+        *n += 1;
+        Some(AddressSlot { counts: Arc::clone(counts), ip })
+    }
+}
+
+impl Drop for AddressSlot {
+    fn drop(&mut self) {
+        let mut c = self.counts.lock();
+        if let Some(n) = c.get_mut(&self.ip) {
+            *n -= 1;
+            if *n == 0 {
+                c.remove(&self.ip);
+            }
+        }
     }
 }
 
