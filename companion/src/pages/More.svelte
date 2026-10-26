@@ -101,7 +101,7 @@
 
   <section class="section">
     <div class="section-head"><h3>About</h3></div>
-    <p class="caption">Lounge {app.state?.device.version ?? ''} on {app.state?.device.model ?? 'this TV'}. Everything here talks to the TV over your own network; nothing leaves the house.</p>
+    <p class="caption">Lounge {app.state?.device.version ?? ''} on {app.state?.device.model ?? 'this TV'}. Everything on this page goes between this phone and the TV over your own network.</p>
     <button class="btn ghost danger" onclick={unpair}>Unpair this phone</button>
   </section>
 </main>

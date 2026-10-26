@@ -57,7 +57,7 @@
 - **Power Setup.** Lounge talks to the TV's own debugging service after you allow it once on screen, or to Shizuku, to take the home role, grant its own accesses, drive HDMI-CEC, set the screensaver and compile itself ahead of time. Every command is shown before it runs and logged after.
 - **A screensaver of its own.** The artwork from the Stage and the rows with a slow push-in, or one of nine slow abstract scenes drawn on the TV's graphics chip: Ink, Current, Rain, Smoke, Embers, Shallows, Lava, Aurora and Silk. Plugins can add their own.
 - **Live backgrounds.** Any of those scenes can run behind the home screen instead of the still light, dimmed so the tiles stay the brightest thing in the room, with the light still following focus over it. Off by default; it freezes after a minute without input and steps down when the TV's graphics chip is busy.
-- **Nothing leaves the house.** No accounts, no analytics, no update checks, no network at all unless you gave it an address.
+- **Nothing leaves the house.** No accounts and no analytics. Lounge reaches only what you gave it an address for, the artwork the TV's other apps publish, and GitHub twice a day for updates, which Settings can turn off.
 - **Built for old TVs too.** Android 9 and up, arm64 and 32-bit ARM, a Rust core behind a Kotlin and Compose shell.
 
 ## Why
@@ -276,8 +276,9 @@ frames out of ten while you move around. A TCL television with a Mali GPU runs t
 at about 75 MB and is bound by its GPU rather than its CPU. Both are measured with the scripts
 in `tools/`, on release builds compiled the way a real install ends up.
 
-Nothing in Lounge talks to the network unless you gave it an address: a media server, a
-playlist, a plugin you installed. There are no accounts, no analytics and no update checks.
+Lounge talks to the network only where you sent it: a media server, a playlist, a plugin you
+installed, the artwork the TV's other apps publish in their rows, and GitHub twice a day to look
+for an update, which Settings, Updates turns off. There are no accounts and no analytics.
 
 ## Where it is
 
