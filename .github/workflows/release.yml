@@ -13,6 +13,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # A tag that is not the app's version would look newer than itself to every TV that installs it.
+      - name: Version
+        run: |
+          TAG=${GITHUB_REF_NAME#v}
+          FILE=android/app/build.gradle.kts
+          NAME=$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' "$FILE")
+          CODE=$(sed -n 's/^ *versionCode = \([0-9][0-9]*\)$/\1/p' "$FILE")
+          if [ "$NAME" != "$TAG" ]; then
+            echo "::error::The tag says $TAG but versionName is $NAME"
+            exit 1
+          fi
+          PREV=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          if [ -n "$PREV" ]; then
+            PREV_CODE=$(git show "$PREV:$FILE" | sed -n 's/^ *versionCode = \([0-9][0-9]*\)$/\1/p')
+            if [ -n "$PREV_CODE" ] && [ "$CODE" -le "$PREV_CODE" ]; then
+              echo "::error::versionCode $CODE is not above $PREV_CODE from $PREV"
+              exit 1
+            fi
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -42,8 +63,8 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-      # The app's signing key and the plugin publisher key come from repository secrets. Without
-      # them the APK is signed with the debug key and the bundled plugins with a throwaway key.
+      # The app's signing key and the plugin publisher key come from repository secrets. A release
+      # without them would not install over what TVs have, so it stops here instead.
       - name: Keys
         env:
           KEYSTORE_BASE64: ${{ secrets.LOUNGE_KEYSTORE_BASE64 }}
@@ -52,28 +73,23 @@ jobs:
           KEY_PASSWORD: ${{ secrets.LOUNGE_KEY_PASSWORD }}
           PUBLISHER_KEY: ${{ secrets.LOUNGE_PUBLISHER_KEY }}
         run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$PUBLISHER_KEY" ]; then
+            echo "::error::A release needs LOUNGE_KEYSTORE_BASE64 and LOUNGE_PUBLISHER_KEY"
+            exit 1
+          fi
           mkdir -p "$HOME/.gradle"
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            {
-              echo "lounge.storeFile=$RUNNER_TEMP/release.jks"
-              echo "lounge.storePassword=$KEYSTORE_PASSWORD"
-              echo "lounge.keyAlias=$KEY_ALIAS"
-              echo "lounge.keyPassword=$KEY_PASSWORD"
-            } >> "$HOME/.gradle/gradle.properties"
-            echo "signed with the release key"
-          else
-            echo "::warning::LOUNGE_KEYSTORE_BASE64 is not set; the APK is signed with the debug key"
-          fi
-          if [ -n "$PUBLISHER_KEY" ]; then
-            printf '%s' "$PUBLISHER_KEY" > "$RUNNER_TEMP/publisher.key"
-          else
-            echo "::warning::LOUNGE_PUBLISHER_KEY is not set; the bundled plugins are signed with a throwaway key"
-          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "lounge.storeFile=$RUNNER_TEMP/release.jks"
+            echo "lounge.storePassword=$KEYSTORE_PASSWORD"
+            echo "lounge.keyAlias=$KEY_ALIAS"
+            echo "lounge.keyPassword=$KEY_PASSWORD"
+          } >> "$HOME/.gradle/gradle.properties"
+          printf '%s' "$PUBLISHER_KEY" > "$RUNNER_TEMP/publisher.key"
       - run: tools/plugins/build.sh
         env:
           LOUNGE_PUBLISHER_KEY: ${{ runner.temp }}/publisher.key
-      - run: ./gradlew :app:assembleRelease
+      - run: ./gradlew :power:testDebugUnitTest :update:testDebugUnitTest :feature:home:testDebugUnitTest :app:assembleRelease
         working-directory: android
       - name: Package
         run: |

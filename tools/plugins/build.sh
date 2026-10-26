@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the first-party plugins for wasm32, bundles and signs them, and drops the .lgp files into
-# the app's assets. Needs the wasm32-unknown-unknown target. The signing key lives at
-# ~/.config/lounge/publisher.key and is generated on first use.
+# the app's assets. Needs the wasm32-unknown-unknown target. The signing key is the file
+# LOUNGE_PUBLISHER_KEY names, or ~/.config/lounge/publisher.key, which is generated on first use.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(dirname "$(dirname "$HERE")")
 KEY=${LOUNGE_PUBLISHER_KEY:-$HOME/.config/lounge/publisher.key}
@@ -12,6 +12,11 @@ cd "$ROOT/plugins"
 cargo build -q --release -p lgp-tool
 TOOL=target/release/lgp-tool
 if [ ! -f "$KEY" ]; then
+  # A key named from outside has to exist: one made here would be a key no TV knows.
+  if [ -n "${LOUNGE_PUBLISHER_KEY:-}" ]; then
+    echo "LOUNGE_PUBLISHER_KEY names $KEY, which does not exist" >&2
+    exit 1
+  fi
   mkdir -p "$(dirname "$KEY")"
   "$TOOL" keygen "$KEY"
 fi

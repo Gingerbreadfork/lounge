@@ -321,15 +321,15 @@ the wasm build, the companion, and the release APK, which each run keeps as an a
 ### Releasing
 
 Pushing a tag like `v0.2.0` builds the APK and attaches it to a GitHub release as
-`Lounge-0.2.0.apk` with a `SHA256SUMS` file. The tag should match `versionName` in
-`android/app/build.gradle.kts`. Two kinds of secret make the release real: the app's signing
-key as `LOUNGE_KEYSTORE_BASE64` (the keystore, base64 encoded) with `LOUNGE_KEYSTORE_PASSWORD`,
+`Lounge-0.2.0.apk` with a `SHA256SUMS` file. The tag must match `versionName` in
+`android/app/build.gradle.kts`, and `versionCode` must be higher than at the previous tag, or the
+release stops before it builds. It also needs two kinds of secret: the app's signing key as
+`LOUNGE_KEYSTORE_BASE64` (the keystore, base64 encoded) with `LOUNGE_KEYSTORE_PASSWORD`,
 `LOUNGE_KEY_ALIAS` and `LOUNGE_KEY_PASSWORD`, and the plugin publisher key as
-`LOUNGE_PUBLISHER_KEY` (the contents of `~/.config/lounge/publisher.key`). Without the first
-the APK is signed with the debug key, which a signed install will not update from; without the
-second the bundled plugins are signed with a throwaway key that TVs would pin, so set it before
-the first release. `gh secret set LOUNGE_PUBLISHER_KEY < ~/.config/lounge/publisher.key` stores
-it.
+`LOUNGE_PUBLISHER_KEY` (the contents of `~/.config/lounge/publisher.key`). Without them the
+release stops too: a debug-signed APK would not install over a signed one, and plugins signed with
+another key would be refused by every TV that pinned yours.
+`gh secret set LOUNGE_PUBLISHER_KEY < ~/.config/lounge/publisher.key` stores it.
 
 ## Working on it
 

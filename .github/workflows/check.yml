@@ -98,9 +98,8 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      # Signed with a key made on the spot; only a release needs the real one.
       - run: tools/plugins/build.sh
-        env:
-          LOUNGE_PUBLISHER_KEY: ${{ runner.temp }}/publisher.key
       - run: ./gradlew :power:testDebugUnitTest :update:testDebugUnitTest :feature:home:testDebugUnitTest :app:assembleRelease
         working-directory: android
       - uses: actions/upload-artifact@v4
