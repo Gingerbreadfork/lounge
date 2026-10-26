@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -25,8 +26,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Text
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.power.CecDevice
@@ -56,6 +59,11 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
     var pairing by remember { mutableStateOf(false) }
     // Forgetting the key makes a new one, so the fingerprint is read again on every status change.
     val fingerprint by produceState<String?>(null, status) { value = power.fingerprint() }
+    // Home screens to turn off or back on, read again after any home action runs.
+    var homesChanged by remember { mutableIntStateOf(0) }
+    val homeActions by produceState(emptyList<PowerAction>(), homesChanged) {
+        value = withContext(Dispatchers.IO) { power.takeHome().filter { it.id.startsWith("home_off_") } + power.giveBackHome() }
+    }
 
     LaunchedEffect(Unit) {
         power.refresh()
@@ -72,7 +80,10 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
             try {
                 val r = power.run(action)
                 runs[action.id] = if (r.ok) RunState.Done(r.output) else RunState.Failed(r.output.ifBlank { "exit ${r.exitCode}" })
-                if (action.id == "home") onHomeRoleChanged()
+                if (action.id.startsWith("home")) {
+                    onHomeRoleChanged()
+                    homesChanged++
+                }
             } catch (e: PrivilegedException) {
                 runs[action.id] = RunState.Failed(e.message ?: "failed")
             }
@@ -134,7 +145,8 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
     Text("What it can do", style = LoungeTheme.typography.meta, color = colors.dust)
     Spacer(Modifier.height(8.dp))
     Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-        power.setupActions.forEach { action -> ActionRow(action, runs[action.id], enabled = ready) { run(action) } }
+        power.setupActions.flatMap { if (it == power.homeRole) listOf(it) + homeActions else listOf(it) }
+            .forEach { action -> ActionRow(action, runs[action.id], enabled = ready) { run(action) } }
     }
 
     if (ready) {

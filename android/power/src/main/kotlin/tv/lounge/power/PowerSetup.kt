@@ -2,6 +2,8 @@ package tv.lounge.power
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.Settings
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
@@ -21,6 +23,12 @@ internal fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''
 
 /** One thing the helper did, for the sheet and diagnostics. */
 data class PowerLogEntry(val atMs: Long, val action: String, val command: String, val result: ShellResult?, val error: String?)
+
+/**
+ * A home screen on this device besides Lounge: [enabled] when Android can pick it now, [appEnabled]
+ * false when its whole app is switched off.
+ */
+data class HomeApp(val packageName: String, val label: String, val priority: Int, val enabled: Boolean, val appEnabled: Boolean)
 
 /** A CEC device the TV knows about, from `dumpsys hdmi_control`. */
 data class CecDevice(val logicalAddress: Int, val type: Int, val name: String, val powerStatus: Int, val physicalAddress: Int) {
@@ -110,6 +118,16 @@ class PowerSetup(private val context: Context) {
         else -> null
     }
 
+    /** Runs [actions] in order, stopping at the first that fails; returns that one's result, or the last. */
+    suspend fun runAll(actions: List<PowerAction>): ShellResult {
+        var last = ShellResult(0, "")
+        for (action in actions) {
+            last = run(action)
+            if (!last.ok) break
+        }
+        return last
+    }
+
     /** Runs one whitelisted action; the result goes to the log either way. */
     suspend fun run(action: PowerAction): ShellResult {
         val backend = backend() ?: throw PrivilegedException("Power Setup is not connected")
@@ -169,6 +187,56 @@ class PowerSetup(private val context: Context) {
     }
 
     val setupActions: List<PowerAction> get() = listOf(homeRole, tvListings, notificationAccess, usageAccess, quickAnimations, optimise)
+
+    // ----- home screens that come before Lounge -----
+
+    /** This app's user, which `pm` needs named: Android gives each user its own range of uids. */
+    private val userId: Int get() = android.os.Process.myUid() / 100_000
+
+    /** Lounge's own home priority as Android sees it, and every other home screen on the device. */
+    private fun homes(): Pair<Int, List<HomeApp>> {
+        val pm = context.packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val all = runCatching { pm.queryIntentActivities(intent, PackageManager.MATCH_DISABLED_COMPONENTS) }.getOrDefault(emptyList())
+        val pickable = runCatching { pm.queryIntentActivities(intent, 0) }.getOrDefault(emptyList()).map { it.activityInfo.packageName }.toSet()
+        val own = all.filter { it.activityInfo.packageName == context.packageName }.maxOfOrNull { it.priority } ?: 0
+        // Below zero are the system's stand-ins, such as the one shown before the device unlocks.
+        val others = all.filter { it.activityInfo.packageName != context.packageName && it.priority >= 0 }
+            .groupBy { it.activityInfo.packageName }
+            .map { (pkg, found) ->
+                HomeApp(pkg, found.first().loadLabel(pm).toString(), found.maxOf { it.priority }, pkg in pickable, found.first().activityInfo.applicationInfo.enabled)
+            }
+        return own to others
+    }
+
+    /**
+     * Everything that makes Lounge the home screen: choosing it, then switching off each home
+     * screen Android would still pick first. Reads the package list, so call it off the main thread.
+     */
+    fun takeHome(): List<PowerAction> {
+        val (own, others) = homes()
+        return listOf(homeRole) + outranking(others, own).map { home ->
+            PowerAction(
+                "home_off_${home.packageName}",
+                "Turn off ${home.label}",
+                "Android opens it before any chosen home. It stays installed and can be turned back on here.",
+                disableCommand(home.packageName, userId),
+            )
+        }
+    }
+
+    /** Home screens switched off as a whole app. Reads the package list, so call it off the main thread. */
+    fun homesOff(): List<HomeApp> = switchedOff(homes().second)
+
+    /** Turns back on the home screens that are switched off. Reads the package list, so call it off the main thread. */
+    fun giveBackHome(): List<PowerAction> = homesOff().map { home ->
+        PowerAction(
+            "home_on_${home.packageName}",
+            "Turn ${home.label} back on",
+            "Do this before uninstalling Lounge, or the TV has no home screen to fall back on.",
+            enableCommand(home.packageName, userId),
+        )
+    }
 
     private val ambient = ComponentName(context.packageName, "tv.lounge.launcher.AmbientDreamService").flattenToShortString()
 
@@ -236,6 +304,18 @@ class PowerSetup(private val context: Context) {
             android.view.KeyEvent.KEYCODE_MENU to "KEYCODE_MENU",
         )
         private val VOLUME_DIRECTIONS = setOf("raise", "lower", "same")
+
+        /**
+         * The home screens Android picks before one of [ownPriority], whichever home is chosen: it
+         * goes by the priority a filter declares first, and an app's own count as zero.
+         */
+        fun outranking(homes: List<HomeApp>, ownPriority: Int): List<HomeApp> = homes.filter { it.enabled && it.priority > ownPriority }
+
+        /** Home screens whose whole app is off. One with only its activity off, as a finished setup leaves it, is left alone. */
+        fun switchedOff(homes: List<HomeApp>): List<HomeApp> = homes.filter { !it.appEnabled }
+
+        fun disableCommand(packageName: String, userId: Int) = "pm disable-user --user $userId ${shellQuote(packageName)}"
+        fun enableCommand(packageName: String, userId: Int) = "pm enable --user $userId ${shellQuote(packageName)}"
 
         /** The enabled flag [useAmbient] printed before switching: "1", "0" or "null", else null. */
         fun previousScreensaverEnabled(output: String): String? =

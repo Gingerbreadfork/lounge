@@ -218,18 +218,31 @@ adb shell am start -n tv.lounge.launcher/.MainActivity
 ```
 
 The first launch runs the five setup steps. Android does not let an app make itself the home
-screen, so that step needs either one command from a computer,
+screen, so that step needs either a command from a computer,
 
 ```sh
 adb shell cmd package set-home-activity tv.lounge.launcher/.MainActivity
 ```
 
-or **Power Setup** on the TV (Settings, Power Setup, Connect). Power Setup talks to the TV's own
-debugging service after you allow it once on screen, and from then on it can take the home role,
-grant the optional accesses, drive the TV over HDMI-CEC from a streamer, set the screensaver and
-compile Lounge ahead of time. Every action shows its command before it runs. Nothing it can do is
-hidden from you, and the two that change the living room, taking the home role and switching
-the TV's power, only ever happen when you press them.
+or **Power Setup** on the TV (Settings, Power Setup, Connect). On Google TV one command is not
+enough: its own home and its setup app declare a priority no app is allowed, and Android goes by
+priority before it looks at the chosen home. They have to be switched off as well, which leaves
+them installed:
+
+```sh
+adb shell pm disable-user --user 0 com.google.android.apps.tv.launcherx
+adb shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
+```
+
+`pm enable` with the same names turns them back on. Do that before you uninstall Lounge, or the TV
+is left without a home screen. Power Setup finds whichever homes come before Lounge on your TV
+and switches them off along with taking the home role, and it can turn them back on.
+
+Power Setup talks to the TV's own debugging service after you allow it once on screen, and from
+then on it can take the home role, grant the optional accesses, drive the TV over HDMI-CEC from a
+streamer, set the screensaver and compile Lounge ahead of time. Every action shows its command
+before it runs. Nothing it can do is hidden from you, and the two that change the living room,
+taking the home role and switching the TV's power, only ever happen when you press them.
 
 The screensaver is Lounge's own. It shows the artwork from the Stage and the rows with a slow
 push-in, the clock and a line naming the picture, or one of nine abstract scenes drawn on the

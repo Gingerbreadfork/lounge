@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -58,8 +59,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tv.lounge.core.CoreClient
 import tv.lounge.core.HomeSnapshot
 import tv.lounge.core.PairingInfo
@@ -72,6 +75,7 @@ import tv.lounge.design.SpillMask
 import tv.lounge.design.drawSpill
 import tv.lounge.design.lightGlow
 import tv.lounge.platform.Prefs
+import tv.lounge.power.PowerAction
 import tv.lounge.power.PowerSetup
 import tv.lounge.power.PowerStatus
 import tv.lounge.power.PrivilegedException
@@ -341,6 +345,8 @@ private fun StepPower(power: PowerSetup, context: Context) {
     var homeState by remember { mutableStateOf<String?>(null) }
     var isHome by remember { mutableStateOf(isDefaultHome(context)) }
     val ready = status is PowerStatus.Ready
+    val takeHome by produceState(emptyList<PowerAction>(), isHome) { value = withContext(Dispatchers.IO) { power.takeHome() } }
+    val turnOff = takeHome.filter { it.id.startsWith("home_off_") }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         isHome = isDefaultHome(context)
@@ -405,7 +411,7 @@ private fun StepPower(power: PowerSetup, context: Context) {
                     homeState = "Working…"
                     scope.launch {
                         homeState = try {
-                            val r = power.run(power.homeRole)
+                            val r = power.runAll(takeHome.ifEmpty { listOf(power.homeRole) })
                             isHome = isDefaultHome(context)
                             if (r.ok || isHome) null else r.output.lineSequence().firstOrNull()?.take(28) ?: "Failed"
                         } catch (e: PrivilegedException) {
@@ -417,7 +423,18 @@ private fun StepPower(power: PowerSetup, context: Context) {
         )
     }
     Spacer(Modifier.height(20.dp))
-    Text("The stock launcher stays installed, so casting, the gear button and the programme guide keep working. Undo from Settings → Power Setup.", style = LoungeTheme.typography.caption, color = colors.dust)
+    Text(
+        if (!isHome && turnOff.isNotEmpty()) {
+            val them = if (turnOff.size == 1) "it" else "them"
+            "This TV's own home comes before any chosen one, so Lounge turns $them off too: " +
+                turnOff.joinToString("; ") { it.command } +
+                ". Nothing is uninstalled; turn $them back on from Settings → Power Setup, and do that before you uninstall Lounge."
+        } else {
+            "The stock launcher stays installed, so casting, the gear button and the programme guide keep working. Undo from Settings → Power Setup."
+        },
+        style = LoungeTheme.typography.caption,
+        color = colors.dust,
+    )
 }
 
 @Composable

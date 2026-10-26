@@ -84,4 +84,31 @@ class PowerTest {
         assertEquals(0x1000, devices[1].physicalAddress)
         assertTrue(devices[2].isOn)
     }
+
+    @Test
+    fun googleTvsOwnHomesComeBeforeLounge() {
+        val homes = listOf(
+            HomeApp("com.google.android.apps.tv.launcherx", "Google TV Home", priority = 2, enabled = true, appEnabled = true),
+            HomeApp("com.google.android.tungsten.setupwraith", "Setup", priority = 1, enabled = true, appEnabled = true),
+            HomeApp("com.example.launcher", "Another launcher", priority = 0, enabled = true, appEnabled = true),
+            HomeApp("com.google.android.tvrecommendations", "Old home", priority = 3, enabled = false, appEnabled = false),
+        )
+        assertEquals(listOf("com.google.android.apps.tv.launcherx", "com.google.android.tungsten.setupwraith"), PowerSetup.outranking(homes, ownPriority = 0).map { it.packageName })
+        assertEquals(emptyList<HomeApp>(), PowerSetup.outranking(homes, ownPriority = 3))
+    }
+
+    @Test
+    fun onlyWholeAppsSwitchedOffAreOfferedBack() {
+        val homes = listOf(
+            HomeApp("com.google.android.apps.tv.launcherx", "Google TV Home", priority = 2, enabled = false, appEnabled = false),
+            HomeApp("com.example.setup", "Setup", priority = 1, enabled = false, appEnabled = true),
+        )
+        assertEquals(listOf("com.google.android.apps.tv.launcherx"), PowerSetup.switchedOff(homes).map { it.packageName })
+    }
+
+    @Test
+    fun homeCommandsNameTheUserAndQuoteThePackage() {
+        assertEquals("pm disable-user --user 0 'com.google.android.apps.tv.launcherx'", PowerSetup.disableCommand("com.google.android.apps.tv.launcherx", 0))
+        assertEquals("pm enable --user 10 'a'\\''b'", PowerSetup.enableCommand("a'b", 10))
+    }
 }

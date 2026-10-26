@@ -78,6 +78,7 @@ import tv.lounge.design.sounds
 import tv.lounge.design.focusRing
 import tv.lounge.design.lightGlow
 import tv.lounge.platform.Prefs
+import tv.lounge.power.PowerAction
 
 /**
  * Right-hand `curtain` sheet over a scrim (DESIGN.md §5.4). One panel serves every sheet: it slides
@@ -550,12 +551,17 @@ private fun DiagLine(label: String, value: String) {
     }
 }
 
-/** The "make this my home screen" guide, honest about what each path needs. */
+/**
+ * The "make this my home screen" guide, honest about what each path needs. [takeHome] is what
+ * "Do it now" runs, shown before it does; [homesOff] names the home screens switched off.
+ */
 @Composable
 fun HomeRoleSheet(
     isDefaultHome: Boolean,
     packageName: String,
     powerReady: Boolean,
+    takeHome: List<PowerAction>,
+    homesOff: List<String>,
     onDoItNow: () -> Unit,
     onPowerSetup: () -> Unit,
     onRecheck: () -> Unit,
@@ -563,6 +569,8 @@ fun HomeRoleSheet(
 ) {
     val colors = LoungeTheme.colors
     val context = LocalContext.current
+    val turnOff = takeHome.filter { it.id.startsWith("home_off_") }
+    val them = if (turnOff.size == 1) "it" else "them"
     SheetHeading(
         if (isDefaultHome) "Lounge is your home screen" else "Make Lounge your home screen",
         if (isDefaultHome) "Pressing Home brings you here." else "Google TV has no setting for this. One of these works.",
@@ -576,12 +584,21 @@ fun HomeRoleSheet(
             onClick = if (powerReady) onDoItNow else onPowerSetup,
             focusRequester = firstFocus,
         )
+        if (turnOff.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Step(
+                if (turnOff.size == 1) "This TV's own home comes first" else "This TV's own homes come first",
+                "Android opens $them before any chosen home, so this also turns $them off. Nothing is uninstalled; " +
+                    "turn $them back on in Power Setup, and do that before you uninstall Lounge.",
+                takeHome.joinToString("\n") { it.command },
+            )
+        }
         Spacer(Modifier.height(20.dp))
         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Step(
                 "Or from a computer, once",
                 "Turn on Developer options and USB debugging on this device, connect with adb, then run:",
-                "adb shell cmd package set-home-activity $packageName/tv.lounge.launcher.MainActivity",
+                takeHome.joinToString("\n") { "adb shell ${it.command}" }.ifEmpty { "adb shell cmd package set-home-activity $packageName/tv.lounge.launcher.MainActivity" },
             )
             Step(
                 "Or let Android ask",
@@ -598,8 +615,21 @@ fun HomeRoleSheet(
         )
     } else {
         SheetRow(icon = LoungeIcons.Power, title = "Check again", onClick = onRecheck, focusRequester = firstFocus)
+        if (homesOff.isNotEmpty()) {
+            SheetRow(icon = LoungeIcons.Power, title = if (homesOff.size == 1) "Turn it back on" else "Turn them back on", value = "Power Setup", onClick = onPowerSetup)
+        }
     }
-    SheetFootnote("The stock launcher stays installed, so casting, the gear button and the programme guide keep working.")
+    SheetFootnote(
+        when {
+            homesOff.isNotEmpty() -> {
+                val off = if (homesOff.size == 1) "it" else "them"
+                homesOff.joinToString(" and ") + (if (homesOff.size == 1) " is" else " are") +
+                    " turned off. Turn $off back on before you uninstall Lounge, or the TV has no home screen to fall back on."
+            }
+            turnOff.isNotEmpty() -> "What $them provide${if (turnOff.size == 1) "s" else ""} may be missing while $them ${if (turnOff.size == 1) "is" else "are"} off."
+            else -> "The stock launcher stays installed, so casting, the gear button and the programme guide keep working."
+        },
+    )
 }
 
 @Composable

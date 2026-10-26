@@ -833,22 +833,28 @@ private fun SheetContent(
             onRemoved = { open(Overlay.Plugins) },
             firstFocus = first,
         )
-        Overlay.HomeRole -> HomeRoleSheet(
-            isDefaultHome = isDefaultHome,
-            packageName = context.packageName,
-            powerReady = powerStatus is tv.lounge.power.PowerStatus.Ready,
-            onDoItNow = {
-                scope.launch {
-                    runCatching { power.run(power.homeRole) }
-                        .onSuccess { r -> if (!r.ok) say(r.output.ifBlank { "That did not work" }) }
-                        .onFailure { say(it.message ?: "That did not work") }
-                    onHomeChanged()
-                }
-            },
-            onPowerSetup = { open(Overlay.PowerSetup) },
-            onRecheck = onHomeChanged,
-            firstFocus = first,
-        )
+        Overlay.HomeRole -> {
+            val takeHome by produceState(emptyList<tv.lounge.power.PowerAction>(), isDefaultHome) { value = withContext(Dispatchers.IO) { power.takeHome() } }
+            val homesOff by produceState(emptyList<String>(), isDefaultHome) { value = withContext(Dispatchers.IO) { power.homesOff().map { it.label } } }
+            HomeRoleSheet(
+                isDefaultHome = isDefaultHome,
+                packageName = context.packageName,
+                powerReady = powerStatus is tv.lounge.power.PowerStatus.Ready,
+                takeHome = takeHome,
+                homesOff = homesOff,
+                onDoItNow = {
+                    scope.launch {
+                        runCatching { power.runAll(takeHome.ifEmpty { listOf(power.homeRole) }) }
+                            .onSuccess { r -> if (!r.ok) say(r.output.ifBlank { "That did not work" }) }
+                            .onFailure { say(it.message ?: "That did not work") }
+                        onHomeChanged()
+                    }
+                },
+                onPowerSetup = { open(Overlay.PowerSetup) },
+                onRecheck = onHomeChanged,
+                firstFocus = first,
+            )
+        }
         Overlay.Companion -> CompanionSheet(
             core = core,
             enabled = uiPrefs.companionEnabled,
