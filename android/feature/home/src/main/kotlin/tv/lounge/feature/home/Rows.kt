@@ -22,8 +22,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -84,7 +85,10 @@ fun ContentRow(
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val scope = rememberCoroutineScope()
-    val focusedIndex = remember(row.id) { mutableIntStateOf(-1) }
+    // Followed by id, so a tile the row re-sorts keeps its neighbours' light and its nudge.
+    val focusedId = remember(row.id) { mutableStateOf<String?>(null) }
+    val tiles = rememberUpdatedState(row.tiles)
+    val focusedIndex = remember(row.id) { derivedStateOf { tiles.value.indexOfFirst { it.id == focusedId.value } } }
     val focusedRow = remember(isFocusedRow) { derivedStateOf { isFocusedRow() } }
     val size = tileSize(row.kind, row.size)
     val safeXPx = with(LocalDensity.current) { Dimens.safeX.toPx() }
@@ -129,8 +133,8 @@ fun ContentRow(
                     .onPreviewKeyEvent { e ->
                         if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) {
                             val px = 6.dp.value * (safeXPx / Dimens.safeX.value)
-                            if (e.key == Key.DirectionLeft && focusedIndex.intValue == 0) nudgeBy(-px)
-                            if (e.key == Key.DirectionRight && focusedIndex.intValue == row.tiles.lastIndex) nudgeBy(px)
+                            if (e.key == Key.DirectionLeft && focusedIndex.value == 0) nudgeBy(-px)
+                            if (e.key == Key.DirectionRight && focusedIndex.value == row.tiles.lastIndex) nudgeBy(px)
                         }
                         false
                     }
@@ -143,7 +147,7 @@ fun ContentRow(
                     // neighbours' brightness without recomposing a single tile.
                     val lights = remember(index, roomDim) {
                         derivedStateOf {
-                            val f = focusedIndex.intValue
+                            val f = focusedIndex.value
                             when {
                                 roomDim -> Lights.Dimmed
                                 !focusedRow.value -> Lights.OtherRow
@@ -153,7 +157,7 @@ fun ContentRow(
                             }
                         }
                     }
-                    val nudgeRead: () -> Float = remember(index) { { if (focusedIndex.intValue == index) nudge.value else 0f } }
+                    val nudgeRead: () -> Float = remember(index) { { if (focusedIndex.value == index) nudge.value else 0f } }
                     Column {
                         TileView(
                             tile = tile,
@@ -165,7 +169,7 @@ fun ContentRow(
                             focusRequester = requesterFor(index),
                             onFocused = { focused, bounds ->
                                 if (focused) {
-                                    focusedIndex.intValue = index
+                                    focusedId.value = tile.id
                                     onTileFocused(tile, index, bounds)
                                 }
                             },
@@ -175,7 +179,7 @@ fun ContentRow(
                             nudge = nudgeRead,
                         )
                         if (row.kind == TileKind.POSTER) {
-                            val showTitle = remember(index) { derivedStateOf { focusedRow.value && focusedIndex.intValue == index } }
+                            val showTitle = remember(index) { derivedStateOf { focusedRow.value && focusedIndex.value == index } }
                             FocusedTitle(visible = showTitle.value, title = tile.title, width = size.width)
                         }
                     }

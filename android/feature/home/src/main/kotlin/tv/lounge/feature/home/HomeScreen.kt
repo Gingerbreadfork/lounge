@@ -324,7 +324,15 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 val tileId = state.focusedTileId ?: return@LaunchedEffect
                 val rows = snapshot.rows
                 val row = rows.firstOrNull { it.id == rowId }
-                if (row != null && row.tiles.any { it.id == tileId }) return@LaunchedEffect
+                val at = row?.tiles?.indexOfFirst { it.id == tileId } ?: -1
+                if (at >= 0) {
+                    // Still there, perhaps elsewhere in its row: the index follows it, and the row
+                    // scrolls to it if it moved out of view.
+                    state.focusedTileIndex = at
+                    val list = state.rowListState(rowId)
+                    if (list.layoutInfo.visibleItemsInfo.none { it.key == tileId }) list.scrollToItem(at)
+                    return@LaunchedEffect
+                }
                 when {
                     row != null && row.tiles.isNotEmpty() -> state.rowRequester(rowId, state.focusedTileIndex.coerceIn(0, row.tiles.lastIndex)).requestWhenReady()
                     rows.isNotEmpty() -> state.focusRow(rows[before.indexOf(rowId).coerceIn(0, rows.lastIndex)].id)
