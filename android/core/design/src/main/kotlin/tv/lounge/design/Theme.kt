@@ -100,6 +100,7 @@ fun LoungeTheme(
 ) {
     val colors = variant.colors()
     val lit = if (colors.focusRing) visuals.copy(glowAlpha = (visuals.glowAlpha * 2f).coerceAtMost(1f)) else visuals
+    val type = if (colors.focusRing) LoungeTypography.Bold else LoungeTypography.Default
     val motion = if (reducedMotion) LoungeMotion.Reduced else LoungeMotion.Default
     val designDensity = designDensity()
     val fontResolver = LoungeFonts.resolver(LocalContext.current)
@@ -107,11 +108,11 @@ fun LoungeTheme(
         LocalDensity provides designDensity,
         LocalFontFamilyResolver provides fontResolver,
         LocalLoungeColors provides colors,
-        LocalLoungeTypography provides LoungeTypography.Default,
+        LocalLoungeTypography provides type,
         LocalLoungeMotion provides motion,
         LocalLoungeVisuals provides lit,
         LocalContentColor provides colors.limelight,
-        LocalTextStyle provides LoungeTypography.Default.body,
+        LocalTextStyle provides type.body,
         LocalIndication provides NoIndication,
     ) {
         // The velvet fill stays even under the light field: the field is a scaled offscreen layer,

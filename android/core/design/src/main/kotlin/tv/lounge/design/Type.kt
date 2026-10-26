@@ -150,6 +150,13 @@ data class LoungeTypography(
                 lineHeightStyle = centred,
             ),
         )
+
+        /** High contrast: the running text one cut heavier, from the Figtree cuts that ship. */
+        val Bold = Default.copy(
+            body = Default.body.copy(fontFamily = LoungeFonts.figtree(500), fontWeight = FontWeight(500)),
+            meta = Default.meta.copy(fontFamily = LoungeFonts.figtree(600), fontWeight = FontWeight(600)),
+            caption = Default.caption.copy(fontFamily = LoungeFonts.figtree(600), fontWeight = FontWeight(600)),
+        )
     }
 }
 
