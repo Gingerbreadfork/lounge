@@ -479,7 +479,7 @@ impl Store {
             "INSERT INTO plugins(id, manifest, publisher, enabled, built_in, installed_ms, last_refresh_ms, last_error)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(id) DO UPDATE SET manifest = excluded.manifest, publisher = excluded.publisher, built_in = excluded.built_in,
-             installed_ms = excluded.installed_ms, last_refresh_ms = NULL, last_error = NULL",
+             last_refresh_ms = NULL, last_error = NULL",
             params![row.id, row.manifest_json, row.publisher, row.enabled as i64, row.built_in as i64, row.installed_ms, row.last_refresh_ms, row.last_error],
         )?;
         Ok(())
@@ -762,6 +762,9 @@ mod tests {
         s.plugin_setting_set("tv.lounge.iptv", "playlist_url", Some("http://x")).unwrap();
         s.plugin_kv_set("tv.lounge.iptv", "token", b"t", 8).unwrap();
         assert!(s.plugins().unwrap()[0].enabled);
+        // An update keeps the plugin's place among the others.
+        s.plugin_upsert(&PluginRow { installed_ms: 99, ..row.clone() }).unwrap();
+        assert_eq!(s.plugins().unwrap()[0].installed_ms, 1);
         assert_eq!(s.plugin_settings("tv.lounge.iptv").unwrap(), vec![("playlist_url".to_string(), "http://x".to_string())]);
         assert_eq!(s.plugin_kv_get("tv.lounge.iptv", "token").unwrap(), Some(b"t".to_vec()));
         s.plugin_remove("tv.lounge.iptv").unwrap();
