@@ -11,11 +11,21 @@
   async function load() {
     layout = (await act('', () => api.layout())) ?? null;
   }
-  async function save(patch: Partial<Layout>, message = 'Saved to the TV') {
+  // Saves run one at a time and in order, so the TV ends up with the last move. Only the last
+  // answer is shown, so an older one cannot undo a newer move on screen.
+  let queue: Promise<void> = Promise.resolve();
+  let waiting = 0;
+  function save(patch: Partial<Layout>, message = 'Saved to the TV') {
     busy = true;
-    const l = await act(message, () => api.setLayout(patch));
-    if (l) layout = l;
-    busy = false;
+    waiting++;
+    queue = queue.then(async () => {
+      const l = await act(message, () => api.setLayout(patch));
+      waiting--;
+      if (waiting === 0) {
+        if (l) layout = l;
+        busy = false;
+      }
+    });
   }
   function move(id: string, dir: -1 | 1) {
     if (!layout) return;
@@ -35,18 +45,24 @@
     if (id.startsWith('channel:')) return 'A channel another app publishes';
     return null;
   }
+  // Each change shows at once, so the next one builds on it even before the TV has answered.
+  function change(patch: Partial<Layout>, message: string) {
+    if (!layout) return;
+    layout = { ...layout, ...patch };
+    save(patch, message);
+  }
   function toggleHidden(id: string) {
     if (!layout) return;
-    const hidden = layout.hidden.includes(id) ? layout.hidden.filter((h) => h !== id) : [...layout.hidden, id];
-    save({ hidden }, layout.hidden.includes(id) ? 'Shown again' : 'Hidden on the TV');
+    const shown = layout.hidden.includes(id);
+    change({ hidden: shown ? layout.hidden.filter((h) => h !== id) : [...layout.hidden, id] }, shown ? 'Shown again' : 'Hidden on the TV');
   }
   function unpinStage(id: string) {
     if (!layout) return;
-    save({ stagePins: layout.stagePins.filter((p) => p !== id) }, 'Unpinned from the Stage');
+    change({ stagePins: layout.stagePins.filter((p) => p !== id) }, 'Unpinned from the Stage');
   }
   function unpinApp(pkg: string) {
     if (!layout) return;
-    save({ pinnedApps: layout.pinnedApps.filter((p) => p !== pkg) }, 'Unpinned');
+    change({ pinnedApps: layout.pinnedApps.filter((p) => p !== pkg) }, 'Unpinned');
   }
   let snapshotTiles = $derived(app.state?.snapshot.rows.flatMap((r) => r.tiles) ?? []);
   function tileTitle(id: string) {
