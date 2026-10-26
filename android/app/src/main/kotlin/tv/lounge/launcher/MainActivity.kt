@@ -179,13 +179,16 @@ class MainActivity : ComponentActivity() {
                         dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_DOWN, cmd.keyCode, 0))
                         dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_UP, cmd.keyCode, 0))
                     } else {
-                        power.inputKey(cmd.keyCode)?.let { action ->
-                            lifecycleScope.launch(Dispatchers.IO) { runCatching { power.run(action) }.onFailure { android.util.Log.w("Lounge", "key through Power Setup: ${it.message}") } }
-                        }
+                        power.inputKey(cmd.keyCode)?.let { remoteKeys.trySend(it) }
                     }
                     UiCommand.InstallUpdate -> updates.interact(this@MainActivity, lifecycleScope)
                     else -> Unit
                 }
+            }
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            for (action in remoteKeys) {
+                runCatching { power.run(action) }.onFailure { android.util.Log.w("Lounge", "key through Power Setup: ${it.message}") }
             }
         }
         lifecycleScope.launch {
@@ -340,6 +343,8 @@ class MainActivity : ComponentActivity() {
 
     private var lastTvCollectMs = 0L
     private val tvCollects = Channel<Unit>(Channel.CONFLATED)
+    /** Phone keys for the app in front, sent one at a time so they arrive in the order pressed. */
+    private val remoteKeys = Channel<tv.lounge.power.PowerAction>(capacity = 16, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     private val appCollects = Channel<Unit>(Channel.CONFLATED)
 
     private fun collectTvNow() {

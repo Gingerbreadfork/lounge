@@ -180,7 +180,9 @@ class PowerSetup(private val context: Context) {
     /** A remote key for whatever is in front, while Lounge is not; only the d-pad, Back, Home and Menu, anything else is refused. */
     fun inputKey(keyCode: Int): PowerAction? {
         val name = REMOTE_KEYS[keyCode] ?: return null
-        return PowerAction("key_$name", "Remote: $name", "Presses a remote key for the app in front.", "input keyevent $name", timeoutMs = 5_000)
+        // From Android 12 the input service answers `cmd` directly, without starting a new process.
+        val command = if (android.os.Build.VERSION.SDK_INT >= 31) "cmd input keyevent $name" else "input keyevent $name"
+        return PowerAction("key_$name", "Remote: $name", "Presses a remote key for the app in front.", command, timeoutMs = 5_000)
     }
 
     /** Raise, lower or same; anything else is refused. */
