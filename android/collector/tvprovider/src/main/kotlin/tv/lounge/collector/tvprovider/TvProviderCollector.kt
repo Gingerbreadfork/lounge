@@ -96,7 +96,7 @@ class TvProviderCollector(private val context: Context) {
                 if (!p.isBrowsable) continue
                 val title = p.title?.takeIf { it.isNotBlank() } ?: continue
                 out += Draft(
-                    id = "wn:${p.id}",
+                    id = watchNextId(p),
                     kind = ProgramKind.WATCH_NEXT,
                     pkg = p.packageName ?: "",
                     title = title,
@@ -122,6 +122,16 @@ class TvProviderCollector(private val context: Context) {
             }
         }
         return out
+    }
+
+    /**
+     * The provider's row id changes whenever an app republishes an entry, so hiding one would not
+     * stick; the app's own id for it does not, when the app gives one.
+     */
+    private fun watchNextId(p: WatchNextProgram): String {
+        val own = p.internalProviderId?.takeIf { it.isNotBlank() }
+        val pkg = p.packageName?.takeIf { it.isNotBlank() }
+        return if (own != null && pkg != null) "wn:$pkg:$own" else "wn:${p.id}"
     }
 
     private fun channels(): List<Channel> {
