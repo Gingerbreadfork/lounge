@@ -481,11 +481,15 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
     {
         let mut state = inner.state.lock();
         let now = now_ms();
-        state.store.replace_items_encoded("apps", &rows, now)?;
-        let usage = state.store.load_usage()?;
+        stored("apps", state.store.replace_items_encoded("apps", &rows, now));
         state.graph.replace_source("apps", items);
-        for (pkg, ms) in usage {
-            state.graph.set_usage(&pkg, ms);
+        match state.store.load_usage() {
+            Ok(usage) => {
+                for (pkg, ms) in usage {
+                    state.graph.set_usage(&pkg, ms);
+                }
+            }
+            Err(e) => tracing::error!("could not read app usage: {e}"),
         }
     }
     if done.deferred {
@@ -635,7 +639,7 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
     let rows = lounge_store::encode_items(&persisted)?;
     {
         let mut state = inner.state.lock();
-        state.store.replace_items_encoded("tvprovider", &rows, now)?;
+        stored("TV listings", state.store.replace_items_encoded("tvprovider", &rows, now));
         state.graph.replace_source("tvprovider", items);
         state.last_programs = programs;
     }
@@ -771,7 +775,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         if !enabled(&state) {
             return Ok(());
         }
-        state.store.replace_items_encoded(&source, &rows, now)?;
+        stored(&source, state.store.replace_items_encoded(&source, &rows, now));
         state.graph.replace_source(&source, items);
     }
     if done.deferred {
@@ -841,7 +845,7 @@ fn ingest_inputs(inner: &Inner, inputs: Vec<InputRecord>) -> Result<(), lounge_s
         .collect();
     items.sort_by(|a, b| b.weight.cmp(&a.weight).then_with(|| a.title.cmp(&b.title)));
     let mut state = inner.state.lock();
-    state.store.replace_items("inputs", &items, now)?;
+    stored("inputs", state.store.replace_items("inputs", &items, now));
     state.graph.replace_source("inputs", items);
     Ok(())
 }
@@ -944,13 +948,18 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
     let offset = inner.utc_offset_minutes.load(Ordering::Relaxed);
     let mut state = inner.state.lock();
     if !items.is_empty() {
-        state.store.upsert_items(&items, now)?;
-        record_usage(&mut state, &playing, offset)?;
+        stored("sessions", state.store.upsert_items(&items, now));
+        record_usage(&mut state, &playing, offset);
         for it in items {
             state.graph.upsert(it);
         }
-        for id in state.store.prune_source("sessions", SESSION_HISTORY)? {
-            state.graph.remove(&id);
+        match state.store.prune_source("sessions", SESSION_HISTORY) {
+            Ok(removed) => {
+                for id in removed {
+                    state.graph.remove(&id);
+                }
+            }
+            Err(e) => tracing::error!("could not prune sessions: {e}"),
         }
     }
     state.now_playing = now_playing.map(|(np, _)| np);
@@ -975,22 +984,33 @@ fn apply_usage(inner: &Inner, usage: Vec<AppUsage>) -> Result<(), lounge_store::
     let pairs: Vec<(String, i64)> = usage.into_iter().map(|u| (u.package, u.last_used_ms)).collect();
     let offset = inner.utc_offset_minutes.load(Ordering::Relaxed);
     let mut state = inner.state.lock();
-    record_usage(&mut state, &pairs, offset)
+    record_usage(&mut state, &pairs, offset);
+    Ok(())
 }
 
 /// Remember when apps were used, in the store, the graph and the habits behind explanations.
-fn record_usage(state: &mut State, usage: &[(String, i64)], utc_offset_minutes: i32) -> Result<(), lounge_store::StoreError> {
+fn record_usage(state: &mut State, usage: &[(String, i64)], utc_offset_minutes: i32) {
     if usage.is_empty() {
-        return Ok(());
+        return;
     }
-    let counted = state.store.set_usage(usage, |ms| engine::local_hour(ms, utc_offset_minutes))?;
+    let counted = state.store.set_usage(usage, |ms| engine::local_hour(ms, utc_offset_minutes)).unwrap_or_else(|e| {
+        tracing::error!("could not store app usage: {e}");
+        Vec::new()
+    });
     for (pkg, ms) in usage {
         state.graph.set_usage(pkg, *ms);
     }
     for (pkg, hour) in counted {
         state.habits.entry(pkg).or_insert([0; 24])[hour as usize % 24] += 1;
     }
-    Ok(())
+}
+
+/// Logs a store write that failed. The graph is updated either way, so a store that cannot be
+/// written does not keep what arrived off the home; the next write that works catches it up.
+fn stored(what: &str, result: Result<(), lounge_store::StoreError>) {
+    if let Err(e) = result {
+        tracing::error!("could not store {what}: {e}");
+    }
 }
 
 fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::StoreError> {
