@@ -57,6 +57,14 @@ jobs:
           workspaces: |
             core
             plugins
+      # A release passes the same tests as a change on main before anything is signed. The core
+      # embeds the built phone app, so that is built first.
+      - run: pnpm exec svelte-check --tsconfig ./tsconfig.json && pnpm build
+        working-directory: companion
+      - run: cargo test --workspace
+        working-directory: core
+      - run: cargo test --workspace
+        working-directory: plugins
       - run: cargo install cargo-ndk --version 4.1.2 --locked
       - name: Android NDK
         run: |
