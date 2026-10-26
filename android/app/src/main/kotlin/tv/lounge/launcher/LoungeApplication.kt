@@ -76,6 +76,19 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
         }, "lounge-warmup").start()
         // Power Setup's state is unknown until checked, and updates and the phone's remote both use it.
         appScope.launch { runCatching { power.refresh() } }
+        // A daylight-saving change sends no broadcast, so the offset is looked at again now and then.
+        appScope.launch {
+            var sent = utcOffsetMinutes()
+            while (true) {
+                kotlinx.coroutines.delay(5 * 60_000L)
+                val now = utcOffsetMinutes()
+                val c = core
+                if (c != null && now != sent) {
+                    runCatching { c.setUtcOffsetMinutes(now) }
+                    sent = now
+                }
+            }
+        }
         updates.start(appScope)
         android.util.Log.i("Lounge", "startup: application onCreate took ${android.os.SystemClock.uptimeMillis() - startedAt} ms")
     }
@@ -115,13 +128,15 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
             dataDir = filesDir.absolutePath,
             cacheDir = cacheDir.absolutePath,
             tier = DeviceTierDetector.detect(this),
-            utcOffsetMinutes = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000,
+            utcOffsetMinutes = utcOffsetMinutes(),
             hasTvControls = power.hasTvControls,
             deviceName = android.os.Build.MODEL,
             screenWidth = panel.width.coerceAtLeast(0).toUInt(),
             screenHeight = panel.height.coerceAtLeast(0).toUInt(),
         )
     }
+
+    private fun utcOffsetMinutes(): Int = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000
 
     companion object {
         @Volatile var startedAt: Long = android.os.SystemClock.uptimeMillis()
