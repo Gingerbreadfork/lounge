@@ -8,9 +8,22 @@ use serde::Deserialize;
 pub struct Jellyfin;
 
 const APP_PACKAGE: &str = "org.jellyfin.androidtv";
-/// Sent as `Authorization`, which every Jellyfin reads; newer servers ignore `X-Emby-Authorization`
-/// and `api_key` unless legacy authorization is switched on.
-const AUTH_HEADER: &str = "MediaBrowser Client=\"Lounge\", Device=\"Android TV\", DeviceId=\"lounge-launcher\", Version=\"0.1\"";
+/// The client header, sent as `Authorization`, which every Jellyfin reads; newer servers ignore
+/// `X-Emby-Authorization` and `api_key` unless legacy authorization is switched on. It names this
+/// TV by an id of its own, since the server signs out an older session of the same user and id.
+fn auth_header(device_id: &str) -> String {
+    format!("MediaBrowser Client=\"Lounge\", Device=\"Android TV\", DeviceId=\"{device_id}\", Version=\"0.1\"")
+}
+
+/// This TV's device id, made the first time and kept; the clock is the only thing that differs
+/// between two TVs a plugin can read.
+fn device_id() -> String {
+    host::kv_get_string("device_id").unwrap_or_else(|| {
+        let id = format!("lounge-{:x}", host::now_ms());
+        host::kv_set("device_id", id.as_bytes());
+        id
+    })
+}
 
 impl sdk::Plugin for Jellyfin {
     fn manifest() -> Manifest {
@@ -73,6 +86,7 @@ struct Session {
     server: String,
     token: String,
     user_id: String,
+    device_id: String,
 }
 
 #[derive(Deserialize)]
@@ -142,8 +156,13 @@ impl Session {
     fn connect() -> Result<Session, String> {
         let server = host::required_setting("server", "Server address")?.trim_end_matches('/').to_string();
         let username = host::required_setting("username", "Username")?;
-        if let (Some(token), Some(user_id)) = (host::kv_get_string("token"), host::kv_get_string("user_id")) {
-            let s = Session { server: server.clone(), token, user_id };
+        let device_id = device_id();
+        // The saved session belongs to one server and user; another of either signs in afresh.
+        let owner = format!("{server}\n{username}");
+        if host::kv_get_string("session_for").as_deref() == Some(owner.as_str())
+            && let (Some(token), Some(user_id)) = (host::kv_get_string("token"), host::kv_get_string("user_id"))
+        {
+            let s = Session { server: server.clone(), token, user_id, device_id: device_id.clone() };
             let probe = host::fetch(&s.request(&format!("/Users/{}", s.user_id)))?;
             if probe.ok() {
                 return Ok(s);
@@ -158,7 +177,7 @@ impl Session {
             url: format!("{server}/Users/AuthenticateByName"),
             headers: [
                 ("Content-Type".to_string(), "application/json".to_string()),
-                ("Authorization".to_string(), AUTH_HEADER.to_string()),
+                ("Authorization".to_string(), auth_header(&device_id)),
             ]
             .into_iter()
             .collect(),
@@ -175,12 +194,13 @@ impl Session {
         let auth: AuthResponse = serde_json::from_str(&response.body).map_err(|e| format!("unexpected sign-in response: {e}"))?;
         host::kv_set("token", auth.access_token.as_bytes());
         host::kv_set("user_id", auth.user.id.as_bytes());
-        Ok(Session { server, token: auth.access_token, user_id: auth.user.id })
+        host::kv_set("session_for", owner.as_bytes());
+        Ok(Session { server, token: auth.access_token, user_id: auth.user.id, device_id })
     }
 
     fn request(&self, path: &str) -> HttpRequest {
         HttpRequest::get(format!("{}{}", self.server, path))
-            .header("Authorization", &format!("{AUTH_HEADER}, Token=\"{}\"", self.token))
+            .header("Authorization", &format!("{}, Token=\"{}\"", auth_header(&self.device_id), self.token))
             .header("Accept", "application/json")
     }
 
@@ -302,7 +322,7 @@ mod tests {
 
     #[test]
     fn media_items_map_to_resume_tiles() {
-        let s = Session { server: "http://jf:8096".into(), token: "t".into(), user_id: "u".into() };
+        let s = Session { server: "http://jf:8096".into(), token: "t".into(), user_id: "u".into(), device_id: "tv-1".into() };
         let it: MediaItem = serde_json::from_str(
             r#"{"Id":"e1","Name":"Honeydew","Type":"Episode","SeriesName":"The Bear","SeriesId":"s1","ParentIndexNumber":2,"IndexNumber":4,
                  "RunTimeTicks":18000000000,"UserData":{"PlaybackPositionTicks":9000000000,"LastPlayedDate":"2026-10-18T12:00:00Z"}}"#,
@@ -322,9 +342,9 @@ mod tests {
 
     #[test]
     fn the_token_goes_in_the_authorization_header() {
-        let s = Session { server: "http://jf:8096".into(), token: "secret".into(), user_id: "u".into() };
+        let s = Session { server: "http://jf:8096".into(), token: "secret".into(), user_id: "u".into(), device_id: "tv-1".into() };
         let req = s.request("/Users/u");
-        assert_eq!(req.headers.get("Authorization").map(String::as_str), Some(format!("{AUTH_HEADER}, Token=\"secret\"").as_str()));
+        assert_eq!(req.headers.get("Authorization").map(String::as_str), Some(format!("{}, Token=\"secret\"", auth_header("tv-1")).as_str()));
         assert!(!req.headers.contains_key("X-Emby-Authorization"));
     }
 }
