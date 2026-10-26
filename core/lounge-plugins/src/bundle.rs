@@ -5,10 +5,12 @@
 
 use crate::{api::Manifest, PluginError, Result};
 use ed25519_dalek::{Signature, VerifyingKey};
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 const MAGIC: &[u8] = b"lounge-plugin-v1\0";
+/// Most files a bundle may list; it needs four.
+const MAX_ENTRIES: u16 = 16;
 
 pub struct Bundle {
     pub manifest: Manifest,
@@ -20,7 +22,12 @@ pub struct Bundle {
 
 impl Bundle {
     pub fn read(path: &Path) -> Result<Bundle> {
-        let file = std::fs::File::open(path)?;
+        let mut file = std::fs::File::open(path)?;
+        // Opening a zip builds a record for every file its directory lists, so a small upload
+        // listing hundreds of thousands is turned away first.
+        if declared_entries(&mut file)? > MAX_ENTRIES {
+            return Err(PluginError::Bundle("the bundle lists too many files".into()));
+        }
         let mut zip = zip::ZipArchive::new(file).map_err(|e| PluginError::Bundle(e.to_string()))?;
         let manifest_json = entry(&mut zip, "manifest.json", 256 * 1024)?;
         let wasm = entry(&mut zip, "plugin.wasm", 16 * 1024 * 1024)?;
@@ -100,6 +107,20 @@ fn key_bytes<const N: usize>(raw: &[u8], what: &str) -> Result<[u8; N]> {
     bytes.try_into().map_err(|_| PluginError::Bundle(format!("{what} has the wrong length")))
 }
 
+/// The file count a zip's end record declares. Zip64 archives, which count past 65,534, give
+/// `u16::MAX` and so are refused too.
+fn declared_entries(file: &mut std::fs::File) -> Result<u16> {
+    let len = file.metadata()?.len();
+    let tail = len.min(22 + 65_535);
+    file.seek(SeekFrom::End(-(tail as i64)))?;
+    let mut buf = vec![0u8; tail as usize];
+    file.read_exact(&mut buf)?;
+    file.seek(SeekFrom::Start(0))?;
+    let at = buf.windows(4).rposition(|w| w == [0x50, 0x4b, 0x05, 0x06]).ok_or_else(|| PluginError::Bundle("not a zip file".into()))?;
+    let count = buf.get(at + 10..at + 12).ok_or_else(|| PluginError::Bundle("not a zip file".into()))?;
+    Ok(u16::from_le_bytes([count[0], count[1]]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +142,17 @@ mod tests {
         let mut tampered = Bundle::read(&path).unwrap();
         tampered.wasm.push(0);
         assert!(matches!(tampered.verify(), Err(PluginError::Signature)));
+    }
+
+    #[test]
+    fn a_bundle_listing_too_many_files_is_refused_before_it_is_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("many.lgp");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        for i in 0..20 {
+            zip.start_file(format!("f{i}"), zip::write::SimpleFileOptions::default()).unwrap();
+        }
+        zip.finish().unwrap();
+        assert!(matches!(Bundle::read(&path), Err(PluginError::Bundle(e)) if e.contains("too many")));
     }
 }
