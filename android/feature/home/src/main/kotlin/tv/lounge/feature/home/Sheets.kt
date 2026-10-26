@@ -655,5 +655,9 @@ fun openPlayListing(context: android.content.Context, packageName: String) {
 
 fun requestUninstall(context: android.content.Context, packageName: String) {
     val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }
+    // Without the system's uninstaller, the app's page in Settings has the same button.
+    runCatching { context.startActivity(intent) }.onFailure {
+        val info = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(info) }
+    }
 }
