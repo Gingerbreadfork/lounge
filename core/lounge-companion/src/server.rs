@@ -451,12 +451,19 @@ async fn ws_loop(app: Shared, mut socket: WebSocket) {
     }
 }
 
+/// Runs a call into the launcher on tokio's blocking threads. The server has two workers, and a
+/// resolve, an install or a store write waiting behind a big ingest would otherwise hold them.
+async fn on_core<T: Send + 'static>(app: &Shared, f: impl FnOnce(&dyn CompanionActions) -> T + Send + 'static) -> Result<T, ApiError> {
+    let actions = Arc::clone(&app.actions);
+    tokio::task::spawn_blocking(move || f(actions.as_ref())).await.map_err(|e| bad(e.to_string()))
+}
+
 #[derive(Deserialize)]
 struct KeyBody {
     key: String,
 }
 async fn key(State(app): State<Shared>, Json(b): Json<KeyBody>) -> Result<StatusCode, ApiError> {
-    app.actions.send_key(&b.key).map_err(bad)?;
+    on_core(&app, move |a| a.send_key(&b.key)).await?.map_err(bad)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -465,7 +472,7 @@ struct TextBody {
     text: String,
 }
 async fn text(State(app): State<Shared>, Json(b): Json<TextBody>) -> Result<StatusCode, ApiError> {
-    app.actions.type_text(&b.text).map_err(bad)?;
+    on_core(&app, move |a| a.type_text(&b.text)).await?.map_err(bad)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -474,7 +481,7 @@ struct ActionBody {
     action: String,
 }
 async fn open(State(app): State<Shared>, Json(b): Json<ActionBody>) -> Result<StatusCode, ApiError> {
-    app.actions.perform(&b.action).map_err(bad)?;
+    on_core(&app, move |a| a.perform(&b.action)).await?.map_err(bad)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -483,7 +490,7 @@ struct LaunchBody {
     package: String,
 }
 async fn launch(State(app): State<Shared>, Json(b): Json<LaunchBody>) -> Result<StatusCode, ApiError> {
-    app.actions.launch(&b.package).map_err(bad)?;
+    on_core(&app, move |a| a.launch(&b.package)).await?.map_err(bad)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -492,20 +499,20 @@ struct SearchBody {
     query: String,
 }
 async fn search(State(app): State<Shared>, Json(b): Json<SearchBody>) -> Result<StatusCode, ApiError> {
-    app.actions.search(&b.query).map_err(bad)?;
+    on_core(&app, move |a| a.search(&b.query)).await?.map_err(bad)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn layout(State(app): State<Shared>) -> Result<Response, ApiError> {
-    Ok(Json(app.actions.layout()).into_response())
+    Ok(Json(on_core(&app, |a| a.layout()).await?).into_response())
 }
 
 async fn set_layout(State(app): State<Shared>, Json(patch): Json<LayoutPatch>) -> Result<Response, ApiError> {
-    Ok(Json(app.actions.set_layout(patch).map_err(bad)?).into_response())
+    Ok(Json(on_core(&app, move |a| a.set_layout(patch)).await?.map_err(bad)?).into_response())
 }
 
 async fn plugins(State(app): State<Shared>) -> Result<Response, ApiError> {
-    Ok(json_raw(app.actions.plugins_json()))
+    Ok(json_raw(on_core(&app, |a| a.plugins_json()).await?))
 }
 
 async fn install_plugin(State(app): State<Shared>, body: Bytes) -> Result<Response, ApiError> {
@@ -516,7 +523,8 @@ async fn install_plugin(State(app): State<Shared>, body: Bytes) -> Result<Respon
     let path = app.actions.temp_dir().join(format!("upload-{}.lgp", now_ms()));
     tokio::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new("."))).await.map_err(|e| bad(e.to_string()))?;
     tokio::fs::write(&path, &body).await.map_err(|e| bad(e.to_string()))?;
-    let result = app.actions.install_plugin(&path);
+    let p = path.clone();
+    let result = on_core(&app, move |a| a.install_plugin(&p)).await?;
     let _ = tokio::fs::remove_file(&path).await;
     Ok(json_raw(result.map_err(bad)?))
 }
@@ -528,11 +536,10 @@ struct UrlBody {
 async fn install_plugin_url(State(app): State<Shared>, Json(b): Json<UrlBody>) -> Result<Response, ApiError> {
     let _turn = app.uploads.acquire().await.map_err(|e| bad(e.to_string()))?;
     let path = app.actions.temp_dir().join(format!("download-{}.lgp", now_ms()));
-    let actions = Arc::clone(&app.actions);
-    let url = b.url.clone();
     let p = path.clone();
-    tokio::task::spawn_blocking(move || actions.download(&url, &p)).await.map_err(|e| bad(e.to_string()))?.map_err(bad)?;
-    let result = app.actions.install_plugin(&path);
+    on_core(&app, move |a| a.download(&b.url, &p)).await?.map_err(bad)?;
+    let p = path.clone();
+    let result = on_core(&app, move |a| a.install_plugin(&p)).await?;
     let _ = tokio::fs::remove_file(&path).await;
     Ok(json_raw(result.map_err(bad)?))
 }
@@ -543,21 +550,21 @@ struct SettingBody {
     value: Option<String>,
 }
 async fn plugin_setting(State(app): State<Shared>, AxPath(id): AxPath<String>, Json(b): Json<SettingBody>) -> Result<StatusCode, ApiError> {
-    app.actions.set_plugin_setting(&id, &b.key, b.value).map_err(bad)?;
+    on_core(&app, move |a| a.set_plugin_setting(&id, &b.key, b.value)).await?.map_err(bad)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn plugin_log(State(app): State<Shared>, AxPath(id): AxPath<String>) -> Result<Response, ApiError> {
-    Ok(Json(app.actions.plugin_log(&id)).into_response())
+    Ok(Json(on_core(&app, move |a| a.plugin_log(&id)).await?).into_response())
 }
 
 async fn plugin_command(State(app): State<Shared>, AxPath((id, command)): AxPath<(String, String)>) -> Result<StatusCode, ApiError> {
-    app.actions.plugin_command(&id, &command).map_err(bad)?;
+    on_core(&app, move |a| a.plugin_command(&id, &command)).await?.map_err(bad)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn diagnostics(State(app): State<Shared>) -> Result<Response, ApiError> {
-    Ok(json_raw(app.actions.diagnostics_json()))
+    Ok(json_raw(on_core(&app, |a| a.diagnostics_json()).await?))
 }
 
 async fn devices(State(app): State<Shared>, Extension(Paired(token)): Extension<Paired>) -> Response {
@@ -569,17 +576,18 @@ async fn revoke_device(State(app): State<Shared>, AxPath(id): AxPath<String>) ->
 }
 
 async fn backup(State(app): State<Shared>) -> Result<Response, ApiError> {
+    let json = on_core(&app, |a| a.export_json()).await?;
     Ok((
         [(header::CONTENT_TYPE, "application/json"), (header::CONTENT_DISPOSITION, "attachment; filename=\"lounge-backup.json\"")],
-        app.actions.export_json(),
+        json,
     )
         .into_response())
 }
 
 async fn restore(State(app): State<Shared>, body: Bytes) -> Result<StatusCode, ApiError> {
     let _turn = app.uploads.acquire().await.map_err(|e| bad(e.to_string()))?;
-    let json = std::str::from_utf8(&body).map_err(|_| bad("backup is not UTF-8".into()))?;
-    app.actions.import_json(json).map_err(bad)?;
+    let json = String::from_utf8(body.to_vec()).map_err(|_| bad("backup is not UTF-8".into()))?;
+    on_core(&app, move |a| a.import_json(&json)).await?.map_err(bad)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
