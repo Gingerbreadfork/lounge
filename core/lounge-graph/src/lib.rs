@@ -331,15 +331,19 @@ impl Graph {
         self.layout.pinned_apps.retain(|p| p != package);
     }
 
+    /// Moves an app to `to_index` in Your apps as it is shown. The apps up to the last pinned or
+    /// moved one keep their places as pins; pins not shown now, such as an uninstalled app's, stay
+    /// at the end so they come back where they were left.
     pub fn move_app(&mut self, package: &str, to_index: usize) {
-        let mut pins = self.layout.pinned_apps.clone();
-        if !pins.iter().any(|p| p == package) {
-            pins.push(package.to_string());
-        }
-        pins.retain(|p| p != package);
-        let idx = to_index.min(pins.len());
-        pins.insert(idx, package.to_string());
-        self.layout.pinned_apps = pins;
+        let pins = &self.layout.pinned_apps;
+        let mut order: Vec<String> = self.your_apps().iter().filter_map(|it| it.id.strip_prefix("app:")).map(str::to_string).collect();
+        let stale: Vec<String> = pins.iter().filter(|p| *p != package && !order.contains(p)).cloned().collect();
+        order.retain(|p| p != package);
+        order.insert(to_index.min(order.len()), package.to_string());
+        let last = order.iter().rposition(|p| p == package || pins.contains(p)).unwrap_or(0);
+        order.truncate(last + 1);
+        order.extend(stale);
+        self.layout.pinned_apps = order;
     }
 
     pub fn set_row_order(&mut self, rows: Vec<String>) {
@@ -700,6 +704,17 @@ mod tests {
         assert_eq!(g.layout.pinned_apps, vec!["c", "a", "b"]);
         g.move_app("a", 99);
         assert_eq!(g.layout.pinned_apps, vec!["c", "b", "a"]);
+    }
+
+    #[test]
+    fn a_move_follows_the_row_as_shown_past_pins_of_missing_apps() {
+        let mut g = Graph::default();
+        g.replace_source("apps", vec![app("a", "A", None), app("b", "B", None), app("c", "C", None)]);
+        g.layout.pinned_apps = vec!["gone".into(), "a".into(), "b".into()];
+        g.move_app("a", 1);
+        let shown: Vec<&str> = g.your_apps().iter().map(|it| it.id.as_str()).collect();
+        assert_eq!(shown, vec!["app:b", "app:a", "app:c"]);
+        assert_eq!(g.layout.pinned_apps, vec!["b", "a", "gone"]);
     }
 
     #[test]
