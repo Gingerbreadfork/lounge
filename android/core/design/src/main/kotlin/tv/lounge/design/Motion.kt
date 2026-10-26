@@ -4,7 +4,6 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 
@@ -66,5 +65,3 @@ data class LoungeMotion(
 
 val LocalLoungeMotion = staticCompositionLocalOf { LoungeMotion.Default }
 
-@Composable
-fun motion(): LoungeMotion = LocalLoungeMotion.current

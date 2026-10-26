@@ -300,7 +300,6 @@ private data class FrameShape(val left: Float, val width: Float, val height: Flo
         Outline.Rounded(RoundRect(left, 0f, left + width, height, CornerRadius(radius)))
 }
 
-private fun lerp(a: Int, b: Int, p: Float): Int = (a + (b - a) * p).toInt()
 
 /** The band spans the safe width of a 1920-wide canvas. */
 private val BandWidth = 1920.dp - Dimens.safeX * 2

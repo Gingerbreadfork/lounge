@@ -13,12 +13,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -204,17 +202,6 @@ fun Badge(text: String, dot: Color? = null, textColor: Color = LoungeTheme.color
 fun Hairline(modifier: Modifier = Modifier) {
     Box(modifier.height(1.dp).background(LoungeTheme.colors.curtainEdge))
 }
-
-@Composable
-fun HSpacer(width: Dp) = Spacer(Modifier.width(width))
-
-@Composable
-fun VSpacer(height: Dp) = Spacer(Modifier.height(height))
-
-/** A focusable region that reports focus and nothing else; used by overlays' first items. */
-fun Modifier.focusReporter(onChange: (Boolean) -> Unit): Modifier = this.onFocusChanged { onChange(it.isFocused) }.focusable()
-
-fun Modifier.describe(description: String): Modifier = semantics { contentDescription = description }
 
 /** Whether the enclosing [Swap] slot is the live one; hidden copies read false. */
 val LocalSwapSlotActive = staticCompositionLocalOf<State<Boolean>> { mutableStateOf(true) }

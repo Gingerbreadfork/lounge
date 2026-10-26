@@ -9,7 +9,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
@@ -69,7 +68,6 @@ object Dimens {
     val tileRadius: Dp = 12.dp
     val stageRadius: Dp = 20.dp
     val sheetWidth: Dp = 560.dp
-    val focusLineY: Dp = 334.dp
     val stageArtworkWidth: Dp = 1120.dp
     val stageArtworkHeight: Dp = 630.dp
     val playbillWidth: Dp = 560.dp
@@ -154,5 +152,3 @@ private object NoIndication : androidx.compose.foundation.IndicationNodeFactory 
     override fun hashCode(): Int = -1
 }
 
-@Suppress("unused")
-val Transparent: Color = Color.Transparent

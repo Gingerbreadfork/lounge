@@ -173,24 +173,12 @@ class PowerSetup(private val context: Context) {
     val systemAudioOff = PowerAction("cec_sam_off", "Sound through the TV", "HDMI-CEC System Audio Mode off.", "cmd hdmi_control setsystemaudiomode off")
     fun selectDevice(d: CecDevice) = PowerAction("cec_select_${d.logicalAddress}", "Switch to ${d.name}", "HDMI-CEC device select.", "cmd hdmi_control deviceselect ${d.logicalAddress}")
 
-    /** A media key for `cmd media_session dispatch`; anything else is refused. */
-    fun mediaKey(key: String): PowerAction {
-        require(key in MEDIA_KEYS) { "Unknown media key: $key" }
-        return PowerAction("media_$key", "Media: $key", "Dispatches a media key to the active session.", "cmd media_session dispatch ${shellQuote(key)}")
-    }
-
     /** A remote key for whatever is in front, while Lounge is not; only the d-pad, Back, Home and Menu, anything else is refused. */
     fun inputKey(keyCode: Int): PowerAction? {
         val name = REMOTE_KEYS[keyCode] ?: return null
         // From Android 12 the input service answers `cmd` directly, without starting a new process.
         val command = if (android.os.Build.VERSION.SDK_INT >= 31) "cmd input keyevent $name" else "input keyevent $name"
         return PowerAction("key_$name", "Remote: $name", "Presses a remote key for the app in front.", command, timeoutMs = 5_000)
-    }
-
-    /** Raise, lower or same; anything else is refused. */
-    fun volume(direction: String): PowerAction {
-        require(direction in VOLUME_DIRECTIONS) { "Unknown volume direction: $direction" }
-        return PowerAction("volume_$direction", "Volume $direction", "Adjusts the media stream.", "cmd media_session volume --adj ${shellQuote(direction)} --show")
     }
 
     val setupActions: List<PowerAction> get() = listOf(homeRole, tvListings, notificationAccess, usageAccess, quickAnimations, optimise)
@@ -300,7 +288,6 @@ class PowerSetup(private val context: Context) {
     val hasTvControls: Boolean get() = hasCec && !isTelevision
 
     companion object {
-        private val MEDIA_KEYS = setOf("play", "pause", "play-pause", "mute", "stop", "next", "previous", "rewind", "record", "fast-forward")
         private val REMOTE_KEYS = mapOf(
             android.view.KeyEvent.KEYCODE_DPAD_UP to "KEYCODE_DPAD_UP",
             android.view.KeyEvent.KEYCODE_DPAD_DOWN to "KEYCODE_DPAD_DOWN",
@@ -310,7 +297,6 @@ class PowerSetup(private val context: Context) {
             android.view.KeyEvent.KEYCODE_BACK to "KEYCODE_BACK",
             android.view.KeyEvent.KEYCODE_MENU to "KEYCODE_MENU",
         )
-        private val VOLUME_DIRECTIONS = setOf("raise", "lower", "same")
 
         /**
          * The home screens Android picks before one of [ownPriority], whichever home is chosen: it

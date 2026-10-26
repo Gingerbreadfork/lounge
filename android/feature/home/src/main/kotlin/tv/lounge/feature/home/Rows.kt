@@ -56,13 +56,6 @@ import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.glowRoom
 
-/** One stable [FocusRequester] per tile index, for rows whose focus the screen does not manage itself. */
-@Composable
-fun rememberRowRequesters(count: Int): (Int) -> FocusRequester {
-    val list = remember(count) { List(count) { FocusRequester() } }
-    return { index -> list[index] }
-}
-
 /**
  * A content row: a header with an optional badge and a pivot-scrolling tile list that remembers its
  * focused child (DESIGN.md §5.3). The header follows the light, the list keeps glow room, the
@@ -76,7 +69,7 @@ fun ContentRow(
     isFocusedRow: () -> Boolean,
     idle: Boolean,
     listState: LazyListState = rememberLazyListState(),
-    requesterFor: (Int) -> FocusRequester = rememberRowRequesters(row.tiles.size),
+    requesterFor: (Int) -> FocusRequester,
     onTileFocused: (Tile, Int, Rect) -> Unit,
     onTileClick: (Tile) -> Unit,
     onTileLongPress: (Tile, Rect, FocusRequester) -> Unit,
