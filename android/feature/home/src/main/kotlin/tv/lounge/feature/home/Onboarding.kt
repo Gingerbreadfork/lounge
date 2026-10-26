@@ -128,13 +128,13 @@ fun OnboardingScreen(
                 .fillMaxSize()
                 .background(colors.velvet)
                 .onPreviewKeyEvent { e ->
-                    if (e.isBack() && e.type == KeyEventType.KeyUp) {
+                    // Both halves of Back are taken: left alone, the press would clear focus.
+                    if (!e.isBack()) return@onPreviewKeyEvent false
+                    if (e.type == KeyEventType.KeyUp) {
                         // On first boot a reflexive Back on the first step must not skip setup for good.
                         if (step > 0) step-- else if (uiPrefs.onboardingDone) onDone()
-                        true
-                    } else {
-                        false
                     }
+                    true
                 }
                 .focusProperties { canFocus = !leaving }
                 .trapFocus(leaving)
