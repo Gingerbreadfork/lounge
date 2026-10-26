@@ -421,7 +421,8 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
             LiveBackdrop(liveStyle, light, onUnusable = { why ->
                 android.util.Log.w("Lounge", "background: ${liveStyle.id} falls back to the still field: $why")
                 liveFailed = true
-                say("${liveStyle.name} is too heavy for this TV, so the background is still")
+                // A compile error's own text is for the log, not the screen (DESIGN.md §8).
+                say(if ("too heavy" in why) "${liveStyle.name} is too heavy for this TV, so the background is still" else "${liveStyle.name} could not be drawn on this TV, so the background is still")
             })
         } else {
             LightField(light)
