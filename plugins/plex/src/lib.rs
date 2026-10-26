@@ -43,13 +43,24 @@ impl sdk::Plugin for Plex {
         for m in on_deck.media_container.metadata {
             items.push(server.resume_item(&m));
         }
+        // Asked of each movie and TV library, so music and photos never take the row's places.
         let wanted = libraries_setting();
-        let recent: Container = server.get_json("/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=40")?;
-        for m in recent.media_container.metadata {
-            if !wanted.is_empty() && !m.library_section_title.as_deref().map(|t| wanted.iter().any(|w| w.eq_ignore_ascii_case(t))).unwrap_or(true) {
-                continue;
+        let sections: Container = server.get_json("/library/sections")?;
+        let chosen = video_sections(&sections.media_container.directory, &wanted);
+        if chosen.is_empty() && !wanted.is_empty() {
+            sdk::warn!("no movie or TV library is called {}", wanted.join(" or "));
+        }
+        let mut recent: Vec<Metadata> = Vec::new();
+        for section in chosen {
+            match server.get_json::<Container>(&format!("/library/sections/{}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size={RECENT}", url_encode(&section.key))) {
+                Ok(c) => recent.extend(c.media_container.metadata),
+                Err(e) => sdk::warn!("{}: {e}", section.title),
             }
-            if let Some(item) = server.recent_item(&m) {
+        }
+        recent.sort_by_key(|m| std::cmp::Reverse(m.added_at.unwrap_or(0)));
+        recent.truncate(RECENT);
+        for m in &recent {
+            if let Some(item) = server.recent_item(m) {
                 items.push(item);
             }
         }
@@ -79,6 +90,21 @@ impl sdk::Plugin for Plex {
 
 sdk::export_plugin!(Plex);
 
+/// Items in the Recently added row.
+const RECENT: usize = 40;
+/// Libraries asked for recently added items, which keeps a refresh well inside its fetch budget.
+const MAX_SECTIONS: usize = 12;
+
+/// The movie and TV libraries named in `wanted`, or all of them when it is empty.
+fn video_sections<'a>(sections: &'a [Section], wanted: &[String]) -> Vec<&'a Section> {
+    sections
+        .iter()
+        .filter(|s| matches!(s.kind.as_str(), "movie" | "show"))
+        .filter(|s| wanted.is_empty() || wanted.iter().any(|w| w.eq_ignore_ascii_case(s.title.trim())))
+        .take(MAX_SECTIONS)
+        .collect()
+}
+
 fn libraries_setting() -> Vec<String> {
     host::setting("libraries").unwrap_or_default().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
 }
@@ -106,6 +132,19 @@ struct MediaContainer {
     metadata: Vec<Metadata>,
     #[serde(rename = "Hub", default)]
     hub: Vec<Hub>,
+    #[serde(rename = "Directory", default)]
+    directory: Vec<Section>,
+}
+
+/// A library, as `/library/sections` lists it.
+#[derive(Deserialize, Default)]
+struct Section {
+    #[serde(default)]
+    key: String,
+    #[serde(default)]
+    title: String,
+    #[serde(rename = "type", default)]
+    kind: String,
 }
 
 #[derive(Deserialize, Default)]
@@ -155,8 +194,6 @@ pub struct Metadata {
     pub grandparent_art: Option<String>,
     #[serde(rename = "parentThumb")]
     pub parent_thumb: Option<String>,
-    #[serde(rename = "librarySectionTitle")]
-    pub library_section_title: Option<String>,
 }
 
 impl Server {
@@ -304,6 +341,24 @@ mod tests {
         "ratingKey": "1201", "type": "episode", "title": "Honeydew", "grandparentTitle": "The Bear", "parentIndex": 2, "index": 4,
         "duration": 1800000, "viewOffset": 900000, "lastViewedAt": 1760800000, "thumb": "/library/metadata/1201/thumb/1", "grandparentThumb": "/library/metadata/1100/thumb/1", "grandparentArt": "/library/metadata/1100/art/1"
     }]}}"#;
+
+    #[test]
+    fn recently_added_comes_from_the_movie_and_tv_libraries_named() {
+        let c: Container = serde_json::from_str(r#"{"MediaContainer": {"Directory": [
+            {"key": "1", "title": "Films", "type": "movie"},
+            {"key": "2", "title": "Music", "type": "artist"},
+            {"key": "3", "title": "TV Shows", "type": "show"},
+            {"key": "4", "title": "Photos", "type": "photo"}
+        ]}}"#)
+        .unwrap();
+        let keys = |wanted: &[&str]| -> Vec<String> {
+            let wanted: Vec<String> = wanted.iter().map(|w| w.to_string()).collect();
+            video_sections(&c.media_container.directory, &wanted).iter().map(|s| s.key.clone()).collect()
+        };
+        assert_eq!(keys(&[]), vec!["1", "3"]);
+        assert_eq!(keys(&["tv shows"]), vec!["3"]);
+        assert!(keys(&["Music"]).is_empty());
+    }
 
     #[test]
     fn on_deck_becomes_a_resume_point() {
