@@ -15,50 +15,14 @@
 
 ## At a glance
 
-**On the screen**
-
-- **The Stage.** One thing at a time: the episode to continue with how much is left, the channel that is on, the app you open at this hour. It lowers to a band when you move into the rows and rises again, as one continuous picture.
-- **Continue watching from everywhere.** Every app that publishes Watch Next, the TV's own listings, your media server through a plugin, and what is playing in the background, folded into one row with one entry per title.
-- **Rows you own.** Pin, reorder and hide. Your apps in your order, sorted by recency until you pin them. Games get a row with a badge when a controller is connected. Other apps' preview channels can be rows too.
-- **Live TV.** Tuner channels and plugin channels in Live now, with a guide laid out to the minute that refreshes while it is open. OK on a programme tunes it.
-- **The whole TV.** HDMI inputs with the names their devices announce over CEC and whether anything is plugged in. On a streamer, a TV controls card turns the TV on and switches to the right input, sends sound to a soundbar, changes the volume, or turns everything off.
-- **Now playing.** Music or a podcast in the background becomes a chip in the top bar and a card with play, pause and skip.
-- **Search** across apps, what you have been watching and whatever the plugins can find, with recently watched shown before you type.
-- **A menu on every tile.** Hold OK: pin, move, hide, pin to the Stage, app info, the store page, uninstall.
-
-**The look**
-
-- **Light, not chrome.** The focused tile's own artwork colour glows around it and spills onto the wall; the tiles beside it lift as if lit from the side. The lamp warms up on a cold start and the lights go down after a minute without the remote.
-- **Ten themes** that change the walls and the lamp and nothing else, including Blackout for OLED panels and High contrast.
-- **Three sounds**, rendered rather than sampled, for moving, opening and going back. Off while music plays, off entirely if you like.
-- **Artwork done once.** Every picture is decoded once at index time and cut to every size the screen needs, with its colour palette, a baked vignette for the hero and the slice the Stage lowers onto.
-- **Type and a mark of its own.** Bricolage Grotesque and Figtree, both bundled, and the plush coral sofa.
-- **Fits the TV it is on.** Reduced motion follows the system or your choice, Lite mode turns the shader and the spill off, and two device tiers set the budgets.
-
-**From your phone**
-
-- **A page the TV serves.** Pair by QR code or six digits on the same network, add it to the phone's home screen, no account and no server.
-- **What's on**, mirrored. Tap a tile and it opens on the TV.
-- **A remote** with a d-pad, media keys, a field that types into whatever the TV has focused (the phone keyboard's own dictation works there too), and a place to paste a link that opens on the TV. With Power Setup connected the d-pad works inside other apps too.
-- **Arrange the home screen** from the phone: rows, pinned apps, what is on the Stage.
-- **Plugins**, configured and installed from a file or a link. **Backups** of your layout and settings as one file, restored in one tap. **Paired phones** and the TV's diagnostics.
-
-**Plugins**
-
-- **WebAssembly in a sandbox.** A plugin runs inside the core with a fuel budget, a memory cap, no file system, no sockets, and reaches only the hosts its manifest names.
-- **Signed bundles.** Ed25519-signed `.lgp` files; the TV pins the publisher's key on first install and refuses an update from anyone else.
-- **Keeps itself current**: Lounge checks its GitHub releases twice a day and installs updates on its own where Android allows it, with a confirmation only when it must ask.
-- **Fifteen plugins built in**: Jellyfin, Emby, Plex, Kodi, Trakt, IPTV, HDHomeRun, Tvheadend, Channels DVR, NextPVR, Twitch, YouTube channels, the Internet Archive, Immich photos and Art mode, which hangs paintings from the Met and the Cleveland Museum of Art on the screensaver. Plus a sample library to try things with, an SDK, and a command-line tool that bundles, signs and runs a plugin on your computer against fixtures.
-- **Any language** that targets core WebAssembly: the interface is eight imports and six exports with JSON in between.
-
-**Setting up and staying out of the way**
-
-- **Five screens on first run**, with a live preview of the home screen while you choose a theme.
-- **Power Setup.** Lounge talks to the TV's own debugging service after you allow it once on screen, or to Shizuku, to take the home role, grant its own accesses, drive HDMI-CEC, set the screensaver and compile itself ahead of time. Every action you start shows its command first, and the Power Setup page lists the last 60 that ran since Lounge started.
-- **A screensaver of its own.** The artwork from the Stage and the rows with a slow push-in, or one of nine slow abstract scenes drawn on the TV's graphics chip: Ink, Current, Rain, Smoke, Embers, Shallows, Lava, Aurora and Silk. Plugins can add their own.
-- **Live backgrounds.** Any of those scenes can run behind the home screen instead of the still light, dimmed so the tiles stay the brightest thing in the room, with the light still following focus over it. Off by default; it freezes after a minute without input and steps down when the TV's graphics chip is busy.
-- **Nothing leaves the house.** No accounts and no analytics. Lounge reaches only what you gave it an address for, the artwork the TV's other apps publish, and GitHub twice a day for updates, which Settings can turn off.
-- **Built for old TVs too.** Android 9 and up, arm64 and 32-bit ARM, a Rust core behind a Kotlin and Compose shell.
+- **The Stage.** One thing at a time: the episode to continue, the channel that is on, the app you open at this hour.
+- **Continue watching from everywhere.** Every app that publishes Watch Next, the TV's own listings and your media server, one entry per title.
+- **Rows you own.** Pin, reorder and hide. Live TV with a guide, the TV's inputs and, on a streamer, the TV's controls.
+- **Light, not chrome.** The focused tile's own colour spills onto the wall. Ten themes, including Blackout for OLED panels and High contrast.
+- **Your phone as the other remote.** A page the TV serves, with no account: it types, arranges the home screen and installs plugins.
+- **Fifteen plugins built in**, from Jellyfin, Plex and Kodi to IPTV, Trakt and Twitch, each sandboxed WebAssembly in a signed bundle.
+- **A screensaver of its own**, and scenes that can run live behind the home screen.
+- **Keeps itself current** from this repository's releases. Android 9 and up, arm64 and 32-bit ARM.
 
 ## Why
 
@@ -82,8 +46,8 @@ move back up and it rises again, one continuous picture, nothing squeezed.
 **Rows you own.** Continue watching comes from every app that publishes it, from the TV's own
 listings, and from plugins. Your apps sit in the order you pin them, sorted by how recently you
 opened them until you do. Games get a row of their own, marked when a controller is connected.
-All apps is the whole list. Hold OK on any tile for a menu: pin, move, hide, pin it to the Stage, app info, the store
-page, uninstall. Rows with nothing in them stay out of the way.
+Hold OK on any tile for a menu: pin, move, hide, pin it to the Stage, app info, the store page,
+uninstall. Rows with nothing in them stay out of the way.
 
 **Live TV with a guide.** Channels from the TV's tuner and from plugins show what is on now, and
 a guide lays the schedule out as a grid of channels and time.
@@ -96,7 +60,11 @@ right input, sends sound to a soundbar, changes the volume, or turns everything 
 a card with play, pause and skip.
 
 **Search.** Apps, what you have been watching, and whatever the plugins can find, from one box.
-When it is empty it shows what you watched recently.
+
+**Screensaver and live backgrounds.** The screensaver shows the artwork from the Stage and the
+rows with a slow push-in, or one of nine abstract scenes drawn on the TV's graphics chip in your
+theme's colours. Plugins can add scenes ([PLUGINS.md](PLUGINS.md#screensavers)). Any scene can
+also run behind the home screen, dimmed so the tiles stay the brightest thing in the room.
 
 **Set up once.** Five screens on first run: how it should look, which accesses to allow, making
 it the home screen, pairing a phone, done. Every one is reachable again from Settings.
@@ -123,81 +91,60 @@ home screen like an app. The TV serves it itself and remembers the phone until y
 </p>
 
 - **What's on** mirrors the home screen. Tap a tile and it opens on the TV.
-- **Remote** is a d-pad, Back, Home, Menu and the media keys, a field that types into whatever
-  the TV has focused, where the phone keyboard's own dictation works too, and a place to paste a
-  link that opens on the TV. The d-pad, Back and Menu reach Lounge's own screen; with Power Setup
-  connected they reach whatever app is in front.
+- **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into whatever
+  the TV has focused, and a place to paste a link that opens on the TV. With Power Setup
+  connected, the keys reach whatever app is in front.
 - **Layout** reorders the rows and your pinned apps, and shows what is pinned to the Stage.
 - **Plugins** configures the installed plugins and installs new ones from a file or a link.
-- **More** downloads a backup of your layout and settings as one JSON file and restores it,
-  lists the paired phones, and shows the TV's diagnostics.
+- **More** backs up your layout and settings as one file and restores it, lists the paired
+  phones, and shows the TV's diagnostics.
 
 ## Plugins
 
 A plugin is a WebAssembly module in a signed `.lgp` bundle. It runs inside the core under a fuel
 budget and a memory cap, with no access to Android, the file system, sockets or other plugins:
-the only things it can do are fetch from the hosts its manifest names, keep a small private
-store, read its settings, and log. What it publishes becomes tiles, Stage spotlights, channels in
-the guide, or rows of its own. Its settings become fields on the TV and on the phone.
+it can only fetch from the hosts its manifest names, keep a small private store, read its
+settings and log. What it publishes becomes tiles, Stage spotlights, channels in the guide or
+rows of its own. The TV pins each publisher's key on first install and refuses an update signed
+by anyone else. Any language that targets core WebAssembly will do: the interface is eight
+imports and six exports with JSON in between.
 
-Fifteen ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
-use from the phone or the TV's settings; each asks only for what it needs.
+Fifteen ship in the APK, written against the same SDK as anyone else's. Turn on the ones you use
+from the phone or the TV's settings.
 
-- **Jellyfin**, **Emby** and **Plex** put your server's resume points into Continue watching and
-  its newest additions into a row, and answer search. Plex items open in the Plex app; Jellyfin
-  and Emby open their app, or the item's page where the TV has a browser.
-- **IPTV** turns an M3U playlist into channels in Live now and the guide, with programme
-  information from an XMLTV feed.
-- **HDHomeRun** finds the tuner on your network and puts its channels and guide on the home
-  screen; channels play in the TV's own player.
-- **Tvheadend**, **Channels DVR** and **NextPVR** do the same for a DVR, and add your recordings
-  as a row. Channels DVR and NextPVR also put half-watched recordings in Continue watching.
-- **YouTube channels** follows channels and playlists through their public feeds, no account
-  needed, and opens videos in the YouTube app.
-- **Internet Archive** fills rows with free feature films, cartoons and television from
-  archive.org, played on the TV, and searches its films.
-- **Immich photos** turns an album shared from your Immich server into the screensaver, at
-  Immich's preview size.
-- **Kodi** reads a Kodi library over its own remote control: half-watched films and episodes in
-  Continue watching, the next episode of each show, what was added lately, and Live TV channels
-  with their guide. Selecting something tells Kodi to play it, on this TV or on a box across the
-  room.
-- **Trakt** brings what you paused, the next episode of every show you are watching and your
-  watchlist from Trakt, whichever service they live on; selecting one searches for it. Sign-in is
-  a code you enter on your phone.
-- **Twitch** puts the channels you follow that are live now into Live now and the guide, with the
-  game and the viewers, and opens them in the Twitch app.
-- **Art mode** hangs public-domain paintings from the Met and the Cleveland Museum of Art on the
-  screensaver, whole and in their own shape, with the painter, the year and the museum under the
-  clock, from the museums' large pictures. The wall changes with every refresh; a painter or a
-  subject narrows it.
+| Plugin | What it adds |
+|---|---|
+| Jellyfin, Emby, Plex | Your server's resume points in Continue watching, its newest additions as a row, and search |
+| Kodi | A Kodi library: resume points, the next episodes, recent additions and Live TV, played on whichever Kodi you choose |
+| Trakt | What you paused, what is next and your watchlist, whichever service they live on |
+| IPTV | An M3U playlist as channels, with a guide from XMLTV |
+| HDHomeRun | The tuner's channels and guide, played in the TV's own player |
+| Tvheadend, Channels DVR, NextPVR | A DVR's channels, guide and recordings |
+| Twitch | The channels you follow that are live, in Live now and the guide |
+| YouTube channels | Channels and playlists through their public feeds, no account needed |
+| Internet Archive | Free films, cartoons and television from archive.org, with search |
+| Immich photos | A shared Immich album as the screensaver |
+| Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art on the screensaver |
 
 A sixteenth, **Sample library**, lives in the repository but not the APK: eighteen public-domain
-films with their posters, a few left part-watched, so you can see Lounge with something on it.
-The pictures in this file use it. [PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin
-on your TV and covers the whole interface.
+films with their posters, so you can see Lounge with something on it. The pictures in this file
+use it. [PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin on your TV.
 
 ## The look
 
-The idea is a dim living room at night with one bright thing in it. The backdrop is dark velvet;
-the focused tile is the lamp. Its artwork's own colour spills onto the wall behind it and glows
-around it, the tiles beside it lift as if lit from the side, and the rest of the room sits back.
-Leave the remote alone for a minute and the lights go down.
-
-Ten themes change the colour of the walls and the lamp and nothing else. Dusk, the default, is
-indigo with a coral lamp. House is warm plum under tungsten. Then Hearth, Opera, Marquee,
-Green room, Moonlight and Graphite, plus Blackout for OLED panels and High contrast.
+The idea is a dim living room at night with one bright thing in it. The backdrop is dark velvet
+and the focused tile is the lamp: its artwork's own colour spills onto the wall and glows around
+it, the tiles beside it lift as if lit from the side, and after a minute without the remote the
+lights go down. Ten themes change the walls and the lamp and nothing else.
 
 <p align="center">
   <img src="docs/screenshots/themes.png" width="920" alt="The ten themes, each shown as the home screen with the Settings sheet open">
 </p>
 
-Type is Bricolage Grotesque for headings and Figtree for everything else, both bundled. The three
-sounds, for moving, opening and going back, are rendered from a script rather than sampled: felt
-and wood in a quiet room, nothing clicky. The mark is a plush coral sofa. Reduced motion follows
-the system or your choice, High contrast adds a focus ring, and Lite mode turns the shader and
-the spill off for a TV that needs it. The whole system is written down in
-[DESIGN.md](DESIGN.md), and the code follows it.
+Type is Bricolage Grotesque and Figtree, both bundled, the three sounds are rendered rather than
+sampled, and the mark is a plush coral sofa. Reduced motion follows the system or your choice,
+and Lite mode turns the shader and the spill off for a TV that needs it. The whole system is
+written down in [DESIGN.md](DESIGN.md).
 
 <p align="center">
   <img src="docs/screenshots/onboarding.png" width="49%" alt="The first setup screen: ten themes in a grid with a live preview of the home screen beside them">
@@ -207,9 +154,8 @@ the spill off for a TV that needs it. The whole system is written down in
 ## Installing on a TV
 
 Grab `Lounge-<version>.apk` from the [Releases](../../releases) page, with a `SHA256SUMS` file
-beside it, or build it yourself (below). Lounge runs on Android TV and Google TV from Android 9,
-on arm64 and 32-bit ARM. Install it over ADB from a computer on the same network, or copy the
-file to the TV and open it with a file manager.
+beside it, or build it yourself (below). Install it over ADB from a computer on the same network,
+or copy the file to the TV and open it with a file manager.
 
 ```sh
 adb connect <tv>:5555
@@ -217,16 +163,15 @@ adb install -r Lounge-<version>.apk
 adb shell am start -n tv.lounge.launcher/.MainActivity
 ```
 
-The first launch runs the five setup steps. Android does not let an app make itself the home
-screen, so that step needs either a command from a computer,
+The first launch runs the setup steps. Android does not let an app make itself the home screen,
+so that step needs either a command from a computer,
 
 ```sh
 adb shell cmd package set-home-activity tv.lounge.launcher/.MainActivity
 ```
 
-or **Power Setup** on the TV (Settings, Power Setup, Connect). On Google TV one command is not
-enough: its own home and its setup app declare a priority no app is allowed, and Android goes by
-priority before it looks at the chosen home. They have to be switched off as well, which leaves
+or **Power Setup** on the TV (Settings, Power Setup, Connect). On Google TV the stock home and
+its setup app outrank any home you choose, so they have to be switched off as well, which leaves
 them installed:
 
 ```sh
@@ -234,55 +179,38 @@ adb shell pm disable-user --user 0 com.google.android.apps.tv.launcherx
 adb shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
 ```
 
-`pm enable` with the same names turns them back on. Do that before you uninstall Lounge, or the TV
-is left without a home screen. Power Setup finds whichever homes come before Lounge on your TV
-and switches them off along with taking the home role, and it can turn them back on.
+`pm enable` with the same names turns them back on. Do that before you uninstall Lounge, or the
+TV is left without a home screen. Power Setup does both for you and can undo them.
 
-Power Setup talks to the TV's own debugging service after you allow it once on screen, and from
-then on it can take the home role, grant the optional accesses, drive the TV over HDMI-CEC from a
-streamer, set the screensaver and compile Lounge ahead of time. Every action you start shows its
-command before it runs, and the Power Setup page lists the last 60 that ran since Lounge
-started, including the two it does on its own: installing an update and passing on keys from the
-phone.
-The two that change the living room, taking the home role and switching the TV's power, only ever
-happen when you press them.
+Power Setup talks to the TV's own debugging service once you allow it on screen. It can take the
+home role, grant the optional accesses, drive the TV over HDMI-CEC, set the screensaver and
+compile Lounge ahead of time. Each action shows its command first, and its page lists what ran.
 
-The screensaver is Lounge's own. It shows the artwork from the Stage and the rows with a slow
-push-in, the clock and a line naming the picture, or one of nine abstract scenes drawn on the
-TV's graphics chip: Ink, Current, Rain, Smoke, Embers, Shallows, Lava, Aurora and Silk, each in
-the colours of your theme. Choose in Settings, Screensaver, Style. Plugins can add scenes of their
-own, and a shader file pushed to the TV shows up there too, for trying one out
-([PLUGINS.md](PLUGINS.md#screensavers)).
-
-After that first install Lounge keeps itself current. Twice a day it looks at the
-[Releases](../../releases) page, downloads a newer APK, checks it against the published hash
-and installs it while you are in another app. Android 12 and later let an app update itself
-without asking once it installed the current build, so after the first update there is no
-prompt at all; with Power Setup connected there is never one. Otherwise a tile on the home
-screen says the update is ready and Android asks you to confirm when you press it. On a Google
-TV with Play Protect, that first confirmation also warns that it has not seen this developer
-before: choose More details, then Install anyway, and it will not ask again. Settings → Updates
-shows where things stand, has a "Check now", and can turn the automatic check off.
+After the first install Lounge keeps itself current. Twice a day it checks the
+[Releases](../../releases) page, verifies a newer APK against its published hash and installs it
+while you are in another app. From Android 12 there is no prompt after the first update, and
+with Power Setup there is none at all; otherwise a tile on the home screen offers the update.
+The first time, Play Protect on Google TV may warn that it does not know the developer: choose
+More details, then Install anyway. Settings, Updates checks now or turns this off.
 
 ## Under the hood
 
 The shell is Kotlin and Compose for TV. Everything that decides what to show is a Rust core
 behind a UniFFI boundary: a graph of apps, programmes, channels and inputs with their usage,
 ranking into the Stage and the rows, a SQLite store, and an artwork pipeline that decodes each
-picture once and writes every size the screen needs, including the hero's vignette and the band
-the Stage lowers onto. Plugins run in [wasmi](https://github.com/wasmi-labs/wasmi) inside that
-core. The companion is an [axum](https://github.com/tokio-rs/axum) server in the same process,
-with the Svelte 5 app embedded at build time, about 30 KB gzipped.
+picture once and writes every size the screen needs. Plugins run in
+[wasmi](https://github.com/wasmi-labs/wasmi) inside that core. The companion is an
+[axum](https://github.com/tokio-rs/axum) server in the same process, with the Svelte 5 app
+embedded at build time, about 30 KB gzipped.
 
 The APK is 19 MB. On a Google TV Streamer the release build is on screen in about a second
 from a cold start, sits a little over 100 MB, and keeps the main thread under 5 ms on nine
 frames out of ten while you move around. A TCL television with a Mali GPU runs the same build
 at about 75 MB and is bound by its GPU rather than its CPU. Both are measured with the scripts
-in `tools/`, on release builds compiled the way a real install ends up.
+in `tools/`.
 
-Lounge talks to the network only where you sent it: a media server, a playlist, a plugin you
-installed, the artwork the TV's other apps publish in their rows, and GitHub twice a day to look
-for an update, which Settings, Updates turns off. There are no accounts and no analytics.
+Lounge reaches only what you gave it an address for, the artwork the TV's other apps publish,
+and GitHub twice a day for updates. There are no accounts and no analytics.
 
 ## Building from source
 
@@ -302,29 +230,15 @@ generates the Kotlin bindings, and builds the companion with pnpm when `node_mod
 present. The plugin publisher key is created on first use at `~/.config/lounge/publisher.key`
 and never enters the tree.
 
-There are three build types. `debug` installs beside a release as `tv.lounge.launcher.debug`.
-`release` is shrunk with R8 and carries the baseline profile, so the hot paths are compiled
-before the first run. `profile` is release without R8 and exists only to capture that profile
-with `tools/baseline-profile.sh`. Release builds are signed with the debug key unless
-`lounge.storeFile`, `lounge.storePassword`, `lounge.keyAlias` and `lounge.keyPassword` are set
-in `~/.gradle/gradle.properties`.
+There are three build types: `debug` installs beside a release as `tv.lounge.launcher.debug`,
+`release` is shrunk with R8 and carries a baseline profile, and `profile` exists only to capture
+that profile with `tools/baseline-profile.sh`. Release builds are signed with the debug key
+unless `lounge.storeFile`, `lounge.storePassword`, `lounge.keyAlias` and `lounge.keyPassword`
+are set in `~/.gradle/gradle.properties`.
 
-Every push builds the whole thing on GitHub: the core's tests, the plugins and the SDK with
-the wasm build, the companion, and the release APK, which each run keeps as an artifact named
-`lounge-apk`.
-
-### Releasing
-
-Pushing a tag like `v0.2.0` builds the APK and attaches it to a GitHub release as
-`Lounge-0.2.0.apk` with a `SHA256SUMS` file. The tag must match `versionName` in
-`android/app/build.gradle.kts`, and `versionCode` must be higher than at the previous tag, or the
-release stops before it builds. It also needs two kinds of secret: the app's signing key as
-`LOUNGE_KEYSTORE_BASE64` (the keystore, base64 encoded) with `LOUNGE_KEYSTORE_PASSWORD`,
-`LOUNGE_KEY_ALIAS` and `LOUNGE_KEY_PASSWORD`, and the plugin publisher key as
-`LOUNGE_PUBLISHER_KEY` (the contents of `~/.config/lounge/publisher.key`). Without them the
-release stops too: a debug-signed APK would not install over a signed one, and plugins signed with
-another key would be refused by every TV that pinned yours.
-`gh secret set LOUNGE_PUBLISHER_KEY < ~/.config/lounge/publisher.key` stores it.
+Every push builds and tests the whole thing on GitHub and keeps the APK as an artifact named
+`lounge-apk`. Pushing a tag publishes a release; [docs/RELEASING.md](docs/RELEASING.md) has the
+rules and the secrets it needs.
 
 ## Working on it
 
@@ -338,9 +252,9 @@ cd companion && LOUNGE_TV=http://<tv>:8787 pnpm dev    # the phone app against a
 
 On a device, `tools/drive.sh <serial> <out dir>` walks a fixed path through the launcher and
 saves a screenshot after every step, `tools/framestats.sh <serial>` prints per-phase frame times
-for that path from `dumpsys gfxinfo`, and `tools/baseline-profile.sh <serial>` captures a fresh
-baseline profile from the `profile` build. Frame times are only meaningful once the installed
-build has been compiled the way a real install ends up, which the scripts do for you.
+for that path, and `tools/baseline-profile.sh <serial>` captures a fresh baseline profile from
+the `profile` build. The scripts compile the installed build the way a real install ends up, so
+frame times mean something.
 
 ```
 android/     Gradle project: app, core/{bindings,design,platform}, collector/*, feature/home, power
@@ -348,7 +262,7 @@ core/        Rust workspace: lounge-core (UniFFI), -graph, -store, -artwork, -pl
 plugins/     Rust workspace: the plugin SDK, the built-in plugins, lgp-tool
 companion/   Svelte 5 phone app, embedded into the core at build time
 design/      fonts, the mark's sources and renderer, the sound renderer
-docs/        the pictures in this file
+docs/        the pictures in this file, and how to release
 tools/       device drives, frame timing, the baseline profile, plugin and companion builds
 workdir/     ignored by git: your own notes, logs and measurements
 ```
