@@ -133,7 +133,7 @@ class MainActivity : ComponentActivity() {
         val fresh = core.snapshots.value.rows.isEmpty()
         afterFirstFrames(2) {
             pushPermissions()
-            lifecycleScope.launch(Dispatchers.IO) { core.ingestInputs(inputs.snapshot()) }
+            lifecycleScope.launch(Dispatchers.IO) { guarded("inputs") { core.ingestInputs(inputs.snapshot()) } }
             if (fresh) {
                 collectAppsNow()
                 collectTvNow()
@@ -152,7 +152,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 // HDMI-CEC devices that flap report a burst of changes; one scan answers them all.
-                inputs.changes().debounce(500).collect { core.ingestInputs(inputs.snapshot()) }
+                inputs.changes().debounce(500).collect { guarded("inputs") { core.ingestInputs(inputs.snapshot()) } }
             }
         }
         lifecycleScope.launch {
@@ -161,14 +161,16 @@ class MainActivity : ComponentActivity() {
         // Collections run one at a time, and requests made while one runs fold into a single rerun.
         lifecycleScope.launch(Dispatchers.IO) {
             for (request in appCollects) {
-                val includeMobile = prefs.showMobileApps.first()
-                core.ingestApps(apps.snapshot(includeMobileApps = includeMobile))
-                val usage = apps.usage()
-                if (usage.isNotEmpty()) core.reportUsage(usage)
+                guarded("apps") {
+                    val includeMobile = prefs.showMobileApps.first()
+                    core.ingestApps(apps.snapshot(includeMobileApps = includeMobile))
+                    val usage = apps.usage()
+                    if (usage.isNotEmpty()) core.reportUsage(usage)
+                }
             }
         }
         lifecycleScope.launch(Dispatchers.IO) {
-            for (request in tvCollects) core.ingestPrograms(tvProvider.snapshot())
+            for (request in tvCollects) guarded("TV listings") { core.ingestPrograms(tvProvider.snapshot()) }
         }
         lifecycleScope.launch {
             platform.commands.collect { cmd ->
@@ -208,7 +210,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 // Players report position and buffering constantly; the home only needs real changes.
-                media.sessions().conflate().debounce(500).collect { core.ingestSessions(it) }
+                media.sessions().conflate().debounce(500).collect { guarded("now playing") { core.ingestSessions(it) } }
             }
         }
         lifecycleScope.launch {
@@ -379,8 +381,10 @@ class MainActivity : ComponentActivity() {
         }
         resumedBefore = true
         lifecycleScope.launch(Dispatchers.IO) {
-            val usage = apps.usage()
-            if (usage.isNotEmpty()) core.reportUsage(usage)
+            guarded("app usage") {
+                val usage = apps.usage()
+                if (usage.isNotEmpty()) core.reportUsage(usage)
+            }
         }
     }
 
@@ -393,5 +397,19 @@ class MainActivity : ComponentActivity() {
 
     private fun collectAppsNow() {
         appCollects.trySend(Unit)
+    }
+
+    /**
+     * One pass of a collector, kept from ending its loop: a storage error, a binder that died or
+     * a banner too large to draw on an armv7 TV costs that pass, not the home screen.
+     */
+    private suspend fun guarded(what: String, block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            android.util.Log.w("Lounge", "collecting $what failed", t)
+        }
     }
 }
