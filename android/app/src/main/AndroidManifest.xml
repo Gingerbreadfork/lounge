@@ -53,7 +53,7 @@
             android:excludeFromRecents="true"
             android:clearTaskOnLaunch="true"
             android:screenOrientation="landscape"
-            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|fontWeightAdjustment|locale|layoutDirection|colorMode|touchscreen|mcc|mnc|grammaticalGender"
             android:theme="@style/Theme.Lounge">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
