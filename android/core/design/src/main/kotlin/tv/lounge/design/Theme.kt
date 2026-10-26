@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
@@ -101,7 +103,10 @@ fun LoungeTheme(
     val type = if (colors.focusRing) LoungeTypography.Bold else LoungeTypography.Default
     val motion = if (reducedMotion) LoungeMotion.Reduced else LoungeMotion.Default
     val designDensity = designDensity()
-    val fontResolver = LoungeFonts.resolver(LocalContext.current)
+    // Read through the configuration, so turning bold text on or off reaches the text at once.
+    val configuration = LocalConfiguration.current
+    val context = LocalContext.current
+    val fontResolver = remember(configuration) { LoungeFonts.resolver(context) }
     CompositionLocalProvider(
         LocalDensity provides designDensity,
         LocalFontFamilyResolver provides fontResolver,

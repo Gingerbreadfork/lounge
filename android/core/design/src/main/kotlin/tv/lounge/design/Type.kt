@@ -19,11 +19,25 @@ import androidx.compose.ui.unit.sp
  * Sizes are in sp at 1080p; the system density scales them for 4K-rendered UIs.
  */
 object LoungeFonts {
-    @Volatile private var shared: FontFamily.Resolver? = null
+    /** The resolver and the system's bold-text adjustment it was made for. */
+    @Volatile private var shared: Pair<Int, FontFamily.Resolver>? = null
 
-    /** The process-wide resolver; [warmUp] fills its cache so first-frame text never parses a font. */
-    fun resolver(context: android.content.Context): FontFamily.Resolver =
-        shared ?: synchronized(this) { shared ?: createFontFamilyResolver(context.applicationContext).also { shared = it } }
+    /**
+     * The process-wide resolver; [warmUp] fills its cache so first-frame text never parses a font.
+     * A resolver takes the system's bold-text setting when it is made, so a new one is made when
+     * that setting changes.
+     */
+    fun resolver(context: android.content.Context): FontFamily.Resolver {
+        val weight = weightAdjustment(context)
+        shared?.let { (w, r) -> if (w == weight) return r }
+        return synchronized(this) {
+            shared?.takeIf { it.first == weight }?.second
+                ?: createFontFamilyResolver(context.applicationContext).also { shared = weight to it }
+        }
+    }
+
+    fun weightAdjustment(context: android.content.Context): Int =
+        if (android.os.Build.VERSION.SDK_INT >= 31) context.resources.configuration.fontWeightAdjustment.takeIf { it != android.content.res.Configuration.FONT_WEIGHT_ADJUSTMENT_UNDEFINED } ?: 0 else 0
 
     /**
      * Resolves every typeface the typography uses, off the main thread, so the first frame never
