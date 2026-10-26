@@ -283,14 +283,33 @@ pub struct Channel {
     pub uuid: String,
     #[serde(default)]
     pub name: String,
-    #[serde(default)]
-    pub number: Option<i64>,
+    #[serde(default, deserialize_with = "channel_number")]
+    pub number: Option<String>,
     #[serde(default)]
     pub enabled: Option<bool>,
     #[serde(default)]
     pub icon_public_url: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
+}
+
+/// A channel number as Tvheadend sends it: an integer, or a string such as "7.1" for a subchannel.
+/// Zero and anything else count as no number, so one odd channel cannot fail the whole list.
+fn channel_number<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Number {
+        Int(i64),
+        Float(f64),
+        Text(String),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Option::<Number>::deserialize(d)? {
+        Some(Number::Int(n)) if n > 0 => Some(n.to_string()),
+        Some(Number::Float(n)) if n > 0.0 => Some(n.to_string()),
+        Some(Number::Text(t)) if !matches!(t.trim(), "" | "0") => Some(t.trim().to_string()),
+        _ => None,
+    })
 }
 
 #[derive(Deserialize, Default, Clone, Debug)]
@@ -430,7 +449,7 @@ impl Server {
             title: c.name.clone(),
             channel_id: Some(c.uuid.clone()),
             channel_name: Some(c.name.clone()),
-            channel_number: c.number.filter(|n| *n > 0).map(|n| n.to_string()),
+            channel_number: c.number.clone(),
             logo: self.picture(&c.icon_public_url),
             action: Action::play(self.public_url(&format!("stream/channel/{}?profile={}", c.uuid, self.profile)), c.name.clone()),
             ..Default::default()
@@ -534,6 +553,21 @@ mod tests {
         assert_eq!(base64(b"fo"), "Zm8=");
         assert_eq!(base64(b"foo"), "Zm9v");
         assert_eq!(base64(b"me:pw"), "bWU6cHc=");
+    }
+
+    #[test]
+    fn subchannel_numbers_keep_their_minor_part() {
+        let grid: Grid<Channel> = serde_json::from_str(
+            r#"{"entries": [
+                {"uuid": "a", "name": "KQED", "number": "7.1"},
+                {"uuid": "b", "name": "Two", "number": 2},
+                {"uuid": "c", "name": "Unnumbered", "number": 0},
+                {"uuid": "d", "name": "Missing"},
+                {"uuid": "e", "name": "Odd", "number": true}]}"#,
+        )
+        .unwrap();
+        let numbers: Vec<Option<&str>> = grid.entries.iter().map(|c| c.number.as_deref()).collect();
+        assert_eq!(numbers, vec![Some("7.1"), Some("2"), None, None, None]);
     }
 
     #[test]
