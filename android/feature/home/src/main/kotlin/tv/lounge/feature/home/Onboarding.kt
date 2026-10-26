@@ -129,7 +129,8 @@ fun OnboardingScreen(
                 .background(colors.velvet)
                 .onPreviewKeyEvent { e ->
                     if (e.isBack() && e.type == KeyEventType.KeyUp) {
-                        if (step > 0) step-- else onDone()
+                        // On first boot a reflexive Back on the first step must not skip setup for good.
+                        if (step > 0) step-- else if (uiPrefs.onboardingDone) onDone()
                         true
                     } else {
                         false
