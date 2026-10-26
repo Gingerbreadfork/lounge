@@ -562,7 +562,7 @@ pub(crate) fn spawn(
         .name("lounge-plugin-calls".into())
         .spawn(move || {
             while let Ok(job) = calls_rx.recv() {
-                answer(&calls_inner, job);
+                crate::guarded("a plugin call", || answer(&calls_inner, job));
             }
         })
         .expect("spawn plugin calls thread");
@@ -570,8 +570,12 @@ pub(crate) fn spawn(
         .name("lounge-plugins".into())
         .spawn(move || loop {
             match refresh_rx.recv_timeout(Duration::from_secs(60)) {
-                Ok(PluginJob::Refresh(id)) => run_refresh(&inner, &id),
-                Ok(other) => answer(&inner, other),
+                Ok(PluginJob::Refresh(id)) => {
+                    crate::guarded("a plugin refresh", || run_refresh(&inner, &id));
+                }
+                Ok(other) => {
+                    crate::guarded("a plugin call", || answer(&inner, other));
+                }
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
                     if !inner.screen_on.load(Ordering::Relaxed) {
                         continue;
@@ -592,7 +596,7 @@ pub(crate) fn spawn(
                             .collect()
                     };
                     for id in due {
-                        run_refresh(&inner, &id);
+                        crate::guarded("a plugin refresh", || run_refresh(&inner, &id));
                     }
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
@@ -647,7 +651,11 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
         window_hours: 12,
     };
     let started = Instant::now();
-    match inner.plugins.refresh(&entry, &ctx) {
+    // A panic while running the plugin or fetching its pictures is that refresh's error, so the
+    // plugin waits its interval rather than failing again every minute.
+    let outcome = crate::guarded("a plugin refresh", || inner.plugins.refresh(&entry, &ctx))
+        .unwrap_or_else(|| Err("the refresh stopped on an error inside Lounge".into()));
+    match outcome {
         Ok((items, notes)) => {
             tracing::info!("plugin {id}: {} items in {} ms", items.len(), started.elapsed().as_millis());
             push_log(&inner.plugins.logs, id, 1, &format!("refreshed: {} items in {} ms", items.len(), started.elapsed().as_millis()));

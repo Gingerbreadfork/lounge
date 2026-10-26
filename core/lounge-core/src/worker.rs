@@ -98,11 +98,13 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                 // Nothing arrived: the clock moved on, so what the screen says may have too.
                 let mut dirty = pending.is_empty() && screen_on;
                 for job in pending {
-                    match job {
+                    // A job that panics is lost on its own; whatever it changed is still published.
+                    let finished = crate::guarded("a worker job", || match job {
                         Job::LoadGraph => {
-                            if let Err(e) = load_graph(&inner) {
+                            if let Some(Err(e)) = crate::guarded("loading the graph", || load_graph(&inner)) {
                                 tracing::error!("load graph failed: {e}");
                             }
+                            mark_loaded(&inner);
                         }
                         Job::IngestApps(apps) => {
                             if let Err(e) = ingest_apps(&inner, apps) {
@@ -165,10 +167,14 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                         }
                         Job::Rebuild => dirty = true,
                         Job::Housekeeping => housekeeping(&inner),
+                    });
+                    if finished.is_none() {
+                        dirty = true;
                     }
                 }
                 if dirty {
-                    next_change = rebuild(&inner, utc_offset);
+                    // A rebuild that panics waits for the next tick rather than retrying at once.
+                    next_change = crate::guarded("rebuilding the home", || rebuild(&inner, utc_offset)).flatten();
                 }
             }
             tracing::info!("worker thread exiting");
@@ -188,10 +194,15 @@ fn load_graph(inner: &Inner) -> Result<(), lounge_store::StoreError> {
     for (pkg, ms) in usage {
         state.graph.set_usage(&pkg, ms);
     }
-    state.loaded = true;
-    inner.loaded.notify_all();
     tracing::info!("graph loaded: {count} items in {} ms", started.elapsed().as_millis());
     Ok(())
+}
+
+/// Lets callers waiting for the graph go on whether or not it loaded; one that failed to load
+/// starts empty and the next ingests fill it.
+fn mark_loaded(inner: &Inner) {
+    inner.state.lock().loaded = true;
+    inner.loaded.notify_all();
 }
 
 // ---------------------------------------------------------------------------
@@ -292,8 +303,14 @@ impl ArtPlan {
                 .par_iter()
                 .map(|(src, styles)| {
                     let wanted: Vec<Style> = styles.iter().map(|(_, s)| *s).collect();
-                    let results = prepare_many(Path::new(src), &art_dir, &wanted);
-                    styles.iter().zip(results).map(|((i, _), r)| (*i, r.map_err(|e| e.to_string()))).collect()
+                    // A decoder that panics on a file counts as one that cannot read it, so the
+                    // file is not tried again until it changes.
+                    let results: Vec<Result<Prepared, String>> =
+                        match crate::guarded("preparing a picture", || prepare_many(Path::new(src), &art_dir, &wanted)) {
+                            Some(results) => results.into_iter().map(|r| r.map_err(|e| e.to_string())).collect(),
+                            None => wanted.iter().map(|_| Err("the decoder failed on this picture".to_string())).collect(),
+                        };
+                    styles.iter().zip(results).map(|((i, _), r)| (*i, r)).collect()
                 })
                 .collect()
         };

@@ -976,6 +976,12 @@ fn init_logging() {
             use tracing_subscriber::layer::SubscriberExt;
             let subscriber = tracing_subscriber::registry().with(tracing_android::layer("Lounge").ok());
             let _ = tracing::subscriber::set_global_default(subscriber);
+            // Android discards stderr, so a panic's message would otherwise be lost.
+            let default_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                tracing::error!("panic on {}: {info}", std::thread::current().name().unwrap_or("an unnamed thread"));
+                default_hook(info);
+            }));
         }
         #[cfg(not(target_os = "android"))]
         {
@@ -1025,6 +1031,18 @@ pub fn set_storage_aside(data_dir: String) -> Result<String, CoreError> {
     Ok(aside.to_string_lossy().into_owned())
 }
 
+/// Runs `f`, or returns `None` if it panicked. The core's long-lived threads run each piece of
+/// work through this, so one bad picture or plugin answer cannot end the thread.
+pub(crate) fn guarded<T>(what: &str, f: impl FnOnce() -> T) -> Option<T> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(v) => Some(v),
+        Err(_) => {
+            tracing::error!("{what} panicked; carrying on without it");
+            None
+        }
+    }
+}
+
 pub(crate) fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1045,5 +1063,11 @@ mod tests {
         assert!(opened.persisted.is_none());
         assert!(opened.plugins.is_empty());
         assert!(dir.path().join("lounge.db.broken").exists());
+    }
+
+    #[test]
+    fn a_panic_is_contained() {
+        assert_eq!(guarded("a sum", || 2 + 5), Some(7));
+        assert_eq!(guarded("a test", || -> i32 { panic!("on purpose") }), None);
     }
 }
