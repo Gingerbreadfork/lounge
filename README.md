@@ -177,6 +177,9 @@ A sixteenth, **Sample library**, lives in the repository but not the APK: eighte
 films with their posters, so you can see Lounge with something on it. The pictures in this file
 use it. [PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin on your TV.
 
+Plugin submissions are welcome. Open a pull request that adds yours under `plugins/` once it
+passes the [checklist](PLUGINS.md#checklist-before-you-share-it) in PLUGINS.md.
+
 ## The look
 
 The idea is a dim living room at night with one bright thing in it. The backdrop is dark velvet
