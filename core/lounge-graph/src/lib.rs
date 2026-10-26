@@ -451,16 +451,20 @@ impl Graph {
         v
     }
 
-    /// What is airing on every channel at `now_ms`, in one pass over the items.
+    /// What is airing on every channel at `now_ms`, in one pass over the items. Where a guide's
+    /// entries overlap, the one that started last wins, the same one every rebuild.
     pub fn airing_index(&self, now_ms: i64) -> HashMap<i64, &Item> {
-        let mut out = HashMap::new();
+        let mut out: HashMap<i64, &Item> = HashMap::new();
         for it in self.items.values() {
             if it.kind != ItemKind::Program {
                 continue;
             }
             let Some(ch) = it.channel_id else { continue };
             if airing_at(it, now_ms) {
-                out.entry(ch).or_insert(it);
+                let slot = out.entry(ch).or_insert(it);
+                if (it.airing_start_ms, &it.id) > (slot.airing_start_ms, &slot.id) {
+                    *slot = it;
+                }
             }
         }
         out
@@ -790,6 +794,20 @@ mod tests {
         g.replace_source("apps", apps);
         g.layout.stage_pins = (0..5).map(|i| format!("app:p{i}")).collect();
         assert_eq!(g.stage_candidates(3).len(), 3);
+    }
+
+    #[test]
+    fn overlapping_entries_give_the_same_programme_every_time() {
+        let mut g = Graph::default();
+        let programme = |id: &str, start: i64| {
+            let mut p = Item::content(id, ItemKind::Program, "t", id, DeepLink::None);
+            p.channel_id = Some(1);
+            p.airing_start_ms = Some(start);
+            p.airing_end_ms = Some(1000);
+            p
+        };
+        g.replace_source("t", vec![programme("p:a", 0), programme("p:b", 100), programme("p:c", 100)]);
+        assert_eq!(g.airing_index(500).get(&1).map(|i| i.id.as_str()), Some("p:c"));
     }
 
     #[test]
