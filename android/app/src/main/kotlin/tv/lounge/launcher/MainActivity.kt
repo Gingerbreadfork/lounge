@@ -133,7 +133,7 @@ class MainActivity : ComponentActivity() {
         val fresh = core.snapshots.value.rows.isEmpty()
         afterFirstFrames(2) {
             pushPermissions()
-            core.ingestInputs(inputs.snapshot())
+            lifecycleScope.launch(Dispatchers.IO) { core.ingestInputs(inputs.snapshot()) }
             if (fresh) {
                 collectAppsNow()
                 collectTvNow()
@@ -149,9 +149,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        lifecycleScope.launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                inputs.changes().collect { core.ingestInputs(inputs.snapshot()) }
+                // HDMI-CEC devices that flap report a burst of changes; one scan answers them all.
+                inputs.changes().debounce(500).collect { core.ingestInputs(inputs.snapshot()) }
             }
         }
         lifecycleScope.launch {
