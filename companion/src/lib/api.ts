@@ -101,15 +101,31 @@ export function liveState(onState: (s: State) => void, onStatus: (connected: boo
   let ws: WebSocket | null = null;
   let closed = false;
   let delay = 1000;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const connect = () => {
     if (closed) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(`${proto}://${location.host}/api/ws`);
     ws.onopen = () => { delay = 1000; onStatus(true); };
     ws.onmessage = (e) => { try { onState(JSON.parse(e.data)); } catch { /* ignore */ } };
-    ws.onclose = () => { onStatus(false); if (!closed) { setTimeout(connect, delay); delay = Math.min(delay * 2, 15000); } };
+    ws.onclose = () => { onStatus(false); if (!closed) { timer = setTimeout(connect, delay); delay = Math.min(delay * 2, 15000); } };
     ws.onerror = () => ws?.close();
   };
+  // Coming back to the app, or to the network, tries at once rather than waiting out the backoff.
+  const retry = () => {
+    if (closed || document.hidden || (ws && ws.readyState <= WebSocket.OPEN)) return;
+    clearTimeout(timer);
+    delay = 1000;
+    connect();
+  };
+  document.addEventListener('visibilitychange', retry);
+  window.addEventListener('online', retry);
   connect();
-  return () => { closed = true; ws?.close(); };
+  return () => {
+    closed = true;
+    clearTimeout(timer);
+    document.removeEventListener('visibilitychange', retry);
+    window.removeEventListener('online', retry);
+    ws?.close();
+  };
 }
