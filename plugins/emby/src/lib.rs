@@ -20,7 +20,7 @@ impl sdk::Plugin for Emby {
             description: "Continue watching and recently added from your Emby server.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
-            fetch_hosts: vec!["*".into()],
+            fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
             rows: vec![RowSpec { id: "recent".into(), title: "Recently added on Emby".into(), style: RowStyle::Poster }],
             settings: vec![

@@ -9,9 +9,65 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::net::IpAddr;
 
 pub const ABI_VERSION: u32 = 1;
 pub const HOST_MODULE: &str = "lounge";
+
+/// The allow-list entry for a plugin that finds devices on the home network itself, such as a
+/// tuner: it may reach home-network IP literals and `.local` names it was not given.
+pub const LOCAL_NETWORK: &str = "local-network";
+
+/// The host of a URL, lowercased, without user name, port or brackets.
+pub fn host_of(url: &str) -> Option<String> {
+    let rest = url.split("://").nth(1)?;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority.rsplit('@').next()?;
+    // An IPv6 literal keeps its brackets' contents whole; anything else stops at the port.
+    let host = if let Some(inner) = host.strip_prefix('[') {
+        inner.split(']').next()?
+    } else {
+        host.split(':').next()?
+    };
+    if host.is_empty() { None } else { Some(host.to_ascii_lowercase()) }
+}
+
+/// Private, shared, link-local and unique local addresses: a home network's, not the internet's.
+pub fn is_local_network(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            v4.is_private() || v4.is_link_local() || (o[0] == 100 && (o[1] & 0xc0) == 64)
+        }
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => is_local_network(IpAddr::V4(v4)),
+            None => {
+                let first = v6.segments()[0];
+                (first & 0xfe00) == 0xfc00 || (first & 0xffc0) == 0xfe80
+            }
+        },
+    }
+}
+
+/// A name only the home network answers for: one label, or a suffix the internet does not delegate.
+fn local_style(host: &str) -> bool {
+    !host.contains('.') || [".local", ".lan", ".home.arpa", ".internal"].iter().any(|suffix| host.ends_with(suffix))
+}
+
+/// A home-network IP literal or a local-style name, which [LOCAL_NETWORK] covers.
+pub fn is_home_name(host: &str) -> bool {
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    match host.parse::<IpAddr>() {
+        Ok(ip) => is_local_network(ip),
+        Err(_) => local_style(host),
+    }
+}
+
+/// The host a setting's value names, with or without its scheme.
+fn host_in_setting(value: &str) -> Option<String> {
+    let value = value.trim();
+    host_of(value).or_else(|| host_of(&format!("http://{value}")))
+}
 
 pub mod exports {
     pub const MEMORY: &str = "memory";
@@ -107,15 +163,59 @@ impl Manifest {
                 return Err(format!("duplicate or empty row id {:?}", r.id));
             }
         }
+        for h in &self.fetch_hosts {
+            if let Some(key) = h.strip_prefix('$')
+                && !self.settings.iter().any(|s| s.key == key)
+            {
+                return Err(format!("fetch host {h:?} names no setting"));
+            }
+        }
         Ok(())
     }
 
-    pub fn allows_host(&self, host: &str) -> bool {
+    /// Whether the allow list names `host`. `$key` stands for the host in the plugin's setting
+    /// `key`, which `setting` looks up, and [LOCAL_NETWORK] for home-network literals and names.
+    pub fn allows_host_with(&self, host: &str, setting: &dyn Fn(&str) -> Option<String>) -> bool {
         let host = host.to_ascii_lowercase();
         self.fetch_hosts.iter().any(|h| {
             let h = h.to_ascii_lowercase();
-            h == "*" || h == host || (h.starts_with("*.") && host.ends_with(&h[1..]))
+            match h.strip_prefix('$') {
+                Some(key) => setting(key).and_then(|v| host_in_setting(&v)).is_some_and(|given| given == host),
+                None if h == LOCAL_NETWORK => is_home_name(&host),
+                None => h == "*" || h == host || (h.starts_with("*.") && host.ends_with(&h[1..])),
+            }
         })
+    }
+
+    /// As [Manifest::allows_host_with] for a plugin with no settings filled in.
+    pub fn allows_host(&self, host: &str) -> bool {
+        self.allows_host_with(host, &|_| None)
+    }
+
+    /// The hosts this plugin may follow into the home network: those its `$key` settings hold, and
+    /// the IP literals and local-style names its allow list names exactly. A public name gets public
+    /// addresses alone, so its owner cannot point it at a router.
+    pub fn home_hosts(&self, setting: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+        let mut hosts: Vec<String> = self
+            .fetch_hosts
+            .iter()
+            .filter_map(|h| match h.strip_prefix('$') {
+                Some(key) => setting(key).and_then(|v| host_in_setting(&v)),
+                None if h == "*" || h.starts_with("*.") || h.eq_ignore_ascii_case(LOCAL_NETWORK) => None,
+                None => {
+                    let h = h.trim().trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+                    (h.parse::<IpAddr>().is_ok() || local_style(&h)).then_some(h)
+                }
+            })
+            .collect();
+        hosts.sort();
+        hosts.dedup();
+        hosts
+    }
+
+    /// Whether the allow list has [LOCAL_NETWORK].
+    pub fn reaches_local_network(&self) -> bool {
+        self.fetch_hosts.iter().any(|h| h.eq_ignore_ascii_case(LOCAL_NETWORK))
     }
 
     pub fn refresh_minutes_or_default(&self) -> u32 {
@@ -485,11 +585,40 @@ mod tests {
     }
 
     #[test]
+    fn settings_and_the_home_network_in_the_allow_list() {
+        let m = Manifest { fetch_hosts: vec!["$server".into(), "*".into(), "*.cdn.net".into(), "api.example.com".into(), "nas.local".into(), "10.0.0.9".into()], ..Default::default() };
+        let setting = |k: &str| (k == "server").then(|| "http://jf.example.org:8096/".to_string());
+        assert!(m.allows_host_with("jf.example.org", &setting));
+        // The server the person gave may be anywhere; of the plugin's own names, only local ones.
+        assert_eq!(m.home_hosts(&setting), vec!["10.0.0.9", "jf.example.org", "nas.local"]);
+        // A server typed without its scheme names its host all the same.
+        assert_eq!(m.home_hosts(&|_| Some("192.168.0.10:8096".into())), vec!["10.0.0.9", "192.168.0.10", "nas.local"]);
+        assert!(m.home_hosts(&|_| None).iter().all(|h| h != "*"));
+
+        let tuner = Manifest { fetch_hosts: vec![LOCAL_NETWORK.into()], ..Default::default() };
+        assert!(tuner.allows_host("192.168.0.20") && tuner.allows_host("hdhr.local") && tuner.allows_host("fd00::5") && tuner.allows_host("tuner"));
+        assert!(!tuner.allows_host("8.8.8.8") && !tuner.allows_host("evil.example"));
+        assert!(tuner.reaches_local_network() && !m.reaches_local_network());
+    }
+
+    #[test]
+    fn home_network_addresses() {
+        for ip in ["10.1.2.3", "172.16.0.1", "192.168.1.1", "100.64.0.1", "169.254.1.1", "fd12::1", "fe80::1", "::ffff:192.168.1.1"] {
+            assert!(is_local_network(ip.parse().unwrap()), "{ip}");
+        }
+        for ip in ["8.8.8.8", "100.128.0.1", "172.32.0.1", "2001:4860::8888"] {
+            assert!(!is_local_network(ip.parse().unwrap()), "{ip}");
+        }
+    }
+
+    #[test]
     fn manifest_validation() {
         let mut m = Manifest { id: "tv.lounge.iptv".into(), name: "IPTV".into(), version: "1.0".into(), ..Default::default() };
         assert!(m.validate().is_ok());
         m.id = "Bad Id".into();
         assert!(m.validate().is_err());
+        let unknown = Manifest { id: "tv.lounge.iptv".into(), name: "IPTV".into(), version: "1.0".into(), fetch_hosts: vec!["$server".into()], ..Default::default() };
+        assert!(unknown.validate().is_err());
     }
 }
 

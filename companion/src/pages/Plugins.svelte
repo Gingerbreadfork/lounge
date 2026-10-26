@@ -54,8 +54,22 @@
     if (!p.configured) return { text: 'Needs setup', cls: '' };
     return { text: 'Off', cls: '' };
   }
-  function reachesTv(p: Plugin) {
-    return p.fetchHosts.some((h) => h === 'localhost' || h === '127.0.0.1' || h === '::1');
+  /** Where a plugin may connect, in words; a host it names is shown as it is. */
+  function reachText(p: Plugin) {
+    const parts: string[] = [];
+    for (const h of p.fetchHosts) {
+      let part: string | undefined;
+      if (h.startsWith('$')) {
+        const setting = p.settings.find((s) => s.key === h.slice(1));
+        part = setting ? `what you enter in ${setting.label}` : undefined;
+      } else if (h === '*') part = 'any public site';
+      else if (h === 'local-network') part = 'devices on your home network';
+      else if (h === 'localhost' || h === '127.0.0.1' || h === '::1') part = 'this TV';
+      else part = h;
+      if (part && !parts.includes(part)) parts.push(part);
+    }
+    if (parts.length === 0) return 'nothing';
+    return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
   }
   function ago(ms: number) {
     const m = Math.floor((Date.now() - ms) / 60000);
@@ -132,7 +146,7 @@
     </section>
 
     <section class="section">
-      <p class="caption">Can connect to: {current.fetchHosts.includes('*') ? `any host${reachesTv(current) ? ', this TV included' : ''} (it needs the addresses you enter)` : current.fetchHosts.join(', ') || 'nothing'}. Signed by {current.publisher.slice(0, 16)}… Refreshes every {current.refreshMinutes} min while the TV is on.</p>
+      <p class="caption">Can connect to: {reachText(current)}. Signed by {current.publisher.slice(0, 16)}… Refreshes every {current.refreshMinutes} min while the TV is on.</p>
       {#if !current.builtIn}<button class="btn danger" onclick={() => command(current!, 'remove')}>Remove plugin</button>{/if}
     </section>
   {:else}

@@ -1,7 +1,8 @@
 //! The one way out of the sandbox: HTTP(S) to hosts the manifest declared. Bodies are capped,
 //! redirects are followed only to allowed hosts, and artwork downloads land in a cache directory.
 
-use crate::api::{base64_encode, HttpRequest, HttpResponse};
+use crate::api::{base64_encode, is_home_name, is_local_network, HttpRequest, HttpResponse};
+pub use crate::api::host_of;
 use crate::{PluginError, Result};
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
@@ -40,9 +41,9 @@ impl Fetcher {
     }
 
     /// A fetcher for a plugin: loopback, unspecified and this device's own addresses are refused
-    /// whatever name leads to them, except through a host in `local_hosts`.
-    pub fn guarded(local_hosts: Vec<String>) -> Fetcher {
-        Fetcher::with_resolver(GuardedResolver { inner: DefaultResolver::default(), local_hosts })
+    /// whatever name leads to them, and home-network addresses too, except as `reach` allows.
+    pub fn guarded(reach: Reach) -> Fetcher {
+        Fetcher::with_resolver(GuardedResolver { inner: DefaultResolver::default(), reach })
     }
 
     fn with_resolver(resolver: impl Resolver) -> Fetcher {
@@ -212,28 +213,48 @@ pub fn redact(url: &str) -> String {
     format!("{scheme}://{authority}{path}")
 }
 
-/// Refuses addresses that lead back into the device unless the plugin named that host itself.
+/// Where a plugin's fetches may lead besides the public internet.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Reach {
+    /// Names that may lead into this device itself: loopback names and literals the plugin lists.
+    pub this_device: Vec<String>,
+    /// Names that may lead into the home network: those the plugin names exactly or was given.
+    pub home: Vec<String>,
+    /// Whether any home-network literal or `.local` name may lead there as well.
+    pub any_home_name: bool,
+}
+
+/// Refuses addresses that lead back into the device, and into the home network for a name the
+/// plugin did not name or was not given, so a public name cannot be pointed at a router or a NAS.
 #[derive(Debug)]
 struct GuardedResolver {
     inner: DefaultResolver,
-    local_hosts: Vec<String>,
+    reach: Reach,
 }
 
 impl Resolver for GuardedResolver {
     fn resolve(&self, uri: &Uri, config: &Config, timeout: NextTimeout) -> std::result::Result<ResolvedSocketAddrs, ureq::Error> {
         let addrs = self.inner.resolve(uri, config, timeout)?;
         let host = uri.host().unwrap_or("").trim_start_matches('[').trim_end_matches(']').trim_end_matches('.').to_ascii_lowercase();
-        if self.local_hosts.contains(&host) {
+        if self.reach.this_device.contains(&host) {
             return Ok(addrs);
         }
+        let home = self.reach.home.contains(&host) || (self.reach.any_home_name && is_home_name(&host));
         let mut out = self.empty();
+        let mut kept_out_of_home = false;
         for addr in addrs.iter() {
-            if !is_own_address(addr.ip()) {
-                out.push(*addr);
+            if is_own_address(addr.ip()) {
+                continue;
             }
+            if !home && is_local_network(addr.ip()) {
+                kept_out_of_home = true;
+                continue;
+            }
+            out.push(*addr);
         }
         if out.is_empty() {
-            return Err(ureq::Error::Io(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{host} leads to this device itself"))));
+            let why = if kept_out_of_home { "leads into the home network, where the plugin may reach only the addresses it is given" } else { "leads to this device itself" };
+            return Err(ureq::Error::Io(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{host} {why}"))));
         }
         Ok(out)
     }
@@ -251,19 +272,6 @@ pub fn is_own_address(ip: IpAddr) -> bool {
     }
     // Binding succeeds only to an address the device itself holds.
     std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).is_ok()
-}
-
-pub fn host_of(url: &str) -> Option<String> {
-    let rest = url.split("://").nth(1)?;
-    let authority = rest.split(['/', '?', '#']).next()?;
-    let host = authority.rsplit('@').next()?;
-    // An IPv6 literal keeps its brackets' contents whole; anything else stops at the port.
-    let host = if let Some(inner) = host.strip_prefix('[') {
-        inner.split(']').next()?
-    } else {
-        host.split(':').next()?
-    };
-    if host.is_empty() { None } else { Some(host.to_ascii_lowercase()) }
 }
 
 /// Scheme, host and port, for telling whether a redirect leaves the origin.
@@ -409,15 +417,27 @@ mod tests {
     }
 
     #[test]
+    fn only_hosts_a_plugin_was_given_lead_into_the_home_network() {
+        let request = |url: &str| HttpRequest { timeout_ms: 300, ..HttpRequest::get(url.to_string()) };
+        let err = Fetcher::guarded(Reach::default()).fetch(&request("http://192.168.77.1:9/"), &|_| true).unwrap_err();
+        assert!(err.to_string().contains("home network"), "{err}");
+        // Named, or covered by the home network entry, the address is tried and simply does not answer.
+        for reach in [Reach { home: vec!["192.168.77.1".into()], ..Reach::default() }, Reach { any_home_name: true, ..Reach::default() }] {
+            let err = Fetcher::guarded(reach).fetch(&request("http://192.168.77.1:9/"), &|_| true).unwrap_err();
+            assert!(!err.to_string().contains("home network"), "{err}");
+        }
+    }
+
+    #[test]
     fn a_guarded_fetcher_will_not_reach_loopback_by_any_name() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let fetcher = Fetcher::guarded(Vec::new());
+        let fetcher = Fetcher::guarded(Reach::default());
         for url in [format!("http://127.0.0.1:{port}/"), format!("http://2130706433:{port}/"), format!("http://localhost:{port}/"), format!("http://[::ffff:127.0.0.1]:{port}/")] {
             let err = fetcher.fetch(&HttpRequest::get(url.clone()), &|_| true).unwrap_err();
             assert!(err.to_string().contains("this device"), "{url}: {err}");
         }
-        let named = Fetcher::guarded(vec!["127.0.0.1".into()]);
+        let named = Fetcher::guarded(Reach { this_device: vec!["127.0.0.1".into()], ..Reach::default() });
         std::thread::spawn(move || {
             if let Ok((mut s, _)) = listener.accept() {
                 let mut buf = [0u8; 1024];

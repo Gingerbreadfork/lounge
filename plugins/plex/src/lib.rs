@@ -17,7 +17,7 @@ impl sdk::Plugin for Plex {
             description: "On Deck and recently added from your Plex Media Server.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
-            fetch_hosts: vec!["*".into()],
+            fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
             rows: vec![RowSpec { id: "recent".into(), title: "Recently added on Plex".into(), style: RowStyle::Poster }],
             settings: vec![

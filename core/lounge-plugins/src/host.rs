@@ -586,7 +586,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
             };
             let response: Outcome<HttpResponse> = if let Err(e) = budget {
                 Outcome::Err(e)
-            } else if !caller.data().manifest.allows_host(&host) {
+            } else if !caller.data().manifest.allows_host_with(&host, &|key| caller.data().services.setting(&caller.data().plugin, key)) {
                 Outcome::Err(format!("host {host} is not in this plugin's allow list"))
             } else {
                 match caller.data().services.fetch(&caller.data().plugin, &request) {

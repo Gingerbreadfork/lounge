@@ -17,7 +17,8 @@ impl sdk::Plugin for HdHomeRun {
             description: "Over-the-air channels and a guide from an HDHomeRun tuner on your network.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
-            fetch_hosts: vec!["*".into()],
+            // Tuners are found by discovery, so any on the home network may be reached.
+            fetch_hosts: vec!["$device".into(), "local-network".into(), "*".into()],
             refresh_minutes: 60,
             rows: vec![],
             settings: vec![

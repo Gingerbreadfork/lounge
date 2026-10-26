@@ -16,7 +16,7 @@ impl sdk::Plugin for Channels {
             description: "Live channels, the guide and your recordings from a Channels DVR server.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
-            fetch_hosts: vec!["*".into()],
+            fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
             rows: vec![RowSpec { id: "recordings".into(), title: "Recordings".into(), style: RowStyle::Landscape }],
             settings: vec![

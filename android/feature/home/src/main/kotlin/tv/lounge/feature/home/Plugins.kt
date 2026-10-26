@@ -160,14 +160,30 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             SheetRow(icon = LoungeIcons.Trash, title = "Remove", accent = colors.ember, onClick = { core.removePlugin(p.id); onRemoved() })
         }
     }
-    val thisTv = p.fetchHosts.any { it == "localhost" || it == "127.0.0.1" || it == "::1" }
     SheetFootnote(
-        "Can connect to: " + when {
-            p.fetchHosts.any { it == "*" } -> "any host${if (thisTv) ", this TV included" else ""} (it needs the addresses you enter)"
-            else -> p.fetchHosts.joinToString(", ").ifEmpty { "nothing" }
-        },
+        "Can connect to: ${reachText(p)}.",
         "Signed by ${p.publisher.take(16)}… Refreshes every ${p.refreshMinutes} min while the TV is on.",
     )
+}
+
+/** Where a plugin may connect, in words; a host it names is shown as it is. */
+private fun reachText(p: PluginInfo): String {
+    val parts = LinkedHashSet<String>()
+    for (h in p.fetchHosts) {
+        parts += when {
+            h.startsWith("$") -> p.settings.firstOrNull { it.key == h.drop(1) }?.let { "what you enter in ${it.label}" } ?: continue
+            h == "*" -> "any public site"
+            h == "local-network" -> "devices on your home network"
+            h == "localhost" || h == "127.0.0.1" || h == "::1" -> "this TV"
+            else -> h
+        }
+    }
+    val list = parts.toList()
+    return when (list.size) {
+        0 -> "nothing"
+        1 -> list[0]
+        else -> list.dropLast(1).joinToString(", ") + " and " + list.last()
+    }
 }
 
 @Composable

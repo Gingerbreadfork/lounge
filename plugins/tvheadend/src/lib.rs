@@ -22,7 +22,7 @@ impl sdk::Plugin for Tvheadend {
             description: "Live channels, the guide and your recordings from a Tvheadend server.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg, Kind::Search],
-            fetch_hosts: vec!["*".into()],
+            fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
             rows: vec![RowSpec { id: "recordings".into(), title: "Recordings".into(), style: RowStyle::Landscape }],
             settings: vec![

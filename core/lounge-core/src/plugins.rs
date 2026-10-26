@@ -6,7 +6,7 @@ use crate::{now_ms, screensavers, worker, Inner, PluginInfo, PluginSettingInfo};
 use lounge_plugin_api::{valid_plugin_id, Action, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
 use lounge_plugins::host::{Host, Limits, LoadedPlugin, Services};
-use lounge_plugins::http::Fetcher;
+use lounge_plugins::http::{Fetcher, Reach};
 use lounge_store::PluginRow;
 use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -68,32 +68,37 @@ pub(crate) struct SearchGroup {
     pub items: Vec<ReadyItem>,
 }
 
-/// A plugin's fetcher and the local hosts it was built for.
-type Guarded = (Vec<String>, Arc<Fetcher>);
+/// A plugin's fetcher and where it was built to reach.
+type Guarded = (Reach, Arc<Fetcher>);
 
-/// One guarded fetcher per plugin, rebuilt when the hosts it names change.
+/// One guarded fetcher per plugin, rebuilt when where it may reach changes.
 #[derive(Default)]
 pub(crate) struct Fetchers {
     map: Mutex<HashMap<String, Guarded>>,
 }
 
 impl Fetchers {
-    fn for_plugin(&self, id: &str, manifest: &Manifest) -> Arc<Fetcher> {
-        let local = local_hosts(manifest);
+    fn for_plugin(&self, id: &str, manifest: &Manifest, setting: &dyn Fn(&str) -> Option<String>) -> Arc<Fetcher> {
+        let reach = reach(manifest, setting);
         let mut map = self.map.lock();
-        if let Some((hosts, f)) = map.get(id)
-            && *hosts == local
+        if let Some((built_for, f)) = map.get(id)
+            && *built_for == reach
         {
             return Arc::clone(f);
         }
-        let f = Arc::new(Fetcher::guarded(local.clone()));
-        map.insert(id.to_string(), (local, Arc::clone(&f)));
+        let f = Arc::new(Fetcher::guarded(reach.clone()));
+        map.insert(id.to_string(), (reach, Arc::clone(&f)));
         f
     }
 
     fn forget(&self, id: &str) {
         self.map.lock().remove(id);
     }
+}
+
+/// Where a plugin's fetches may lead besides the public internet, with its settings filled in.
+fn reach(manifest: &Manifest, setting: &dyn Fn(&str) -> Option<String>) -> Reach {
+    Reach { this_device: local_hosts(manifest), home: manifest.home_hosts(setting), any_home_name: manifest.reaches_local_network() }
 }
 
 /// Hosts that may lead back into the TV: only loopback names and address literals the plugin
@@ -119,6 +124,7 @@ pub(crate) struct PluginManager {
     refresh_tx: crossbeam_channel::Sender<PluginJob>,
     calls_tx: crossbeam_channel::Sender<PluginJob>,
     fetchers: Arc<Fetchers>,
+    services: Arc<CoreServices>,
     /// The newest search; older ones still queued answer with nothing.
     pub search_generation: AtomicU64,
 }
@@ -168,16 +174,18 @@ impl Services for CoreServices {
             .and_then(|w| w.upgrade())
             .and_then(|inner| inner.state.lock().plugins.iter().find(|p| p.id == plugin).map(|p| p.manifest.clone()))
             .ok_or_else(|| "plugin is not installed".to_string())?;
-        let fetcher = self.fetchers.for_plugin(plugin, &manifest);
-        fetcher.fetch(request, &|host| host_permitted(&manifest, host)).map_err(|e| e.to_string())
+        let setting = |key: &str| self.setting(plugin, key);
+        let fetcher = self.fetchers.for_plugin(plugin, &manifest, &setting);
+        fetcher.fetch(request, &|host| host_permitted(&manifest, host, &setting)).map_err(|e| e.to_string())
     }
 }
 
-/// The manifest's allow list, applied to every hop by name. The fetcher then checks the address
-/// each name resolves to, so loopback and the TV's own addresses stay out of reach whatever the
-/// name; this check keeps the obvious spellings from even being tried.
-pub(crate) fn host_permitted(manifest: &Manifest, host: &str) -> bool {
-    if !manifest.allows_host(host) {
+/// The manifest's allow list, with the plugin's settings for its `$key` entries, applied to every
+/// hop by name. The fetcher then checks the address each name resolves to, so loopback, the TV's
+/// own addresses and the home network stay out of reach whatever the name; this check keeps the
+/// obvious spellings from even being tried.
+pub(crate) fn host_permitted(manifest: &Manifest, host: &str, setting: &dyn Fn(&str) -> Option<String>) -> bool {
+    if !manifest.allows_host_with(host, setting) {
         return false;
     }
     let h = host.to_ascii_lowercase();
@@ -226,6 +234,7 @@ impl PluginManager {
             refresh_tx,
             calls_tx,
             fetchers,
+            services: Arc::clone(&services),
             search_generation: AtomicU64::new(0),
         });
         (manager, refresh_rx, calls_rx, services)
@@ -333,14 +342,22 @@ impl PluginManager {
             items.truncate(MAX_ITEMS);
         }
         let dir = self.plugin_art_dir(&entry.id).ok_or_else(|| format!("invalid plugin id {:?}", entry.id))?;
-        let fetcher = self.fetchers.for_plugin(&entry.id, &entry.manifest);
+        let settings = self.settings_of(&entry.id);
+        let setting = |key: &str| settings.get(key).cloned();
+        let fetcher = self.fetchers.for_plugin(&entry.id, &entry.manifest, &setting);
+        let permitted = |host: &str| host_permitted(&entry.manifest, host, &setting);
         let budget = ArtBudget { downloads: ART_DOWNLOADS, bytes: ART_BYTES, deadline: Instant::now() + ART_TIME };
-        let (ready, skipped) = with_artwork(&fetcher, &entry.manifest, &dir, items, &budget);
+        let (ready, skipped) = with_artwork(&fetcher, &permitted, &dir, items, &budget);
         if skipped > 0 {
             notes.push(format!("{skipped} pictures were not downloaded this time; they come with later refreshes"));
         }
         prune_art_dir(&dir, &ready);
         Ok((ready, notes))
+    }
+
+    /// A plugin's settings as they are now, for what its allow list's `$key` entries stand for.
+    fn settings_of(&self, id: &str) -> HashMap<String, String> {
+        self.services.with_store(|s| s.plugin_settings(id).unwrap_or_default()).unwrap_or_default().into_iter().collect()
     }
 
     fn resolve(&self, entry: &PluginEntry, action: &str) -> Result<Action, String> {
@@ -374,7 +391,10 @@ impl PluginManager {
                             return None;
                         }
                         let dir = self.plugin_art_dir(&entry.id)?;
-                        let fetcher = self.fetchers.for_plugin(&entry.id, &entry.manifest);
+                        let settings = self.settings_of(&entry.id);
+                        let setting = |key: &str| settings.get(key).cloned();
+                        let fetcher = self.fetchers.for_plugin(&entry.id, &entry.manifest, &setting);
+                        let permitted = |host: &str| host_permitted(&entry.manifest, host, &setting);
                         // One picture per result: the poster or the thumbnail, whichever it has.
                         for it in items.iter_mut() {
                             if it.poster.is_some() {
@@ -383,7 +403,7 @@ impl PluginManager {
                             it.logo = None;
                         }
                         let budget = ArtBudget { downloads: SEARCH_LIMIT as usize, bytes: 24 * 1024 * 1024, deadline };
-                        let (ready, _) = with_artwork(&fetcher, &entry.manifest, &dir, items, &budget);
+                        let (ready, _) = with_artwork(&fetcher, &permitted, &dir, items, &budget);
                         Some(SearchGroup { plugin: entry.id.clone(), plugin_name: entry.manifest.name.clone(), items: ready })
                     })
                 })
@@ -423,14 +443,13 @@ struct ArtBudget {
 /// Download the pictures `items` name, each URL once, earliest items first, within `budget`.
 /// Pictures already cached cost nothing; the rest are what the budget limits. Returns the items
 /// with local paths and how many pictures the budget left out.
-fn with_artwork(fetcher: &Fetcher, manifest: &Manifest, dir: &Path, items: Vec<ApiItem>, budget: &ArtBudget) -> (Vec<ReadyItem>, usize) {
+fn with_artwork(fetcher: &Fetcher, permitted: &(dyn Fn(&str) -> bool + Sync), dir: &Path, items: Vec<ApiItem>, budget: &ArtBudget) -> (Vec<ReadyItem>, usize) {
     let mut urls: Vec<String> = Vec::new();
     let mut seen = HashSet::new();
     let mut wallpapers = HashSet::new();
     for it in &items {
         for u in [&it.poster, &it.thumbnail, &it.logo].into_iter().flatten() {
-            let permitted = lounge_plugins::http::host_of(u).is_some_and(|h| host_permitted(manifest, &h));
-            if !permitted {
+            if !lounge_plugins::http::host_of(u).is_some_and(|h| permitted(&h)) {
                 continue;
             }
             if seen.insert(u.clone()) {
@@ -469,7 +488,7 @@ fn with_artwork(fetcher: &Fetcher, manifest: &Manifest, dir: &Path, items: Vec<A
                 }
                 let timeout = budget.deadline - now;
                 let max = if wallpapers.contains(u) { MAX_WALLPAPER_BYTES } else { MAX_ARTWORK_BYTES };
-                if let Ok(d) = fetcher.download(u, dir, max, timeout, &|h| host_permitted(manifest, h)) {
+                if let Ok(d) = fetcher.download(u, dir, max, timeout, &|h| permitted(h)) {
                     bytes.fetch_add(d.fetched, Ordering::Relaxed);
                     fetched.lock().push((u.clone(), d.path.to_string_lossy().into_owned()));
                 }
@@ -826,6 +845,16 @@ mod tests {
     }
 
     #[test]
+    fn the_server_a_plugin_is_given_may_be_on_the_home_network() {
+        let m = Manifest { fetch_hosts: vec!["$server".into(), "*".into(), "localhost".into()], ..Default::default() };
+        let r = reach(&m, &|k| (k == "server").then(|| "http://192.168.0.10:8096".to_string()));
+        assert_eq!(r.home, vec!["192.168.0.10", "localhost"]);
+        assert_eq!(r.this_device, vec!["localhost"]);
+        assert!(!r.any_home_name);
+        assert!(host_permitted(&m, "192.168.0.10", &|k| (k == "server").then(|| "http://192.168.0.10:8096".to_string())));
+    }
+
+    #[test]
     fn clipping_respects_characters() {
         assert_eq!(clip_bytes("héllo", 2), "h");
         assert_eq!(clip_bytes("héllo", 3), "hé");
@@ -861,11 +890,11 @@ mod tests {
             }
         });
         let manifest = Manifest { fetch_hosts: vec!["127.0.0.1".into()], ..Default::default() };
-        let fetcher = Fetcher::guarded(local_hosts(&manifest));
+        let fetcher = Fetcher::guarded(reach(&manifest, &|_| None));
         let dir = tempfile::tempdir().unwrap();
         let item = |id: &str, kind: ApiItemKind| ApiItem { id: id.into(), title: id.into(), kind, thumbnail: Some(format!("http://127.0.0.1:{port}/{id}.jpg")), ..Default::default() };
         let budget = ArtBudget { downloads: 10, bytes: 64 * 1024 * 1024, deadline: Instant::now() + Duration::from_secs(20) };
-        let (ready, _) = with_artwork(&fetcher, &manifest, dir.path(), vec![item("painting", ApiItemKind::Wallpaper), item("tile", ApiItemKind::Program)], &budget);
+        let (ready, _) = with_artwork(&fetcher, &|h| host_permitted(&manifest, h, &|_| None), dir.path(), vec![item("painting", ApiItemKind::Wallpaper), item("tile", ApiItemKind::Program)], &budget);
         assert!(ready[0].thumbnail.is_some(), "the wallpaper's picture is kept");
         assert!(ready[1].thumbnail.is_none(), "a tile's picture over 4 MB is not");
     }

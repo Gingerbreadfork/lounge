@@ -28,7 +28,7 @@ impl sdk::Plugin for Iptv {
             description: "Channels from an M3U playlist, with programme information from an XMLTV guide.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
-            fetch_hosts: vec!["*".into()],
+            fetch_hosts: vec!["$playlist_url".into(), "$epg_url".into(), "*".into()],
             refresh_minutes: 60,
             rows: Vec::new(),
             settings: vec![

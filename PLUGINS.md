@@ -161,7 +161,7 @@ already downloaded cost nothing. Downloads a refresh no longer names are deleted
   "description": "Channels from an M3U playlist, with programme information from an XMLTV guide.",
   "publisher_name": "Lounge",
   "kinds": ["content", "epg"],
-  "fetch_hosts": ["*"],
+  "fetch_hosts": ["$playlist_url", "*"],
   "refresh_minutes": 60,
   "rows": [{ "id": "recent", "title": "Recently added", "style": "poster" }],
   "settings": [
@@ -178,7 +178,7 @@ already downloaded cost nothing. Downloads a refresh no longer names are deleted
 | `name`, `description`, `publisher_name` | What the TV and the phone show. The description is one sentence. |
 | `version` | Shown to the user; updates may carry any version, the signature is what matters. |
 | `kinds` | What the plugin does: `content` (items and rows), `epg` (channels and schedule), `wallpaper`, `screensaver`, `search`. |
-| `fetch_hosts` | Hosts `fetch` may reach, including on redirects. `*` means any host and is shown to the user as such; a plugin that talks to a server the user names must declare it. The TV checks the address every name resolves to: loopback and the TV's own addresses are reachable only through an entry that is literally `localhost` or an IP address, never through `*` or any other name. |
+| `fetch_hosts` | Hosts `fetch` may reach, including on redirects, each shown to the user in words. A name or IP address is that host; `*.example.com` is its subdomains; `*` is any host on the public internet. `$key` is whatever host the user enters in the setting `key`, which is how a plugin reaches a server they name, at home or not. `local-network` is any home-network IP address or local name, for a plugin that finds devices itself, such as a tuner; a local name is one label, or one under `.local`, `.lan`, `.home.arpa` or `.internal`. The TV checks the address every name resolves to. The home network is reachable only through `$key`, `local-network`, or an entry that is itself an IP address or a local name, never through a wildcard or a public name. Loopback and the TV's own addresses are reachable only through an entry that is literally `localhost` or an IP address. |
 | `refresh_minutes` | How often `refresh` runs while the screen is on; at least 5, 0 means the host's default. |
 | `rows` | Rows of your own, in order. `style` is `landscape` (16:9 tiles), `poster` (portrait) or `compact`. Items name a row by its `id`. |
 | `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `url`, `password`, `number` or `toggle`. A `toggle` is stored as `true` or `false`. A `default` is what `setting` returns while nothing is set, and the TV and the phone show it in the field. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. |
@@ -433,7 +433,8 @@ one definition the host and the SDK share.
 ## Checklist before you share it
 
 - The `id` is yours and will never change.
-- `fetch_hosts` lists only what the plugin needs; `*` only when the user names the server.
+- `fetch_hosts` lists only what the plugin needs: `$key` for a server the user names, `*` only for
+  pictures and pages that may come from anywhere.
 - Passwords are `password` settings read through `secret`, never logged.
 - `lgp-tool run` shows the items you expect, with artwork URLs that resolve, and the log says
   what happened in a sentence a user could read on the TV.

@@ -23,7 +23,7 @@ impl sdk::Plugin for Kodi {
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg, Kind::Search],
             // Loopback is refused unless named, and Kodi often runs on the TV itself.
-            fetch_hosts: vec!["*".into(), "localhost".into(), "127.0.0.1".into()],
+            fetch_hosts: vec!["$server".into(), "localhost".into(), "127.0.0.1".into(), "*".into()],
             refresh_minutes: 10,
             rows: vec![
                 RowSpec { id: "upnext".into(), title: "Up next in Kodi".into(), style: RowStyle::Landscape },
