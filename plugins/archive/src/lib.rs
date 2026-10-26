@@ -72,7 +72,8 @@ impl sdk::Plugin for Archive {
     }
 
     fn search(query: &str, limit: u32) -> Result<Vec<Item>, String> {
-        let q = format!("title:({}) AND mediatype:movies", quote(query));
+        let Some(title) = title_query(query) else { return Ok(Vec::new()) };
+        let q = format!("{title} AND mediatype:movies");
         Ok(search(&q, limit.clamp(1, 40) as usize)?.iter().map(|d| item_for(d, None, 0)).collect())
     }
 
@@ -260,6 +261,21 @@ fn first_sentence(s: &str) -> String {
     s[..cut].trim().to_string()
 }
 
+/// A title search that finds titles while a word is still being typed: every word must appear,
+/// and the last may be the start of one. Lucene's syntax characters are dropped and words are
+/// lowercased, so a typed "and" or "or" stays a word.
+fn title_query(typed: &str) -> Option<String> {
+    let words: Vec<String> = typed
+        .split_whitespace()
+        .map(|w| w.chars().filter(|c| c.is_alphanumeric() || *c == '\'').collect::<String>().to_lowercase())
+        .filter(|w| !w.is_empty())
+        .collect();
+    let (last, rest) = words.split_last()?;
+    let mut terms = rest.to_vec();
+    terms.push(if last.chars().count() >= 3 { format!("{last}*") } else { last.clone() });
+    Some(format!("title:({})", terms.join(" AND ")))
+}
+
 fn quote(s: &str) -> String {
     let cleaned: String = s.chars().filter(|c| !matches!(c, '"' | '(' | ')' | ':' | '[' | ']')).collect();
     if cleaned.contains(' ') { format!("\"{}\"", cleaned.trim()) } else { cleaned }
@@ -354,6 +370,9 @@ mod tests {
         assert!(q.starts_with("collection:feature_films AND mediatype:movies AND NOT (subject:(sex OR "));
         assert!(q.ends_with(") AND avg_rating:[4 TO 5] AND num_reviews:[3 TO 100000]"));
         assert_eq!(quote("night of the living dead"), "\"night of the living dead\"");
+        assert_eq!(title_query("Night of the Liv").as_deref(), Some("title:(night AND of AND the AND liv*)"));
+        assert_eq!(title_query("Alien: (1979) OR x").as_deref(), Some("title:(alien AND 1979 AND or AND x)"));
+        assert_eq!(title_query(" ( ) "), None);
         assert_eq!(encode_query("a b:c"), "a+b%3Ac");
         assert_eq!(encode_path("his girl friday.mp4"), "his%20girl%20friday.mp4");
     }
