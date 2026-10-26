@@ -52,6 +52,8 @@ private const val FRAME_MS = 33L
 private const val WINDOW = 45
 private const val SETTLE_MS = 2_500L
 private const val SLOW_MS = 40f
+/** Frames this slow, three in a row, mean no step down will save the scene, so it ends at once. */
+private const val HOPELESS_MS = 500f
 private const val START_DIVISOR = 2
 private const val MAX_DIVISOR = 3
 private const val RENDERER = 3
@@ -257,6 +259,7 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
             var windows = 0
             var pausedAt = 0L
             var reported = false
+            var hopeless = 0
             while (true) {
                 if (paused) {
                     if (pausedAt == 0L) pausedAt = System.nanoTime()
@@ -272,7 +275,14 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
                 val t0 = System.nanoTime()
                 draw((t0 - started) / 1_000_000_000f)
                 val took = (System.nanoTime() - t0) / 1_000_000f
-                if (System.currentTimeMillis() > settleUntil) frames[n++] = took
+                if (System.currentTimeMillis() > settleUntil) {
+                    frames[n++] = took
+                    hopeless = if (took > HOPELESS_MS) hopeless + 1 else 0
+                    if (hopeless >= 3) {
+                        giveUp("it is too heavy for this TV")
+                        return@launch
+                    }
+                }
                 if (n >= WINDOW) {
                     n = 0
                     windows++

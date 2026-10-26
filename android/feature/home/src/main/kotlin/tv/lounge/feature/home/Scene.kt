@@ -42,6 +42,8 @@ private const val WINDOW = 45
 private const val SLOW_MS = 45f
 private const val BACKED_UP_MS = 8f
 private const val SETTLE_NS = 2_500_000_000L
+/** Frames this slow, three in a row, mean no step down will save the scene, so it ends at once. */
+private const val HOPELESS_MS = 500f
 private const val RENDERER = 3
 
 /**
@@ -174,6 +176,7 @@ internal fun SceneSurface(
         var windows = 0
         var reportAt = 1
         var pausedAt = 0L
+        var hopeless = 0
         while (true) {
             if (paused()) {
                 if (pausedAt == 0L) pausedAt = System.nanoTime()
@@ -195,10 +198,15 @@ internal fun SceneSurface(
                     if (now > settle) {
                         lateness[n] = (System.nanoTime() - now) / 1_000_000f
                         gaps[n++] = (now - last) / 1_000_000f
+                        hopeless = if (gaps[n - 1] > HOPELESS_MS) hopeless + 1 else 0
                     }
                     last = now
                     time.floatValue = (now - started) / 1_000_000_000f * speed
                 }
+            }
+            if (hopeless >= 3) {
+                onUnusable("it is too heavy for this TV")
+                return@LaunchedEffect
             }
             if (n < WINDOW) continue
             n = 0
