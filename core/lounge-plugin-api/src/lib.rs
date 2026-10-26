@@ -133,6 +133,32 @@ pub struct Manifest {
     pub homepage: Option<String>,
 }
 
+/// What is wrong with an allow-list entry that is neither `*`, [LOCAL_NETWORK] nor `$key`: it
+/// must be a host name or an IP literal, with no scheme, port or path, and a wildcard must sit
+/// above at least two labels of a name, so `*.com` and `*.1` cannot stand in for `*`.
+fn fetch_host_problem(entry: &str) -> Option<&'static str> {
+    let (wild, name) = match entry.strip_prefix("*.") {
+        Some(rest) => (true, rest),
+        None => (false, entry),
+    };
+    let literal = name.trim_start_matches('[').trim_end_matches(']');
+    if !wild && literal.parse::<IpAddr>().is_ok() {
+        return None;
+    }
+    let labels: Vec<&str> = name.split('.').collect();
+    let label_ok = |l: &&str| !l.is_empty() && l.len() <= 63 && !l.starts_with('-') && !l.ends_with('-') && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
+    if name.len() > 253 || !labels.iter().all(label_ok) {
+        return Some("is not a host name or an IP address; leave out the scheme, port and path");
+    }
+    if labels.last().is_some_and(|l| l.bytes().all(|b| b.is_ascii_digit())) {
+        return Some("is not a host name or an IP address");
+    }
+    if wild && labels.len() < 2 {
+        return Some("is too wide; a wildcard needs a name of two labels or more under it, such as *.example.com");
+    }
+    None
+}
+
 /// A plugin id is a reverse-domain name: labels of `[a-z0-9]` joined by `.` or `-`, at least
 /// two of them, no label empty. It is also a directory name, so `.` and `..` can never pass.
 pub fn valid_plugin_id(id: &str) -> bool {
@@ -164,10 +190,15 @@ impl Manifest {
             }
         }
         for h in &self.fetch_hosts {
-            if let Some(key) = h.strip_prefix('$')
-                && !self.settings.iter().any(|s| s.key == key)
-            {
-                return Err(format!("fetch host {h:?} names no setting"));
+            match h.strip_prefix('$') {
+                Some(key) if !self.settings.iter().any(|s| s.key == key) => return Err(format!("fetch host {h:?} names no setting")),
+                Some(_) => {}
+                None if h == "*" || h.eq_ignore_ascii_case(LOCAL_NETWORK) => {}
+                None => {
+                    if let Some(problem) = fetch_host_problem(h) {
+                        return Err(format!("fetch host {h:?} {problem}"));
+                    }
+                }
             }
         }
         Ok(())
@@ -569,6 +600,17 @@ pub fn base64_decode(s: &str) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn allow_list_entries_must_be_hosts() {
+        let check = |h: &str| Manifest { id: "tv.example.p".into(), name: "P".into(), version: "1".into(), fetch_hosts: vec![h.into()], ..Default::default() }.validate();
+        for good in ["*", "local-network", "localhost", "127.0.0.1", "[::1]", "api.example.com", "*.example.com", "*.ytimg.com"] {
+            assert!(check(good).is_ok(), "{good}");
+        }
+        for bad in ["*.", "*.com", "*.1", "*.0.1", "http://a.example", "a.example:8080", "a.example/path", "a..example", "example.", "-a.example", "10.0.0"] {
+            assert!(check(bad).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn a_secret_url_is_kept_like_a_password() {
