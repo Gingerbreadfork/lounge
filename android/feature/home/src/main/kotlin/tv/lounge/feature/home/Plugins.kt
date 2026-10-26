@@ -53,7 +53,7 @@ import tv.lounge.design.lightGlow
 
 /** Installed plugins: one row each with its state. Selecting one opens its detail sheet. */
 @Composable
-fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRequester) {
+fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRequester, cameFrom: Overlay? = null) {
     val colors = LoungeTheme.colors
     var plugins by remember { mutableStateOf(core.plugins()) }
     // Each read waits on the core's lock, which a big refresh can hold, so the polls run off the main thread.
@@ -63,6 +63,8 @@ fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRe
             plugins = withContext(Dispatchers.IO) { core.plugins() }
         }
     }
+    // Back from a plugin's page puts focus on that plugin, if it is still there.
+    val returnTo = (cameFrom as? Overlay.PluginDetail)?.id?.takeIf { id -> plugins.any { it.id == id } }
     SheetHeading("Plugins", "Sources that add rows, channels and guide data. Each runs in its own sandbox.")
     if (plugins.isEmpty()) {
         Text("No plugins installed.", style = LoungeTheme.typography.meta, color = colors.dust)
@@ -75,7 +77,7 @@ fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRe
                     value = statusWord(p),
                     accent = if (p.enabled && p.lastError == null) colors.signal else if (p.lastError != null) colors.ember else colors.dust,
                     onClick = { onOpen(p.id) },
-                    focusRequester = if (i == 0) firstFocus else null,
+                    focusRequester = if (p.id == returnTo || (returnTo == null && i == 0)) firstFocus else null,
                 )
             }
         }

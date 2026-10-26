@@ -848,7 +848,7 @@ private fun SheetContent(
                 firstFocus = first,
             )
         }
-        Overlay.Plugins -> PluginsSheet(core = core, onOpen = { id -> open(Overlay.PluginDetail(id)) }, firstFocus = first)
+        Overlay.Plugins -> PluginsSheet(core = core, onOpen = { id -> open(Overlay.PluginDetail(id)) }, firstFocus = first, cameFrom = cameFrom)
         is Overlay.PluginDetail -> PluginDetailSheet(
             core = core,
             pluginId = overlay.id,
