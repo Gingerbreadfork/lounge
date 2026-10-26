@@ -69,7 +69,7 @@ impl sdk::Plugin for Tvheadend {
         let window_end = ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000;
         let mut schedule = sdk::ScheduleBudget::new(sdk::MAX_ITEMS - items.len());
         'pages: for page in 0..MAX_PAGES {
-            let grid: Grid<Event> = match s.get_json(&format!("/api/epg/events/grid?start={}&limit={PAGE}", page * PAGE)) {
+            let grid: Grid<Event> = match s.get_json(&format!("/api/epg/events/grid?start={}&limit={PAGE}&sort=start&dir=ASC", page * PAGE)) {
                 Ok(grid) => grid,
                 Err(e) => {
                     sdk::warn!("guide unavailable: {e}");
