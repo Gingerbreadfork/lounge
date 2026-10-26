@@ -102,7 +102,6 @@ fn module(manifest: &str, items: &str, found: &str) -> Vec<u8> {
 }
 
 fn bundle(dir: &std::path::Path) -> std::path::PathBuf {
-    use ed25519_dalek::{Signer, SigningKey};
     let manifest = format!(r#"{{"id":"{ID}","name":"Test DVR","version":"1","kinds":["epg","search"],"fetch_hosts":[]}}"#);
     let t = now();
     let items = format!(
@@ -116,11 +115,15 @@ fn bundle(dir: &std::path::Path) -> std::path::PathBuf {
         t + 9_000_000
     );
     let found = r#"[{"id":"s1","kind":"schedule","title":"News","channel_id":"1"},{"id":"m1","title":"A film","action":{"play":"http://dvr/m1"}}]"#;
-    let wasm = module(&manifest, &items, found);
+    signed(dir, &manifest, &module(&manifest, &items, found))
+}
+
+fn signed(dir: &std::path::Path, manifest: &str, wasm: &[u8]) -> std::path::PathBuf {
+    use ed25519_dalek::{Signer, SigningKey};
     let key = SigningKey::from_bytes(&[7u8; 32]);
-    let sig = key.sign(&lounge_plugins::bundle::Bundle::signed_bytes(manifest.as_bytes(), &wasm));
+    let sig = key.sign(&lounge_plugins::bundle::Bundle::signed_bytes(manifest.as_bytes(), wasm));
     let path = dir.join("testdvr.lgp");
-    lounge_plugins::bundle::Bundle::write(&path, manifest.as_bytes(), &wasm, &key.verifying_key().to_bytes(), &sig.to_bytes()).unwrap();
+    lounge_plugins::bundle::Bundle::write(&path, manifest.as_bytes(), wasm, &key.verifying_key().to_bytes(), &sig.to_bytes()).unwrap();
     path
 }
 
@@ -185,4 +188,35 @@ fn a_dvr_plugin_fills_the_guide_and_answers_search() {
     core.set_plugin_enabled(ID.into(), false);
     wait_for("the guide to empty", || core.guide(now() - 3_600_000, 6).channels.is_empty());
     assert!(core.search_plugins("news".into()).is_empty());
+}
+
+#[test]
+fn live_now_carries_a_row_of_tiles_and_the_guide_the_rest() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = CoreConfig {
+        data_dir: dir.path().join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::A,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    let core = Core::open(config, Arc::new(Recorder::default())).unwrap();
+    let snapshots = Arc::new(Snapshots(Mutex::new(None)));
+    core.add_listener(snapshots.clone());
+
+    let manifest = format!(r#"{{"id":"{ID}","name":"Test DVR","version":"1","kinds":["epg"],"fetch_hosts":[]}}"#);
+    let channels: Vec<String> = (1..=80)
+        .map(|n| format!(r#"{{"id":"ch{n}","kind":"channel","title":"Channel {n}","channel_id":"{n}","channel_number":"{n}","action":{{"play":"http://tuner/{n}"}}}}"#))
+        .collect();
+    let wasm = module(&manifest, &format!("[{}]", channels.join(",")), "[]");
+    core.install_plugin(signed(dir.path(), &manifest, &wasm).to_string_lossy().into_owned(), false).unwrap();
+    core.set_plugin_enabled(ID.into(), true);
+
+    wait_for("the guide", || core.guide(now(), 6).channels.len() == 80);
+    wait_for("Live now", || snapshots.0.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "live")));
+    let live = snapshots.0.lock().as_ref().unwrap().rows.iter().find(|r| r.id == "live").unwrap().tiles.len();
+    assert_eq!(live, 60);
 }

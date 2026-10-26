@@ -428,9 +428,9 @@ impl Graph {
         v
     }
 
-    /// Channels with something airing now (or with no schedule at all), most recently watched first.
-    pub fn live_now(&self, now_ms: i64) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self.channels().into_iter().filter(|it| it.airing_start_ms.is_none() || airing_at(it, now_ms)).collect();
+    /// Tuner channels, most recently watched first; what each is airing comes from the airing index.
+    pub fn live_now(&self) -> Vec<&Item> {
+        let mut v = self.channels();
         v.sort_by(|a, b| b.last_used_ms.cmp(&a.last_used_ms));
         v
     }
@@ -750,7 +750,7 @@ mod tests {
         g.replace_source("plugin:tw", vec![ch, live]);
         assert!(g.airing_now(7, 50).is_none());
         assert_eq!(g.airing_now(7, 5_000_000).map(|i| i.title.as_str()), Some("Speedruns"));
-        assert_eq!(g.live_now(5_000_000).len(), 1);
+        assert_eq!(g.live_now().len(), 1);
         assert_eq!(g.schedule_index(1_000, 2_000).get(&7).map(Vec::len), Some(1));
         assert_eq!(g.next_airing_change(50), Some(100));
         assert_eq!(g.next_airing_change(200), None);

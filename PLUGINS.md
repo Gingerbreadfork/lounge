@@ -229,7 +229,8 @@ voice (commas between facts, never dots: "S2 E4, Netflix"). `season` and `episod
 as "S2 E4" when both are given. `duration_ms` with `position_ms`, or `progress` from 0 to 1,
 draws the progress bar and "19 minutes left". `last_used_ms` orders Continue watching, newest
 first; a resume item without one keeps the time Lounge first saw it. `added_ms` and `is_new` mark
-new arrivals. `weight` orders a row when recency does not.
+new arrivals. `weight` orders a row when recency does not. A row on the home shows its first 60
+items in that order; search and the guide still reach the rest.
 
 **Artwork.** `thumbnail` is 16:9 and feeds landscape tiles and the Stage's full-bleed picture.
 `poster` is portrait and feeds poster rows; on its own it is also cropped for landscape tiles and

@@ -72,6 +72,10 @@ pub(crate) fn effective_row_order(state: &State) -> Vec<String> {
     order
 }
 
+/// The most tiles a content row carries, so a big source cannot swell every rebuild. The guide
+/// and search reach the rest.
+const ROW_TILES: usize = 60;
+
 pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32) -> HomeSnapshot {
     let graph = &state.graph;
     let now = now_ms();
@@ -135,12 +139,12 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
                     None
                 };
             }
-            ("Continue watching", TileKind::Landscape, RowSize::M, None, items)
+            ("Continue watching", TileKind::Landscape, RowSize::M, None, items.into_iter().take(ROW_TILES).collect())
         }
         "apps" => ("Your apps", TileKind::AppBanner, RowSize::M, None, graph.your_apps()),
         "games" => ("Games", TileKind::Landscape, RowSize::M, Some(Badge::Controller), graph.games()),
         "live" => {
-            let channels = graph.live_now(now);
+            let channels = graph.live_now();
             if channels.is_empty() {
                 return None;
             }
@@ -150,7 +154,7 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
                 kind: TileKind::Landscape,
                 size: RowSize::M,
                 badge: Some(Badge::Live),
-                tiles: channels.iter().map(|ch| live_tile(graph, index.airing(ch), ch, now)).collect(),
+                tiles: channels.iter().take(ROW_TILES).map(|ch| live_tile(graph, index.airing(ch), ch, now)).collect(),
             });
         }
         "tvcontrols" => {
@@ -211,7 +215,7 @@ fn plugin_row(state: &State, key: &str) -> Option<Row> {
         kind,
         size: RowSize::M,
         badge: None,
-        tiles: items.iter().map(|it| tile_for(graph, it, kind)).collect(),
+        tiles: items.iter().take(ROW_TILES).map(|it| tile_for(graph, it, kind)).collect(),
     })
 }
 
@@ -233,7 +237,7 @@ fn channel_row(graph: &Graph, index: &BuildIndex, channel_id: i64) -> Option<Row
         kind,
         size: RowSize::M,
         badge: None,
-        tiles: items.iter().map(|it| tile_for(graph, it, kind)).collect(),
+        tiles: items.iter().take(ROW_TILES).map(|it| tile_for(graph, it, kind)).collect(),
     })
 }
 
