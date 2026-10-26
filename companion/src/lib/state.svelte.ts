@@ -88,9 +88,6 @@ export function start() {
     return;
   }
   connect();
-  let pending: string | null = null;
-  try { pending = sessionStorage.getItem('lounge.pendingShare'); sessionStorage.removeItem('lounge.pendingShare'); } catch { /* ignore */ }
-  if (pending) app.share = pending;
 }
 
 export async function connect() {
@@ -102,6 +99,10 @@ export async function connect() {
   } catch (e: any) {
     if (e?.status === 401) { unpair(); return; }
   }
+  // A link shared before the phone was paired waits here until it is, by link or by code.
+  let pending: string | null = null;
+  try { pending = sessionStorage.getItem('lounge.pendingShare'); sessionStorage.removeItem('lounge.pendingShare'); } catch { /* ignore */ }
+  if (pending) app.share = pending;
   stopLive = liveState(
     (s) => { app.state = s; app.error = null; },
     (c) => { app.connected = c; if (c) app.everConnected = true; },
