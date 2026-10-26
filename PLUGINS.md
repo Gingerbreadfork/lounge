@@ -364,7 +364,9 @@ that takes a refresh or two can be walked through. `--search` runs `search`
 instead of `refresh`, and `--resolve action` runs `resolve` for one action and prints what came
 back. Each run keeps what the TV would keep, the first item with each id and at most 2000 of
 them, or 12 search results, and prints the TV's notes about the rest. It prints the fuel it
-used; `--json` prints the items as JSON. `--fixtures dir` answers every `fetch` from a file
+used; `--json` prints the items as JSON. After the items come any pictures the TV would not show:
+one from a host outside `fetch_hosts`, or a tile's picture over 4 MB among the fixtures.
+`--artwork` downloads every picture the way the TV does to find the rest. `--fixtures dir` answers every `fetch` from a file
 named `<sha256 of the URL>.body` in that directory. A request that is not a GET, or has a body,
 first looks for `<sha256 of "METHOD url\nbody">.body`, so each step of a sign-in or each
 JSON-RPC call can have its own answer; when a fixture is missing, the error names both files.
@@ -445,8 +447,8 @@ one definition the host and the SDK share.
 - `fetch_hosts` lists only what the plugin needs: `$key` for a server the user names, `*` only for
   pictures and pages that may come from anywhere.
 - Passwords are `password` settings read through `secret`, never logged.
-- `lgp-tool run` shows the items you expect, with artwork URLs that resolve, and the log says
-  what happened in a sentence a user could read on the TV.
+- `lgp-tool run --artwork` shows the items you expect and no pictures the TV would not show,
+  and the log says what happened in a sentence a user could read on the TV.
 - A refresh that fails returns an error naming the cause and the fix ("Jellyfin didn't answer
   at 192.168.0.20. Check the server, then try again."), not a stack trace.
 - Items keep stable `id`s between refreshes, so pins and hidden tiles survive.

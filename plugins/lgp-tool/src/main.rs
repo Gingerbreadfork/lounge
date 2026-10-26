@@ -4,19 +4,20 @@
 //! lgp-tool keygen <key-file>                       write a new Ed25519 signing key (hex seed, mode 0600, never over a file)
 //! lgp-tool bundle <plugin.wasm> <key-file> <out.lgp> [--manifest manifest.json]
 //! lgp-tool inspect <bundle.lgp>                    print the manifest and verify the signature
-//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--now ms] [--state file] [--search query] [--resolve action] [--json]
+//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--now ms] [--artwork] [--state file] [--search query] [--resolve action] [--json]
 //! ```
 //! `run` executes `refresh` (or `search`) with a host that keeps key-values in memory, or in
 //! the `--state` file between runs as the TV keeps them between refreshes, reads settings from
 //! the flags, and fetches live unless `--fixtures` points at a directory of fixtures; [`FIXTURES`]
 //! describes them. `--now` fixes the clock a refresh is given. It prints the log, the fuel used
-//! and the items, or with `--json` every item as JSON and the log on stderr.
+//! and the items, or with `--json` every item as JSON and the log on stderr, then any pictures
+//! the TV would not show; `--artwork` downloads each one as the TV would to find out.
 
 use ed25519_dalek::{Signer, SigningKey};
-use lounge_plugin_api::{HttpRequest, HttpResponse, Manifest, RefreshContext};
+use lounge_plugin_api::{HttpRequest, HttpResponse, Item, ItemKind, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
-use lounge_plugins::host::{kept, kept_results, Host, Limits, Services, SEARCH_LIMIT, WINDOW_HOURS};
-use lounge_plugins::http::{host_permitted, reach, Fetcher};
+use lounge_plugins::host::{kept, kept_results, Host, Limits, Services, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
+use lounge_plugins::http::{host_of, host_permitted, reach, redact, Fetcher};
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -37,7 +38,7 @@ fn main() {
     }
 }
 
-const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--now ms] [--state file] [--search q] [--resolve action] [--json]";
+const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--now ms] [--artwork] [--state file] [--search q] [--resolve action] [--json]";
 
 const FIXTURES: &str = "fixtures: --fixtures dir answers each fetch from <sha256 of the url, hex>.body in dir.
 A request that is not a GET, or carries a body, first looks for <sha256 of \"METHOD url\\nbody\">.body, so
@@ -176,11 +177,16 @@ fn run(args: &[String]) -> Result<(), String> {
     }
     let items = items.map_err(|e| e.to_string())?;
     let elapsed = started.elapsed();
+    let manifest = services.manifest.get().cloned().unwrap_or_default();
+    let artwork = check_artwork(&items, &manifest, &services, args.iter().any(|a| a == "--artwork"));
     if args.iter().any(|a| a == "--json") {
         for line in services.logs.lock().iter() {
             eprintln!("log: {line}");
         }
         println!("{}", serde_json::to_string_pretty(&items).map_err(|e| e.to_string())?);
+        for line in &artwork {
+            eprintln!("{line}");
+        }
         return Ok(());
     }
     print_logs(&services);
@@ -203,7 +209,64 @@ fn run(args: &[String]) -> Result<(), String> {
     if items.len() > 40 {
         println!("  … and {} more", items.len() - 40);
     }
+    for line in &artwork {
+        println!("{line}");
+    }
     Ok(())
+}
+
+/// What the TV would make of the items' pictures: any from a host the plugin may not reach and,
+/// from fixtures or with `download`, any a tile could not show. Wallpapers are checked for their
+/// host only, since the TV takes larger pictures for them.
+fn check_artwork(items: &[Item], manifest: &Manifest, services: &RunServices, download: bool) -> Vec<String> {
+    let mut urls: Vec<(&str, bool)> = Vec::new();
+    for it in items {
+        for u in [&it.poster, &it.thumbnail, &it.logo].into_iter().flatten() {
+            if !urls.iter().any(|(seen, _)| seen == u) {
+                urls.push((u, it.kind == ItemKind::Wallpaper));
+            }
+        }
+    }
+    if urls.is_empty() {
+        return Vec::new();
+    }
+    let setting = |key: &str| services.settings.lock().get(key).cloned();
+    let permitted = |host: &str| host_permitted(manifest, host, &setting);
+    let fetcher = Fetcher::guarded(reach(manifest, &setting));
+    let dir = std::env::temp_dir().join(format!("lgp-tool-art-{}", std::process::id()));
+    let mut problems = Vec::new();
+    for (url, wallpaper) in &urls {
+        let Some(host) = host_of(url) else {
+            problems.push(format!("  {}: not an address the TV can fetch", redact(url)));
+            continue;
+        };
+        if !permitted(&host) {
+            problems.push(format!("  {}: {host} is not in fetch_hosts", redact(url)));
+            continue;
+        }
+        if *wallpaper {
+            continue;
+        }
+        if let Some(fixtures) = &services.fixtures {
+            let get = HttpRequest { method: "GET".into(), url: url.to_string(), headers: Default::default(), body: None, timeout_ms: 0 };
+            let size = fixture_names(&get).iter().find_map(|n| std::fs::metadata(fixtures.join(format!("{n}.body"))).ok()).map(|m| m.len() as usize);
+            if let Some(size) = size.filter(|&s| s > MAX_ARTWORK_BYTES) {
+                problems.push(format!("  {}: {:.1} MB, over the {} MB a tile's picture may be", redact(url), size as f64 / 1_048_576.0, MAX_ARTWORK_BYTES / 1_048_576));
+            }
+        } else if download && let Err(e) = fetcher.download(url, &dir, MAX_ARTWORK_BYTES, std::time::Duration::from_secs(20), &permitted) {
+            problems.push(format!("  {}: {e}", redact(url)));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut out = Vec::new();
+    if !problems.is_empty() {
+        out.push(format!("artwork: {} of {} pictures would not show on the TV:", problems.len(), urls.len()));
+        out.extend(problems);
+    }
+    if !download && services.fixtures.is_none() {
+        out.push(format!("artwork: {} pictures not downloaded; --artwork fetches them as the TV would", urls.len()));
+    }
+    out
 }
 
 fn amount(n: u64) -> String {
@@ -428,6 +491,24 @@ mod tests {
         let missing = fixture(&d, &elsewhere).map(|_| ()).unwrap_err();
         assert!(missing.contains("no fixture for post http://a/none") && missing.contains("or for any request to this URL"));
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn pictures_from_hosts_the_plugin_may_not_reach_are_reported() {
+        let manifest = Manifest { fetch_hosts: vec!["api.example.com".into()], ..Default::default() };
+        let item = |poster: &str, kind: ItemKind| Item { id: poster.into(), title: "T".into(), kind, poster: Some(poster.into()), ..Default::default() };
+        let items = vec![
+            item("https://api.example.com/p.jpg", ItemKind::Program),
+            item("https://cdn.other.com/p.jpg?token=secret", ItemKind::Program),
+            item("not a url", ItemKind::Program),
+            item("https://walls.other.com/w.jpg", ItemKind::Wallpaper),
+        ];
+        let lines = check_artwork(&items, &manifest, &RunServices::default(), false);
+        assert_eq!(lines[0], "artwork: 3 of 4 pictures would not show on the TV:");
+        assert!(lines.iter().any(|l| l.contains("cdn.other.com is not in fetch_hosts") && !l.contains("secret")));
+        assert!(lines.iter().any(|l| l.contains("walls.other.com is not in fetch_hosts")));
+        assert!(lines.iter().any(|l| l.contains("not an address the TV can fetch")));
+        assert!(lines.last().unwrap().contains("--artwork fetches them"));
     }
 
     #[test]
