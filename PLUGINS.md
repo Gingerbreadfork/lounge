@@ -228,7 +228,8 @@ left out. The first 2,000 items of a refresh are kept, so put what matters first
 voice (commas between facts, never dots: "S2 E4, Netflix"). `season` and `episode` are shown
 as "S2 E4" when both are given. `duration_ms` with `position_ms`, or `progress` from 0 to 1,
 draws the progress bar and "19 minutes left". `last_used_ms` orders Continue watching, newest
-first. `added_ms` and `is_new` mark new arrivals. `weight` orders a row when recency does not.
+first; a resume item without one keeps the time Lounge first saw it. `added_ms` and `is_new` mark
+new arrivals. `weight` orders a row when recency does not.
 
 **Artwork.** `thumbnail` is 16:9 and feeds landscape tiles and the Stage's full-bleed picture.
 `poster` is portrait and feeds poster rows; on its own it is also cropped for landscape tiles and

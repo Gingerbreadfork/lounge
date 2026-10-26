@@ -419,6 +419,10 @@ fn first_seen(state: &State, source: &str) -> HashMap<String, i64> {
     state.graph.items().filter(|it| it.source == source).filter_map(|it| Some((it.id.clone(), it.added_ms?))).collect()
 }
 
+fn last_used(state: &State, source: &str) -> HashMap<String, i64> {
+    state.graph.items().filter(|it| it.source == source).filter_map(|it| Some((it.id.clone(), it.last_used_ms?))).collect()
+}
+
 fn pick<'a>(results: &'a [Option<Prepared>], idx: Option<usize>) -> Option<&'a Prepared> {
     idx.and_then(|i| results[i].as_ref())
 }
@@ -656,12 +660,12 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
     let source = format!("plugin:{plugin}");
     let enabled = |state: &State| state.plugins.iter().any(|p| p.id == plugin && p.enabled);
     // A refresh that finishes after the plugin was turned off or removed is dropped.
-    let seen = {
+    let (seen, used) = {
         let state = inner.state.lock();
         if !enabled(&state) {
             return Ok(());
         }
-        first_seen(&state, &source)
+        (first_seen(&state, &source), last_used(&state, &source))
     };
     let mut ids = HashSet::new();
     let ready: Vec<ReadyItem> = ready.into_iter().filter(|r| ids.insert(r.item.id.clone())).collect();
@@ -743,8 +747,10 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         match p.kind {
             PluginItemKind::Resume => {
                 it.flags.watch_next = true;
+                // Without a time from the plugin, the time it was first seen stands, so it does not
+                // jump to the front of Continue watching with every refresh.
                 if it.last_used_ms.is_none() {
-                    it.last_used_ms = Some(now);
+                    it.last_used_ms = Some(used.get(&id).copied().unwrap_or(now));
                 }
             }
             PluginItemKind::Channel => {
