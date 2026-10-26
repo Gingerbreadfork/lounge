@@ -69,26 +69,35 @@ impl Fetcher {
             if !allowed(&host) {
                 return Err(PluginError::Denied(format!("host {host} is not in the plugin's allow list")));
             }
+            let (address, basic) = credentials_of(&url);
+            // A header the plugin set itself wins over a name and password in the URL.
+            let basic = basic.filter(|_| !headers.keys().any(|k| k.eq_ignore_ascii_case("authorization")));
             let mut response = match method.as_str() {
                 "POST" | "PUT" | "PATCH" => {
                     let mut b = match method.as_str() {
-                        "POST" => self.agent.post(&url),
-                        "PUT" => self.agent.put(&url),
-                        _ => self.agent.patch(&url),
+                        "POST" => self.agent.post(&address),
+                        "PUT" => self.agent.put(&address),
+                        _ => self.agent.patch(&address),
                     };
                     for (k, v) in &headers {
                         b = b.header(k, v);
+                    }
+                    if let Some(basic) = &basic {
+                        b = b.header("Authorization", basic);
                     }
                     b.config().timeout_global(Some(timeout)).build().send(body.as_deref().unwrap_or("")).map_err(|e| fetch_error(e, &url))?
                 }
                 _ => {
                     let mut b = match method.as_str() {
-                        "DELETE" => self.agent.delete(&url),
-                        "HEAD" => self.agent.head(&url),
-                        _ => self.agent.get(&url),
+                        "DELETE" => self.agent.delete(&address),
+                        "HEAD" => self.agent.head(&address),
+                        _ => self.agent.get(&address),
                     };
                     for (k, v) in &headers {
                         b = b.header(k, v);
+                    }
+                    if let Some(basic) = &basic {
+                        b = b.header("Authorization", basic);
                     }
                     b.config().timeout_global(Some(timeout)).build().call().map_err(|e| fetch_error(e, &url))?
                 }
@@ -149,7 +158,12 @@ impl Fetcher {
             if !allowed(&host) {
                 return Err(PluginError::Denied(format!("host {host} is not in the plugin's allow list")));
             }
-            let mut response = self.agent.get(&url).config().timeout_global(Some(timeout)).build().call().map_err(|e| fetch_error(e, &url))?;
+            let (address, basic) = credentials_of(&url);
+            let mut request = self.agent.get(&address);
+            if let Some(basic) = &basic {
+                request = request.header("Authorization", basic);
+            }
+            let mut response = request.config().timeout_global(Some(timeout)).build().call().map_err(|e| fetch_error(e, &url))?;
             let status = response.status().as_u16();
             if matches!(status, 301 | 302 | 303 | 307 | 308)
                 && let Some(loc) = response.headers().get("location").and_then(|v| v.to_str().ok())
@@ -272,6 +286,40 @@ pub fn is_own_address(ip: IpAddr) -> bool {
     }
     // Binding succeeds only to an address the device itself holds.
     std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).is_ok()
+}
+
+/// `url` without a user name and password, and those as an `Authorization: Basic` value. ureq
+/// would send them still percent-encoded, and a password with a symbol in it would never match.
+fn credentials_of(url: &str) -> (String, Option<String>) {
+    let Some((scheme, rest)) = url.split_once("://") else { return (url.to_string(), None) };
+    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let Some((userinfo, hostport)) = rest[..authority_end].rsplit_once('@') else { return (url.to_string(), None) };
+    let (user, password) = userinfo.split_once(':').unwrap_or((userinfo, ""));
+    let pair = format!("{}:{}", percent_decode(user), percent_decode(password));
+    (format!("{scheme}://{hostport}{}", &rest[authority_end..]), Some(format!("Basic {}", base64_encode(pair.as_bytes()))))
+}
+
+/// `%XX` escapes turned back into the bytes they stand for; anything else is left as it is.
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let escaped = (bytes[i] == b'%' && i + 3 <= bytes.len())
+            .then(|| std::str::from_utf8(&bytes[i + 1..i + 3]).ok().and_then(|hex| u8::from_str_radix(hex, 16).ok()))
+            .flatten();
+        match escaped {
+            Some(b) => {
+                out.push(b);
+                i += 3;
+            }
+            None => {
+                out.push(bytes[i]);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// Scheme, host and port, for telling whether a redirect leaves the origin.
@@ -414,6 +462,15 @@ mod tests {
         }
         assert!(!is_own_address("192.0.2.77".parse().unwrap()));
         assert!(!is_own_address("8.8.8.8".parse().unwrap()));
+    }
+
+    #[test]
+    fn credentials_in_a_url_become_a_decoded_basic_header() {
+        let (address, basic) = credentials_of("http://kodi:p%40ss%21@tv.lan:8080/image/x?y=1");
+        assert_eq!(address, "http://tv.lan:8080/image/x?y=1");
+        assert_eq!(basic.as_deref(), Some(format!("Basic {}", base64_encode(b"kodi:p@ss!")).as_str()));
+        assert_eq!(credentials_of("https://example.com/a@b"), ("https://example.com/a@b".to_string(), None));
+        assert_eq!(percent_decode("100%"), "100%");
     }
 
     #[test]
