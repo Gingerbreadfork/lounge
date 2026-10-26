@@ -167,7 +167,9 @@ fun Modifier.trapFocus(leaving: Boolean): Modifier = focusProperties {
     onExit = { if (!leaving && requestedFocusDirection in Directional) cancelFocusChange() }
 }
 
-fun KeyEvent.isBack(): Boolean = key in backKeys
+/** Back, Escape or a controller's B; never a press the system cancelled, as after a long press it took. */
+fun KeyEvent.isBack(): Boolean = key in backKeys && !nativeKeyEvent.isCanceled &&
+    (nativeKeyEvent.flags and android.view.KeyEvent.FLAG_CANCELED_LONG_PRESS) == 0
 
 /** Text typed on the phone, for the Lounge text field that has focus. */
 val LocalPhoneText = staticCompositionLocalOf<Flow<String>> { emptyFlow() }
