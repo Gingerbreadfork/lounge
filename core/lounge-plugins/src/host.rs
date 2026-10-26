@@ -22,10 +22,31 @@ pub trait Services: Send + Sync {
     fn fetch(&self, plugin: &str, request: &HttpRequest) -> std::result::Result<HttpResponse, String>;
 }
 
+/// The services `lg_manifest` gets: nothing to read and nowhere to write or fetch.
+struct Silent;
+
+impl Services for Silent {
+    fn kv_get(&self, _: &str, _: &str) -> Option<Vec<u8>> {
+        None
+    }
+    fn kv_set(&self, _: &str, _: &str, _: &[u8]) {}
+    fn kv_delete(&self, _: &str, _: &str) {}
+    fn secret(&self, _: &str, _: &str) -> Option<String> {
+        None
+    }
+    fn setting(&self, _: &str, _: &str) -> Option<String> {
+        None
+    }
+    fn log(&self, _: &str, _: i32, _: &str) {}
+    fn fetch(&self, _: &str, _: &HttpRequest) -> std::result::Result<HttpResponse, String> {
+        Err("nothing may be fetched while the manifest is read".into())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub memory_bytes: usize,
-    /// Most entries the module's tables may hold, in total.
+    /// Most entries each of the module's tables may hold.
     pub table_elements: usize,
     pub fuel: u64,
     /// What every host call costs, on top of one unit per byte it moves, so a loop of host calls
@@ -139,9 +160,11 @@ impl Host {
         Ok(LoadedPlugin { id: id.to_string(), manifest, module })
     }
 
-    /// The manifest the module itself reports, for cross-checking with `manifest.json`.
+    /// The manifest the module itself reports, for cross-checking with `manifest.json`. It runs
+    /// before the plugin is trusted with anything, so it reaches neither the network nor storage.
     pub fn manifest_of(&self, plugin: &LoadedPlugin) -> Result<Manifest> {
-        self.call_json::<(), Manifest>(plugin, exports::MANIFEST, None, self.limits.call_time, self.limits.call_result_bytes).map(|o| match o {
+        let silent: Arc<dyn Services> = Arc::new(Silent);
+        self.call_json_with(&silent, plugin, exports::MANIFEST, None::<&()>, self.limits.call_time, self.limits.call_result_bytes).map(|o| match o {
             Outcome::Ok(m) => Ok(m),
             Outcome::Err(e) => Err(PluginError::Failed(e)),
         })?
@@ -186,6 +209,18 @@ impl Host {
     }
 
     fn call_json<I: Serialize, O: DeserializeOwned>(&self, plugin: &LoadedPlugin, export: &str, input: Option<&I>, time: Duration, max_result: usize) -> Result<Outcome<O>> {
+        self.call_json_with(&self.services, plugin, export, input, time, max_result)
+    }
+
+    fn call_json_with<I: Serialize, O: DeserializeOwned>(
+        &self,
+        services: &Arc<dyn Services>,
+        plugin: &LoadedPlugin,
+        export: &str,
+        input: Option<&I>,
+        time: Duration,
+        max_result: usize,
+    ) -> Result<Outcome<O>> {
         let started = Instant::now();
         let deadline = started + time;
         // The start function cannot be paused, so it runs on the first slice alone.
@@ -193,7 +228,7 @@ impl Host {
         let state = State {
             plugin: plugin.id.clone(),
             manifest: plugin.manifest.clone(),
-            services: Arc::clone(&self.services),
+            services: Arc::clone(services),
             limits: StoreLimitsBuilder::new()
                 .memory_size(self.limits.memory_bytes)
                 .memories(1)
