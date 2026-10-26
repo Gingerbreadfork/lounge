@@ -163,7 +163,7 @@ impl Server {
     /// Checks the address and token once per refresh and remembers the server's identity. The
     /// server's root needs the token, unlike `/identity`, so a wrong token is caught here.
     fn connect() -> Result<Server, String> {
-        let base = host::required_setting("server", "Server address")?.trim_end_matches('/').to_string();
+        let base = host::server_setting("server", "Server address")?;
         let token = host::secret("token").filter(|t| !t.trim().is_empty()).ok_or_else(|| "The Plex token is missing: paste it in the plugin's settings".to_string())?;
         let probe = Server { base, token, machine: String::new(), name: "Plex".into() };
         let r = host::fetch(&probe.request("/"))?;

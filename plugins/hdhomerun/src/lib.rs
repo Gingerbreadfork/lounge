@@ -30,9 +30,8 @@ impl sdk::Plugin for HdHomeRun {
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let base = match host::setting("device").map(|d| d.trim().trim_end_matches('/').to_string()).filter(|d| !d.is_empty()) {
-            Some(d) if d.starts_with("http") => d,
-            Some(d) => format!("http://{d}"),
+        let base = match host::setting("device").filter(|d| !d.trim().is_empty()) {
+            Some(d) => sdk::server_address(&d),
             None => discover()?,
         };
         let device: Discover = get_json(&format!("{base}/discover.json")).map_err(|e| format!("No HDHomeRun at {}: {e}", sdk::redact_url(&base)))?;

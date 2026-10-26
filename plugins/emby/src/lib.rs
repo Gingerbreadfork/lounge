@@ -154,7 +154,7 @@ pub struct UserData {
 impl Session {
     /// Reuse the cached token; sign in again when there is none or the server rejects it.
     fn connect() -> Result<Session, String> {
-        let server = host::required_setting("server", "Server address")?.trim_end_matches('/').to_string();
+        let server = host::server_setting("server", "Server address")?;
         let username = host::required_setting("username", "Username")?;
         let device_id = device_id();
         // The saved session belongs to one server and user; another of either signs in afresh.

@@ -29,7 +29,7 @@ impl sdk::Plugin for Channels {
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let base = host::required_setting("server", "Server address")?.trim_end_matches('/').to_string();
+        let base = host::server_setting("server", "Server address")?;
         let favorites_only = host::setting("favorites_only").map(|v| v == "true").unwrap_or(false);
         let max_recordings = host::setting("recordings").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(30).clamp(1, 100);
         let mut numbers = HashSet::new();

@@ -348,7 +348,7 @@ pub struct Server {
 
 impl Server {
     fn connect() -> Result<Server, String> {
-        let base = host::required_setting("server", "Kodi address")?.trim().trim_end_matches('/').to_string();
+        let base = host::server_setting("server", "Kodi address")?;
         let username = host::setting("username").map(|u| u.trim().to_string()).filter(|u| !u.is_empty());
         let password = host::secret("password").unwrap_or_default();
         Ok(Server::new(&base, username.as_deref(), &password))

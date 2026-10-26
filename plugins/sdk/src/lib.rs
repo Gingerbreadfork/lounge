@@ -224,6 +224,11 @@ pub mod host {
     pub fn required_setting(key: &str, label: &str) -> Result<String, String> {
         setting(key).ok_or_else(|| format!("{label} is not set"))
     }
+
+    /// A server address from setting `key`, as [crate::server_address] tidies it.
+    pub fn server_setting(key: &str, label: &str) -> Result<String, String> {
+        Ok(crate::server_address(&required_setting(key, label)?))
+    }
 }
 
 #[macro_export]
@@ -358,6 +363,13 @@ mod iso_tests {
             assert_eq!(parse_iso8601(bad), None, "{bad:?}");
         }
     }
+}
+
+/// A server address as people type it, ready to put paths after: trimmed, with `http://` when no
+/// scheme was given and without a trailing slash, so "192.168.0.10:8096" works.
+pub fn server_address(value: &str) -> String {
+    let address = value.trim().trim_end_matches('/');
+    if address.contains("://") { address.to_string() } else { format!("http://{address}") }
 }
 
 /// `url` without its query string, fragment, user name or password, for messages people read.
@@ -673,6 +685,13 @@ impl ScheduleBudget {
 #[cfg(test)]
 mod helper_tests {
     use super::*;
+
+    #[test]
+    fn server_addresses_are_tidied() {
+        assert_eq!(server_address(" 192.168.0.10:8096/ "), "http://192.168.0.10:8096");
+        assert_eq!(server_address("https://jf.example.org/"), "https://jf.example.org");
+        assert_eq!(server_address("http://kodi.lan:8080"), "http://kodi.lan:8080");
+    }
 
     #[test]
     fn urls_lose_queries_and_passwords() {

@@ -210,7 +210,7 @@ pub fn ms_from_any(t: i64) -> i64 {
 impl Server {
     /// Reuses the saved session when the server still accepts it, otherwise signs in with the PIN.
     fn connect() -> Result<Server, String> {
-        let base = host::required_setting("server", "Server address")?.trim_end_matches('/').to_string();
+        let base = host::server_setting("server", "Server address")?;
         if let Some(saved) = host::kv_get_string(SESSION_KEY).and_then(|s| serde_json::from_str::<SavedSession>(&s).ok()).filter(|s| s.base == base) {
             let s = Server { base: base.clone(), sid: saved.sid };
             if s.call::<Status>("session.verify", "").map(|st| st.stat == "ok").unwrap_or(false) {
