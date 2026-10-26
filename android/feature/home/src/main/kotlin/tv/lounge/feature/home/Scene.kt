@@ -35,6 +35,10 @@ import kotlin.math.ceil
 import kotlinx.coroutines.delay
 import tv.lounge.design.LoungeColors
 import tv.lounge.design.LoungeTheme
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.getValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val TAG = "Lounge"
 private const val FRAME_NS = 30_000_000L
@@ -134,7 +138,9 @@ internal fun SceneSurface(
     prepareFinish: DrawScope.(divisor: Float) -> Unit,
 ) {
     val colors = LoungeTheme.colors
-    val compiled = remember(style) { compileScene(style, colors) }
+    // A pushed or plugin program can take long enough to compile to stall the screen.
+    val compiling by produceState<Result<Program>?>(null, style) { value = withContext(Dispatchers.Default) { compileScene(style, colors) } }
+    val compiled = compiling ?: return
     val program = compiled.getOrNull()
     if (program == null) {
         LaunchedEffect(style.id) { onUnusable(compiled.exceptionOrNull()?.message ?: "the program does not compile") }
