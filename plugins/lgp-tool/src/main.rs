@@ -4,13 +4,13 @@
 //! lgp-tool keygen <key-file>                       write a new Ed25519 signing key (hex seed, mode 0600, never over a file)
 //! lgp-tool bundle <plugin.wasm> <key-file> <out.lgp> [--manifest manifest.json]
 //! lgp-tool inspect <bundle.lgp>                    print the manifest and verify the signature
-//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--state file] [--search query] [--resolve action] [--json]
+//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--now ms] [--state file] [--search query] [--resolve action] [--json]
 //! ```
 //! `run` executes `refresh` (or `search`) with a host that keeps key-values in memory, or in
 //! the `--state` file between runs as the TV keeps them between refreshes, reads settings from
 //! the flags, and fetches live unless `--fixtures` points at a directory of fixtures; [`FIXTURES`]
-//! describes them. It prints the log, the fuel used and the items, or with `--json` every item
-//! as JSON and the log on stderr.
+//! describes them. `--now` fixes the clock a refresh is given. It prints the log, the fuel used
+//! and the items, or with `--json` every item as JSON and the log on stderr.
 
 use ed25519_dalek::{Signer, SigningKey};
 use lounge_plugin_api::{HttpRequest, HttpResponse, Manifest, RefreshContext};
@@ -37,9 +37,11 @@ fn main() {
     }
 }
 
-const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--state file] [--search q] [--resolve action] [--json]";
+const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--now ms] [--state file] [--search q] [--resolve action] [--json]";
 
 const FIXTURES: &str = "fixtures: --fixtures dir answers each fetch from <sha256 of the url, hex>.body in dir.
+A request that is not a GET, or carries a body, first looks for <sha256 of \"METHOD url\\nbody\">.body, so
+each call of a sign-in or JSON-RPC flow can have its own answer; a missing fixture's error names both files.
 The body may be binary, such as a gzip file: as on the TV, it reaches the plugin as text when it is UTF-8 and
 as body_base64 otherwise, and a body over the TV's 8 MB limit fails the fetch. An optional <sha256>.head
 beside it gives the status on its first line (\"404\" or \"HTTP/1.1 404 Not Found\") and headers on the
@@ -152,7 +154,10 @@ fn run(args: &[String]) -> Result<(), String> {
             .refresh_counted(
                 &plugin,
                 &RefreshContext {
-                    now_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0),
+                    now_ms: match flag(args, "--now") {
+                        Some(ms) => ms.parse().map_err(|_| format!("--now takes milliseconds since 1970, not {ms:?}"))?,
+                        None => std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0),
+                    },
                     utc_offset_minutes: 0,
                     tier: "a".into(),
                     since_ms: None,
@@ -331,7 +336,7 @@ impl Services for RunServices {
     }
     fn fetch(&self, _p: &str, request: &HttpRequest) -> Result<HttpResponse, String> {
         if let Some(dir) = &self.fixtures {
-            return fixture(dir, &request.url);
+            return fixture(dir, request);
         }
         let manifest = self.manifest.get().ok_or("nothing may be fetched while the manifest is read")?;
         // The TV's own rules: the allow list on every hop, and loopback and the home network
@@ -341,11 +346,13 @@ impl Services for RunServices {
     }
 }
 
-/// The recorded answer for `url`, shaped the way the TV's host shapes a live one.
-fn fixture(dir: &Path, url: &str) -> Result<HttpResponse, String> {
-    use sha2::Digest;
-    let name = hex::encode(sha2::Sha256::digest(url.as_bytes()));
-    let bytes = std::fs::read(dir.join(format!("{name}.body"))).map_err(|_| format!("no fixture for {url} ({name}.body)"))?;
+/// The recorded answer for `request`, shaped the way the TV's host shapes a live one.
+fn fixture(dir: &Path, request: &HttpRequest) -> Result<HttpResponse, String> {
+    let names = fixture_names(request);
+    let Some((name, bytes)) = names.iter().find_map(|n| std::fs::read(dir.join(format!("{n}.body"))).ok().map(|b| (n.clone(), b))) else {
+        let files: Vec<String> = names.iter().map(|n| format!("{n}.body")).collect();
+        return Err(format!("no fixture for {} {} ({})", request.method, request.url, files.join(", or for any request to this URL ")));
+    };
     let limit = Fetcher::new().max_body;
     if bytes.len() > limit {
         return Err(format!("fetch: the response body is larger than request limit: {limit}"));
@@ -358,6 +365,19 @@ fn fixture(dir: &Path, url: &str) -> Result<HttpResponse, String> {
         Ok(body) => HttpResponse { status, headers, body, body_base64: None },
         Err(e) => HttpResponse { status, headers, body: String::new(), body_base64: Some(lounge_plugin_api::base64_encode(e.as_bytes())) },
     })
+}
+
+/// The fixture names that may answer `request`, the most particular first.
+fn fixture_names(request: &HttpRequest) -> Vec<String> {
+    use sha2::Digest;
+    let hash = |text: &str| hex::encode(sha2::Sha256::digest(text.as_bytes()));
+    let body = request.body.as_deref().unwrap_or("");
+    let by_url = hash(&request.url);
+    if request.method.eq_ignore_ascii_case("GET") && body.is_empty() {
+        vec![by_url]
+    } else {
+        vec![hash(&format!("{} {}\n{body}", request.method.to_ascii_uppercase(), request.url)), by_url]
+    }
 }
 
 /// A status line ("404" or "HTTP/1.1 404 Not Found") and then "Name: value" headers, with
@@ -391,6 +411,25 @@ mod tests {
         dir.join(format!("{}.{ext}", hex::encode(sha2::Sha256::digest(url.as_bytes()))))
     }
 
+    fn get(url: &str) -> HttpRequest {
+        HttpRequest { method: "GET".into(), url: url.into(), headers: Default::default(), body: None, timeout_ms: 0 }
+    }
+
+    #[test]
+    fn a_request_with_a_body_finds_its_own_answer_before_the_url_s() {
+        let d = dir("bodies");
+        let post = |body: &str| HttpRequest { method: "post".into(), body: Some(body.into()), ..get("http://a/rpc") };
+        std::fs::write(d.join(format!("{}.body", fixture_names(&post("{\"m\":1}"))[0])), "one").unwrap();
+        std::fs::write(file_for(&d, "http://a/rpc", "body"), "any").unwrap();
+        assert_eq!(fixture(&d, &post("{\"m\":1}")).unwrap().body, "one");
+        assert_eq!(fixture(&d, &post("{\"m\":2}")).unwrap().body, "any");
+        assert_eq!(fixture(&d, &get("http://a/rpc")).unwrap().body, "any");
+        let elsewhere = HttpRequest { url: "http://a/none".into(), ..post("x") };
+        let missing = fixture(&d, &elsewhere).map(|_| ()).unwrap_err();
+        assert!(missing.contains("no fixture for post http://a/none") && missing.contains("or for any request to this URL"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn fixtures_carry_binary_bodies_statuses_and_headers() {
         let d = dir("fixtures");
@@ -398,17 +437,17 @@ mod tests {
         std::fs::write(file_for(&d, "http://a/gz", "body"), [0x1f, 0x8b, 0x08, 0xff]).unwrap();
         std::fs::write(file_for(&d, "http://a/locked", "body"), "").unwrap();
         std::fs::write(file_for(&d, "http://a/locked", "head"), "HTTP/1.1 401 Unauthorized\nWWW-Authenticate: Digest realm=\"tvheadend\", nonce=\"n\"\n").unwrap();
-        let text = fixture(&d, "http://a/text").unwrap();
+        let text = fixture(&d, &get("http://a/text")).unwrap();
         assert_eq!((text.status, text.body.as_str(), text.body_base64.is_none()), (200, "hello", true));
-        let gz = fixture(&d, "http://a/gz").unwrap();
+        let gz = fixture(&d, &get("http://a/gz")).unwrap();
         assert_eq!(gz.bytes(), [0x1f, 0x8b, 0x08, 0xff]);
         assert!(gz.body.is_empty());
-        let locked = fixture(&d, "http://a/locked").unwrap();
+        let locked = fixture(&d, &get("http://a/locked")).unwrap();
         assert_eq!(locked.status, 401);
         assert_eq!(locked.headers["www-authenticate"], "Digest realm=\"tvheadend\", nonce=\"n\"");
-        assert!(fixture(&d, "http://a/missing").unwrap_err().contains("no fixture"));
+        assert!(fixture(&d, &get("http://a/missing")).unwrap_err().contains("no fixture"));
         std::fs::write(file_for(&d, "http://a/huge", "body"), vec![b'x'; Fetcher::new().max_body + 1]).unwrap();
-        assert!(fixture(&d, "http://a/huge").unwrap_err().contains("larger than"));
+        assert!(fixture(&d, &get("http://a/huge")).unwrap_err().contains("larger than"));
         assert_eq!(parse_head("404").unwrap().0, 404);
         assert!(parse_head("teapot").is_err());
         let _ = std::fs::remove_dir_all(&d);

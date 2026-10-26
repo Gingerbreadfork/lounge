@@ -353,7 +353,7 @@ large JSON array one entry at a time.
 lgp-tool run mine.wasm --set playlist_url=https://example.com/list.m3u --secret password=hunter2
 lgp-tool run mine.lgp --search "bear"
 lgp-tool run mine.lgp --resolve "play:his_girl_friday"
-lgp-tool run mine.wasm --fixtures ./fixtures
+lgp-tool run mine.wasm --fixtures ./fixtures --now 1767225600000
 ```
 
 `--set` and `--secret` stand in for the fields the user would fill. Live fetches follow the
@@ -362,9 +362,14 @@ would allow them, so a host refused here is refused on the TV too. `--state file
 key-value store in a JSON file between runs, as the TV keeps it between refreshes, so a sign-in
 that takes a refresh or two can be walked through. `--search` runs `search`
 instead of `refresh`, and `--resolve action` runs `resolve` for one action and prints what came
-back. Each run prints the fuel it used; `--json` prints the items as JSON. `--fixtures dir`
-answers every `fetch` from a file named `<sha256 of the URL>.body` in that directory, so a test
-runs the same way every time and offline. A binary body reaches the plugin as `body_base64`, as
+back. Each run keeps what the TV would keep, the first item with each id and at most 2000 of
+them, or 12 search results, and prints the TV's notes about the rest. It prints the fuel it
+used; `--json` prints the items as JSON. `--fixtures dir` answers every `fetch` from a file
+named `<sha256 of the URL>.body` in that directory. A request that is not a GET, or has a body,
+first looks for `<sha256 of "METHOD url\nbody">.body`, so each step of a sign-in or each
+JSON-RPC call can have its own answer; when a fixture is missing, the error names both files.
+`--now` gives the refresh a fixed time in milliseconds, so with fixtures a test runs the same
+way every time and offline. A binary body reaches the plugin as `body_base64`, as
 on the TV, and one over 8 MB fails the same way. An optional `<sha256>.head` beside it gives the
 status on its first line and headers on the lines after; without one the answer is 200 with no
 headers. Unit-test your parsing in ordinary Rust: the SDK's host functions are absent off wasm,
