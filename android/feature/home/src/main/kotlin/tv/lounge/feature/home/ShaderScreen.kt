@@ -69,7 +69,9 @@ fun ShaderScreensaver(style: ShaderStyle, onUnusable: (String) -> Unit, preview:
 @Composable
 private fun SaverSurface(style: ShaderStyle, lights: State<Float>, slow: Boolean, keepResolution: Boolean, onUnusable: (String) -> Unit) {
     val finish = remember { RuntimeShader(FINISH_SKSL) }
-    val quality = remember(keepResolution) { SceneQuality("saver", startDivisor = 2f, maxDivisor = 6f, gpuBudgetMs = 24f, keepResolution = keepResolution) }
+    // A scene with fine detail starts at full size on a TV with the GPU for it (DESIGN.md §5.5).
+    val full = style.fine && LoungeTheme.visuals.tierA
+    val quality = remember(keepResolution, full) { SceneQuality("saver", startDivisor = if (full) 1f else 2f, maxDivisor = 6f, gpuBudgetMs = 24f, keepResolution = keepResolution) }
     SceneSurface(style, quality, finish, slow, paused = { false }, onUnusable = onUnusable) {
         finish.setFloatUniform("resolution", size.width, size.height)
         finish.setFloatUniform("brightness", lights.value)

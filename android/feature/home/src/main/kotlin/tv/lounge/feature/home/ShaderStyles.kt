@@ -17,6 +17,8 @@ data class ShaderStyle(
     val source: String,
     val values: List<ShaderValue>,
     val origin: String,
+    /** Fine detail that blurs at half size, so it starts at full size where the TV allows. */
+    val fine: Boolean = false,
 )
 
 /** One `uniform` a program declares. */
@@ -120,6 +122,7 @@ object ShaderStyles {
                 source = source,
                 values = ShaderSource.parseValues(o.optJSONObject("uniforms")),
                 origin = "Lounge",
+                fine = o.optBoolean("fine"),
             )
         }
     }.getOrDefault(emptyList())
