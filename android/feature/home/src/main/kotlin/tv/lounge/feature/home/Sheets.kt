@@ -464,7 +464,7 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
         if (!enabled) { core.stopCompanion(); pairing = null }
         refresh()
     }
-    LaunchedEffect(Unit) {
+    WhileStarted {
         while (true) {
             kotlinx.coroutines.delay(5000)
             refresh()

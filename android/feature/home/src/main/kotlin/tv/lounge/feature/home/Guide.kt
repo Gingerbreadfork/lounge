@@ -93,7 +93,7 @@ fun GuideSheet(core: CoreClient, visibleState: MutableTransitionState<Boolean>, 
     val firstFocus = remember { FocusRequester() }
     var guide by remember { mutableStateOf<Guide?>(null) }
     val leaving = !visibleState.targetState
-    LaunchedEffect(Unit) {
+    WhileStarted {
         while (true) {
             val now = System.currentTimeMillis()
             val from = (now - HALF_HOUR_MS / 2) / HALF_HOUR_MS * HALF_HOUR_MS

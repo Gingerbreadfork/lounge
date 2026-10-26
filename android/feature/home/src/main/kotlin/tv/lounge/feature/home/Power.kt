@@ -65,7 +65,7 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
         value = withContext(Dispatchers.IO) { power.takeHome().filter { it.id.startsWith("home_off_") } + power.giveBackHome() }
     }
 
-    LaunchedEffect(Unit) {
+    WhileStarted {
         power.refresh()
         while (true) {
             delay(if (power.status.value is PowerStatus.Ready) 15_000 else 6_000)

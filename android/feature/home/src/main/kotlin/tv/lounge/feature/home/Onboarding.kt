@@ -353,7 +353,7 @@ private fun StepPower(power: PowerSetup, context: Context) {
         scope.launch { power.refresh() }
     }
     // The approval prompt is a system dialog over this screen, so poll while it is up.
-    LaunchedEffect(status) {
+    WhileStarted(status) {
         if (status == PowerStatus.WaitingForApproval) {
             while (true) {
                 delay(3_000)

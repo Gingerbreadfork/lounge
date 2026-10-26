@@ -57,7 +57,7 @@ fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRe
     val colors = LoungeTheme.colors
     var plugins by remember { mutableStateOf(core.plugins()) }
     // Each read waits on the core's lock, which a big refresh can hold, so the polls run off the main thread.
-    LaunchedEffect(Unit) {
+    WhileStarted {
         while (true) {
             delay(2000)
             plugins = withContext(Dispatchers.IO) { core.plugins() }
@@ -101,7 +101,7 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
     var showLog by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf<List<String>>(emptyList()) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(pluginId) {
+    WhileStarted(pluginId) {
         while (true) {
             delay(1500)
             info = withContext(Dispatchers.IO) { core.plugins().firstOrNull { it.id == pluginId } }
