@@ -1,7 +1,9 @@
 //! The public core: the only crate the Kotlin shell sees.
 //!
-//! Every entry point returns immediately; work runs on the core's worker thread and
-//! results arrive through `SnapshotListener`.
+//! Most entry points return at once; their work runs on the core's worker thread and the
+//! results arrive through `SnapshotListener`. Those that answer a question wait for it: `guide`,
+//! `perform`, `available_channels`, `search_plugins`, `install_plugin` and `companion_pairing`,
+//! so they are called off the main thread.
 
 mod companion;
 mod engine;

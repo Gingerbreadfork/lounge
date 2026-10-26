@@ -327,7 +327,7 @@ Bottom-left (x 96, 54 from the bottom), `curtain` card, 1 px hairline, radius 16
 - **Empty row**: not rendered (5.3).
 - **Empty home** (first run, nothing configured): the Stage shows the house light, the title "Let's set up your home screen", one primary button "Start", and the strip shows the setup steps as tiles.
 - **Offline**: rows that need the network show their cached content with a `dust` "Offline, showing what we have" meta line under the header. Nothing else changes; apps, inputs and live TV work.
-- **Permission missing**: a row that needs a permission (Continue watching, Live now, Now playing) shows one compact tile in the row's place: "Turn on TV listings to see what you were watching", primary action opens the system prompt. Dismissible; stays dismissed.
+- **Permission missing**: Continue watching, without TV listings, shows one compact tile in the row's place: "Turn on TV listings to see what you were watching", primary action opens the system prompt. Dismissible; stays dismissed. Live now and Now playing stay away until their access is given; Settings has the switches.
 - **Error**: toasts explain and offer the fix in the same sentence. Never "Something went wrong".
 
 ## 9. Sound
