@@ -279,8 +279,8 @@ impl Host {
             return Err(PluginError::Failed(format!("{export} returned nothing")));
         }
         // The plugin names the range; it is checked against its memory before a byte is allocated.
-        let end = ptr as usize + len as usize;
-        if len as usize > max_result || end > memory.data_size(&store) {
+        let end = (ptr as usize).checked_add(len as usize);
+        if len as usize > max_result || end.is_none_or(|end| end > memory.data_size(&store)) {
             return Err(PluginError::Wasm(format!("{export} returned {len} bytes at {ptr}, outside its memory or over the limit")));
         }
         let mut out = vec![0u8; len as usize];
