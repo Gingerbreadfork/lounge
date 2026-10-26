@@ -107,6 +107,8 @@ pub(crate) struct PluginManager {
     pub search_generation: AtomicU64,
     /// Held through an install, so two of one id cannot both pass the publisher check.
     pub installing: Mutex<()>,
+    /// Plugins with a refresh waiting to run; asking again meanwhile adds nothing.
+    refresh_queued: Mutex<HashSet<String>>,
 }
 
 /// The host's view of storage, backed by the core's store once it exists.
@@ -232,6 +234,7 @@ impl PluginManager {
             services: Arc::clone(&services),
             search_generation: AtomicU64::new(0),
             installing: Mutex::new(()),
+            refresh_queued: Mutex::new(HashSet::new()),
         });
         (manager, refresh_rx, calls_rx, services)
     }
@@ -242,7 +245,9 @@ impl PluginManager {
 
     /// Queue a refresh on the refresh thread.
     pub fn refresh_soon(&self, id: &str) {
-        let _ = self.refresh_tx.send(PluginJob::Refresh(id.to_string()));
+        if self.refresh_queued.lock().insert(id.to_string()) {
+            let _ = self.refresh_tx.send(PluginJob::Refresh(id.to_string()));
+        }
     }
 
     /// Queue a resolve or search on the thread that answers presses.
@@ -595,6 +600,8 @@ pub(crate) fn spawn(
         .spawn(move || loop {
             match refresh_rx.recv_timeout(Duration::from_secs(60)) {
                 Ok(PluginJob::Refresh(id)) => {
+                    // Taken off first, so a request while this one runs queues the next.
+                    inner.plugins.refresh_queued.lock().remove(&id);
                     crate::guarded("a plugin refresh", || run_refresh(&inner, &id));
                 }
                 Ok(other) => {
