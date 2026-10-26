@@ -107,7 +107,8 @@ export async function connect() {
     (s) => { app.state = s; app.error = null; },
     (c) => { app.connected = c; if (c) app.everConnected = true; },
   );
-  api.state().then((s) => (app.state = s)).catch((e) => {
+  // The socket may already have delivered a newer snapshot than this first read.
+  api.state().then((s) => { if (!app.state || s.snapshot.revision >= app.state.snapshot.revision) app.state = s; }).catch((e) => {
     if (e?.status === 401) unpair();
     else app.error = e?.message ?? 'The TV did not answer.';
   });
