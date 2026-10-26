@@ -286,6 +286,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     if (now - state.lastHomeAt > HOME_KEEPS_PLACE_MS) {
                         state.stageTileId = null
                         state.stageIndex = 0
+                        state.stageChosen = false
                     }
                     state.lastHomeAt = now
                     clearOverlays()
@@ -344,9 +345,16 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 }
             }
             FocusRegion.Stage -> {
-                val id = state.stageTileId ?: return@LaunchedEffect
                 val strip = snapshot.stage.strip
-                if (state.playbillFocused || strip.isEmpty() || strip.any { it.id == id }) return@LaunchedEffect
+                if (state.playbillFocused || strip.isEmpty()) return@LaunchedEffect
+                // Until the viewer moves along the strip, focus stays on its first tile, which may
+                // be one that has just arrived ahead of the focused one.
+                if (!state.stageChosen) {
+                    state.stripRequester(0).requestWhenReady()
+                    return@LaunchedEffect
+                }
+                val id = state.stageTileId ?: return@LaunchedEffect
+                if (strip.any { it.id == id }) return@LaunchedEffect
                 state.stripRequester(state.stageIndex.coerceIn(0, strip.lastIndex)).requestWhenReady()
             }
             FocusRegion.TopBar -> if (state.topBar.last === state.topBar.nowPlaying && snapshot.nowPlaying == null) focusHome()
@@ -909,15 +917,20 @@ private fun StageSlot(
     SideEffect { state.stageHeight = height }
     val light = LocalLightState.current
     LaunchedEffect(height) { snapshotFlow { height.value }.collect { light.sourceMoved() } }
-    // The selection follows its tile's id, so a snapshot that reorders the strip keeps the playbill
-    // on the focused tile; the last index stands in once the tile is gone.
+    // Once the viewer has moved along the strip, the selection follows its tile's id, so a snapshot
+    // that reorders the strip keeps the playbill on the focused tile; the last index stands in once
+    // the tile is gone. Before that it is the first tile.
     val strip = rememberUpdatedState(snapshot.stage.strip)
     val selected = remember {
         derivedStateOf {
             val tiles = strip.value
             val id = state.stageTileId
             val byId = if (id == null) -1 else tiles.indexOfFirst { it.id == id }
-            if (byId >= 0) byId else state.stageIndex.coerceIn(0, (tiles.size - 1).coerceAtLeast(0))
+            when {
+                !state.stageChosen -> 0
+                byId >= 0 -> byId
+                else -> state.stageIndex.coerceIn(0, (tiles.size - 1).coerceAtLeast(0))
+            }
         }
     }
     SideEffect { state.stageIndex = selected.value }
@@ -942,6 +955,7 @@ private fun StageSlot(
         },
         onStripClick = onPerform,
         onStripLongPress = onMenu,
+        onStripMoved = { state.stageChosen = true },
         onPrimary = onPrimary,
         onSecondary = onSecondary,
         onBandFocused = onBandFocused,

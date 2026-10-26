@@ -59,6 +59,11 @@ class HomeState(private val tierA: Boolean = true) {
     /** The Stage's selection: the strip tile's id, with its last known index for when the id is gone. */
     var stageTileId by mutableStateOf<String?>(null)
     var stageIndex by mutableIntStateOf(0)
+    /**
+     * Whether the viewer has moved along the strip since the Stage last opened on its first tile.
+     * Until then the first tile leads, even one that arrives after the home appears.
+     */
+    var stageChosen by mutableStateOf(false)
     var focusedRowId by mutableStateOf<String?>(null)
     var focusedTileIndex by mutableIntStateOf(-1)
     /** The focused row tile's id; not read by composition. */

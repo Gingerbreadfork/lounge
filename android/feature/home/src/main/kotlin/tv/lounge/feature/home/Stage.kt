@@ -25,6 +25,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -126,6 +131,7 @@ fun StageView(
     onStripFocused: (Int, Tile) -> Unit,
     onStripClick: (Tile) -> Unit,
     onStripLongPress: (Tile, Rect, FocusRequester) -> Unit,
+    onStripMoved: () -> Unit,
     onPrimary: (StageSpotlight) -> Unit,
     onSecondary: (StageSpotlight) -> Unit,
     onBandFocused: () -> Unit,
@@ -189,6 +195,7 @@ fun StageView(
             onStripFocused = onStripFocused,
             onStripClick = onStripClick,
             onStripLongPress = onStripLongPress,
+            onStripMoved = onStripMoved,
             onPrimary = onPrimary,
             onSecondary = onSecondary,
             onPlaybillFocusChanged = onPlaybillFocusChanged,
@@ -375,6 +382,7 @@ private fun ExpandedStage(
     onStripFocused: (Int, Tile) -> Unit,
     onStripClick: (Tile) -> Unit,
     onStripLongPress: (Tile, Rect, FocusRequester) -> Unit,
+    onStripMoved: () -> Unit,
     onPrimary: (StageSpotlight) -> Unit,
     onSecondary: (StageSpotlight) -> Unit,
     onPlaybillFocusChanged: (Boolean) -> Unit,
@@ -423,6 +431,7 @@ private fun ExpandedStage(
             onStripFocused = onStripFocused,
             onStripClick = onStripClick,
             onStripLongPress = onStripLongPress,
+            onStripMoved = onStripMoved,
         )
     }
 }
@@ -444,6 +453,7 @@ private fun StageStrip(
     onStripFocused: (Int, Tile) -> Unit,
     onStripClick: (Tile) -> Unit,
     onStripLongPress: (Tile, Rect, FocusRequester) -> Unit,
+    onStripMoved: () -> Unit,
 ) {
     val safeXPx = with(LocalDensity.current) { Dimens.safeX.toPx() }
     val stripState = remember { LazyListState(LazyLayoutCacheWindow(ahead = 540.dp, behind = 270.dp), 0, 0) }
@@ -455,6 +465,10 @@ private fun StageStrip(
             modifier = Modifier
                 .fillMaxWidth()
                 .glowRoom()
+                .onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && (e.key == Key.DirectionLeft || e.key == Key.DirectionRight)) onStripMoved()
+                    false
+                }
                 .focusRestorer()
                 .focusGroup()
                 // After the group, so it reaches every tile.
