@@ -15,14 +15,61 @@
 
 ## At a glance
 
-- **The Stage.** One thing at a time: the episode to continue, the channel that is on, the app you open at this hour.
-- **Continue watching from everywhere.** Every app that publishes Watch Next, the TV's own listings and your media server, one entry per title.
-- **Rows you own.** Pin, reorder and hide. Live TV with a guide, the TV's inputs and, on a streamer, the TV's controls.
-- **Light, not chrome.** The focused tile's own colour spills onto the wall. Ten themes, including Blackout for OLED panels and High contrast.
-- **Your phone as the other remote.** A page the TV serves, with no account: it types, arranges the home screen and installs plugins.
-- **Fifteen plugins built in**, from Jellyfin, Plex and Kodi to IPTV, Trakt and Twitch, each sandboxed WebAssembly in a signed bundle.
-- **A screensaver of its own**, and scenes that can run live behind the home screen.
-- **Keeps itself current** from this repository's releases. Android 9 and up, arm64 and 32-bit ARM.
+<table>
+<tr>
+<td width="33%" valign="top">
+<img src="docs/icons/play.svg" width="28" height="28" alt=""><br>
+<b>The Stage</b><br>
+One thing at a time: the episode to continue, the channel that is on, the app you open at this hour.
+</td>
+<td width="33%" valign="top">
+<img src="docs/icons/tv.svg" width="28" height="28" alt=""><br>
+<b>The whole TV</b><br>
+Inputs named by their devices and, on a streamer, the TV's power, input and sound.
+</td>
+<td width="33%" valign="top">
+<img src="docs/icons/apps.svg" width="28" height="28" alt=""><br>
+<b>Rows you own</b><br>
+Pin, reorder and hide. Your apps in your order, and games with a badge when a controller is in.
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+<img src="docs/icons/resume.svg" width="28" height="28" alt=""><br>
+<b>Continue watching</b><br>
+Every app that publishes Watch Next, the TV's own listings and your media server, one entry per title.
+</td>
+<td width="33%" valign="top">
+<img src="docs/icons/theme.svg" width="28" height="28" alt=""><br>
+<b>Light, not chrome</b><br>
+The focused tile's own colour spills onto the wall. Ten themes, Blackout and High contrast among them.
+</td>
+<td width="33%" valign="top">
+<img src="docs/icons/phone.svg" width="28" height="28" alt=""><br>
+<b>Your phone as a remote</b><br>
+A page the TV serves, with no account: it types, arranges the home screen and installs plugins.
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+<img src="docs/icons/guide.svg" width="28" height="28" alt=""><br>
+<b>Live TV and a guide</b><br>
+Tuner and plugin channels in Live now, and a guide laid out to the minute.
+</td>
+<td width="33%" valign="top">
+<img src="docs/icons/frame.svg" width="28" height="28" alt=""><br>
+<b>A screensaver of its own</b><br>
+Your artwork or nine abstract scenes, which can also run live behind the home screen.
+</td>
+<td width="33%" valign="top">
+<img src="docs/icons/plugin.svg" width="28" height="28" alt=""><br>
+<b>Fifteen plugins</b><br>
+Jellyfin, Plex, Kodi, IPTV, Trakt, Twitch and more, each sandboxed WebAssembly in a signed bundle.
+</td>
+</tr>
+</table>
+
+<p align="center"><sub>Keeps itself current from this repository's releases &nbsp;·&nbsp; Android 9 and up, arm64 and 32-bit ARM</sub></p>
 
 ## Why
 
@@ -263,7 +310,7 @@ plugins/     Rust workspace: the plugin SDK, the built-in plugins, lgp-tool
 companion/   Svelte 5 phone app, embedded into the core at build time
 design/      fonts, the mark's sources and renderer, the sound renderer
 docs/        the pictures in this file, and how to release
-tools/       device drives, frame timing, the baseline profile, plugin and companion builds
+tools/       device drives, frame timing, the baseline profile, builds, the README's icons
 workdir/     ignored by git: your own notes, logs and measurements
 ```
 
