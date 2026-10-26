@@ -17,6 +17,17 @@ pub enum StoreError {
 
 pub type Result<T> = std::result::Result<T, StoreError>;
 
+impl StoreError {
+    /// SQLite cannot read the file as a database at all, so only starting a new one helps.
+    pub fn is_corrupt(&self) -> bool {
+        matches!(
+            self,
+            StoreError::Db(rusqlite::Error::SqliteFailure(e, _))
+                if matches!(e.code, rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase)
+        )
+    }
+}
+
 /// An item already serialised for the `items` table.
 pub struct EncodedItem {
     pub id: String,
@@ -131,6 +142,28 @@ impl Store {
         Ok(store)
     }
 
+    /// Moves the database at `path` and its journal files to `<path>.broken`, replacing an earlier
+    /// copy, and returns where it went. The next `open` starts an empty database.
+    pub fn set_aside(path: &Path) -> Result<PathBuf> {
+        let with = |p: &Path, suffix: &str| {
+            let mut s = p.as_os_str().to_owned();
+            s.push(suffix);
+            PathBuf::from(s)
+        };
+        let aside = with(path, ".broken");
+        for suffix in ["-wal", "-shm"] {
+            let _ = std::fs::remove_file(with(&aside, suffix));
+        }
+        std::fs::rename(path, &aside)?;
+        for suffix in ["-wal", "-shm"] {
+            let journal = with(path, suffix);
+            if journal.exists() {
+                std::fs::rename(&journal, with(&aside, suffix))?;
+            }
+        }
+        Ok(aside)
+    }
+
     pub fn open_in_memory() -> Result<Store> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(SCHEMA)?;
@@ -189,15 +222,22 @@ impl Store {
         Ok(())
     }
 
+    /// The saved layout, or the default one when none is saved or it cannot be read.
     pub fn load_layout(&self) -> Result<Layout> {
         let json: Option<String> = self
             .conn
             .query_row("SELECT json FROM layout WHERE id = 1", [], |r| r.get(0))
             .optional()?;
-        Ok(match json {
-            Some(j) => serde_json::from_str(&j)?,
-            None => Layout::default(),
-        })
+        let Some(json) = json else { return Ok(Layout::default()) };
+        match serde_json::from_str(&json) {
+            Ok(layout) => Ok(layout),
+            Err(e) => {
+                // Kept in meta so the next saved change does not lose it for good.
+                tracing::warn!("stored layout is unreadable, using the default: {e}");
+                let _ = self.set_meta("unreadable_layout", &json);
+                Ok(Layout::default())
+            }
+        }
     }
 
     pub fn save_layout(&self, layout: &Layout) -> Result<()> {
@@ -578,6 +618,41 @@ mod tests {
         l.hidden.insert("app:x".into());
         s.save_layout(&l).unwrap();
         assert_eq!(s.load_layout().unwrap(), l);
+    }
+
+    #[test]
+    fn an_unreadable_layout_falls_back_and_is_kept() {
+        let s = Store::open_in_memory().unwrap();
+        s.conn.execute("INSERT INTO layout(id, json) VALUES (1, '{\"hidden\": 3}')", []).unwrap();
+        assert_eq!(s.load_layout().unwrap(), Layout::default());
+        assert_eq!(s.meta("unreadable_layout").unwrap().as_deref(), Some("{\"hidden\": 3}"));
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_database_is_set_aside() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lounge.db");
+        std::fs::write(&path, vec![0x5a; 8192]).unwrap();
+        let err = Store::open(&path).err().expect("a file of noise must not open");
+        assert!(err.is_corrupt(), "{err}");
+        assert_eq!(Store::set_aside(&path).unwrap(), dir.path().join("lounge.db.broken"));
+        assert!(!path.exists());
+        let s = Store::open(&path).unwrap();
+        assert_eq!(s.load_layout().unwrap(), Layout::default());
+    }
+
+    #[test]
+    fn setting_aside_takes_the_journal_and_replaces_an_earlier_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = |name: &str| dir.path().join(name);
+        for name in ["lounge.db", "lounge.db-wal", "lounge.db.broken", "lounge.db.broken-shm"] {
+            std::fs::write(file(name), name).unwrap();
+        }
+        Store::set_aside(&file("lounge.db")).unwrap();
+        assert_eq!(std::fs::read_to_string(file("lounge.db.broken")).unwrap(), "lounge.db");
+        assert_eq!(std::fs::read_to_string(file("lounge.db.broken-wal")).unwrap(), "lounge.db-wal");
+        assert!(!file("lounge.db.broken-shm").exists());
+        assert!(!file("lounge.db").exists() && !file("lounge.db-wal").exists());
     }
 
     #[test]

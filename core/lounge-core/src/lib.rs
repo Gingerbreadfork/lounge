@@ -10,11 +10,11 @@ mod screensavers;
 mod search;
 mod worker;
 
-use lounge_graph::Graph;
-use lounge_store::Store;
+use lounge_graph::{Graph, Layout};
+use lounge_store::{PluginRow, Store, StoreError};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -637,13 +637,12 @@ impl Core {
     #[uniffi::constructor]
     pub fn open(config: CoreConfig, platform: Arc<dyn Platform>) -> Result<Arc<Self>, CoreError> {
         init_logging();
-        let db_path = PathBuf::from(&config.data_dir).join("lounge.db");
-        let store = Store::open(&db_path)?;
-        let layout = store.load_layout()?;
+        let db_path = PathBuf::from(&config.data_dir).join(DB_FILE);
+        let Opened { store, layout, persisted, plugins: plugin_rows, habits } = open_store(&db_path)?;
         // Only the persisted snapshot is needed for the first frame; the graph itself is loaded
         // by the worker as its first job, so opening the core costs one small read.
         let graph = Graph::new(layout);
-        let (revision, snapshot) = match store.load_snapshot()? {
+        let (revision, snapshot) = match persisted {
             Some((rev, json)) => match serde_json::from_str::<HomeSnapshot>(&json) {
                 Ok(s) => (rev, s),
                 Err(e) => {
@@ -655,8 +654,7 @@ impl Core {
         };
         let art_dir = lounge_artwork::out_dir_for(&PathBuf::from(&config.cache_dir));
         let art_threads = match config.tier { DeviceTier::A => 2, _ => 1 };
-        let plugin_entries = plugins::entries_from_rows(&store.plugins()?);
-        let habits = store.load_habits()?;
+        let plugin_entries = plugins::entries_from_rows(&plugin_rows);
         let (plugin_manager, refresh_rx, calls_rx, plugin_services) =
             plugins::PluginManager::new(&PathBuf::from(&config.data_dir), &PathBuf::from(&config.cache_dir));
         let utc_offset = config.utc_offset_minutes;
@@ -986,9 +984,66 @@ fn init_logging() {
     });
 }
 
+const DB_FILE: &str = "lounge.db";
+
+/// What the first frame needs from the store, read together so an unreadable file shows up
+/// before anything starts.
+struct Opened {
+    store: Store,
+    layout: Layout,
+    persisted: Option<(u64, String)>,
+    plugins: Vec<PluginRow>,
+    habits: std::collections::HashMap<String, [u32; 24]>,
+}
+
+fn read_store(path: &Path) -> Result<Opened, StoreError> {
+    let store = Store::open(path)?;
+    let layout = store.load_layout()?;
+    let persisted = store.load_snapshot()?;
+    let plugins = store.plugins()?;
+    let habits = store.load_habits()?;
+    Ok(Opened { store, layout, persisted, plugins, habits })
+}
+
+/// Opens the store, setting a database SQLite cannot read aside and starting an empty one.
+fn open_store(path: &Path) -> Result<Opened, StoreError> {
+    match read_store(path) {
+        Err(e) if e.is_corrupt() => {
+            let aside = Store::set_aside(path)?;
+            tracing::error!("database unreadable ({e}); moved to {} and starting empty", aside.display());
+            read_store(path)
+        }
+        other => other,
+    }
+}
+
+/// Moves the database under `data_dir` aside so the next `Core::open` starts empty. The recovery
+/// screen offers this when the core will not open.
+#[uniffi::export]
+pub fn set_storage_aside(data_dir: String) -> Result<String, CoreError> {
+    let aside = Store::set_aside(&PathBuf::from(data_dir).join(DB_FILE))?;
+    Ok(aside.to_string_lossy().into_owned())
+}
+
 pub(crate) fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_unreadable_database_is_set_aside_and_a_new_one_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DB_FILE);
+        std::fs::write(&path, vec![0x5a; 8192]).unwrap();
+        let opened = open_store(&path).unwrap();
+        assert!(opened.persisted.is_none());
+        assert!(opened.plugins.is_empty());
+        assert!(dir.path().join("lounge.db.broken").exists());
+    }
 }
