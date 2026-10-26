@@ -423,7 +423,8 @@ async fn ws(State(app): State<Shared>, headers: HeaderMap, upgrade: WebSocketUpg
     if origin_host.is_some_and(|o| !o.eq_ignore_ascii_case(host)) {
         return Err(ApiError(StatusCode::FORBIDDEN, "cross-site socket".into()));
     }
-    Ok(upgrade.on_upgrade(move |socket| ws_loop(app, socket)))
+    // The phone only ever sends pings here, so a large message is refused before it is read.
+    Ok(upgrade.max_message_size(4096).max_frame_size(4096).on_upgrade(move |socket| ws_loop(app, socket)))
 }
 
 async fn ws_loop(app: Shared, mut socket: WebSocket) {
