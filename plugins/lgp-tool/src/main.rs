@@ -53,6 +53,9 @@ fn keygen(args: &[String]) -> Result<(), String> {
     let mut seed = [0u8; 32];
     getrandom::fill(&mut seed).map_err(|e| e.to_string())?;
     let key = SigningKey::from_bytes(&seed);
+    if let Some(dir) = Path::new(out).parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -143,7 +146,12 @@ fn run(args: &[String]) -> Result<(), String> {
     let _ = tracing::subscriber::set_global_default(FuelMeter(fuel_used.clone()));
     let started = std::time::Instant::now();
     if let Some(action) = flag(args, "--resolve") {
-        let resolved = host.resolve(&plugin, &action).inspect_err(|_| print_logs(&services)).map_err(|e| e.to_string())?;
+        let resolved = host.resolve(&plugin, &action).inspect_err(|_| print_logs(&services));
+        // A resolve may sign in again, so its key-values are kept as a refresh's are.
+        if let Some(file) = &state {
+            save_state(file, &services.kv.lock())?;
+        }
+        let resolved = resolved.map_err(|e| e.to_string())?;
         print_logs(&services);
         println!("resolved in {:.0} ms: {resolved:?}", started.elapsed().as_secs_f64() * 1000.0);
         return Ok(());
@@ -537,7 +545,7 @@ mod tests {
     #[test]
     fn keygen_never_overwrites_and_keeps_the_seed_private() {
         let d = dir("keygen");
-        let path = d.join("publisher.key").to_string_lossy().into_owned();
+        let path = d.join("new").join("publisher.key").to_string_lossy().into_owned();
         keygen(std::slice::from_ref(&path)).unwrap();
         let first = std::fs::read(&path).unwrap();
         assert!(keygen(std::slice::from_ref(&path)).unwrap_err().contains("already exists"));
