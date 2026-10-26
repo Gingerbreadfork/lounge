@@ -705,9 +705,11 @@ impl Core {
     /// Register for snapshots. The current snapshot is delivered immediately.
     pub fn add_listener(&self, listener: Arc<dyn SnapshotListener>) {
         self.count();
-        let current = self.inner.snapshot.read().clone();
-        listener.on_snapshot(current);
-        self.inner.listeners.lock().push(listener);
+        // Under the lock the worker holds while it publishes, so a snapshot published meanwhile
+        // is neither missed nor overtaken by this older one.
+        let mut listeners = self.inner.listeners.lock();
+        listener.on_snapshot(self.inner.snapshot.read().clone());
+        listeners.push(listener);
     }
 
     pub fn snapshot(&self) -> HomeSnapshot {

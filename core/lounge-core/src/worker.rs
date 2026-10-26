@@ -1100,8 +1100,11 @@ fn rebuild(inner: &Inner, utc_offset_minutes: i32) -> Option<i64> {
         }
         Err(e) => tracing::warn!("serialise snapshot: {e}"),
     }
-    *inner.snapshot.write() = snapshot.clone();
-    let listeners = inner.listeners.lock().clone();
+    let listeners = {
+        let listeners = inner.listeners.lock();
+        *inner.snapshot.write() = snapshot.clone();
+        listeners.clone()
+    };
     for l in listeners {
         l.on_snapshot(snapshot.clone());
     }
