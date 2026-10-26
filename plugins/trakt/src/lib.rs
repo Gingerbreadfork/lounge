@@ -14,6 +14,7 @@ const DEVICE_KEY: &str = "device";
 const UP_NEXT_SHOWS: usize = 12;
 const WATCHLIST_ITEMS: usize = 24;
 const WEEK_MS: i64 = 7 * 86_400_000;
+const HOUR_MS: i64 = 3_600_000;
 
 impl sdk::Plugin for Trakt {
     fn manifest() -> Manifest {
@@ -120,6 +121,55 @@ struct Token {
     access: String,
     refresh: String,
     expires_ms: i64,
+    /// How long Trakt said the token lasts; 0 for a token saved before this was kept.
+    #[serde(default)]
+    lifetime_ms: i64,
+}
+
+impl Token {
+    /// Renewal is due once a fifth of the token's life is left, and always an hour ahead.
+    fn due(&self, now_ms: i64) -> bool {
+        let ahead = if self.lifetime_ms > 0 { (self.lifetime_ms / 5).max(HOUR_MS) } else { WEEK_MS };
+        self.expires_ms - now_ms < ahead
+    }
+}
+
+/// Why a renewal failed: Trakt refused the refresh token, or no usable answer came back.
+enum RenewError {
+    Refused(u16),
+    Failed(String),
+}
+
+/// What follows a renewal: the token to use, a new sign-in, or an error until the next refresh.
+enum Renewed {
+    Use(Token),
+    SignInAgain,
+    TryLater(String),
+}
+
+fn after_renewal(current: Token, outcome: Result<Token, RenewError>, now_ms: i64) -> Renewed {
+    match outcome {
+        Ok(fresh) => Renewed::Use(fresh),
+        // Only a refresh token Trakt refuses needs the person to sign in again.
+        Err(RenewError::Refused(status)) => {
+            sdk::warn!("Trakt refused to renew the sign-in (HTTP {status}); signing in again");
+            Renewed::SignInAgain
+        }
+        // Anything else may pass, so the current token serves while it lasts.
+        Err(RenewError::Failed(e)) if current.expires_ms > now_ms => {
+            sdk::warn!("could not renew the sign-in ({e}); using the current one");
+            Renewed::Use(current)
+        }
+        Err(RenewError::Failed(e)) => Renewed::TryLater(format!("Could not renew the Trakt sign-in ({e}); it tries again on the next refresh")),
+    }
+}
+
+/// Marks the saved token as spent, so the next refresh renews it with the refresh token.
+fn expire_token() {
+    if let Some(mut t) = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice::<Token>(&v).ok()) {
+        t.expires_ms = 0;
+        host::kv_set(TOKEN_KEY, serde_json::to_string(&t).unwrap_or_default().as_bytes());
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -157,16 +207,18 @@ impl Client {
         let secret = host::secret("client_secret").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or("Client secret is not set")?;
         let saved: Option<Token> = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice(&v).ok());
         let token = match saved {
-            // Renew a week ahead, so a token never runs out between refreshes.
-            Some(t) if t.expires_ms > now_ms + WEEK_MS => t,
-            Some(t) => match renew(&client_id, &secret, &t, now_ms) {
-                Ok(fresh) => fresh,
-                Err(e) => {
-                    sdk::warn!("could not renew the sign-in ({e}); signing in again");
-                    host::kv_delete(TOKEN_KEY);
-                    return Err(device_step(&client_id, &secret, now_ms)?);
+            Some(t) if !t.due(now_ms) => t,
+            Some(t) => {
+                let outcome = renew(&client_id, &secret, &t, now_ms);
+                match after_renewal(t, outcome, now_ms) {
+                    Renewed::Use(t) => t,
+                    Renewed::SignInAgain => {
+                        host::kv_delete(TOKEN_KEY);
+                        return Err(device_step(&client_id, &secret, now_ms)?);
+                    }
+                    Renewed::TryLater(e) => return Err(e),
                 }
-            },
+            }
             None => return Err(device_step(&client_id, &secret, now_ms)?),
         };
         Ok(Client { client_id, token: token.access })
@@ -184,8 +236,8 @@ impl Client {
         let r = host::fetch(&self.request(path))?;
         match r.status {
             401 => {
-                host::kv_delete(TOKEN_KEY);
-                return Err("Trakt no longer accepts the sign-in. Press Refresh now to sign in again.".into());
+                expire_token();
+                return Err("Trakt no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now.".into());
             }
             429 => return Err("Trakt is asking for a pause (rate limit); it will try again later".into()),
             s if !(200..300).contains(&s) => return Err(format!("Trakt answered HTTP {s} for {}", path.split('?').next().unwrap_or(path))),
@@ -245,21 +297,26 @@ fn instruction(d: &Device) -> String {
     format!("Sign in: on your phone open {} and enter {}, then press Refresh now here.", d.verification_url.trim_start_matches("https://"), d.user_code)
 }
 
-fn renew(client_id: &str, secret: &str, old: &Token, now_ms: i64) -> Result<Token, String> {
+fn renew(client_id: &str, secret: &str, old: &Token, now_ms: i64) -> Result<Token, RenewError> {
     let (status, body) = post(
         "/oauth/token",
         serde_json::json!({ "refresh_token": old.refresh, "client_id": client_id, "client_secret": secret, "redirect_uri": "urn:ietf:wg:oauth:2.0:oob", "grant_type": "refresh_token" }),
         client_id,
-    )?;
-    if !(200..300).contains(&status) {
-        return Err(format!("HTTP {status}"));
+    )
+    .map_err(RenewError::Failed)?;
+    if matches!(status, 400 | 401) {
+        return Err(RenewError::Refused(status));
     }
-    let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    if !(200..300).contains(&status) {
+        return Err(RenewError::Failed(format!("HTTP {status}")));
+    }
+    let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| RenewError::Failed(e.to_string()))?;
     Ok(save_token(&t, now_ms))
 }
 
 fn save_token(t: &TokenAnswer, now_ms: i64) -> Token {
-    let token = Token { access: t.access_token.clone(), refresh: t.refresh_token.clone(), expires_ms: now_ms + t.expires_in * 1000 };
+    let lifetime_ms = t.expires_in * 1000;
+    let token = Token { access: t.access_token.clone(), refresh: t.refresh_token.clone(), expires_ms: now_ms + lifetime_ms, lifetime_ms };
     host::kv_set(TOKEN_KEY, serde_json::to_string(&token).unwrap_or_default().as_bytes());
     token
 }
@@ -552,5 +609,31 @@ mod tests {
     fn the_sign_in_instruction_names_the_code() {
         let d = Device { device_code: "x".into(), user_code: "5055CC52".into(), verification_url: "https://trakt.tv/activate".into(), expires_ms: 0 };
         assert_eq!(instruction(&d), "Sign in: on your phone open trakt.tv/activate and enter 5055CC52, then press Refresh now here.");
+    }
+
+    fn token(expires_ms: i64, lifetime_ms: i64) -> Token {
+        Token { access: "old".into(), refresh: "r".into(), expires_ms, lifetime_ms }
+    }
+
+    #[test]
+    fn renewal_is_due_when_a_fifth_of_the_life_is_left() {
+        let day = 86_400_000;
+        assert!(!token(day, day).due(0));
+        assert!(!token(day, day).due(day - 5 * HOUR_MS));
+        assert!(token(day, day).due(day - 4 * HOUR_MS));
+        assert!(!token(90 * day, 90 * day).due(60 * day));
+        assert!(token(90 * day, 90 * day).due(75 * day));
+        // A token saved before its lifetime was kept renews a week ahead, as it did.
+        let old: Token = serde_json::from_str(r#"{"access": "a", "refresh": "r", "expires_ms": 1000000000}"#).unwrap();
+        assert!(old.due(1_000_000_000 - WEEK_MS + 1));
+        assert!(!old.due(1_000_000_000 - WEEK_MS - 1));
+    }
+
+    #[test]
+    fn only_a_refused_renewal_asks_for_a_new_sign_in() {
+        assert!(matches!(after_renewal(token(10, 10), Err(RenewError::Refused(401)), 0), Renewed::SignInAgain));
+        assert!(matches!(after_renewal(token(10, 10), Err(RenewError::Failed("HTTP 503".into())), 0), Renewed::Use(t) if t.access == "old"));
+        assert!(matches!(after_renewal(token(10, 10), Err(RenewError::Failed("timed out".into())), 20), Renewed::TryLater(_)));
+        assert!(matches!(after_renewal(token(10, 10), Ok(token(99, 99)), 0), Renewed::Use(t) if t.expires_ms == 99));
     }
 }
