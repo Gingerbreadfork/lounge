@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Other apps' rows name their artwork by plain http as often as not; only that artwork and the
+     https update check use Android's network stack. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

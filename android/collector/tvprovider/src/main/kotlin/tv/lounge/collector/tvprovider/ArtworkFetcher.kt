@@ -47,12 +47,13 @@ class ArtworkFetcher(
         if (failedAt != null && System.currentTimeMillis() - failedAt < 3_600_000L) return@withContext file.takeIf { it.exists() }?.absolutePath
         dir.mkdirs()
         val tmp = File.createTempFile(file.name + ".", ".tmp", dir)
+        val started = System.currentTimeMillis()
         try {
-            open(Uri.parse(uri)).use { input -> tmp.outputStream().use { input.copyTo(it) } }
+            open(Uri.parse(uri)).use { input -> copyBounded(input, tmp, started) }
             if (tmp.length() == 0L) throw IllegalStateException("empty")
             // Some providers answer a logo request with the logo's URL as text; follow it once.
             urlInside(tmp)?.let { target ->
-                open(Uri.parse(target)).use { input -> tmp.outputStream().use { input.copyTo(it) } }
+                open(Uri.parse(target)).use { input -> copyBounded(input, tmp, started) }
                 if (tmp.length() == 0L || urlInside(tmp) != null) throw IllegalStateException("empty redirect")
             }
             if (!tmp.renameTo(file)) {
@@ -65,6 +66,25 @@ class ArtworkFetcher(
             synchronized(failures) { failures[uri] = System.currentTimeMillis() }
             Log.d(TAG, "artwork $uri: ${e.javaClass.simpleName} ${e.message}")
             file.takeIf { it.exists() }?.absolutePath
+        }
+    }
+
+    /**
+     * Copies at most [MAX_BYTES], and only until [DEADLINE_MS] after [started]: no picture needs
+     * more, and a server that trickles must not hold up the rest of the listings.
+     */
+    private fun copyBounded(input: InputStream, file: File, started: Long) {
+        file.outputStream().use { out ->
+            val buf = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                total += n
+                if (total > MAX_BYTES) throw IllegalStateException("larger than any picture")
+                if (System.currentTimeMillis() - started > DEADLINE_MS) throw IllegalStateException("too slow")
+                out.write(buf, 0, n)
+            }
         }
     }
 
@@ -90,6 +110,8 @@ class ArtworkFetcher(
             conn.instanceFollowRedirects = true
             conn.setRequestProperty("User-Agent", "Lounge/0.1 (Android TV)")
             if (conn.responseCode !in 200..299) throw IllegalStateException("HTTP ${conn.responseCode}")
+            val type = conn.contentType.orEmpty().lowercase()
+            if (type.startsWith("video/") || type.startsWith("audio/")) throw IllegalStateException("not a picture: $type")
             conn.inputStream
         }
         else -> throw IllegalArgumentException("unsupported scheme")
@@ -110,5 +132,8 @@ class ArtworkFetcher(
 
     private companion object {
         const val TAG = "LoungeArt"
+        /** The most the artwork pipeline will decode. */
+        const val MAX_BYTES = 12L * 1024 * 1024
+        const val DEADLINE_MS = 30_000L
     }
 }
