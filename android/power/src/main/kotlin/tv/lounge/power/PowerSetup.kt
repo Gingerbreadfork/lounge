@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -149,7 +150,8 @@ class PowerSetup(private val context: Context) {
     }
 
     private fun record(entry: PowerLogEntry) {
-        _log.value = (_log.value + entry).takeLast(60)
+        // Two commands can finish at once; update keeps both entries.
+        _log.update { (it + entry).takeLast(60) }
     }
 
     // ----- the whitelist -----
