@@ -65,7 +65,7 @@
         {#if spotlight.artworkPath}<img src={art(spotlight.artworkPath)} alt="" />{/if}
       </div>
       <div class="stage-text">
-        <p class="meta">{spotlight.category}{#if spotlight.source}<span class="source"> · {spotlight.source}</span>{/if}</p>
+        <p class="meta">{spotlight.category}{#if spotlight.source}<span class="source">{` · ${spotlight.source}`}</span>{/if}</p>
         <h2>{spotlight.title}</h2>
         {#each spotlight.lines as line}<p class="meta">{line}</p>{/each}
         {#if progressPct(spotlight.progress) != null}
