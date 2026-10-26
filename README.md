@@ -200,45 +200,49 @@ written down in [DESIGN.md](DESIGN.md).
 
 ## Installing on a TV
 
-Grab `Lounge-<version>.apk` from the [Releases](../../releases) page, with a `SHA256SUMS` file
-beside it, or build it yourself (below). Install it over ADB from a computer on the same network,
-or copy the file to the TV and open it with a file manager.
+Download `Lounge-<version>.apk` from the [Releases](../../releases) page, or build it yourself
+(below). It runs on Android TV and Google TV from Android 9.
+
+### The easy way: a USB stick
+
+1. Copy the APK onto a USB stick and plug it into the TV.
+2. Open the APK with a file manager on the TV. Google TV has none built in, but any from the
+   Play Store will do. The first time, Android asks you to let that file manager install apps.
+3. Open Lounge. Its setup makes it the home screen through **Power Setup**: when it asks, turn
+   on USB debugging in Developer options, then choose Allow on the TV's prompt and tick Always
+   allow.
+
+### The advanced way: ADB
+
+With USB debugging on and a computer on the same network, this installs Lounge and makes it
+the home screen; press Home and its setup starts:
 
 ```sh
 adb connect <tv>:5555
 adb install -r Lounge-<version>.apk
-adb shell am start -n tv.lounge.launcher/.MainActivity
-```
-
-The first launch runs the setup steps. Android does not let an app make itself the home screen,
-so that step needs either a command from a computer,
-
-```sh
 adb shell cmd package set-home-activity tv.lounge.launcher/.MainActivity
 ```
 
-or **Power Setup** on the TV (Settings, Power Setup, Connect). On Google TV the stock home and
-its setup app outrank any home you choose, so they have to be switched off as well, which leaves
-them installed:
+On Google TV the stock home and its setup app outrank any home you choose, so switch them off
+too. They stay installed, and `pm enable` with the same names brings them back; do that before
+you uninstall Lounge, or the TV is left without a home screen.
 
 ```sh
 adb shell pm disable-user --user 0 com.google.android.apps.tv.launcherx
 adb shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
 ```
 
-`pm enable` with the same names turns them back on. Do that before you uninstall Lounge, or the
-TV is left without a home screen. Power Setup does both for you and can undo them.
+Power Setup does all of this from the TV as well, and can undo it. It also grants the optional
+accesses, drives the TV over HDMI-CEC, sets the screensaver and compiles Lounge ahead of time,
+showing each command before it runs.
 
-Power Setup talks to the TV's own debugging service once you allow it on screen. It can take the
-home role, grant the optional accesses, drive the TV over HDMI-CEC, set the screensaver and
-compile Lounge ahead of time. Each action shows its command first, and its page lists what ran.
+### Updates
 
-After the first install Lounge keeps itself current. Twice a day it checks the
-[Releases](../../releases) page, verifies a newer APK against its published hash and installs it
-while you are in another app. From Android 12 there is no prompt after the first update, and
-with Power Setup there is none at all; otherwise a tile on the home screen offers the update.
-The first time, Play Protect on Google TV may warn that it does not know the developer: choose
-More details, then Install anyway. Settings, Updates checks now or turns this off.
+Lounge checks the [Releases](../../releases) page twice a day, verifies a newer APK against its
+published hash and installs it while you are in another app. From Android 12 there is no prompt
+after the first update, and with Power Setup there is none at all; otherwise a tile on the home
+screen offers it. On Google TV, Play Protect may warn the first time that it does not know the
+developer: choose More details, then Install anyway. Settings, Updates turns the check off.
 
 ## Under the hood
 
