@@ -1,8 +1,9 @@
 package tv.lounge.power
 
 import android.content.pm.PackageManager
-import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 
@@ -63,13 +64,22 @@ class ShizukuBackend : Privileged {
         if (!permitted) throw PrivilegedException("Shizuku has not granted Lounge access")
         val newProcess = Shizuku::class.java.getDeclaredMethod("newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java)
         newProcess.isAccessible = true
-        val process = newProcess.invoke(null, arrayOf("sh", "-c", command), null, null)
+        val process = newProcess.invoke(null, arrayOf("sh", "-c", command), null, null) as? Process
             ?: throw PrivilegedException("Shizuku could not start a shell")
-        val cls = process.javaClass
-        val stdout = (cls.getMethod("getInputStream").invoke(process) as InputStream).readBytes().toString(Charsets.UTF_8)
-        val stderr = (cls.getMethod("getErrorStream").invoke(process) as InputStream).readBytes().toString(Charsets.UTF_8)
-        val code = cls.getMethod("waitFor").invoke(process) as Int
-        runCatching { cls.getMethod("destroy").invoke(process) }
-        ShellResult(code, (stdout + stderr).trim())
+        try {
+            coroutineScope {
+                // Both streams drain at once, so a chatty stderr cannot fill its pipe and stall it.
+                val stdout = async { process.inputStream.readBytes() }
+                val stderr = async { process.errorStream.readBytes() }
+                if (!process.waitFor(timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                    process.destroy()
+                    throw PrivilegedException("the command did not finish within ${timeoutMs / 1000} s")
+                }
+                val text = (stdout.await().toString(Charsets.UTF_8) + stderr.await().toString(Charsets.UTF_8)).trim()
+                ShellResult(process.exitValue(), text)
+            }
+        } finally {
+            runCatching { process.destroy() }
+        }
     }
 }
