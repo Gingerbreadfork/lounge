@@ -389,9 +389,9 @@ kept, and the plugin refreshes.
 | Fuel | 20 billion instructions per call, handed out in slices; a runaway loop ends at its time limit or with "out of fuel". A start function gets the first 10 million |
 | Host calls | 10,000 fuel each, plus one per byte they move |
 | Time | 3 minutes for a refresh, 12 s for `search`, `resolve` and the manifest |
-| Fetches | 64 per call, 60 s of waiting in total, 20 s and 8 MB each |
-| Result | 8 MB of JSON per call |
-| Items | 2,000 per refresh, each id once |
+| Fetches | 64 per call, 60 s of waiting in total, 20 s and 8 MB each, and 16 MB once encoded for the plugin |
+| Result | 8 MB of JSON from a refresh, 256 KB from `search`, `resolve` and the manifest |
+| Items | 2,000 per refresh, each id once; past the first 4,000 sent, items are only counted |
 | Artwork | 4 MB per picture, 12 MB for a wallpaper; 600 new pictures, 192 MB and two minutes per refresh |
 | Key-value | 256 keys of up to 256 bytes, values of 256 KB, 1,000 writes per call |
 | Log | 500 lines per call of up to 4 KB each, the last 200 kept |

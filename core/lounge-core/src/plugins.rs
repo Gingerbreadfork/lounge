@@ -322,14 +322,14 @@ impl PluginManager {
     /// sentences worth putting in the plugin's log.
     fn refresh(&self, entry: &PluginEntry, ctx: &RefreshContext) -> Result<(Vec<ReadyItem>, Vec<String>), String> {
         let plugin = self.loaded(&entry.id, &entry.manifest)?;
-        let items = self.host.refresh(&plugin, ctx).map_err(|e| e.to_string())?;
+        let (items, sent) = self.host.refresh_counted(&plugin, ctx).map_err(|e| e.to_string())?;
         let mut notes = Vec::new();
         let (mut items, repeats) = unique_by_id(items);
         if repeats > 0 {
             notes.push(format!("{repeats} items repeated an id and were left out; ids must be unique"));
         }
-        if items.len() > MAX_ITEMS {
-            notes.push(format!("{} items sent; only the first {MAX_ITEMS} are kept", items.len()));
+        if items.len() > MAX_ITEMS || sent > lounge_plugins::host::ITEMS_READ {
+            notes.push(format!("{sent} items sent; only the first {MAX_ITEMS} are kept"));
             items.truncate(MAX_ITEMS);
         }
         let dir = self.plugin_art_dir(&entry.id).ok_or_else(|| format!("invalid plugin id {:?}", entry.id))?;

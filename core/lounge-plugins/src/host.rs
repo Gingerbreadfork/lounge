@@ -4,7 +4,8 @@
 
 use crate::api::{self, exports, imports, Action, HttpRequest, HttpResponse, Item, Manifest, Outcome, RefreshContext, SearchQuery};
 use crate::{PluginError, Result};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::{DeserializeOwned, Deserializer, IgnoredAny, SeqAccess, Visitor};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use wasmi::{Caller, Config, Engine, Extern, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc, TypedResumableCall, WasmParams, WasmResults};
@@ -39,8 +40,10 @@ pub struct Limits {
     /// fuel meters instructions, this meters the time spent waiting on the network.
     pub max_fetches: u32,
     pub fetch_budget: Duration,
-    /// Largest value an export may hand back.
+    /// Largest value a refresh may hand back.
     pub max_result_bytes: usize,
+    /// Largest value any other export may hand back; a manifest, a search or an action is small.
+    pub call_result_bytes: usize,
     /// Wall-clock limit for one refresh, and for any other call.
     pub refresh_time: Duration,
     pub call_time: Duration,
@@ -59,6 +62,7 @@ impl Default for Limits {
             max_fetches: 64,
             fetch_budget: Duration::from_secs(60),
             max_result_bytes: 8 * 1024 * 1024,
+            call_result_bytes: 256 * 1024,
             refresh_time: Duration::from_secs(180),
             call_time: Duration::from_secs(12),
         }
@@ -69,6 +73,12 @@ impl Default for Limits {
 const MAX_KEY_BYTES: usize = 256;
 /// Longest log line, in bytes; anything after it is dropped.
 const MAX_LOG_BYTES: usize = 4096;
+/// Most items read from one answer; the rest are counted but never built. Twice what the core
+/// keeps, so ids a plugin repeats rarely cost it an item.
+pub const ITEMS_READ: usize = 4_000;
+/// The most an answer to `fetch` may come to as JSON. Ordinary escaping adds little to an 8 MB
+/// body, but control characters grow six-fold, and such an answer is refused before it is built.
+const MAX_ANSWER_BYTES: usize = 16 * 1024 * 1024;
 /// Fuel is handed to a call this much at a time and the clock is read between slices, so a loop
 /// that never calls the host still stops at its deadline. A slice is well under a second on a TV.
 const FUEL_SLICE: u64 = 10_000_000;
@@ -123,14 +133,20 @@ impl Host {
 
     /// The manifest the module itself reports, for cross-checking with `manifest.json`.
     pub fn manifest_of(&self, plugin: &LoadedPlugin) -> Result<Manifest> {
-        self.call_json::<(), Manifest>(plugin, exports::MANIFEST, None, self.limits.call_time).map(|o| match o {
+        self.call_json::<(), Manifest>(plugin, exports::MANIFEST, None, self.limits.call_time, self.limits.call_result_bytes).map(|o| match o {
             Outcome::Ok(m) => Ok(m),
             Outcome::Err(e) => Err(PluginError::Failed(e)),
         })?
     }
 
     pub fn refresh(&self, plugin: &LoadedPlugin, ctx: &RefreshContext) -> Result<Vec<Item>> {
-        self.outcome(self.call_json(plugin, exports::REFRESH, Some(ctx), self.limits.refresh_time)?)
+        self.refresh_counted(plugin, ctx).map(|(items, _)| items)
+    }
+
+    /// A refresh's items, the first [ITEMS_READ] of them, and how many it sent in all.
+    pub fn refresh_counted(&self, plugin: &LoadedPlugin, ctx: &RefreshContext) -> Result<(Vec<Item>, usize)> {
+        let listing: Listing = self.outcome(self.call_json(plugin, exports::REFRESH, Some(ctx), self.limits.refresh_time, self.limits.max_result_bytes)?)?;
+        Ok((listing.items, listing.sent))
     }
 
     /// Whether the module answers `lg_search`.
@@ -143,14 +159,15 @@ impl Host {
             return Ok(Vec::new());
         }
         let q = SearchQuery { query: query.to_string(), limit };
-        self.outcome(self.call_json(plugin, exports::SEARCH, Some(&q), self.limits.call_time)?)
+        let listing: Listing = self.outcome(self.call_json(plugin, exports::SEARCH, Some(&q), self.limits.call_time, self.limits.call_result_bytes)?)?;
+        Ok(listing.items)
     }
 
     pub fn resolve(&self, plugin: &LoadedPlugin, action: &str) -> Result<Action> {
         if plugin.module.get_export(exports::RESOLVE).is_none() {
             return Err(PluginError::Failed("plugin cannot resolve actions".into()));
         }
-        self.outcome(self.call_json(plugin, exports::RESOLVE, Some(&action.to_string()), self.limits.call_time)?)
+        self.outcome(self.call_json(plugin, exports::RESOLVE, Some(&action.to_string()), self.limits.call_time, self.limits.call_result_bytes)?)
     }
 
     fn outcome<T>(&self, o: Outcome<T>) -> Result<T> {
@@ -160,7 +177,7 @@ impl Host {
         }
     }
 
-    fn call_json<I: Serialize, O: DeserializeOwned>(&self, plugin: &LoadedPlugin, export: &str, input: Option<&I>, time: Duration) -> Result<Outcome<O>> {
+    fn call_json<I: Serialize, O: DeserializeOwned>(&self, plugin: &LoadedPlugin, export: &str, input: Option<&I>, time: Duration, max_result: usize) -> Result<Outcome<O>> {
         let started = Instant::now();
         let deadline = started + time;
         // The start function cannot be paused, so it runs on the first slice alone.
@@ -220,7 +237,7 @@ impl Host {
         }
         // The plugin names the range; it is checked against its memory before a byte is allocated.
         let end = ptr as usize + len as usize;
-        if len as usize > self.limits.max_result_bytes || end > memory.data_size(&store) {
+        if len as usize > max_result || end > memory.data_size(&store) {
             return Err(PluginError::Wasm(format!("{export} returned {len} bytes at {ptr}, outside its memory or over the limit")));
         }
         let mut out = vec![0u8; len as usize];
@@ -231,6 +248,70 @@ impl Host {
         let used = self.limits.fuel.saturating_sub(store.get_fuel().unwrap_or(0) + store.data().fuel_reserve);
         tracing::debug!("plugin {} {export}: {} fuel", plugin.id, used);
         Ok(serde_json::from_slice(&out)?)
+    }
+}
+
+/// A list of items read up to [ITEMS_READ] entries, with a count of every entry sent.
+struct Listing {
+    items: Vec<Item>,
+    sent: usize,
+}
+
+impl<'de> Deserialize<'de> for Listing {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> std::result::Result<Listing, D::Error> {
+        struct Entries;
+        impl<'de> Visitor<'de> for Entries {
+            type Value = Listing;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a list of items")
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> std::result::Result<Listing, A::Error> {
+                let mut items = Vec::new();
+                let mut sent = 0;
+                loop {
+                    let more = if items.len() < ITEMS_READ {
+                        seq.next_element::<Item>()?.map(|it| items.push(it)).is_some()
+                    } else {
+                        seq.next_element::<IgnoredAny>()?.is_some()
+                    };
+                    if !more {
+                        return Ok(Listing { items, sent });
+                    }
+                    sent += 1;
+                }
+            }
+        }
+        d.deserialize_seq(Entries)
+    }
+}
+
+/// A buffer that refuses to grow past `max`.
+struct Bounded {
+    buf: Vec<u8>,
+    max: usize,
+}
+
+impl std::io::Write for Bounded {
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        if self.buf.len() + data.len() > self.max {
+            return Err(std::io::Error::other("over the limit"));
+        }
+        self.buf.extend_from_slice(data);
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// A fetch answer as JSON for the plugin, or a short refusal when it would come to more than `max`.
+fn encode_answer(response: &Outcome<HttpResponse>, max: usize) -> std::result::Result<Vec<u8>, serde_json::Error> {
+    let mut out = Bounded { buf: Vec::new(), max };
+    match serde_json::to_writer(&mut out, response) {
+        Ok(()) => Ok(out.buf),
+        // The SDK reads "body is larger than" as an answer too big for a plugin.
+        Err(_) => serde_json::to_vec(&Outcome::<HttpResponse>::Err("the body is larger than a plugin may read once encoded".into())),
     }
 }
 
@@ -513,7 +594,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
                     Err(e) => Outcome::Err(e),
                 }
             };
-            let bytes = serde_json::to_vec(&response).map_err(|e| wasmi::Error::new(e.to_string()))?;
+            let bytes = encode_answer(&response, MAX_ANSWER_BYTES).map_err(|e| wasmi::Error::new(e.to_string()))?;
             drop(response);
             hand_back(&mut caller, &bytes)
         })
@@ -674,6 +755,26 @@ mod tests {
         let plugin = host.load("x", Manifest::default(), &wasm).unwrap();
         let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
         assert!(matches!(&err, PluginError::Failed(msg) if msg.contains("returned nothing")), "{err}");
+    }
+
+    #[test]
+    fn items_past_the_cap_are_counted_but_not_built() {
+        let entries: Vec<String> = (0..ITEMS_READ + 5).map(|i| format!(r#"{{"id":"{i}","title":"t"}}"#)).collect();
+        let json = format!(r#"{{"ok":[{}]}}"#, entries.join(","));
+        let Outcome::Ok(listing) = serde_json::from_str::<Outcome<Listing>>(&json).unwrap() else { panic!("not ok") };
+        assert_eq!(listing.items.len(), ITEMS_READ);
+        assert_eq!(listing.sent, ITEMS_READ + 5);
+        assert_eq!(listing.items.last().map(|it| it.id.as_str()), Some("3999"));
+    }
+
+    #[test]
+    fn an_answer_that_grows_past_its_limit_is_refused() {
+        let response = |body: String| Outcome::Ok(HttpResponse { status: 200, headers: Default::default(), body, body_base64: None });
+        // Each control character becomes six bytes of JSON.
+        let big = encode_answer(&response("\u{1}".repeat(500)), 1000).unwrap();
+        assert!(String::from_utf8(big).unwrap().contains("body is larger than"));
+        let small = encode_answer(&response("plain".into()), 1000).unwrap();
+        assert!(String::from_utf8(small).unwrap().contains("plain"));
     }
 
     /// A minimal module whose `lg_refresh` body is `body`; `lg_alloc` is `alloc`.
