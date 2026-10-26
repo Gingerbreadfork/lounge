@@ -8,6 +8,8 @@ use serde::Deserialize;
 pub struct Jellyfin;
 
 const APP_PACKAGE: &str = "org.jellyfin.androidtv";
+/// Sent as `Authorization`, which every Jellyfin reads; newer servers ignore `X-Emby-Authorization`
+/// and `api_key` unless legacy authorization is switched on.
 const AUTH_HEADER: &str = "MediaBrowser Client=\"Lounge\", Device=\"Android TV\", DeviceId=\"lounge-launcher\", Version=\"0.1\"";
 
 impl sdk::Plugin for Jellyfin {
@@ -156,7 +158,7 @@ impl Session {
             url: format!("{server}/Users/AuthenticateByName"),
             headers: [
                 ("Content-Type".to_string(), "application/json".to_string()),
-                ("X-Emby-Authorization".to_string(), AUTH_HEADER.to_string()),
+                ("Authorization".to_string(), AUTH_HEADER.to_string()),
             ]
             .into_iter()
             .collect(),
@@ -178,7 +180,7 @@ impl Session {
 
     fn request(&self, path: &str) -> HttpRequest {
         HttpRequest::get(format!("{}{}", self.server, path))
-            .header("X-Emby-Authorization", &format!("{AUTH_HEADER}, Token=\"{}\"", self.token))
+            .header("Authorization", &format!("{AUTH_HEADER}, Token=\"{}\"", self.token))
             .header("Accept", "application/json")
     }
 
@@ -190,8 +192,9 @@ impl Session {
         serde_json::from_str(&r.body).map_err(|e| format!("unexpected response for {path}: {e}"))
     }
 
+    /// Item pictures need no sign-in, so the token stays out of every picture's address.
     fn image(&self, item_id: &str, kind: &str, size: &str) -> String {
-        format!("{}/Items/{item_id}/Images/{kind}?{size}&quality=90&api_key={}", self.server, self.token)
+        format!("{}/Items/{item_id}/Images/{kind}?{size}&quality=90", self.server)
     }
 
     fn open(&self, item: &MediaItem) -> Action {
@@ -311,9 +314,17 @@ mod tests {
         assert_eq!(item.season.as_deref(), Some("2"));
         assert_eq!(item.progress, Some(0.5));
         assert_eq!(item.duration_ms, Some(1_800_000));
-        assert!(item.thumbnail.unwrap().contains("/Items/e1/Images/Primary"));
+        assert_eq!(item.thumbnail.as_deref(), Some("http://jf:8096/Items/e1/Images/Primary?maxWidth=960&quality=90"));
         assert!(item.poster.unwrap().contains("/Items/s1/Images/Primary"));
         assert_eq!(item.action.fallback_launch.as_deref(), Some(APP_PACKAGE));
         assert_eq!(url_encode("the bear & co"), "the+bear+%26+co");
+    }
+
+    #[test]
+    fn the_token_goes_in_the_authorization_header() {
+        let s = Session { server: "http://jf:8096".into(), token: "secret".into(), user_id: "u".into() };
+        let req = s.request("/Users/u");
+        assert_eq!(req.headers.get("Authorization").map(String::as_str), Some(format!("{AUTH_HEADER}, Token=\"secret\"").as_str()));
+        assert!(!req.headers.contains_key("X-Emby-Authorization"));
     }
 }
