@@ -51,6 +51,11 @@ private const val TAG = "Lounge"
 private const val FRAME_MS = 33L
 private const val WINDOW = 45
 private const val SETTLE_MS = 2_500L
+/**
+ * Nothing is measured until the app has run this long: its own start keeps the GPU busy, and a
+ * step down taken then would be remembered for good.
+ */
+private const val WARM_MS = 15_000L
 private const val SLOW_MS = 40f
 /** Frames this slow, three in a row, mean no step down will save the scene, so it ends at once. */
 private const val HOPELESS_MS = 500f
@@ -253,7 +258,8 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
         finish.setInputShader("blue", BitmapShader(BlueNoise.bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT))
         loop = scope.launch {
             var started = System.nanoTime()
-            var settleUntil = System.currentTimeMillis() + SETTLE_MS
+            val warm = android.os.Process.getStartUptimeMillis() + WARM_MS - android.os.SystemClock.uptimeMillis()
+            var settleUntil = System.currentTimeMillis() + maxOf(SETTLE_MS, warm)
             val frames = FloatArray(WINDOW)
             var n = 0
             var windows = 0
