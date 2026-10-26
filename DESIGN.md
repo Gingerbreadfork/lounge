@@ -121,7 +121,7 @@ Canvas: 1920 × 1080 logical pixels (both reference devices render the UI at 108
 ```
 y 0    ┌──────────────────────────────────────────────────────────────────────────────┐
        │ (54)                                                                          │
-y 54   │ ● Adam                                   Search   TV controls   ⚙    21:42   │  top bar, 48 high
+y 54   │ ◖ Lounge                                 Search   TV controls   ⚙    21:42   │  top bar, 48 high
 y 102  │                                                                               │
 y 136  │ ┌─ playbill (560 w) ─────────┐  ┌─ artwork 1120 × 630 ───────────────────────┐│
        │ │ Continue watching          │  │                                            ││
@@ -194,11 +194,16 @@ on tapered wooden legs. It is the one bright thing in the dim room, which is the
 own idea. Sources: `design/logo/sofa.png` (on transparency) and `design/logo/sofa-gradient.png`
 (on its indigo-to-orange gradient); `design/logo/make.py` renders every size from them, and
 nothing is traced or redrawn by hand. The sofa appears on exactly two grounds: on `velvet`
-inside the TV UI (the top bar carries it 42 dp wide, nothing behind it), and on its own
+inside the TV UI, and on its own
 gradient wherever it stands for the app outside the UI: the adaptive launcher icon
 (background: the gradient; foreground: the sofa at 58 dp inside the safe zone; monochrome: its
 silhouette), the launcher banner (the sofa on the left, "Lounge" in Bricolage Grotesque Bold,
-`limelight`, to its right) and the phone app's icon. The gradient belongs to the mark and never
+`limelight`, to its right) and the phone app's icon. The top bar carries the banner's lockup at
+TV size, nothing behind it: the sofa 56 dp wide, then "Lounge" 14 dp after it in the same
+Bricolage cut (weight 700, optical size 96) at 30, `limelight`, tracked −0.01 em, its baseline on
+the line where the sofa's seat meets its legs, so the legs hang below the line as the g's tail
+does. Scaled down from the banner the word would fall under the 22 px floor, so at TV size the
+word is set larger against the sofa than on the banner. The gradient belongs to the mark and never
 appears elsewhere in the UI. Never outline it, never flip it, never recolour it, never put text
 on it, and never show it smaller than 36 dp wide.
 

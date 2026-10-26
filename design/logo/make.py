@@ -119,9 +119,9 @@ def banner(pre, gradient):
 
 
 def top_bar_mark(pre):
-    """The sofa alone, 42 dp wide, for the top bar."""
+    """The sofa, 56 dp wide, for the top bar, where "Lounge" stands beside it."""
     for name in ("xhdpi", "xxhdpi", "xxxhdpi"):
-        save(sofa_at(pre, round(42 * DENSITIES[name])), DESIGN_RES, f"drawable-{name}", "mark_sofa.png")
+        save(sofa_at(pre, round(56 * DENSITIES[name])), DESIGN_RES, f"drawable-{name}", "mark_sofa.png")
 
 
 def web_icons(pre, gradient):

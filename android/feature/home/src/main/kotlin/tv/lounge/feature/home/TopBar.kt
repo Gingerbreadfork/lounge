@@ -45,6 +45,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
@@ -104,11 +107,30 @@ fun TopBar(
     }
 }
 
-/** The mark: the sofa, 42 dp wide, on the velvet. */
+/**
+ * The mark (DESIGN.md §5.x): the sofa 56 dp wide with "Lounge" beside it, set as on the banner,
+ * the word's baseline on the sofa's seat so the legs hang below the line as the g's tail does.
+ */
 @Composable
 private fun Mark() {
-    Image(painterResource(tv.lounge.design.R.drawable.mark_sofa), contentDescription = null, modifier = Modifier.width(42.dp))
+    Row {
+        Image(
+            painterResource(tv.lounge.design.R.drawable.mark_sofa),
+            contentDescription = null,
+            modifier = Modifier.width(56.dp).alignBy { (it.measuredHeight * SEAT).roundToInt() },
+        )
+        Spacer(Modifier.width(14.dp))
+        Text(
+            "Lounge",
+            style = LoungeTheme.typography.displayXl.copy(fontSize = 30.sp, lineHeight = 30.sp, letterSpacing = (-0.01).em),
+            color = LoungeTheme.colors.limelight,
+            modifier = Modifier.alignByBaseline(),
+        )
+    }
 }
+
+/** Where the sofa's seat meets its legs, as a fraction of the picture's height. */
+private const val SEAT = 0.85f
 
 /**
  * A top-bar button: glyph and label. Focus is a `curtainEdge` pill behind it (the label does
