@@ -1025,8 +1025,13 @@ fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::
         LayoutCommand::UnpinApp { package } => state.graph.unpin_app(&package),
         LayoutCommand::MoveApp { package, to_index } => state.graph.move_app(&package, to_index as usize),
         LayoutCommand::PinToStage { id } => {
-            if !state.graph.layout.stage_pins.contains(&id) {
-                state.graph.layout.stage_pins.push(id);
+            let pins = &mut state.graph.layout.stage_pins;
+            if !pins.contains(&id) {
+                // The Stage shows no more pins than it has places, so a new one replaces the oldest.
+                if pins.len() >= crate::engine::STAGE_CAP {
+                    pins.remove(0);
+                }
+                pins.push(id);
             }
         }
         LayoutCommand::UnpinFromStage { id } => state.graph.layout.stage_pins.retain(|p| p != &id),

@@ -1,6 +1,6 @@
 //! The worker outlives a job that panics: a listener that panics on one snapshot gets the next.
 
-use lounge_core::{AppRecord, Core, CoreConfig, DeviceTier, HomeSnapshot, Platform, PlatformError, SnapshotListener};
+use lounge_core::{AppRecord, Core, CoreConfig, DeviceTier, HomeSnapshot, LayoutCommand, Platform, PlatformError, SnapshotListener};
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -85,4 +85,45 @@ fn the_worker_carries_on_after_a_panic() {
     wait_for("a snapshot after the panic", || {
         listener.last.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "allapps" && r.tiles.len() == 2))
     });
+}
+
+/// Keeps the latest snapshot.
+#[derive(Default)]
+struct Latest(Mutex<Option<HomeSnapshot>>);
+
+impl SnapshotListener for Latest {
+    fn on_snapshot(&self, s: HomeSnapshot) {
+        *self.0.lock() = Some(s);
+    }
+}
+
+#[test]
+fn a_pin_past_the_stage_s_places_replaces_the_oldest() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = CoreConfig {
+        data_dir: dir.path().join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::B,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    let core = Core::open(config, Arc::new(Quiet)).unwrap();
+    let latest = Arc::new(Latest::default());
+    core.add_listener(latest.clone());
+    let packages: Vec<String> = (1..=7).map(|n| format!("app{n}.tv")).collect();
+    core.ingest_apps(packages.iter().map(|p| app(p)).collect());
+    for p in &packages {
+        core.command(LayoutCommand::PinToStage { id: format!("app:{p}") });
+    }
+    let pinned = |s: &HomeSnapshot| -> Vec<String> {
+        let all = s.rows.iter().find(|r| r.id == "allapps").map(|r| r.tiles.clone()).unwrap_or_default();
+        all.iter().filter(|t| t.stage_pinned).map(|t| t.id.clone()).collect()
+    };
+    wait_for("the last pin", || latest.0.lock().as_ref().is_some_and(|s| pinned(s).contains(&"app:app7.tv".to_string())));
+    let now = pinned(latest.0.lock().as_ref().unwrap());
+    assert_eq!(now.len(), 6);
+    assert!(!now.contains(&"app:app1.tv".to_string()));
 }

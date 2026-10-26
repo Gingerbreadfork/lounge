@@ -35,7 +35,7 @@ impl<'a> BuildIndex<'a> {
     }
 }
 
-const STAGE_CAP: usize = 6;
+pub(crate) const STAGE_CAP: usize = 6;
 const NOTICE_TV_LISTINGS: &str = "notice:tv_listings";
 
 /// The core rows and their titles, in default order.
