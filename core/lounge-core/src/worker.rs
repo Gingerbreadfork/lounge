@@ -301,17 +301,17 @@ impl ArtPlan {
         }
         let deferred = order.len() > sources;
         let groups: Vec<(&str, Vec<(usize, Style)>)> = order.into_iter().take(sources).map(|src| (src, by_src.remove(src).unwrap_or_default())).collect();
-        let work = |groups: &[(&str, Vec<(usize, Style)>)]| -> Vec<Vec<(usize, Result<Prepared, String>)>> {
+        let work = |groups: &[(&str, Vec<(usize, Style)>)]| -> Vec<Vec<(usize, Outcome)>> {
             groups
                 .par_iter()
                 .map(|(src, styles)| {
                     let wanted: Vec<Style> = styles.iter().map(|(_, s)| *s).collect();
                     // A decoder that panics on a file counts as one that cannot read it, so the
                     // file is not tried again until it changes.
-                    let results: Vec<Result<Prepared, String>> =
+                    let results: Vec<Outcome> =
                         match crate::guarded("preparing a picture", || prepare_many(Path::new(src), &art_dir, &wanted)) {
-                            Some(results) => results.into_iter().map(|r| r.map_err(|e| e.to_string())).collect(),
-                            None => wanted.iter().map(|_| Err("the decoder failed on this picture".to_string())).collect(),
+                            Some(results) => results.into_iter().map(|r| r.map_err(|e| (e.to_string(), !matches!(e, lounge_artwork::ArtworkError::Io(_))))).collect(),
+                            None => wanted.iter().map(|_| Err(("the decoder failed on this picture".to_string(), true))).collect(),
                         };
                     styles.iter().zip(results).map(|((i, _), r)| (*i, r)).collect()
                 })
@@ -333,9 +333,11 @@ impl ArtPlan {
                     }
                     prepared[i] = Some(p);
                 }
-                Err(e) => {
+                Err((e, remember)) => {
                     tracing::warn!("{} for {src}: {e}", style.slug());
-                    rows.push((art_key(src, *style), len, mtime, "null".to_string()));
+                    if remember {
+                        rows.push((art_key(src, *style), len, mtime, "null".to_string()));
+                    }
                 }
             }
         }
@@ -345,6 +347,10 @@ impl ArtPlan {
         ArtDone { results: prepared, deferred }
     }
 }
+
+/// A prepared picture, or why not and whether to remember it: a file that does not decode is
+/// not tried again until it changes, but a full disk or another I/O error may pass.
+type Outcome = Result<Prepared, (String, bool)>;
 
 fn art_key(src: &str, style: Style) -> String {
     format!("{src}#{}", style.slug())
