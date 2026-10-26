@@ -39,7 +39,7 @@
 
 - **A page the TV serves.** Pair by QR code or six digits on the same network, add it to the phone's home screen, no account and no server.
 - **What's on**, mirrored. Tap a tile and it opens on the TV.
-- **A remote** with a d-pad, media keys, a field that types into whatever the TV has focused, voice through the phone's own recogniser, and a place to paste a link that opens on the TV. Sharing a link to Lounge from any app does the same. With Power Setup connected the d-pad works inside other apps too.
+- **A remote** with a d-pad, media keys, a field that types into whatever the TV has focused (the phone keyboard's own dictation works there too), and a place to paste a link that opens on the TV. With Power Setup connected the d-pad works inside other apps too.
 - **Arrange the home screen** from the phone: rows, pinned apps, what is on the Stage.
 - **Plugins**, configured and installed from a file or a link. **Backups** of your layout and settings as one file, restored in one tap. **Paired phones** and the TV's diagnostics.
 
@@ -124,10 +124,9 @@ home screen like an app. The TV serves it itself and remembers the phone until y
 
 - **What's on** mirrors the home screen. Tap a tile and it opens on the TV.
 - **Remote** is a d-pad, Back, Home, Menu and the media keys, a field that types into whatever
-  the TV has focused, voice through the phone's own recogniser, and a place to paste a link that
-  opens on the TV. A link shared to Lounge from any other app waits on What's on until you tap
-  Open on the TV. The d-pad, Back and Menu reach Lounge's own screen; with Power Setup connected
-  they reach whatever app is in front.
+  the TV has focused, where the phone keyboard's own dictation works too, and a place to paste a
+  link that opens on the TV. The d-pad, Back and Menu reach Lounge's own screen; with Power Setup
+  connected they reach whatever app is in front.
 - **Layout** reorders the rows and your pinned apps, and shows what is pinned to the Stage.
 - **Plugins** configures the installed plugins and installs new ones from a file or a link.
 - **More** downloads a backup of your layout and settings as one JSON file and restores it,

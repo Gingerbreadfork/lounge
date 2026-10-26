@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '../lib/api';
   import Icon from '../lib/Icon.svelte';
-  import { act, app, connectionLabel } from '../lib/state.svelte';
+  import { act, app, connectionLabel, toast } from '../lib/state.svelte';
 
   let text = $state('');
   let listening = $state(false);
@@ -31,8 +31,9 @@
     act('Opened on the TV', () => api.open(`url:${l}`));
   }
 
-  // Voice through the phone's own recogniser; the TV never needs one.
-  const Speech = (globalThis as any).SpeechRecognition ?? (globalThis as any).webkitSpeechRecognition;
+  // Voice through the phone's own recogniser; the TV never needs one. Browsers give the microphone
+  // only to secure pages, which the TV's plain http address is not, so elsewhere there is no button.
+  const Speech = window.isSecureContext ? ((globalThis as any).SpeechRecognition ?? (globalThis as any).webkitSpeechRecognition) : undefined;
   function voice() {
     if (!Speech) return;
     if (listening) { recognition?.stop(); return; }
@@ -46,7 +47,12 @@
       if (e.results[e.results.length - 1].isFinal) { search(); }
     };
     recognition.onend = () => (listening = false);
-    recognition.onerror = () => (listening = false);
+    recognition.onerror = (e: any) => {
+      listening = false;
+      if (e?.error === 'no-speech') toast('Nothing was heard. Press the microphone and speak.');
+      else if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') toast("The browser did not allow the microphone. The keyboard's own dictation works in the field.");
+      else if (e?.error !== 'aborted') toast('Voice did not work this time. Try again, or use the keyboard.');
+    };
     listening = true;
     recognition.start();
   }
@@ -96,7 +102,7 @@
         <button class="btn primary" onclick={search} disabled={!text.trim()}>Search the TV</button>
       {/if}
     </div>
-    <p class="caption">Paste a link to open it on the TV. Sharing a link to Lounge from another app does the same.</p>
+    <p class="caption">Paste a link to open it on the TV.</p>
   </section>
 </main>
 
