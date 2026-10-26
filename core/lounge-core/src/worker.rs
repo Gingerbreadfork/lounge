@@ -72,7 +72,10 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                 let now = Instant::now();
                 let mut wake = housekeeping_at;
                 if screen_on {
+                    // A boundary is met on the minute it falls in, so a guide whose programmes end
+                    // at odd seconds wakes the worker once a minute rather than for each of them.
                     let until_change = next_change
+                        .map(|at| (at + 59_999) / 60_000 * 60_000)
                         .map(|at| Duration::from_millis((at - now_ms()).max(0) as u64 + 250))
                         .unwrap_or(TICK)
                         .min(TICK);
