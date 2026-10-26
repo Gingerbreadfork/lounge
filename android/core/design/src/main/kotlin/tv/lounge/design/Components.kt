@@ -419,7 +419,8 @@ fun <T : Any> Presence(item: T?, content: @Composable (item: T, visibleState: Mu
 class ToastController {
     var current: String? by mutableStateOf(null)
         private set
-    private var serial = 0
+    // State, so the same text shown again restarts the host's timer.
+    private var serial by mutableIntStateOf(0)
 
     fun show(text: String) {
         current = text
