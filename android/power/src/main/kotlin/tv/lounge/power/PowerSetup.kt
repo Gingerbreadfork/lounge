@@ -130,7 +130,9 @@ class PowerSetup(private val context: Context) {
 
     /** Runs one whitelisted action; the result goes to the log either way. */
     suspend fun run(action: PowerAction): ShellResult {
-        val backend = backend() ?: throw PrivilegedException("Power Setup is not connected")
+        // After a restart nothing is known until checked; with a key or Shizuku there, check now.
+        val backend = backend() ?: (if (hasKey || shizuku.installed) refresh().let { backend() } else null)
+            ?: throw PrivilegedException("Power Setup is not connected")
         return try {
             val r = backend.run(action.command, action.timeoutMs)
             record(PowerLogEntry(System.currentTimeMillis(), action.title, action.command, r, null))
@@ -140,7 +142,8 @@ class PowerSetup(private val context: Context) {
         } catch (e: Exception) {
             val failure = e as? PrivilegedException ?: PrivilegedException(e.message ?: "That did not work", e)
             record(PowerLogEntry(System.currentTimeMillis(), action.title, action.command, null, failure.message))
-            if (backend === adb && e is PrivilegedException) _status.value = PowerStatus.NotPaired
+            // A lost connection or a timeout says nothing about the pairing; only a refused key does.
+            if (backend === adb && e is KeyNotApprovedException) _status.value = PowerStatus.NotPaired
             throw failure
         }
     }

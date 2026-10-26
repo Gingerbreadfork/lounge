@@ -16,7 +16,10 @@ data class ShellResult(val exitCode: Int, val output: String) {
     val ok: Boolean get() = exitCode == 0
 }
 
-class PrivilegedException(message: String, cause: Throwable? = null) : Exception(message, cause)
+open class PrivilegedException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/** The daemon answered but does not know Lounge's key: the one failure that means pairing again. */
+class KeyNotApprovedException : PrivilegedException("This device has not approved Lounge's key")
 
 /** One way of running a shell command with shell-user rights. */
 interface Privileged {

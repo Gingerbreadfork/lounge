@@ -16,6 +16,7 @@ import tv.lounge.design.GlowMasks
 import tv.lounge.design.LoungeFonts
 import tv.lounge.design.SpillMask
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import tv.lounge.platform.AndroidPlatform
 import tv.lounge.platform.DeviceTierDetector
 import tv.lounge.platform.PanelSize
@@ -73,6 +74,8 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
                 android.util.Log.i("Lounge", "startup: fonts and masks warm in ${android.os.SystemClock.uptimeMillis() - t0} ms")
             }.onFailure { android.util.Log.w("Lounge", "startup: warm-up failed", it) }
         }, "lounge-warmup").start()
+        // Power Setup's state is unknown until checked, and updates and the phone's remote both use it.
+        appScope.launch { runCatching { power.refresh() } }
         updates.start(appScope)
         android.util.Log.i("Lounge", "startup: application onCreate took ${android.os.SystemClock.uptimeMillis() - startedAt} ms")
     }
