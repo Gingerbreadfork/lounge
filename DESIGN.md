@@ -18,7 +18,7 @@ Why it fits: it makes the user's own content, not our chrome, the hero. It is dy
 2. **Content first, chrome last.** Full-bleed artwork, left-aligned text, controls that appear where they're needed. Nothing is decorated; every rule, badge or line carries information.
 3. **One screen, one job.** The Stage answers "what should I watch now?". Rows answer "what else have I got?". Overlays answer one question each and then leave.
 4. **The remote is the hand.** Every state is reachable with five keys (D-pad, OK) and a controller. Back always goes up one level; Home always returns to the Stage with focus restored.
-5. **Earn every motion.** Motion shows what changed. Ambient motion is allowed only below the threshold of attention (the light field's clouds, a stepped push-in in the screensaver, the Now Playing bars at eight frames a second) and it stops after a minute without input. The orchestrated moments are the lamp warming up at launch, the Stage changing, the proscenium lowering, and the idle dim.
+5. **Earn every motion.** Motion shows what changed. Ambient motion is allowed only below the threshold of attention (the light field's clouds, the lowered Stage's light, a stepped push-in in the screensaver, the Now Playing bars at eight frames a second) and it stops after a minute without input. The orchestrated moments are the lamp warming up at launch, the Stage changing, the proscenium lowering, and the idle dim.
 6. **Readable from the sofa.** Minimum 22 px type at 1080p, contrast at or above 4.5:1 for text, 3:1 for large display text, no thin weights.
 
 ## 3. Colour
@@ -149,7 +149,12 @@ y 1080 └───────────────────────�
 
 ### 5.2 Home, Stage collapsed (focus in any row)
 
-The Stage lowers to a 200 px band at y 136, full width between the safe margins, as one continuous picture: the artwork's frame travels from 1120 × 630 at x 704 to 1728 × 200 at x 96 over `proscenium`, cropping to the picture's focal line (found at index time: the horizontal band of the 16:9 frame with the most edge energy, weighted toward the upper third). Once lowered, the sharp index-time band slice (1728 × 200) replaces the scaled hero. The playbill and strip fade out over the first 60 % of the lowering and back in over the last 60 % of the raising; rows slide up beneath. The band carries a velvet fade on the left with the title in `headline`, a play arrow and the progress bar; it dims the picture by 22 %. UP from the first row focuses the band and raises the Stage again.
+The Stage lowers to a 200 px band at y 136, full width between the safe margins: the artwork's frame travels from 1120 × 630 at x 704 to 1728 × 200 at x 96 over `proscenium`, and as it lowers the picture goes out of focus into its own light. The playbill and strip fade out over the first 60 % of the lowering and back in over the last 60 % of the raising; rows slide up beneath. UP from the first row focuses the band and raises the Stage again, the light focusing back into the picture.
+
+- **The light.** At index time the key art is read in six columns across a strip around its focal line (the horizontal band of the 16:9 frame with the most edge energy, weighted toward the upper third). Each column's colour leans toward its most saturated pixels, so a yellow coat survives a grey park, and is toned as light: OKLab lightness 0.2–0.5, chroma lifted by half up to 0.17. The six pools ease into one another across the band in OKLab. Over them the picture's `light` blooms right of middle, wider than tall; the top, bottom and right edges fall away as if seen through glass, and blue-noise dither keeps the gradients from banding. A picture without colour blooms silver, never the house lamp; one without key art is a single pool of its `light`.
+- **The text.** The left 20 % is the room's own `velvet`, faintly lit by the picture (8 %), and the colour rises over the next half. The title is `display-l` in `limelight` at x 48, one line; 18 px below it the 6 px progress bar, 300 wide, with how long is left beside it in `meta` at 84 %. With no progress the line is the first metadata line. Text sits at 9:1 or better on the band.
+- **The lowering.** The light takes over from the picture between 85 % and 20 % of the way down; because the pools come from the picture's own columns, its colours land where they were and the change reads as a defocus. The title and bar fade in over the last half, riding in with the frame's left edge so the frame never cuts them.
+- **The drift.** The pools sway sideways and the bloom wanders and breathes, each on its own long period (29–71 s), on the light field's clock: stepped, below the threshold of attention, still after a minute without input, under reduced motion and in Lite. Each part is drawn once into a layer and the drift only moves layers, so it costs no redraw.
 
 ### 5.3 Rows
 
@@ -228,7 +233,7 @@ Brightness is a colour-matrix on the tile image, not an overlay, so blacks stay 
 | `snap` | 120 ms | cubic-bezier(0.2, 0, 0, 1) | Focus scale and glow in |
 | `settle` | 180 ms | cubic-bezier(0.2, 0, 0, 1) | Focus out, brightness changes |
 | `travel` | 220 ms | cubic-bezier(0.3, 0, 0.1, 1) | Row horizontal scroll, backdrop spill moving |
-| `proscenium` (Stage) | — | — | The Stage's height eases between 864 and 200 px while one picture's frame travels from the artwork's place to the band (5.2) and the playbill and strip fade beneath it; the rows slide up. Nothing is squeezed. Text swaps in the playbill are one in-place fade per spotlight change, lines staggered by 40 ms. |
+| `proscenium` (Stage) | — | — | The Stage's height eases between 864 and 200 px while one picture's frame travels from the artwork's place to the band (5.2), going out of focus into its light, and the playbill and strip fade beneath it; the rows slide up. Nothing is squeezed. Text swaps in the playbill are one in-place fade per spotlight change, lines staggered by 40 ms. |
 | `proscenium` | 260 ms | cubic-bezier(0.35, 0, 0.15, 1) | Stage collapse/expand, overlay enter |
 | `curtain` | 320 ms | cubic-bezier(0.3, 0, 0.1, 1) | Stage artwork crossfade, playbill swap, theme change |
 | `dim` | 1200 ms | cubic-bezier(0.4, 0, 0.2, 1) | The house lights going down when idle; the screensaver's late dim over 60 s is the same idea stepped |

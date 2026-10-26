@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -70,7 +71,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import androidx.compose.ui.graphics.painter.BrushPainter
 import coil3.SingletonImageLoader
@@ -83,9 +83,9 @@ import tv.lounge.core.Tile
 import tv.lounge.design.ButtonKind
 import tv.lounge.design.Dimens
 import tv.lounge.design.Lights
+import tv.lounge.design.LocalLightState
 import tv.lounge.design.LocalSwapSlotActive
 import tv.lounge.design.LoungeButton
-import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.ProgressBar
 import tv.lounge.design.BillLight
@@ -156,6 +156,10 @@ fun StageView(
     // frame of the lowering lays out nothing.
     val density = LocalDensity.current
     val geometry = remember(density, spotlight?.focalY) { FrameGeometry(density, spotlight?.focalY ?: 0.5f) }
+    val glow = remember(spotlight?.glowArgb) { spotlight?.glowArgb.orEmpty().map { Color(it.toInt()) } }
+    // The light drifts on the field's clock only while it shows, so a raised Stage leaves it alone.
+    val lightState = LocalLightState.current
+    val clock: () -> Float = remember(lightState, read) { { if (read() < 0.85f) lightState.clock else 0f } }
     Box(modifier.fillMaxWidth().requiredHeight(StageExpandedHeight)) {
         if (spotlight != null) {
             StageFrame(
@@ -163,6 +167,9 @@ fun StageView(
                 index = stage.spotlights.indexOfFirst { it.id == spotlight.id },
                 progress = read,
                 geometry = geometry,
+                glow = glow,
+                light = LoungeTheme.colors.light(spotlight.lightArgb),
+                clock = clock,
             )
             // The band's chrome is its own node at the band's place, so UP from the first row finds
             // something strictly above it. It stays composed while the Stage is up, transparent and
@@ -176,7 +183,7 @@ fun StageView(
                             shape = geometry.frameShape(read(), originX = Dimens.safeX.toPx())
                         },
                 ) {
-                    BandChrome(spotlight, read, !expanded, onBandFocused, LoungeTheme.colors)
+                    BandChrome(spotlight, read, { geometry.left(read()) - geometry.safe }, !expanded, onBandFocused, LoungeTheme.colors)
                 }
             }
         }
@@ -225,18 +232,16 @@ private fun PrefetchStageArt(stage: Stage, selectedIndex: Int) {
         val wanted = if (all) stage.spotlights.indices else (selectedIndex - 1..selectedIndex + 1)
         for (i in wanted) {
             val sp = stage.spotlights.getOrNull(i) ?: continue
-            listOfNotNull(sp.artworkPath, sp.bandPath).forEach { path ->
-                loader.enqueue(ImageRequest.Builder(context).data(path).build())
-            }
+            sp.artworkPath?.let { path -> loader.enqueue(ImageRequest.Builder(context).data(path).build()) }
         }
     }
 }
 
 /**
  * The one picture. Its frame interpolates between the artwork's place beside the playbill and the
- * band. The picture is laid out once at the band's width and only scaled and shifted, and the frame
- * is a clip outline on a layer, so a frame of the lowering lays out nothing. The band's chrome
- * lives inside the clip at its final size.
+ * band, and as it lowers the picture gives way to its own light. Both are laid out once and only
+ * scaled and shifted, and the frame is a clip outline on a layer, so a frame of the lowering lays
+ * out nothing.
  */
 @Composable
 private fun StageFrame(
@@ -244,6 +249,9 @@ private fun StageFrame(
     index: Int,
     progress: () -> Float,
     geometry: FrameGeometry,
+    glow: List<Color>,
+    light: Color,
+    clock: () -> Float,
 ) {
     Box(
         Modifier
@@ -268,18 +276,45 @@ private fun StageFrame(
                     transformOrigin = TransformOrigin(0f, 0f)
                     translationX = geometry.left(p)
                     translationY = geometry.pictureTop(p)
+                    // Hidden once the light covers it, so the lowered band never draws it underneath.
+                    alpha = if (lightIn(p) >= 1f) 0f else 1f
                 },
         ) {
             StageArtworkCrossfade(spotlight, index, Modifier.fillMaxSize())
         }
+        // Laid out at the band's size and stretched to the frame, which a soft light allows.
+        BandLight(
+            glow = glow,
+            light = light,
+            velvet = LoungeTheme.colors.velvet,
+            clock = clock,
+            width = BandWidth,
+            height = Dimens.collapsedStageHeight,
+            modifier = Modifier
+                .wrapContentSize(Alignment.TopStart, unbounded = true)
+                .graphicsLayer {
+                    val p = progress()
+                    alpha = lightIn(p)
+                    scaleX = geometry.width(p) / geometry.bandW
+                    scaleY = geometry.height(p) / geometry.bandH
+                    transformOrigin = TransformOrigin(0f, 0f)
+                    translationX = geometry.left(p)
+                },
+        )
     }
+}
+
+/** How far the light has taken over from the picture: none above 85 % expanded, all below 20 %. */
+private fun lightIn(p: Float): Float {
+    val t = ((0.85f - p) / 0.65f).coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
 }
 
 /** The frame's rectangle and the picture's placement at a given progress (1 expanded, 0 lowered), in px. */
 private class FrameGeometry(density: Density, private val focalY: Float) {
-    private val safe = with(density) { Dimens.safeX.toPx() }
-    private val bandW = with(density) { BandWidth.toPx() }
-    private val bandH = with(density) { Dimens.collapsedStageHeight.toPx() }
+    val safe = with(density) { Dimens.safeX.toPx() }
+    val bandW = with(density) { BandWidth.toPx() }
+    val bandH = with(density) { Dimens.collapsedStageHeight.toPx() }
     private val artW = with(density) { Dimens.stageArtworkWidth.toPx() }
     private val artH = with(density) { Dimens.stageArtworkHeight.toPx() }
     private val artX = with(density) { (Dimens.safeX + Dimens.playbillWidth + 48.dp).toPx() }
@@ -312,14 +347,16 @@ private data class FrameShape(val left: Float, val width: Float, val height: Flo
 private val BandWidth = 1920.dp - Dimens.safeX * 2
 
 /**
- * What the band adds when lowered: house-light dimming, a velvet fade on the left with the title
- * and a play arrow, the progress bar, and the focusable surface that raises the Stage. It stays
- * focusable until it leaves composition so focus hands over to the strip.
+ * What the band adds to its light when lowered: the title, the progress bar with the time left
+ * beside it, and the focusable surface that raises the Stage. The text rides in [textShift] from
+ * its place, with the frame's left edge, so it is never cut by the frame. It stays focusable until
+ * it leaves composition so focus hands over to the strip.
  */
 @Composable
 private fun BandChrome(
     spotlight: StageSpotlight,
     progress: () -> Float,
+    textShift: () -> Float,
     interactive: Boolean,
     onFocused: () -> Unit,
     colors: tv.lounge.design.LoungeColors,
@@ -335,37 +372,28 @@ private fun BandChrome(
             .onFocusChanged { if (it.isFocused) onFocused() }
             .then(if (interactive) Modifier.focusable() else Modifier),
     ) {
-        spotlight.bandPath?.let { band ->
-            // The sharp, index-time slice replaces the scaled hero once the frame has settled.
-            AsyncImage(
-                model = band,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = (1f - progress() * 6f).coerceIn(0f, 1f) },
+        // With progress the line beside the bar is how long is left, which the core puts last.
+        val line = if (spotlight.progress != null) spotlight.lines.lastOrNull() else spotlight.lines.firstOrNull()
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 48.dp).graphicsLayer { translationX = textShift() }) {
+            Text(
+                spotlight.title,
+                style = LoungeTheme.typography.displayL,
+                color = colors.limelight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 720.dp),
             )
-        }
-        Box(Modifier.fillMaxSize().background(colors.velvet.copy(alpha = 0.22f)))
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(0f to colors.velvet.copy(alpha = 0.82f), 0.4f to colors.velvet.copy(alpha = 0.35f), 0.7f to Color.Transparent),
-            ),
-        )
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(spotlight.title, style = LoungeTheme.typography.headline, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(900.dp).wrapContentWidthStart())
-                Icon(LoungeIcons.Play, contentDescription = null, tint = colors.dust, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.height(18.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                spotlight.progress?.let {
+                    ProgressBar(it, Modifier.width(300.dp), thickness = 6.dp)
+                    Spacer(Modifier.width(20.dp))
+                }
+                line?.let { Text(it, style = LoungeTheme.typography.meta, color = colors.limelight.copy(alpha = 0.84f), maxLines = 1) }
             }
-            spotlight.progress?.let { ProgressBar(it, Modifier.width(420.dp), thickness = 6.dp) }
         }
     }
 }
-
-private fun Modifier.wrapContentWidthStart(): Modifier = this.then(
-    Modifier.layout { measurable, constraints ->
-        val placeable = measurable.measure(constraints.copy(minWidth = 0))
-        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
-    },
-)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

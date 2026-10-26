@@ -181,6 +181,7 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
                 while (true) {
                     delay(stepMs)
                     time.floatValue = ((System.nanoTime() - started - paused) / 1_000_000_000.0).toFloat()
+                    state.clock = time.floatValue
                 }
             }
         }

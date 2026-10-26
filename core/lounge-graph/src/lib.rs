@@ -50,9 +50,9 @@ pub struct Artwork {
     pub backdrop: Option<String>,
     pub logo: Option<String>,
     pub palette: Option<Palette>,
-    /// The lowered Stage's slice of the key art (1728×200), cut around `focal_y`.
+    /// The lowered Stage's light: six colours read across the key art's focal line, left to right.
     #[serde(default)]
-    pub band: Option<String>,
+    pub glow: Vec<u32>,
     /// The full-screen picture of a wallpaper item.
     #[serde(default)]
     pub wallpaper: Option<String>,

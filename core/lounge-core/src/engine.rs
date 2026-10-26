@@ -75,6 +75,9 @@ pub(crate) fn effective_row_order(state: &State) -> Vec<String> {
 /// The most tiles a content row carries, so a big source cannot swell every rebuild. The guide
 /// and search reach the rest.
 const ROW_TILES: usize = 60;
+/// Stops across the lowered Stage's light: close enough that a straight gradient between them
+/// keeps the eased pools.
+const GLOW_STOPS: usize = 25;
 
 pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32) -> HomeSnapshot {
     let graph = &state.graph;
@@ -442,7 +445,7 @@ fn build_stage(graph: &Graph, index: &BuildIndex, now: i64, hour_local: u32, con
             explanation: None,
             framed: true,
             art_aspect: 0.0,
-            band_path: None,
+            glow_argb: Vec::new(),
             focal_y: 0.5,
             source: None,
             source_icon_path: None,
@@ -501,7 +504,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
                     artwork.hero = prog.artwork.hero.clone();
                     artwork.landscape = prog.artwork.landscape.clone();
                     artwork.backdrop = prog.artwork.backdrop.clone().or(artwork.backdrop);
-                    artwork.band = prog.artwork.band.clone();
+                    artwork.glow = prog.artwork.glow.clone();
                     artwork.focal_y = prog.artwork.focal_y;
                 }
                 // The programme's own line (an episode title, the game being played), then how long is left.
@@ -596,7 +599,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
         },
         framed,
         art_aspect: it.art_aspect,
-        band_path: if framed { None } else { artwork.band.clone() },
+        glow_argb: if framed { Vec::new() } else { lounge_graph::color::glow_stops(&artwork.glow, GLOW_STOPS) },
         focal_y: artwork.focal_y,
         source,
         source_icon_path: source_icon,

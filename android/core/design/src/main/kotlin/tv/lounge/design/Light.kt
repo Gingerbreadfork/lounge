@@ -72,6 +72,11 @@ class LightState {
     var warmth: Float by mutableFloatStateOf(1f)
     /** True while something opaque covers the backdrop, so the field stops stepping. */
     var paused: Boolean by mutableStateOf(false)
+    /**
+     * The light field's clock in seconds, stepped a few times a second and still while the field
+     * sleeps, so anything else that drifts moves in the field's own frames.
+     */
+    var clock: Float by mutableFloatStateOf(0f)
 
     private var lastCenter: Offset = Offset.Unspecified
 

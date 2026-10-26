@@ -26,6 +26,8 @@ const MAX_SOURCE_SIDE: u32 = 8192;
 const MAX_SOURCE_PIXELS: u64 = 13_000_000;
 /// The lowered Stage's band: full width × 200 at 1080p.
 const BAND_ASPECT: f64 = 1728.0 / 200.0;
+/// How many colours the lowered Stage's light is read in, left to right.
+pub const GLOW_POOLS: usize = 6;
 
 /// Pixel sizes at 1080p, the largest tile of each style (DESIGN.md §5.3) times the
 /// focus scale, so a focused tile never upsamples.
@@ -42,11 +44,9 @@ pub enum Style {
     PosterLarge,
     /// Key art of any aspect fitted inside the Stage frame (no crop), for framed content.
     HeroFit,
-    /// 160×90 thumbnail, Gaussian-blurred at index time, that the Stage and the collapsed band
-    /// scale up as a lit backdrop: a real blur with no render-time cost.
+    /// 160×90 thumbnail, Gaussian-blurred at index time, that the Stage scales up as a lit
+    /// backdrop: a real blur with no render-time cost.
     Backdrop,
-    /// The slice of the key art the lowered Stage shows: 1728×200 around the picture's focal line.
-    Band,
     Icon,
     /// A channel or publisher logo fitted inside 160×160 with its alpha kept: never cropped.
     Logo,
@@ -71,7 +71,6 @@ impl Style {
             Style::PosterLarge => (420, 630),
             Style::HeroFit => (1120, 630),
             Style::Backdrop => (160, 90),
-            Style::Band => (1728, 200),
             Style::Icon => (160, 160),
             Style::Logo => (160, 160),
             Style::Wallpaper => (1920, 1080),
@@ -112,7 +111,6 @@ impl Style {
             Style::PosterLarge => "posterlarge",
             Style::HeroFit => "herofit",
             Style::Backdrop => "backdrop",
-            Style::Band => "band",
             Style::Icon => "icon",
             Style::Logo => "logo",
             Style::Wallpaper => "wall",
@@ -130,9 +128,9 @@ impl Style {
         }
     }
 
-    /// Styles whose output is a slice of the 16:9 frame and so carry the picture's focal line.
+    /// The Stage's key art carries the picture's focal line and the light the lowered Stage shows.
     fn wants_focal(self) -> bool {
-        matches!(self, Style::Hero | Style::Band)
+        matches!(self, Style::Hero)
     }
 }
 
@@ -150,6 +148,9 @@ pub struct Prepared {
     /// Where the picture's interest sits vertically within its 16:9 frame (0 top, 1 bottom).
     #[serde(default = "half")]
     pub focal_y: f32,
+    /// The lowered Stage's light, for key art: [`GLOW_POOLS`] colours across the focal line.
+    #[serde(default)]
+    pub glow: Vec<u32>,
 }
 
 fn half() -> f32 {
@@ -165,7 +166,7 @@ pub fn prepare(src: &Path, out_dir: &Path, style: Style) -> Result<Prepared> {
 /// As [`prepare`] for several styles of one source: the file is read, hashed, decoded and
 /// measured once, and every style is cut from that one decode.
 pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<Prepared>> {
-    let shared = (|| -> Result<(String, RgbaImage, Palette, bool, f32)> {
+    let shared = (|| -> Result<(String, RgbaImage, Palette, bool, f32, Vec<u32>)> {
         std::fs::create_dir_all(out_dir)?;
         let size = std::fs::metadata(src)?.len();
         if size > MAX_SOURCE_BYTES {
@@ -179,10 +180,15 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
         let palette = palette_of(&decoded);
         // Opaque pictures become JPEGs: smaller, quicker to decode, and drawn without blending.
         let opaque = decoded.pixels().all(|p| p.0[3] == 255);
-        let focal_y = if styles.iter().any(|s| s.wants_focal()) { focal_line(&decoded, sw, sh)? } else { 0.5 };
-        Ok((hash, decoded, palette, opaque, focal_y))
+        let (focal_y, glow) = if styles.iter().any(|s| s.wants_focal()) {
+            let focal_y = focal_line(&decoded, sw, sh)?;
+            (focal_y, glow_of(&decoded, sw, sh, focal_y)?)
+        } else {
+            (0.5, Vec::new())
+        };
+        Ok((hash, decoded, palette, opaque, focal_y, glow))
     })();
-    let (hash, decoded, palette, opaque, focal_y) = match shared {
+    let (hash, decoded, palette, opaque, focal_y, glow) = match shared {
         Ok(v) => v,
         Err(e) => {
             let msg = e.to_string();
@@ -211,11 +217,7 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
                 }
             }
             if !out_path.exists() {
-                let mut scaled = if style == Style::Band {
-                    crop_resize(&decoded, sw, sh, band_rect(sw, sh, focal_y), tw, th)?
-                } else {
-                    cover_resize(&decoded, sw, sh, tw, th)?
-                };
+                let mut scaled = cover_resize(&decoded, sw, sh, tw, th)?;
                 if let Some(sigma) = style.blur_sigma() {
                     scaled = image::imageops::blur(&scaled, sigma);
                 }
@@ -250,6 +252,7 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
                 src_width: sw,
                 src_height: sh,
                 focal_y,
+                glow: if style.wants_focal() { glow.clone() } else { Vec::new() },
             })
         })
         .collect()
@@ -310,12 +313,37 @@ fn cover_rect(sw: u32, sh: u32, aspect: f64) -> (f64, f64, f64, f64) {
     (((sw as f64 - cw) / 2.0).max(0.0), ((sh as f64 - ch) / 2.0).max(0.0), cw, ch)
 }
 
-/// The band's crop: a slice of the 16:9 frame, `BAND_ASPECT` wide, centred on the focal line.
-fn band_rect(sw: u32, sh: u32, focal_y: f32) -> (f64, f64, f64, f64) {
+/// The lowered Stage's light: the picture read in [`GLOW_POOLS`] columns across a strip around its
+/// focal line, each column's colour weighted toward its most saturated pixels so a yellow coat
+/// survives instead of averaging into grey, then toned as light (DESIGN.md §5.2).
+fn glow_of(img: &RgbaImage, sw: u32, sh: u32, focal_y: f32) -> Result<Vec<u32>> {
     let (left, top, cw, ch) = cover_rect(sw, sh, 16.0 / 9.0);
-    let bh = (cw / BAND_ASPECT).min(ch).max(1.0);
-    let btop = (top + (focal_y as f64 * ch - bh / 2.0).clamp(0.0, ch - bh)).max(0.0);
-    (left, btop, cw, bh)
+    let strip_h = (ch * 0.55).max(1.0);
+    let strip_top = top + (focal_y as f64 * ch - strip_h / 2.0).clamp(0.0, ch - strip_h);
+    let (tw, th) = (96u32, 24u32);
+    let small = crop_resize(img, sw, sh, (left, strip_top, cw, strip_h), tw, th)?;
+    let per = (tw as usize / GLOW_POOLS).max(1);
+    let pools = (0..GLOW_POOLS)
+        .map(|i| {
+            let mut sum = [0f32; 3];
+            let mut total = 0f32;
+            for y in 0..th {
+                for x in (i * per) as u32..((i + 1) * per) as u32 {
+                    let p = small.get_pixel(x, y);
+                    let (r, g, b) = (p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0);
+                    let [_, a, bb] = lounge_graph::color::oklab(r, g, b);
+                    let w = 0.02 + (a * a + bb * bb) * 40.0;
+                    sum[0] += r * w;
+                    sum[1] += g * w;
+                    sum[2] += b * w;
+                    total += w;
+                }
+            }
+            let to = |v: f32| ((v / total * 255.0).round().clamp(0.0, 255.0) as u32) & 0xFF;
+            lounge_graph::color::glow_tone(0xFF00_0000 | (to(sum[0]) << 16) | (to(sum[1]) << 8) | to(sum[2]))
+        })
+        .collect();
+    Ok(pools)
 }
 
 /// Where the interest is: the horizontal band of the 16:9 frame with the most edge energy, weighted
@@ -640,8 +668,8 @@ mod tests {
     }
 
     #[test]
-    fn band_follows_the_focal_line() {
-        // A frame that is dark except for a bright detailed stripe near the top: the band must find it.
+    fn the_focal_line_finds_the_detail() {
+        // A frame that is dark except for a bright detailed stripe near the top.
         let mut img = RgbaImage::from_pixel(1920, 1080, Rgba([10, 10, 10, 255]));
         for y in 180..300 {
             for x in 0..1920 {
@@ -652,12 +680,32 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("frame.png");
         img.save(&src).unwrap();
-        let p = prepare(&src, &dir.path().join("art"), Style::Band).unwrap();
-        assert_eq!((p.width, p.height), Style::Band.target());
+        let p = prepare(&src, &dir.path().join("art"), Style::Hero).unwrap();
         assert!((0.15..0.32).contains(&p.focal_y), "focal {}", p.focal_y);
-        let out = image::open(&p.path).unwrap().to_rgba8();
-        let bright = out.pixels().filter(|px| px[0] > 128).count();
-        assert!(bright > (1728 * 200) / 4, "band missed the stripe: {bright} bright pixels");
+    }
+
+    #[test]
+    fn glow_reads_the_picture_left_to_right() {
+        // Grey on the left, a yellow coat on the right: the pools follow, and the yellow survives
+        // its grey surroundings.
+        let mut img = RgbaImage::from_pixel(1920, 1080, Rgba([120, 120, 120, 255]));
+        for y in 300..800 {
+            for x in 1400..1700 {
+                img.put_pixel(x, y, Rgba([212, 165, 32, 255]));
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("coat.png");
+        img.save(&src).unwrap();
+        let hero = prepare(&src, &dir.path().join("art"), Style::Hero).unwrap();
+        assert_eq!(hero.glow.len(), GLOW_POOLS);
+        let (r0, g0, b0) = lounge_graph::color::rgb_f(hero.glow[0]);
+        assert!((r0 - g0).abs() < 0.02 && (g0 - b0).abs() < 0.02, "the grey side took a colour");
+        let (r, g, b) = lounge_graph::color::rgb_f(hero.glow[4]);
+        assert!(r > b + 0.15 && g > b + 0.1, "the coat's pool lost its yellow: {r} {g} {b}");
+        // Only key art carries the light.
+        let land = prepare(&src, &dir.path().join("art"), Style::Landscape).unwrap();
+        assert!(land.glow.is_empty());
     }
 
     #[test]

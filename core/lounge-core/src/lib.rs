@@ -386,9 +386,10 @@ pub struct StageSpotlight {
     /// Source artwork aspect (width / height); 0 when unknown.
     #[serde(default)]
     pub art_aspect: f32,
-    /// The lowered Stage's slice of the key art, cut at index time around `focal_y`.
+    /// The lowered Stage's light: colours evenly across the band, left to right, read from the key
+    /// art at index time; empty for framed art and anything without key art.
     #[serde(default)]
-    pub band_path: Option<String>,
+    pub glow_argb: Vec<u32>,
     /// Where the picture's interest sits vertically in its 16:9 frame (0 top, 1 bottom).
     #[serde(default = "half")]
     pub focal_y: f32,

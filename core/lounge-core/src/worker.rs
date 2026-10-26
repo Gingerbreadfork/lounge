@@ -480,7 +480,7 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
             logo: icon.map(|p| p.path.clone()),
             poster: None,
             palette: banner.or(icon).map(|p| p.palette),
-            band: None,
+            glow: Vec::new(),
             wallpaper: None,
             focal_y: 0.5,
         };
@@ -521,7 +521,6 @@ struct ProgramArt {
     hero: Option<usize>,
     hero_fit: Option<usize>,
     backdrop: Option<usize>,
-    band: Option<usize>,
     logo: Option<usize>,
     wallpaper: Option<usize>,
 }
@@ -557,7 +556,6 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
                 hero: plan.want(wide, Style::Hero),
                 hero_fit: plan.want(if wide.is_none() { portrait } else { None }, Style::HeroFit),
                 backdrop: plan.want(wide.or(portrait), Style::Backdrop),
-                band: plan.want(wide, Style::Band),
                 logo: if schedule { None } else { plan.want(p.logo_path.as_deref(), Style::Logo) },
                 wallpaper: None,
             }
@@ -572,7 +570,6 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
         let landscape = pick(&art, w.landscape);
         let hero = pick(&art, w.hero).or(pick(&art, w.hero_fit));
         let logo = pick(&art, w.logo);
-        let band = pick(&art, w.band);
         let artwork = Artwork {
             poster: poster.map(|x| x.path.clone()),
             landscape: landscape.map(|x| x.path.clone()),
@@ -580,9 +577,9 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
             backdrop: pick(&art, w.backdrop).map(|x| x.path.clone()),
             logo: logo.map(|x| x.path.clone()),
             palette: landscape.or(poster).or(logo).map(|x| x.palette),
-            band: band.map(|x| x.path.clone()),
+            glow: hero.map(|x| x.glow.clone()).unwrap_or_default(),
             wallpaper: None,
-            focal_y: band.or(hero).map(|x| x.focal_y).unwrap_or(0.5),
+            focal_y: hero.map(|x| x.focal_y).unwrap_or(0.5),
         };
         let art_aspect = aspect(hero.or(landscape).or(poster));
         let deep_link = match p.kind {
@@ -702,7 +699,6 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
                 hero: plan.want(wide, Style::Hero),
                 hero_fit: plan.want(if wide.is_none() { portrait } else { None }, Style::HeroFit),
                 backdrop: plan.want(wide.or(portrait), Style::Backdrop),
-                band: plan.want(wide, Style::Band),
                 logo: plan.want(r.logo.as_deref(), Style::Logo),
                 wallpaper: None,
             }
@@ -748,7 +744,6 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         it.channel_id = p.channel_id.as_deref().map(|c| channel_key(plugin, c));
         it.channel_name = p.channel_name.clone();
         it.art_aspect = aspect(hero.or(landscape).or(poster));
-        let band = pick(&art, w.band);
         it.artwork = Artwork {
             poster: poster.map(|x| x.path.clone()),
             landscape: landscape.map(|x| x.path.clone()),
@@ -756,9 +751,9 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             backdrop: pick(&art, w.backdrop).map(|x| x.path.clone()),
             logo: logo.map(|x| x.path.clone()),
             palette: landscape.or(poster).or(logo).map(|x| x.palette),
-            band: band.map(|x| x.path.clone()),
+            glow: hero.map(|x| x.glow.clone()).unwrap_or_default(),
             wallpaper: pick(&art, w.wallpaper).map(|x| x.path.clone()),
-            focal_y: band.or(hero).map(|x| x.focal_y).unwrap_or(0.5),
+            focal_y: hero.map(|x| x.focal_y).unwrap_or(0.5),
         };
         match p.kind {
             PluginItemKind::Resume => {
@@ -879,7 +874,6 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
                 plan.want(s.art_path.as_deref(), Style::Hero),
                 plan.want(s.art_path.as_deref(), Style::HeroFit),
                 plan.want(s.art_path.as_deref(), Style::Backdrop),
-                plan.want(s.art_path.as_deref(), Style::Band),
             )
         })
         .collect();
@@ -890,7 +884,7 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
     // Only something playing counts as using its app; a session paused yesterday does not.
     let mut playing: Vec<(String, i64)> = Vec::new();
     let mut now_playing: Option<(NowPlaying, (bool, i64))> = None;
-    for (s, (landscape, hero, hero_fit, backdrop, band)) in titled.iter().zip(wants) {
+    for (s, (landscape, hero, hero_fit, backdrop)) in titled.iter().zip(wants) {
         let title = s.title.clone().unwrap_or_default();
         let landscape = pick(&art, landscape);
         let art_aspect = aspect(landscape);
@@ -920,7 +914,6 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
             playing.push((s.package.clone(), s.updated_ms.min(now)));
         }
         it.art_aspect = art_aspect;
-        let band = if art_aspect >= 1.2 { pick(&art, band) } else { None };
         it.artwork = Artwork {
             landscape: landscape.map(|p| p.path.clone()),
             hero: hero.map(|p| p.path.clone()),
@@ -928,9 +921,9 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
             logo: None,
             poster: None,
             palette: landscape.map(|p| p.palette),
-            band: band.map(|p| p.path.clone()),
+            glow: hero.map(|p| p.glow.clone()).unwrap_or_default(),
             wallpaper: None,
-            focal_y: band.or(hero).map(|p| p.focal_y).unwrap_or(0.5),
+            focal_y: hero.map(|p| p.focal_y).unwrap_or(0.5),
         };
         items.push(it);
 
@@ -1158,7 +1151,7 @@ fn housekeeping(inner: &Inner) {
 }
 
 fn artwork_paths(a: &Artwork) -> impl Iterator<Item = &String> {
-    [&a.poster, &a.landscape, &a.hero, &a.backdrop, &a.logo, &a.band, &a.wallpaper].into_iter().flatten()
+    [&a.poster, &a.landscape, &a.hero, &a.backdrop, &a.logo, &a.wallpaper].into_iter().flatten()
 }
 
 #[cfg(test)]

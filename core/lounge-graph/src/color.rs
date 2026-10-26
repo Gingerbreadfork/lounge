@@ -112,9 +112,125 @@ pub fn contrast_ratio(a: u32, b: u32) -> f32 {
     (hi + 0.05) / (lo + 0.05)
 }
 
+fn srgb_to_linear(c: f32) -> f32 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb(c: f32) -> f32 {
+    let c = c.clamp(0.0, 1.0);
+    if c <= 0.003_130_8 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// OKLab of an sRGB colour given as 0–1 channels.
+pub fn oklab(r: f32, g: f32, b: f32) -> [f32; 3] {
+    let (r, g, b) = (srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b));
+    let l = (0.412_221_47 * r + 0.536_332_55 * g + 0.051_445_995 * b).cbrt();
+    let m = (0.211_903_5 * r + 0.680_699_5 * g + 0.107_396_96 * b).cbrt();
+    let s = (0.088_302_46 * r + 0.281_718_85 * g + 0.629_978_7 * b).cbrt();
+    [
+        0.210_454_26 * l + 0.793_617_8 * m - 0.004_072_047 * s,
+        1.977_998_5 * l - 2.428_592_2 * m + 0.450_593_7 * s,
+        0.025_904_037 * l + 0.782_771_77 * m - 0.808_675_77 * s,
+    ]
+}
+
+/// The opaque sRGB colour of an OKLab triple, clamped into gamut.
+pub fn from_oklab([l, a, b]: [f32; 3]) -> u32 {
+    let l_ = (l + 0.396_337_78 * a + 0.215_803_76 * b).powi(3);
+    let m_ = (l - 0.105_561_346 * a - 0.063_854_17 * b).powi(3);
+    let s_ = (l - 0.089_484_18 * a - 1.291_485_5 * b).powi(3);
+    let r = 4.076_741_7 * l_ - 3.307_711_6 * m_ + 0.230_969_94 * s_;
+    let g = -1.268_438 * l_ + 2.609_757_4 * m_ - 0.341_319_38 * s_;
+    let bl = -0.004_196_086_3 * l_ - 0.703_418_6 * m_ + 1.707_614_7 * s_;
+    let to = |v: f32| ((linear_to_srgb(v) * 255.0).round() as u32) & 0xFF;
+    0xFF00_0000 | (to(r) << 16) | (to(g) << 8) | to(bl)
+}
+
+/// A picture's colour as the collapsed Stage's light: lightness held to 0.2–0.5 so it glows in
+/// the dark room without shouting, chroma lifted by half up to 0.17 (DESIGN.md §5.2).
+pub fn glow_tone(argb: u32) -> u32 {
+    let (r, g, b) = rgb_f(argb);
+    let [l, a, bb] = oklab(r, g, b);
+    let c = (a * a + bb * bb).sqrt();
+    let k = if c > 1e-5 { (c * 1.5).min(0.17) / c } else { 0.0 };
+    from_oklab([l.clamp(0.2, 0.5), a * k, bb * k])
+}
+
+/// `n` colours evenly across the band from its pools, eased between neighbouring pools in OKLab
+/// so each pool reads as a soft patch of its own colour and two strong colours never muddy.
+pub fn glow_stops(pools: &[u32], n: usize) -> Vec<u32> {
+    if pools.is_empty() || n == 0 {
+        return Vec::new();
+    }
+    let labs: Vec<[f32; 3]> = pools.iter().map(|&c| { let (r, g, b) = rgb_f(c); oklab(r, g, b) }).collect();
+    let k = labs.len();
+    (0..n)
+        .map(|i| {
+            let x = if n == 1 { 0.5 } else { i as f32 / (n - 1) as f32 };
+            // Pool centres sit at the middle of each of the k equal slices.
+            let f = (x * k as f32 - 0.5).clamp(0.0, (k - 1) as f32);
+            let lo = (f.floor() as usize).min(k - 1);
+            let hi = (lo + 1).min(k - 1);
+            let t = f - lo as f32;
+            let t = t * t * (3.0 - 2.0 * t);
+            let mix = |j: usize| labs[lo][j] + (labs[hi][j] - labs[lo][j]) * t;
+            from_oklab([mix(0), mix(1), mix(2)])
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oklab_roundtrips() {
+        for &c in &[0xFFE8894Cu32, 0xFF6FB7D9, 0xFF123456, 0xFFFFFFFF, 0xFF000000, 0xFFFFA86B] {
+            let (r, g, b) = rgb_f(c);
+            let back = from_oklab(oklab(r, g, b));
+            let (r2, g2, b2) = rgb_f(back);
+            assert!((r - r2).abs() < 0.01 && (g - g2).abs() < 0.01 && (b - b2).abs() < 0.01, "{c:08x} came back {back:08x}");
+        }
+    }
+
+    #[test]
+    fn glow_stays_in_the_dark_and_keeps_its_hue() {
+        // A white coat and a deep navy both land in the glow's lightness range.
+        for &c in &[0xFFF8F8F0u32, 0xFF050818] {
+            let (r, g, b) = rgb_f(glow_tone(c));
+            let l = oklab(r, g, b)[0];
+            assert!((0.19..=0.51).contains(&l), "{c:08x} toned to lightness {l}");
+        }
+        // A yellow coat stays yellow, only toned.
+        let (r, g, b) = rgb_f(glow_tone(0xFFD4A520));
+        assert!(r > b + 0.2 && g > b + 0.15, "yellow lost its hue: {r} {g} {b}");
+        // Grey stays grey: black and white films get silver, not invented colour.
+        let (r, g, b) = rgb_f(glow_tone(0xFF808080));
+        assert!((r - g).abs() < 0.01 && (g - b).abs() < 0.01);
+    }
+
+    #[test]
+    fn stops_hold_each_pool_at_its_centre() {
+        let pools = [0xFF203060u32, 0xFF604020, 0xFF206040];
+        let stops = glow_stops(&pools, 25);
+        assert_eq!(stops.len(), 25);
+        // The ends hold the outer pools, and the middle stop the middle pool.
+        let near = |a: u32, b: u32| {
+            let (r1, g1, b1) = rgb_f(a);
+            let (r2, g2, b2) = rgb_f(b);
+            (r1 - r2).abs() < 0.02 && (g1 - g2).abs() < 0.02 && (b1 - b2).abs() < 0.02
+        };
+        assert!(near(stops[0], pools[0]) && near(stops[24], pools[2]) && near(stops[12], pools[1]));
+        assert!(glow_stops(&[], 25).is_empty());
+    }
 
     #[test]
     fn grey_palette_falls_back_to_houselight() {

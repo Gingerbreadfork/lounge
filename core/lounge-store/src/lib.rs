@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS usage_hours (
 );
 "#;
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 pub struct Store {
     conn: Connection,
@@ -182,8 +182,9 @@ impl Store {
             .meta("schema_version")?
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
-        if current < 3 {
-            // Prepared artwork changed (JPEGs at 2; the band slice and the baked Stage vignette at 3); let it re-prepare.
+        if current < 4 {
+            // Prepared artwork changed (JPEGs at 2, the baked Stage vignette at 3, the lowered
+            // Stage's light at 4); let it re-prepare.
             self.conn.execute("DELETE FROM artwork", [])?;
         }
         if current < SCHEMA_VERSION {
