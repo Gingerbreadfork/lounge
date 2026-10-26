@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, type Plugin } from '../lib/api';
-  import { act, go, toast } from '../lib/state.svelte';
+  import { act, go, quiet, toast } from '../lib/state.svelte';
 
   let { id }: { id?: string } = $props();
   let plugins = $state<Plugin[]>([]);
@@ -17,9 +17,9 @@
   });
 
   async function load() {
-    const p = await act('', () => api.plugins());
+    const p = await quiet(() => api.plugins());
     if (p) plugins = p;
-    if (id && showLog) log = (await act('', () => api.pluginLog(id!))) ?? log;
+    if (id && showLog) log = (await quiet(() => api.pluginLog(id!))) ?? log;
   }
   let current = $derived(plugins.find((p) => p.id === id) ?? null);
 

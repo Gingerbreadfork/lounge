@@ -129,6 +129,18 @@ export function unpair() {
   location.hash = '#/pair';
 }
 
+/** A background read: a failure is not worth a toast every few seconds, and nothing is read
+ *  while the page is out of sight. */
+export async function quiet<T>(f: () => Promise<T>): Promise<T | undefined> {
+  if (document.hidden) return undefined;
+  try {
+    return await f();
+  } catch (e: any) {
+    if (e?.status === 401) unpair();
+    return undefined;
+  }
+}
+
 export async function act<T>(label: string, f: () => Promise<T>): Promise<T | undefined> {
   try {
     const r = await f();

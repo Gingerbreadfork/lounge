@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, type Device, type Diagnostics } from '../lib/api';
-  import { act, app, toast, unpair } from '../lib/state.svelte';
+  import { act, app, quiet, toast, unpair } from '../lib/state.svelte';
 
   let diag = $state<Diagnostics | null>(null);
   let devices = $state<Device[]>([]);
@@ -12,8 +12,8 @@
     return () => clearInterval(t);
   });
   async function load() {
-    diag = (await act('', () => api.diagnostics())) ?? diag;
-    devices = (await act('', () => api.devices())) ?? devices;
+    diag = (await quiet(() => api.diagnostics())) ?? diag;
+    devices = (await quiet(() => api.devices())) ?? devices;
   }
   async function restore(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
