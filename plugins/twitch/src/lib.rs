@@ -82,6 +82,44 @@ struct Token {
     expires_ms: i64,
 }
 
+/// Why a renewal failed: Twitch refused the refresh token, or no usable answer came back.
+enum RenewError {
+    Refused(u16),
+    Failed(String),
+}
+
+/// What follows a renewal: the token to use, a new sign-in, or an error until the next refresh.
+enum Renewed {
+    Use(Token),
+    SignInAgain,
+    TryLater(String),
+}
+
+fn after_renewal(current: Token, outcome: Result<Token, RenewError>, now_ms: i64) -> Renewed {
+    match outcome {
+        Ok(fresh) => Renewed::Use(fresh),
+        // Only a refresh token Twitch refuses needs the person to sign in again.
+        Err(RenewError::Refused(status)) => {
+            sdk::warn!("Twitch refused to renew the sign-in (HTTP {status}); signing in again");
+            Renewed::SignInAgain
+        }
+        // Anything else may pass, so the current token serves while it lasts.
+        Err(RenewError::Failed(e)) if current.expires_ms > now_ms => {
+            sdk::warn!("could not renew the sign-in ({e}); using the current one");
+            Renewed::Use(current)
+        }
+        Err(RenewError::Failed(e)) => Renewed::TryLater(format!("Could not renew the Twitch sign-in ({e}); it tries again on the next refresh")),
+    }
+}
+
+/// Marks the saved token as spent, so the next refresh renews it with the refresh token.
+fn expire_token() {
+    if let Some(mut t) = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice::<Token>(&v).ok()) {
+        t.expires_ms = 0;
+        host::kv_set(TOKEN_KEY, serde_json::to_string(&t).unwrap_or_default().as_bytes());
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct Device {
     device_code: String,
@@ -124,15 +162,18 @@ impl Client {
         let saved: Option<Token> = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice(&v).ok());
         let token = match saved {
             Some(t) if t.expires_ms > now_ms + 10 * 60_000 => t,
-            Some(t) => match renew(&client_id, &t, now_ms) {
-                Ok(fresh) => fresh,
-                Err(e) => {
-                    sdk::warn!("could not renew the sign-in ({e}); signing in again");
-                    host::kv_delete(TOKEN_KEY);
-                    host::kv_delete(USER_KEY);
-                    return Err(device_step(&client_id, now_ms)?);
+            Some(t) => {
+                let outcome = renew(&client_id, &t, now_ms);
+                match after_renewal(t, outcome, now_ms) {
+                    Renewed::Use(t) => t,
+                    Renewed::SignInAgain => {
+                        host::kv_delete(TOKEN_KEY);
+                        host::kv_delete(USER_KEY);
+                        return Err(device_step(&client_id, now_ms)?);
+                    }
+                    Renewed::TryLater(e) => return Err(e),
                 }
-            },
+            }
             None => return Err(device_step(&client_id, now_ms)?),
         };
         Ok(Client { client_id, token: token.access })
@@ -143,9 +184,8 @@ impl Client {
         let r = host::fetch(&req)?;
         match r.status {
             401 => {
-                host::kv_delete(TOKEN_KEY);
-                host::kv_delete(USER_KEY);
-                return Err("Twitch no longer accepts the sign-in. Press Refresh now to sign in again.".into());
+                expire_token();
+                return Err("Twitch no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now.".into());
             }
             s if !(200..300).contains(&s) => {
                 let why = serde_json::from_str::<Failure>(&r.body).map(|f| f.message).unwrap_or_default();
@@ -223,12 +263,15 @@ fn instruction(d: &Device) -> String {
     format!("Sign in: on your phone open {page} and enter {}, then press Refresh now here.", d.user_code)
 }
 
-fn renew(client_id: &str, old: &Token, now_ms: i64) -> Result<Token, String> {
-    let (status, body) = post_form(&format!("{ID}/token"), &[("client_id", client_id), ("grant_type", "refresh_token"), ("refresh_token", &old.refresh)])?;
-    if !(200..300).contains(&status) {
-        return Err(format!("HTTP {status}"));
+fn renew(client_id: &str, old: &Token, now_ms: i64) -> Result<Token, RenewError> {
+    let (status, body) = post_form(&format!("{ID}/token"), &[("client_id", client_id), ("grant_type", "refresh_token"), ("refresh_token", &old.refresh)]).map_err(RenewError::Failed)?;
+    if matches!(status, 400 | 401) {
+        return Err(RenewError::Refused(status));
     }
-    let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    if !(200..300).contains(&status) {
+        return Err(RenewError::Failed(format!("HTTP {status}")));
+    }
+    let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| RenewError::Failed(e.to_string()))?;
     Ok(save_token(&t, now_ms))
 }
 
@@ -424,5 +467,13 @@ mod tests {
         let d = Device { device_code: "x".into(), user_code: "ABCDEFGH".into(), verification_uri: "https://www.twitch.tv/activate?public=true&device-code=ABCDEFGH".into(), expires_ms: 0 };
         assert_eq!(instruction(&d), "Sign in: on your phone open www.twitch.tv/activate and enter ABCDEFGH, then press Refresh now here.");
         assert_eq!(url_encode("urn:ietf:params:oauth:grant-type:device_code"), "urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code");
+    }
+
+    #[test]
+    fn only_a_refused_renewal_asks_for_a_new_sign_in() {
+        let token = |expires_ms| Token { access: "old".into(), refresh: "r".into(), expires_ms };
+        assert!(matches!(after_renewal(token(10), Err(RenewError::Refused(400)), 0), Renewed::SignInAgain));
+        assert!(matches!(after_renewal(token(10), Err(RenewError::Failed("HTTP 503".into())), 0), Renewed::Use(t) if t.access == "old"));
+        assert!(matches!(after_renewal(token(10), Err(RenewError::Failed("timed out".into())), 20), Renewed::TryLater(_)));
     }
 }
