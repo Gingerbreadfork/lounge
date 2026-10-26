@@ -19,6 +19,8 @@ const LOG_LINES: usize = 200;
 const LOG_LINE_BYTES: usize = 4096;
 const MAX_ITEMS: usize = 2000;
 const MAX_ARTWORK_BYTES: usize = 4 * 1024 * 1024;
+/// A wallpaper fills the panel, so its picture may be as large as the decoder will take.
+const MAX_WALLPAPER_BYTES: usize = lounge_artwork::MAX_SOURCE_BYTES as usize;
 /// What one refresh may download: new pictures, their bytes, and the time it may spend.
 const ART_DOWNLOADS: usize = 600;
 const ART_BYTES: u64 = 192 * 1024 * 1024;
@@ -424,11 +426,18 @@ struct ArtBudget {
 fn with_artwork(fetcher: &Fetcher, manifest: &Manifest, dir: &Path, items: Vec<ApiItem>, budget: &ArtBudget) -> (Vec<ReadyItem>, usize) {
     let mut urls: Vec<String> = Vec::new();
     let mut seen = HashSet::new();
+    let mut wallpapers = HashSet::new();
     for it in &items {
         for u in [&it.poster, &it.thumbnail, &it.logo].into_iter().flatten() {
             let permitted = lounge_plugins::http::host_of(u).is_some_and(|h| host_permitted(manifest, &h));
-            if permitted && seen.insert(u.clone()) {
+            if !permitted {
+                continue;
+            }
+            if seen.insert(u.clone()) {
                 urls.push(u.clone());
+            }
+            if it.kind == ApiItemKind::Wallpaper {
+                wallpapers.insert(u.clone());
             }
         }
     }
@@ -459,7 +468,8 @@ fn with_artwork(fetcher: &Fetcher, manifest: &Manifest, dir: &Path, items: Vec<A
                     continue;
                 }
                 let timeout = budget.deadline - now;
-                if let Ok(d) = fetcher.download(u, dir, MAX_ARTWORK_BYTES, timeout, &|h| host_permitted(manifest, h)) {
+                let max = if wallpapers.contains(u) { MAX_WALLPAPER_BYTES } else { MAX_ARTWORK_BYTES };
+                if let Ok(d) = fetcher.download(u, dir, max, timeout, &|h| host_permitted(manifest, h)) {
                     bytes.fetch_add(d.fetched, Ordering::Relaxed);
                     fetched.lock().push((u.clone(), d.path.to_string_lossy().into_owned()));
                 }
@@ -833,5 +843,30 @@ mod tests {
         prune_art_dir(dir.path(), &ready);
         assert!(keep.exists());
         assert!(!stale.exists());
+    }
+
+    #[test]
+    fn a_wallpaper_may_bring_a_larger_picture_than_a_tile() {
+        // Every request gets the same 5 MB picture.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let body = vec![0u8; 5 * 1024 * 1024];
+            for mut s in listener.incoming().flatten() {
+                let mut buf = [0u8; 4096];
+                let _ = std::io::Read::read(&mut s, &mut buf);
+                let head = format!("HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n", body.len());
+                let _ = std::io::Write::write_all(&mut s, head.as_bytes());
+                let _ = std::io::Write::write_all(&mut s, &body);
+            }
+        });
+        let manifest = Manifest { fetch_hosts: vec!["127.0.0.1".into()], ..Default::default() };
+        let fetcher = Fetcher::guarded(local_hosts(&manifest));
+        let dir = tempfile::tempdir().unwrap();
+        let item = |id: &str, kind: ApiItemKind| ApiItem { id: id.into(), title: id.into(), kind, thumbnail: Some(format!("http://127.0.0.1:{port}/{id}.jpg")), ..Default::default() };
+        let budget = ArtBudget { downloads: 10, bytes: 64 * 1024 * 1024, deadline: Instant::now() + Duration::from_secs(20) };
+        let (ready, _) = with_artwork(&fetcher, &manifest, dir.path(), vec![item("painting", ApiItemKind::Wallpaper), item("tile", ApiItemKind::Program)], &budget);
+        assert!(ready[0].thumbnail.is_some(), "the wallpaper's picture is kept");
+        assert!(ready[1].thumbnail.is_none(), "a tile's picture over 4 MB is not");
     }
 }

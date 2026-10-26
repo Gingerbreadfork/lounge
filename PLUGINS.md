@@ -143,13 +143,13 @@ row under its own name, with the first picture of each result; the results' acti
 exactly as they do in a refresh. A search that a newer one has replaced is not run at all.
 `resolve` runs when the user selects an item whose action says `resolve`.
 
-The host fetches artwork for you, four pictures at a time, caps each at 4 MB, scales it to
-every size the screen needs and takes the palette that lights the focused tile. Give it a
-direct image URL under one of your `fetch_hosts`; a picture that fails to download is simply a
-tile without one, so prefer modestly sized files. Each URL is downloaded once however many items
-name it, earliest items first. One refresh may download up to 600 new pictures, 192 MB, in two
-minutes; what does not fit comes with later refreshes, since pictures already downloaded cost
-nothing. Downloads a refresh no longer names are deleted.
+The host fetches artwork for you, four pictures at a time, caps each at 4 MB (12 MB for a
+wallpaper), scales it to every size the screen needs and takes the palette that lights the
+focused tile. Give it a direct image URL under one of your `fetch_hosts`; a picture that fails
+to download is simply a tile without one, so prefer modestly sized files. Each URL is downloaded
+once however many items name it, earliest items first. One refresh may download up to 600 new
+pictures, 192 MB, in two minutes; what does not fit comes with later refreshes, since pictures
+already downloaded cost nothing. Downloads a refresh no longer names are deleted.
 
 ## The manifest
 
@@ -392,7 +392,7 @@ kept, and the plugin refreshes.
 | Fetches | 64 per call, 60 s of waiting in total, 20 s and 8 MB each |
 | Result | 8 MB of JSON per call |
 | Items | 2,000 per refresh, each id once |
-| Artwork | 4 MB per picture; 600 new pictures, 192 MB and two minutes per refresh |
+| Artwork | 4 MB per picture, 12 MB for a wallpaper; 600 new pictures, 192 MB and two minutes per refresh |
 | Key-value | 256 keys of up to 256 bytes, values of 256 KB, 1,000 writes per call |
 | Log | 500 lines per call of up to 4 KB each, the last 200 kept |
 | Screensavers | 8 per plugin, each a program of up to 32 KB with up to 24 uniforms of up to 16 numbers |

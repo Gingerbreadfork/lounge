@@ -20,7 +20,7 @@ pub enum ArtworkError {
 pub type Result<T> = std::result::Result<T, ArtworkError>;
 
 /// Sources larger than this are not decoded at all; a picture for a TV tile never needs it.
-const MAX_SOURCE_BYTES: u64 = 12 * 1024 * 1024;
+pub const MAX_SOURCE_BYTES: u64 = 12 * 1024 * 1024;
 const MAX_SOURCE_SIDE: u32 = 8192;
 /// Most pixels a source may decode to: a 12 megapixel photo, about 52 MB as RGBA.
 const MAX_SOURCE_PIXELS: u64 = 13_000_000;
