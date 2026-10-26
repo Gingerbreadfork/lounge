@@ -224,8 +224,12 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
         thread.shutdown()
     }
 
+    /** Asks for a buffer at 1/[divisor] of the view, on the main thread, where the holder must be told. */
     private fun resize() {
-        holder?.setFixedSize(ceil(viewWidth / divisor.toFloat()).toInt().coerceAtLeast(1), ceil(viewHeight / divisor.toFloat()).toInt().coerceAtLeast(1))
+        val h = holder ?: return
+        val width = ceil(viewWidth / divisor.toFloat()).toInt().coerceAtLeast(1)
+        val height = ceil(viewHeight / divisor.toFloat()).toInt().coerceAtLeast(1)
+        main.post { h.setFixedSize(width, height) }
     }
 
     private fun giveUp(why: String) {
