@@ -151,6 +151,9 @@ impl Store {
             PathBuf::from(s)
         };
         let aside = with(path, ".broken");
+        // An earlier copy goes first, whatever it is: a rename cannot replace a file with a directory.
+        let _ = std::fs::remove_file(&aside);
+        let _ = std::fs::remove_dir_all(&aside);
         for suffix in ["-wal", "-shm"] {
             let _ = std::fs::remove_file(with(&aside, suffix));
         }
@@ -653,6 +656,16 @@ mod tests {
         assert_eq!(std::fs::read_to_string(file("lounge.db.broken-wal")).unwrap(), "lounge.db-wal");
         assert!(!file("lounge.db.broken-shm").exists());
         assert!(!file("lounge.db").exists() && !file("lounge.db-wal").exists());
+    }
+
+    #[test]
+    fn setting_aside_replaces_an_earlier_copy_of_another_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("lounge.db")).unwrap();
+        std::fs::write(dir.path().join("lounge.db.broken"), b"older").unwrap();
+        Store::set_aside(&dir.path().join("lounge.db")).unwrap();
+        assert!(dir.path().join("lounge.db.broken").is_dir());
+        assert!(Store::open(&dir.path().join("lounge.db")).is_ok());
     }
 
     #[test]
