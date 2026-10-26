@@ -22,7 +22,8 @@ impl sdk::Plugin for Kodi {
             description: "Continue watching, up next, recently added and Live TV from your Kodi library; Kodi plays them.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg, Kind::Search],
-            fetch_hosts: vec!["*".into()],
+            // Loopback is refused unless named, and Kodi often runs on the TV itself.
+            fetch_hosts: vec!["*".into(), "localhost".into(), "127.0.0.1".into()],
             refresh_minutes: 10,
             rows: vec![
                 RowSpec { id: "upnext".into(), title: "Up next in Kodi".into(), style: RowStyle::Landscape },
@@ -34,7 +35,7 @@ impl sdk::Plugin for Kodi {
                     label: "Kodi address".into(),
                     kind: SettingKind::Url,
                     required: true,
-                    help: Some("Like http://192.168.0.20:8080. In Kodi turn on Settings → Services → Control → Allow remote control via HTTP.".into()),
+                    help: Some("Like http://192.168.0.20:8080, or http://localhost:8080 when Kodi runs on this TV. In Kodi turn on Settings → Services → Control → Allow remote control via HTTP.".into()),
                     default: None,
                 },
                 SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: false, help: Some("Kodi's default is kodi.".into()), default: Some("kodi".into()) },
@@ -627,5 +628,11 @@ mod tests {
         assert_eq!(parse_local("", 0), None);
         assert_eq!(parse_local("0000-00-00 00:00:00", 0), None);
         assert_eq!(base64(b"kodi:s3cret"), "a29kaTpzM2NyZXQ=");
+    }
+
+    #[test]
+    fn kodi_on_this_tv_is_within_reach() {
+        let hosts = <Kodi as sdk::Plugin>::manifest().fetch_hosts;
+        assert!(hosts.iter().any(|h| h == "localhost") && hosts.iter().any(|h| h == "127.0.0.1"));
     }
 }

@@ -160,8 +160,12 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             SheetRow(icon = LoungeIcons.Trash, title = "Remove", accent = colors.ember, onClick = { core.removePlugin(p.id); onRemoved() })
         }
     }
+    val thisTv = p.fetchHosts.any { it == "localhost" || it == "127.0.0.1" || it == "::1" }
     SheetFootnote(
-        "Can connect to: " + if (p.fetchHosts.any { it == "*" }) "any host (it needs the addresses you enter)" else p.fetchHosts.joinToString(", ").ifEmpty { "nothing" },
+        "Can connect to: " + when {
+            p.fetchHosts.any { it == "*" } -> "any host${if (thisTv) ", this TV included" else ""} (it needs the addresses you enter)"
+            else -> p.fetchHosts.joinToString(", ").ifEmpty { "nothing" }
+        },
         "Signed by ${p.publisher.take(16)}… Refreshes every ${p.refreshMinutes} min while the TV is on.",
     )
 }

@@ -54,6 +54,9 @@
     if (!p.configured) return { text: 'Needs setup', cls: '' };
     return { text: 'Off', cls: '' };
   }
+  function reachesTv(p: Plugin) {
+    return p.fetchHosts.some((h) => h === 'localhost' || h === '127.0.0.1' || h === '::1');
+  }
   function ago(ms: number) {
     const m = Math.floor((Date.now() - ms) / 60000);
     return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.floor(m / 60)} h ago` : `${Math.floor(m / 1440)} d ago`;
@@ -129,7 +132,7 @@
     </section>
 
     <section class="section">
-      <p class="caption">Can connect to: {current.fetchHosts.includes('*') ? 'any host (it needs the addresses you enter)' : current.fetchHosts.join(', ') || 'nothing'}. Signed by {current.publisher.slice(0, 16)}… Refreshes every {current.refreshMinutes} min while the TV is on.</p>
+      <p class="caption">Can connect to: {current.fetchHosts.includes('*') ? `any host${reachesTv(current) ? ', this TV included' : ''} (it needs the addresses you enter)` : current.fetchHosts.join(', ') || 'nothing'}. Signed by {current.publisher.slice(0, 16)}… Refreshes every {current.refreshMinutes} min while the TV is on.</p>
       {#if !current.builtIn}<button class="btn danger" onclick={() => command(current!, 'remove')}>Remove plugin</button>{/if}
     </section>
   {:else}
