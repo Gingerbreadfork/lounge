@@ -582,8 +582,9 @@ pub(crate) fn spawn(
                             .iter()
                             .filter(|p| p.enabled)
                             .filter(|p| {
-                                let last = rows.iter().find(|r| r.id == p.id).and_then(|r| r.last_refresh_ms).unwrap_or(0);
-                                now - last >= p.manifest.refresh_minutes_or_default() as i64 * 60_000
+                                let row = rows.iter().find(|r| r.id == p.id);
+                                let last = row.and_then(|r| r.last_refresh_ms);
+                                refresh_due(last, row.is_some_and(|r| r.last_error.is_some()), p.manifest.refresh_minutes_or_default(), now)
                             })
                             .map(|p| p.id.clone())
                             .collect()
@@ -627,6 +628,20 @@ fn answer(inner: &Arc<Inner>, job: PluginJob) {
             let _ = reply.send(inner.plugins.search(&entries, &query));
         }
     }
+}
+
+/// How soon a failed refresh is tried again, when the plugin's own interval is longer. A sign-in
+/// that waits on the user fails until it is done, and its code must not expire in between.
+const RETRY_AFTER_FAILURE_MS: i64 = 5 * 60_000;
+
+/// Whether a plugin last refreshed at `last_ms` is due again at `now`.
+fn refresh_due(last_ms: Option<i64>, failed: bool, interval_minutes: u32, now: i64) -> bool {
+    let Some(last) = last_ms else { return true };
+    let mut every = interval_minutes as i64 * 60_000;
+    if failed {
+        every = every.min(RETRY_AFTER_FAILURE_MS);
+    }
+    now - last >= every
 }
 
 fn run_refresh(inner: &Arc<Inner>, id: &str) {
@@ -791,6 +806,18 @@ mod tests {
         assert!(a < 0);
         assert_eq!(a, channel_key("tv.lounge.iptv", "abc.au"));
         assert_ne!(a, channel_key("tv.lounge.iptv", "sbs.au"));
+    }
+
+    #[test]
+    fn a_failed_refresh_is_tried_again_sooner() {
+        let minute = 60_000;
+        assert!(refresh_due(None, false, 15, 0));
+        assert!(!refresh_due(Some(0), false, 15, 14 * minute));
+        assert!(refresh_due(Some(0), false, 15, 15 * minute));
+        assert!(refresh_due(Some(0), true, 15, 5 * minute));
+        assert!(!refresh_due(Some(0), true, 15, 4 * minute));
+        assert!(!refresh_due(Some(0), true, 60, 4 * minute));
+        assert!(refresh_due(Some(0), true, 5, 5 * minute));
     }
 
     #[test]

@@ -134,7 +134,8 @@ limit, so a runaway loop or a leak ends that call and nothing else. Host functio
 too, so a loop of `kv_set` runs out like a loop of arithmetic. There is no state between calls
 apart from the key-value store. `refresh` runs when the plugin is turned on, every
 `refresh_minutes` while the screen is on, when a setting changes, and when someone asks for it
-on the phone. Refreshes run one after another on their own thread; `resolve` and `search` run on
+on the phone. A refresh that fails, such as a sign-in still waiting for the user, is tried again
+after 5 minutes when `refresh_minutes` is longer. Refreshes run one after another on their own thread; `resolve` and `search` run on
 another, so pressing a tile never waits for someone's refresh.
 
 `search` runs as the user types on the TV's search screen, for plugins whose manifest lists the
