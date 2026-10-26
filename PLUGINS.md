@@ -391,7 +391,9 @@ public key the first time it installs your plugin and refuses a later bundle sig
 key, so a new key means your users have to remove and reinstall. `lgp-tool bundle` signs,
 `lgp-tool inspect` verifies and prints the manifest. Installing a bundle with the same `id`
 again is an update: the module and manifest are replaced, settings and the key-value store are
-kept, and the plugin refreshes.
+kept, and the plugin refreshes. An update must not carry an older `version`, which is compared
+number by number, and one whose `fetch_hosts` asks for more than before is turned off until the
+person turns it on again.
 
 ## Limits
 

@@ -105,6 +105,8 @@ pub(crate) struct PluginManager {
     services: Arc<CoreServices>,
     /// The newest search; older ones still queued answer with nothing.
     pub search_generation: AtomicU64,
+    /// Held through an install, so two of one id cannot both pass the publisher check.
+    pub installing: Mutex<()>,
 }
 
 /// The host's view of storage, backed by the core's store once it exists.
@@ -156,6 +158,17 @@ impl Services for CoreServices {
         let fetcher = self.fetchers.for_plugin(plugin, &manifest, &setting);
         fetcher.fetch(request, &|host| host_permitted(&manifest, host, &setting)).map_err(|e| e.to_string())
     }
+}
+
+/// Whether manifest version `a` is older than `b`, by dot-separated numbers. A version that is
+/// not made of numbers is never older, so it can always be installed.
+fn older(a: &str, b: &str) -> bool {
+    let parse = |v: &str| v.trim().trim_start_matches('v').split('.').map(|p| p.parse::<u64>().ok()).collect::<Option<Vec<u64>>>();
+    let (Some(mut x), Some(mut y)) = (parse(a), parse(b)) else { return false };
+    let len = x.len().max(y.len());
+    x.resize(len, 0);
+    y.resize(len, 0);
+    x < y
 }
 
 /// Stores one of a plugin's settings. Moving an address setting to another host forgets the
@@ -218,6 +231,7 @@ impl PluginManager {
             fetchers,
             services: Arc::clone(&services),
             search_generation: AtomicU64::new(0),
+            installing: Mutex::new(()),
         });
         (manager, refresh_rx, calls_rx, services)
     }
@@ -249,9 +263,16 @@ impl PluginManager {
     pub fn install(&self, path: &Path, built_in: bool, existing: Option<&PluginRow>) -> Result<(PluginRow, Manifest), String> {
         let bundle = Bundle::read(path).map_err(|e| e.to_string())?;
         bundle.verify().map_err(|e| e.to_string())?;
+        let installed: Option<Manifest> = existing.and_then(|prev| serde_json::from_str(&prev.manifest_json).ok());
         if let Some(prev) = existing {
             if prev.publisher != bundle.publisher_hex() {
                 return Err(format!("{} is signed by a different publisher than the installed version", bundle.manifest.name));
+            }
+            // A copy from the phone may be newer than the one bundled with Lounge; neither rolls back.
+            if let Some(old) = &installed
+                && older(&bundle.manifest.version, &old.version)
+            {
+                return Err(format!("{} {} is installed already, newer than this {}", bundle.manifest.name, old.version, bundle.manifest.version));
             }
         }
         // The module must describe itself the same way the bundle does.
@@ -266,11 +287,21 @@ impl PluginManager {
         std::fs::write(dir.join("manifest.json"), &bundle.manifest_json).map_err(|e| e.to_string())?;
         self.loaded.lock().insert(bundle.manifest.id.clone(), Arc::new(probe));
         self.fetchers.forget(&bundle.manifest.id);
+        // An update that asks to reach more is turned off until the person allows it again. The
+        // ones bundled with Lounge come with the APK the person installed.
+        let widened: Vec<String> = match &installed {
+            Some(old) if !built_in => bundle.manifest.fetch_hosts.iter().filter(|h| !old.fetch_hosts.contains(h)).cloned().collect(),
+            _ => Vec::new(),
+        };
+        let was_on = existing.is_some_and(|p| p.enabled);
+        if was_on && !widened.is_empty() {
+            push_log(&self.logs, &bundle.manifest.id, 2, &format!("turned off by the update, which also asks to reach {}; turn it on to allow that", widened.join(", ")));
+        }
         let row = PluginRow {
             id: bundle.manifest.id.clone(),
             manifest_json: String::from_utf8_lossy(&bundle.manifest_json).into_owned(),
             publisher: bundle.publisher_hex(),
-            enabled: existing.map(|p| p.enabled).unwrap_or(false),
+            enabled: was_on && widened.is_empty(),
             built_in,
             installed_ms: now_ms(),
             last_refresh_ms: None,
@@ -711,9 +742,15 @@ impl Inner {
     }
 
     pub(crate) fn plugin_install(&self, path: &Path, built_in: bool) -> Result<PluginInfo, String> {
+        let _one_at_a_time = self.plugins.installing.lock();
         let id = lounge_plugins::bundle::Bundle::read(path).map_err(|e| e.to_string())?.manifest.id;
         let existing = self.state.lock().store.plugins().map_err(|e| e.to_string())?.into_iter().find(|r| r.id == id);
         let (row, manifest) = self.plugins.install(path, built_in, existing.as_ref())?;
+        // The store keeps a plugin's switch through an update, so one turned off by it is turned
+        // off here, which also takes away what it published.
+        if existing.as_ref().is_some_and(|e| e.enabled) && !row.enabled {
+            self.plugin_set_enabled(&row.id, false);
+        }
         let info = {
             let mut state = self.state.lock();
             state.store.plugin_upsert(&row).map_err(|e| e.to_string())?;
@@ -813,6 +850,15 @@ mod tests {
         assert!(a < 0);
         assert_eq!(a, channel_key("tv.lounge.iptv", "abc.au"));
         assert_ne!(a, channel_key("tv.lounge.iptv", "sbs.au"));
+    }
+
+    #[test]
+    fn versions_compare_by_their_numbers() {
+        assert!(older("1.2", "1.10"));
+        assert!(older("0.9.9", "1"));
+        assert!(!older("1", "1.0"));
+        assert!(!older("2", "1.9"));
+        assert!(!older("beta", "1"));
     }
 
     #[test]

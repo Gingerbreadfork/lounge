@@ -220,3 +220,31 @@ fn live_now_carries_a_row_of_tiles_and_the_guide_the_rest() {
     let live = snapshots.0.lock().as_ref().unwrap().rows.iter().find(|r| r.id == "live").unwrap().tiles.len();
     assert_eq!(live, 60);
 }
+
+#[test]
+fn an_update_never_rolls_back_and_is_turned_off_when_it_asks_for_more() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = CoreConfig {
+        data_dir: dir.path().join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::A,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    let core = Core::open(config, Arc::new(Recorder::default())).unwrap();
+    let version = |v: &str, hosts: &str| {
+        let manifest = format!(r#"{{"id":"{ID}","name":"Test DVR","version":"{v}","kinds":["epg"],"fetch_hosts":[{hosts}]}}"#);
+        let wasm = module(&manifest, "[]", "[]");
+        signed(dir.path(), &manifest, &wasm).to_string_lossy().into_owned()
+    };
+    core.install_plugin(version("2", r#""a.example""#), false).unwrap();
+    core.set_plugin_enabled(ID.into(), true);
+    assert!(core.install_plugin(version("1.9", r#""a.example""#), false).is_err());
+    assert!(core.install_plugin(version("2.1", r#""a.example""#), false).unwrap().enabled);
+    let wider = core.install_plugin(version("3", r#""a.example","b.example""#), false).unwrap();
+    assert!(!wider.enabled);
+    assert!(core.plugin_log(ID.into()).iter().any(|l| l.contains("b.example")));
+}
