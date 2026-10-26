@@ -125,7 +125,7 @@ it the home screen, pairing a phone, done. Every one is reachable again from Set
 
 <p align="center">
   <img src="docs/screenshots/rows.png" width="49%" alt="The Stage lowered to a band with the rows below it: Continue watching, Your apps, Games">
-  <img src="docs/screenshots/tile-menu.png" width="49%" alt="The long-press menu beside an app tile, with the room dimmed around it">
+  <img src="docs/screenshots/tile-menu.png" width="49%" alt="The long-press menu beside a tile, with Pin to Stage and Hide, and the room dimmed around it">
 </p>
 
 ## The phone
@@ -141,7 +141,7 @@ home screen like an app. The TV serves it itself and remembers the phone until y
   &nbsp;
   <img src="docs/screenshots/phone-layout.png" width="23%" alt="Layout: the rows in order with arrows to move them">
   &nbsp;
-  <img src="docs/screenshots/phone-plugins.png" width="23%" alt="Plugins: the installed plugins and a place to install another from a file or a link">
+  <img src="docs/screenshots/phone-plugins.png" width="23%" alt="Plugins: the built-in plugins, each marked off or needing setup">
 </p>
 
 - **What's on** mirrors the home screen. Tap a tile and it opens on the TV.
