@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -57,6 +58,22 @@ import tv.lounge.design.LoungeTheme
 import tv.lounge.design.glowRoom
 
 /**
+ * Keeps a list that is showing its start showing it when items arrive ahead of its first one.
+ * Left alone, a lazy list holds on to its first visible item and the new ones open off screen.
+ */
+@Composable
+internal fun KeepStart(state: LazyListState, firstKey: Any?) {
+    val shown = remember(state) { arrayOf(firstKey) }
+    // Runs before the list measures the new items, so the position read here is still the old one.
+    SideEffect {
+        if (firstKey != shown[0] && shown[0] != null && state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset == 0) {
+            state.requestScrollToItem(0)
+        }
+        shown[0] = firstKey
+    }
+}
+
+/**
  * A content row: a header with an optional badge and a pivot-scrolling tile list that remembers its
  * focused child (DESIGN.md §5.3). The header follows the light, the list keeps glow room, the
  * focused tile nudges at either end, and the room dims while a menu is open on [heldTileId] in
@@ -92,6 +109,7 @@ fun ContentRow(
     LaunchedEffect(focusedRow) { snapshotFlow { focusedRow.value }.collectLatest { headerAlpha.animateTo(if (it) 1f else 0.62f, motion.settle()) } }
     val nudge = remember { Animatable(0f) }
     val roomDim = heldTileId != null
+    KeepStart(listState, row.tiles.firstOrNull()?.id)
 
     fun nudgeBy(px: Float) {
         if (motion.reducedMotion) return

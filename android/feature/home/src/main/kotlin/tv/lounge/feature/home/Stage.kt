@@ -457,6 +457,7 @@ private fun StageStrip(
 ) {
     val safeXPx = with(LocalDensity.current) { Dimens.safeX.toPx() }
     val stripState = remember { LazyListState(LazyLayoutCacheWindow(ahead = 540.dp, behind = 270.dp), 0, 0) }
+    KeepStart(stripState, strip.firstOrNull()?.id)
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec(safeXPx)) {
         LazyRow(
             state = stripState,
