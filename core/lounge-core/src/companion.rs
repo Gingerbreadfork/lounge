@@ -48,7 +48,7 @@ pub(crate) fn pairing(inner: &Arc<Inner>) -> Result<PairingInfo, String> {
     let c = slot.as_ref().ok_or_else(|| "the companion is not running".to_string())?;
     let ip = lounge_companion::local_ip().ok_or_else(|| "the TV is not on a network".to_string())?;
     let base = format!("http://{ip}:{}", c.port);
-    let info = c.new_pairing(&base, now_ms());
+    let info = c.new_pairing(&base, now_ms())?;
     let dir = PathBuf::from(&inner.config.cache_dir).join("companion");
     // One live code at a time: earlier codes' QR pictures go, so nothing can read a token off them.
     if let Ok(entries) = std::fs::read_dir(&dir) {

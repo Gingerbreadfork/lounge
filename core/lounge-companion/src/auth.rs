@@ -47,13 +47,17 @@ pub struct Device {
 #[serde(rename_all = "camelCase")]
 pub struct PairingInfo {
     pub code: String,
+    /// The token the link carries; the code hands out a different one.
     pub token: String,
     pub url: String,
     pub expires_ms: i64,
 }
 
+/// A live code and link, each with its own token, so whoever photographs the code on screen can
+/// never end up with the token of the phone that typed it. Using either retires both.
 struct Pending {
-    token: String,
+    link_token: String,
+    code_token: String,
     expires_ms: i64,
 }
 
@@ -115,14 +119,15 @@ impl TokenStore {
 
     /// A new six-digit code and the token it will hand out; the URL pairs by itself when opened.
     /// Any earlier code stops working: one live code at a time.
-    pub fn new_pairing(&self, base_url: &str, now_ms: i64) -> PairingInfo {
-        let token = random_token();
-        let code = format!("{:06}", random_u32() % 1_000_000);
+    pub fn new_pairing(&self, base_url: &str, now_ms: i64) -> Result<PairingInfo, String> {
+        let failed = || "the TV's random number source failed, so no code was made".to_string();
+        let (link_token, code_token) = (random_token().ok_or_else(failed)?, random_token().ok_or_else(failed)?);
+        let code = format!("{:06}", random_u32().ok_or_else(failed)? % 1_000_000);
         let expires_ms = now_ms + CODE_TTL_MS;
         let mut pending = self.pending.lock();
         pending.clear();
-        pending.insert(code.clone(), Pending { token: token.clone(), expires_ms });
-        PairingInfo { url: format!("{base_url}/#token={token}"), code, token, expires_ms }
+        pending.insert(code.clone(), Pending { link_token: link_token.clone(), code_token, expires_ms });
+        Ok(PairingInfo { url: format!("{base_url}/#token={link_token}"), code, token: link_token, expires_ms })
     }
 
     /// Exchange a code for its token and register the device. Wrong codes lock out the address
@@ -142,8 +147,8 @@ impl TokenStore {
         match pending {
             Some(pending) => {
                 self.lockouts.lock().by_address.remove(&from);
-                self.register(&pending.token, device_name, now_ms);
-                Ok(pending.token)
+                self.register(&pending.code_token, device_name, now_ms);
+                Ok(pending.code_token)
             }
             None => {
                 let mut l = self.lockouts.lock();
@@ -174,7 +179,9 @@ impl TokenStore {
         if devices.iter().any(|d| d.token_hash == h) {
             return;
         }
-        devices.push(Device { id: random_token()[..12].to_string(), name: device_name.to_string(), created_ms: now_ms, last_seen_ms: now_ms, token_hash: h });
+        // The id only names the device in the list; without randomness the hash serves.
+        let id = random_token().map(|t| t[..12].to_string()).unwrap_or_else(|| h[..12].to_string());
+        devices.push(Device { id, name: device_name.to_string(), created_ms: now_ms, last_seen_ms: now_ms, token_hash: h });
         self.save(&devices);
     }
 
@@ -195,7 +202,7 @@ impl TokenStore {
             }
         }
         let mut pending = self.pending.lock();
-        let matched = pending.iter().find(|(_, p)| p.token == token && p.expires_ms >= now_ms).map(|(c, _)| c.clone());
+        let matched = pending.iter().find(|(_, p)| p.link_token == token && p.expires_ms >= now_ms).map(|(c, _)| c.clone());
         if let Some(code) = matched {
             pending.remove(&code);
             drop(pending);
@@ -229,18 +236,19 @@ fn hash(token: &str) -> String {
     hex::encode(sha2::Sha256::digest(token.as_bytes()))
 }
 
-fn random_u32() -> u32 {
+/// None when the system cannot give randomness, which must never become a guessable code.
+fn random_u32() -> Option<u32> {
     let mut b = [0u8; 4];
-    let _ = getrandom::fill(&mut b);
-    u32::from_le_bytes(b)
+    getrandom::fill(&mut b).ok()?;
+    Some(u32::from_le_bytes(b))
 }
 
-fn random_token() -> String {
+fn random_token() -> Option<String> {
     let mut b = [0u8; 24];
-    let _ = getrandom::fill(&mut b);
+    getrandom::fill(&mut b).ok()?;
     // URL-safe without padding, so it survives a QR code and a fragment.
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    b.iter().map(|x| ALPHABET[(*x & 63) as usize] as char).collect()
+    Some(b.iter().map(|x| ALPHABET[(*x & 63) as usize] as char).collect())
 }
 
 #[cfg(test)]
@@ -254,11 +262,13 @@ mod tests {
     fn pairing_code_exchanges_once() {
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::open(dir.path());
-        let p = store.new_pairing("http://tv:8787", 1_000);
+        let p = store.new_pairing("http://tv:8787", 1_000).unwrap();
         assert_eq!(p.code.len(), 6);
         assert!(store.redeem("000000", "Phone", PHONE, 1_000).is_err() || p.code == "000000");
         let token = store.redeem(&p.code, "Pixel", PHONE, 2_000).unwrap();
-        assert_eq!(token, p.token);
+        // The code's token is the phone's own; the link's, seen on screen, is retired with it.
+        assert_ne!(token, p.token);
+        assert!(!store.authenticate(&p.token, 2_500, "Camera"));
         assert!(store.redeem(&p.code, "Pixel", PHONE, 2_000).is_err());
         assert!(store.authenticate(&token, 3_000, "Phone"));
         assert!(!store.authenticate("nope", 3_000, "Phone"));
@@ -275,7 +285,7 @@ mod tests {
     fn wrong_codes_lock_out_only_the_guesser() {
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::open(dir.path());
-        let p = store.new_pairing("http://tv:8787", 0);
+        let p = store.new_pairing("http://tv:8787", 0).unwrap();
         let wrong = wrong_code(&p);
         for _ in 0..4 {
             assert_eq!(store.redeem(wrong, "x", PEST, 10), Err(RedeemError::Wrong));
@@ -290,7 +300,7 @@ mod tests {
     fn too_many_wrong_codes_from_anyone_pause_typed_codes() {
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::open(dir.path());
-        let p = store.new_pairing("http://tv:8787", 0);
+        let p = store.new_pairing("http://tv:8787", 0).unwrap();
         let wrong = wrong_code(&p);
         for i in 0..WRONG_CODES_WINDOW {
             let ip = IpAddr::V4(std::net::Ipv4Addr::new(10, 0, (i / 200) as u8, (i % 200) as u8 + 1));
@@ -299,7 +309,7 @@ mod tests {
         assert_eq!(store.redeem(&p.code, "x", PHONE, 20), Err(RedeemError::LockedOut));
         // The QR link still pairs, and typed codes work again once the window has passed.
         assert!(store.authenticate(&p.token, 30, "Phone"));
-        let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 100);
+        let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 100).unwrap();
         assert!(store.redeem(&p2.code, "x", PHONE, CODE_TTL_MS + 200).is_ok());
     }
 
@@ -307,8 +317,8 @@ mod tests {
     fn a_new_code_retires_the_old_one() {
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::open(dir.path());
-        let old = store.new_pairing("http://tv:8787", 0);
-        let new = store.new_pairing("http://tv:8787", 10);
+        let old = store.new_pairing("http://tv:8787", 0).unwrap();
+        let new = store.new_pairing("http://tv:8787", 10).unwrap();
         if old.code != new.code {
             assert_eq!(store.redeem(&old.code, "x", PHONE, 20), Err(RedeemError::Wrong));
         }
@@ -320,9 +330,9 @@ mod tests {
     fn qr_token_registers_on_first_use_and_expires() {
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::open(dir.path());
-        let p = store.new_pairing("http://tv:8787", 0);
+        let p = store.new_pairing("http://tv:8787", 0).unwrap();
         assert!(!store.authenticate(&p.token, CODE_TTL_MS + 1, "Phone"));
-        let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 1);
+        let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 1).unwrap();
         assert!(store.authenticate(&p2.token, CODE_TTL_MS + 10, "Pixel 8 · Chrome"));
         assert!(store.authenticate(&p2.token, 2 * CODE_TTL_MS + 10, "Phone"));
         assert_eq!(store.devices(None)[0]["name"], "Pixel 8 · Chrome");

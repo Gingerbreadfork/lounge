@@ -121,7 +121,7 @@ impl Companion {
         let _ = self.revision.send(n);
     }
 
-    pub fn new_pairing(&self, base_url: &str, now_ms: i64) -> PairingInfo {
+    pub fn new_pairing(&self, base_url: &str, now_ms: i64) -> Result<PairingInfo, String> {
         self.tokens.new_pairing(base_url, now_ms)
     }
 

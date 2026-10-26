@@ -111,7 +111,7 @@ fn the_server_checks_before_it_listens() {
     assert_eq!(status, 421);
 
     // A paired phone gets a cookie; it opens the backup, not the rest of the API.
-    let token = companion.new_pairing(&format!("http://{host}"), now()).token;
+    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
     let (status, head) = send(port, &format!("POST /api/session HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Length: 0\r\n\r\n"));
     assert_eq!(status, 204);
     assert!(head.contains("set-cookie: lounge_session=") && head.contains("httponly") && head.contains("samesite=strict"), "{head}");
@@ -167,7 +167,7 @@ fn the_live_socket_upgrades() {
     let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
     let port = companion.port;
     let host = format!("127.0.0.1:{port}");
-    let token = companion.new_pairing(&format!("http://{host}"), now()).token;
+    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
     let (status, _) = send(
         port,
         &format!(
