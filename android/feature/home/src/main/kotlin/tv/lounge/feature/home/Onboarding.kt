@@ -129,6 +129,7 @@ fun OnboardingScreen(
                     }
                 }
                 .focusProperties { canFocus = !leaving }
+                .trapFocus(leaving)
                 .focusGroup(),
         ) {
             Row(Modifier.fillMaxSize().padding(horizontal = Dimens.safeX, vertical = Dimens.safeY)) {
