@@ -25,8 +25,18 @@
     (e.target as HTMLInputElement).value = '';
   }
   async function revoke(d: Device) {
-    await act(d.current ? 'This phone is no longer paired' : `${d.name} forgotten`, () => api.revokeDevice(d.id));
+    const done = await act(d.current ? 'This phone is no longer paired' : `${d.name} forgotten`, () => api.revokeDevice(d.id).then(() => true));
+    if (!done) return;
     if (d.current) unpair(); else load();
+  }
+  /** The TV forgets this phone first, so its token stops working there too; the phone only lets
+   *  go of it once the TV has. */
+  async function unpairThisPhone() {
+    const list = await act('', () => api.devices());
+    if (!list) return;
+    const mine = list.find((d) => d.current);
+    if (mine) await revoke(mine);
+    else unpair();
   }
   function bytes(n: number) {
     return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
@@ -102,7 +112,7 @@
   <section class="section">
     <div class="section-head"><h3>About</h3></div>
     <p class="caption">Lounge {app.state?.device.version ?? ''} on {app.state?.device.model ?? 'this TV'}. Everything on this page goes between this phone and the TV over your own network.</p>
-    <button class="btn ghost danger" onclick={unpair}>Unpair this phone</button>
+    <button class="btn ghost danger" onclick={unpairThisPhone}>Unpair this phone</button>
   </section>
 </main>
 
