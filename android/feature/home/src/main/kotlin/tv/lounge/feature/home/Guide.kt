@@ -35,6 +35,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,10 +95,13 @@ fun GuideSheet(core: CoreClient, visibleState: MutableTransitionState<Boolean>, 
     val firstFocus = remember { FocusRequester() }
     var guide by remember { mutableStateOf<Guide?>(null) }
     val leaving = !visibleState.targetState
+    // The window stays put while the guide is open, so programmes do not slide under the
+    // focus; it moves on only once the present nears its right-hand edge.
+    var from by remember { mutableLongStateOf(0L) }
     WhileStarted {
         while (true) {
             val now = System.currentTimeMillis()
-            val from = (now - HALF_HOUR_MS / 2) / HALF_HOUR_MS * HALF_HOUR_MS
+            if (from == 0L || now > from + WINDOW_MS - HALF_HOUR_MS) from = (now - HALF_HOUR_MS / 2) / HALF_HOUR_MS * HALF_HOUR_MS
             guide = withContext(Dispatchers.IO) { core.guide(from, 3u) }
             delay(60_000L - now % 60_000L)
         }
@@ -134,7 +139,7 @@ fun GuideSheet(core: CoreClient, visibleState: MutableTransitionState<Boolean>, 
             }
         }
     }
-    LaunchedEffect(guide != null) { if (guide != null) runCatching { firstFocus.requestFocus() } }
+    LaunchedEffect(guide != null) { if (guide != null) firstFocus.requestWhenReady() }
 }
 
 @Composable
@@ -216,8 +221,9 @@ private fun ChannelRow(ch: GuideChannel, g: Guide, gridWidth: androidx.compose.u
                     g, gridWidth, firstFocus,
                 ) { onTune(ch.action) }
             } else {
+                // Keyed by programme, so a refresh keeps each cell, and the focus in it, in place.
                 visible.forEachIndexed { i, p ->
-                    ProgrammeCell(p, g, gridWidth, if (i == 0) firstFocus else null) { onTune(ch.action) }
+                    key(p.id) { ProgrammeCell(p, g, gridWidth, if (i == 0) firstFocus else null) { onTune(ch.action) } }
                 }
             }
         }
