@@ -108,7 +108,8 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     val liveBackdrops = LoungeTheme.visuals.shaderWallpaper && !motion.reducedMotion
     var isDefaultHome by remember { mutableStateOf(isDefaultHome(context)) }
     val uiSounds = LoungeTheme.sounds
-    LaunchedEffect(sounds) { uiSounds?.enabled = sounds }
+    // The sounds arrive after the first frame, so the setting is applied again when they do.
+    LaunchedEffect(sounds, uiSounds) { uiSounds?.enabled = sounds }
 
     var composedOnce by remember { mutableStateOf(false) }
     SideEffect {
