@@ -70,6 +70,8 @@ impl sdk::Plugin for Trakt {
             }
         }
         let paused = items.len();
+        // An episode paused part-way is in Continue watching; Up next would show it twice.
+        let paused_episodes: Vec<u64> = playback.iter().filter_map(|p| p.episode.as_ref()).map(|e| e.ids.trakt).filter(|&id| id > 0).collect();
 
         let mut up_next = 0;
         if host::setting("upnext").map(|v| v != "false").unwrap_or(true) {
@@ -85,7 +87,8 @@ impl sdk::Plugin for Trakt {
                         continue;
                     }
                 };
-                if let Some(item) = up_next_item(w, progress.next_episode.as_ref(), (UP_NEXT_SHOWS - i) as i32, &open) {
+                let next = progress.next_episode.as_ref().filter(|e| !paused_episodes.contains(&e.ids.trakt));
+                if let Some(item) = up_next_item(w, next, (UP_NEXT_SHOWS - i) as i32, &open) {
                     items.push(item);
                     up_next += 1;
                 }
