@@ -124,7 +124,7 @@ also run behind the home screen, dimmed so the tiles stay the brightest thing in
 it the home screen, pairing a phone, done. Every one is reachable again from Settings.
 
 <p align="center">
-  <img src="docs/screenshots/rows.png" width="49%" alt="The Stage lowered to a band with the rows below it: Continue watching, Your apps, Games">
+  <img src="docs/screenshots/rows.png" width="49%" alt="The Stage lowered to a band of its picture's own light, with the rows below it: Continue watching, Your apps, Games">
   <img src="docs/screenshots/tile-menu.png" width="49%" alt="The long-press menu beside a tile, with Pin to Stage and Hide, and the room dimmed around it">
 </p>
 
