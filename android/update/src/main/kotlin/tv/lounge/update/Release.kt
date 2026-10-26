@@ -93,6 +93,17 @@ data class Release(
     }
 }
 
+/**
+ * Why an APK may not replace this build, or null when it may. It has to be newer than what is
+ * installed, and the version its release names; otherwise the same release would look new again
+ * after every install.
+ */
+fun versionProblem(release: Version, apkVersionName: String?, apkVersionCode: Long, installedVersionCode: Long): String? = when {
+    apkVersionCode <= installedVersionCode -> "The update is no newer than this copy of Lounge"
+    Version.parse(apkVersionName.orEmpty()) != release -> "The release says $release, but the app in it says ${apkVersionName ?: "nothing"}"
+    else -> null
+}
+
 /** How a downloaded update can be installed on this device. */
 enum class InstallPath {
     /** No prompt: Lounge installed the current build and Android trusts it to update itself. */

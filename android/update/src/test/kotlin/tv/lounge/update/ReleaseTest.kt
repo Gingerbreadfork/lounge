@@ -21,6 +21,16 @@ class ReleaseTest {
     }
 
     @Test
+    fun anUpdateMustBeNewerAndTheVersionItsReleaseNames() {
+        val release = Version(0, 3, 2)
+        assertNull(versionProblem(release, "0.3.2", apkVersionCode = 7, installedVersionCode = 6))
+        // A tag pushed before the version was bumped: installing it would leave 0.3.2 looking new forever.
+        assertTrue(versionProblem(release, "0.3.1", apkVersionCode = 7, installedVersionCode = 6)!!.contains("says 0.3.1"))
+        assertTrue(versionProblem(release, "0.3.2", apkVersionCode = 6, installedVersionCode = 6)!!.contains("no newer"))
+        assertTrue(versionProblem(release, null, apkVersionCode = 7, installedVersionCode = 6) != null)
+    }
+
+    @Test
     fun theLatestReleaseIsRead() {
         val release = Release.parse(LATEST)!!
         assertEquals("v0.1.2", release.tag)

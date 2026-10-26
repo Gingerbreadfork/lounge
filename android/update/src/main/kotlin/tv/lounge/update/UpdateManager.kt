@@ -279,7 +279,7 @@ class UpdateManager(
             return _state.value
         }
         val fail = { message: String -> UpdateState.Failed(message, ready.release, System.currentTimeMillis()).also { _state.value = it } }
-        runCatching { verify(ready.file, ready.sha256) }.onFailure { e ->
+        runCatching { verify(ready.file, ready.sha256, ready.release) }.onFailure { e ->
             Log.w(TAG, "updates: ${ready.file.name} failed its check: ${e.message}")
             ready.file.delete()
             return fail(e.message ?: "The update did not check out")
@@ -291,7 +291,7 @@ class UpdateManager(
         pendingSilent = path == InstallPath.Silent
         if (path == InstallPath.PowerSetup) {
             val r = runCatching {
-                val staged = stage(ready.file, ready.sha256)
+                val staged = stage(ready.file, ready.sha256, ready.release)
                 try {
                     power.run(installAction(staged))
                 } finally {
@@ -396,19 +396,23 @@ class UpdateManager(
         return digest.digest().toHex()
     }
 
-    /** Throws unless [file] still has [sha256] and is a Lounge APK signed like the installed one. */
-    private fun verify(file: File, sha256: String) {
+    /**
+     * Throws unless [file] still has [sha256] and is a Lounge APK signed like the installed one,
+     * newer than it and the version [release] names.
+     */
+    private fun verify(file: File, sha256: String, release: Release) {
         if (sha256(file) != sha256) throw IllegalStateException("The update changed after it was checked")
-        checkPackage(file)
+        checkPackage(file, release)
     }
 
-    private fun checkPackage(file: File) {
+    private fun checkPackage(file: File, release: Release) {
         val pm = context.packageManager
         val archive = archiveInfo(file) ?: throw IllegalStateException("The update is not an app Android can read")
         if (archive.packageName != context.packageName) throw IllegalStateException("The update is not Lounge")
         @Suppress("DEPRECATION")
-        val installed = signers(pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES), withHistory = false)
-        if (!signedLike(installed, signers(archive, withHistory = true))) throw IllegalStateException("The update is not signed like this copy of Lounge")
+        val installedInfo = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES)
+        if (!signedLike(signers(installedInfo, withHistory = false), signers(archive, withHistory = true))) throw IllegalStateException("The update is not signed like this copy of Lounge")
+        versionProblem(release.version, archive.versionName, archive.longVersionCode, installedInfo.longVersionCode)?.let { throw IllegalStateException(it) }
     }
 
     private fun archiveInfo(file: File): PackageInfo? {
@@ -441,12 +445,12 @@ class UpdateManager(
     private fun stagingDir(): File? = context.getExternalFilesDir(null)?.let { File(it, "updates") }
 
     /** Copies the APK where `pm` can read it and checks the copy, right before it is installed. */
-    private fun stage(file: File, sha256: String): File {
+    private fun stage(file: File, sha256: String, release: Release): File {
         val dir = stagingDir()?.apply { mkdirs() } ?: throw IllegalStateException("There is no shared storage for Power Setup to read from")
         val staged = File(dir, file.name)
         file.copyTo(staged, overwrite = true)
         try {
-            verify(staged, sha256)
+            verify(staged, sha256, release)
         } catch (e: Exception) {
             staged.delete()
             throw e
