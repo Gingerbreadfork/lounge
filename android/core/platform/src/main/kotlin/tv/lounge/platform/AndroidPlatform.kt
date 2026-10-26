@@ -161,7 +161,14 @@ class AndroidPlatform(private val context: Context) : Platform {
             "volume_up" -> audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_RAISE, android.media.AudioManager.FLAG_SHOW_UI)
             "volume_down" -> audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_LOWER, android.media.AudioManager.FLAG_SHOW_UI)
             "mute" -> audio.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.ADJUST_TOGGLE_MUTE, android.media.AudioManager.FLAG_SHOW_UI)
-            "home" -> _commands.tryEmit(UiCommand.GoHome)
+            "home" -> {
+                _commands.tryEmit(UiCommand.GoHome)
+                // With another app in front, Home brings Lounge up; the home screen may start from
+                // the background.
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
             "play_pause", "rewind", "fast_forward", "play", "pause", "next", "previous", "stop" -> {
                 // Media keys go to whichever app is playing, not to our window.
                 val code = when (key) {
