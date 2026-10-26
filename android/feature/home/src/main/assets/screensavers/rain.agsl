@@ -1,12 +1,12 @@
-// Rain: a window at night. Drops run down the glass in their own time, each lit from the street
-// below, over the soft bokeh of lamps too far away to make out.
+// Rain: a window at night. The street behind it is out of focus, its lamps soft discs; each drop
+// on the glass is a small lens holding a sharp, upside-down picture of them. Drops run down in
+// their own time, leave a line of droplets that dry away, and clear the mist from their path.
 uniform float2 resolution;
 uniform float time;
 layout(color) uniform half4 velvet;
 layout(color) uniform half4 horizon;
 layout(color) uniform half4 houselight;
 layout(color) uniform half4 ember;
-layout(color) uniform half4 dust;
 
 float2 hash2(float2 p) {
     float3 p3 = fract(float3(p.xyx) * float3(0.1031, 0.1030, 0.0973));
@@ -14,43 +14,78 @@ float2 hash2(float2 p) {
     return fract((p3.xx + p3.yz) * p3.zy);
 }
 
-// One sheet of running drops. A tall cell may hold one drop, which slides down over some seconds,
-// swaying a little, sits at the bottom and fades, then a new one starts at the top. Returns the
-// drop's cover, its wet trail and the crescent of light on its lower edge.
-float3 sheet(float2 uv, float t, float cols, float rows, float seed) {
+// One sheet of running drops in tall cells. A drop slides down over some seconds, swaying a
+// little, and leaves droplets behind that dry from the top. Returns the lens offset of whatever
+// covers this point, how much it covers, and how much of the mist its path has cleared.
+float4 sheet(float2 uv, float t, float cols, float rows, float seed) {
     float2 c = float2(uv.x * cols + seed, uv.y * rows + seed * 0.37);
     float2 id = floor(c);
     float2 f = fract(c) - 0.5;
     float2 rnd = hash2(id);
-    float present = step(0.45, rnd.x);
-    float phase = fract(t * (0.04 + 0.035 * rnd.x) + rnd.y * 7.0);
-    float run = smoothstep(0.0, 0.7, phase);
-    float y = -0.42 + 0.84 * (run * run * (3.0 - 2.0 * run));
-    float x = 0.26 * (rnd.x - 0.5) + 0.06 * sin(run * 9.0 + rnd.y * 12.0);
-    float alive = smoothstep(0.0, 0.05, phase) * (1.0 - smoothstep(0.75, 0.98, phase)) * present;
-    float2 d = float2((f.x - x) * rows / cols, f.y - y);
-    float r = 0.045 + 0.04 * fract(rnd.y * 3.0);
-    float body = length(d * float2(1.0, 0.8));
-    float drop = smoothstep(r, r * 0.8, body) * alive;
-    float light = smoothstep(r * 0.9, r * 0.5, length(d - float2(0.0, r * 0.3))) * (1.0 - smoothstep(r * 0.45, r * 0.7, body)) * alive;
+    float present = step(0.3, rnd.x);
+    float phase = fract(t * (0.035 + 0.03 * rnd.x) + rnd.y * 7.0);
+    float run = smoothstep(0.0, 0.75, phase);
+    float y = -0.38 + 0.74 * (run * run * (3.0 - 2.0 * run));
+    float baseX = 0.24 * (rnd.x - 0.5);
+    float x = baseX + 0.04 * sin(run * 9.0 + rnd.y * 12.0);
+    float alive = smoothstep(0.0, 0.04, phase) * (1.0 - smoothstep(0.82, 0.99, phase)) * present;
+    float k = rows / cols;
+
+    float2 d = float2((f.x - x) * k, f.y - y);
+    float r = 0.05 + 0.035 * fract(rnd.y * 3.0);
+    float2 shape = d * float2(1.0, d.y > 0.0 ? 0.82 : 1.0);
+    float drop = smoothstep(r, r * 0.86, length(shape)) * alive;
+    float2 n = shape / r * drop;
+
+    // The droplets it left, one per tenth of the cell, the higher ones older and drier.
     float above = y - f.y;
-    float trail = smoothstep(0.008, 0.0, abs(d.x)) * step(0.0, above) * (1.0 - smoothstep(0.0, 0.5, above)) * run * alive * (1.0 - drop);
-    return float3(drop, trail, light);
+    float seg = floor((f.y + 0.5) * 10.0);
+    float2 sr = fract(float2(0.618034, 0.754878) * (seg + 1.0) + rnd * 13.0);
+    float2 td = float2((f.x - baseX - 0.03 * (sr.x - 0.5)) * k, f.y - ((seg + 0.5) / 10.0 - 0.5));
+    float tr = r * (0.2 + 0.22 * sr.y);
+    float fresh = step(0.04, above) * (1.0 - smoothstep(0.1, 0.6, above)) * step(0.3, sr.x) * alive;
+    float bead = smoothstep(tr, tr * 0.72, length(td)) * fresh * (1.0 - drop);
+    n += td / tr * bead;
+
+    float wipe = smoothstep(r * 1.3, r * 0.6, abs(d.x)) * step(0.0, above) * (1.0 - smoothstep(0.2, 0.9, above)) * alive;
+    return float4(n, max(drop, bead), wipe);
 }
 
-// Small drops that sit on the glass and catch a little of the light without moving.
-float2 beads(float2 uv, float cols, float rows, float seed) {
+// Mist: small drops sitting on the glass, each slowly gathering and drying on its own clock.
+float3 mist(float2 uv, float t, float cols, float rows, float seed, float density) {
     float2 c = float2(uv.x * cols + seed, uv.y * rows);
     float2 id = floor(c);
     float2 f = fract(c) - 0.5;
     float2 rnd = hash2(id + seed);
-    float present = step(0.72, rnd.x);
-    float2 d = float2((f.x - 0.5 * (rnd.y - 0.5)) * rows / cols, f.y - 0.5 * (rnd.x - 0.5));
-    float r = 0.05 + 0.07 * fract(rnd.y * 7.0);
-    float body = length(d);
-    float drop = smoothstep(r, r * 0.7, body) * present;
-    float light = smoothstep(r * 0.9, r * 0.4, length(d - float2(0.0, r * 0.35))) * (1.0 - smoothstep(r * 0.35, r * 0.6, body)) * present;
-    return float2(drop, light);
+    float life = fract(rnd.y * 5.0 + t * (0.004 + 0.004 * rnd.x));
+    float there = step(1.0 - density, rnd.x) * smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.85, 1.0, life));
+    // Placed so the whole drop stays inside its cell, measured in cell heights.
+    float halfWidth = 0.5 * rows / cols;
+    float r = min(0.1 + 0.16 * fract(rnd.y * 7.0), halfWidth * 0.8);
+    float2 centre = float2((rnd.y - 0.5) * 2.0 * (halfWidth - r), (fract(rnd.x * 13.0) - 0.5) * 2.0 * (0.5 - r));
+    float2 d = float2(f.x * rows / cols, f.y) - centre;
+    float cover = smoothstep(r, r * 0.7, length(d)) * there;
+    return float3(d / r * cover, cover);
+}
+
+// One lamp of the street, at `at` with one over its radius squared `inv`: its out-of-focus disc
+// at `p`, the same through a drop at `seen`, and the drop's sharp picture of it.
+void lamp(float2 p, float2 seen, float2 at, float inv, float speed, float phase, float toEmber, float strength, float t,
+          inout half3 here, inout half3 blurred, inout half3 sharp) {
+    // A slow rise and fall, as a triangle wave.
+    half breathe = half(0.85 + 0.15 * abs(fract(t * speed + phase) * 2.0 - 1.0));
+    half3 color = mix(houselight.rgb, ember.rgb, half(toEmber)) * half(strength) * breathe;
+    // Half precision is plenty for soft lamps, and faster on some TVs' GPUs.
+    half2 dh = half2(p - at);
+    half2 ds = half2(seen - at);
+    half qh = dot(dh, dh) * half(inv);
+    half qs = dot(ds, ds) * half(inv);
+    here += color * (smoothstep(1.0, 0.5, qh) * (0.6 + 0.4 * clamp(qh * 1.2, 0.0, 1.0)));
+    blurred += color * smoothstep(1.0, 0.5, qs);
+    // A bright core with a short tail, from multiplications alone.
+    half point = clamp(1.0 - qs * 40.0, 0.0, 1.0);
+    point *= point;
+    sharp += color * (2.2 * point * point);
 }
 
 half4 main(float2 coord) {
@@ -59,30 +94,45 @@ half4 main(float2 coord) {
     float2 p = float2(uv.x - 0.5 * aspect, 1.0 - uv.y);
     float t = time;
 
-    // The street: dark above, a lit haze low down, and a few lamps as soft discs.
-    half3 col = mix(velvet.rgb * 0.75, horizon.rgb * 1.6, half(smoothstep(0.9, 0.0, p.y)));
-    for (int i = 0; i < 5; i++) {
-        float fi = float(i);
-        float2 rnd = hash2(float2(fi * 3.1, 17.0));
-        float2 lamp = float2((rnd.x - 0.5) * aspect * 1.1, 0.1 + 0.3 * rnd.y);
-        float radius = 0.09 + 0.1 * fract(rnd.x * 5.0);
-        float glow = exp(-dot(p - lamp, p - lamp) / (radius * radius));
-        float breathe = 0.85 + 0.15 * sin(t * (0.3 + 0.4 * rnd.y) + fi * 2.0);
-        half3 lampColor = mix(houselight.rgb, ember.rgb, half(fract(rnd.y * 3.0)));
-        col += lampColor * half(glow * breathe * (0.6 - 0.06 * fi));
+    float4 a = sheet(uv, t, 10.0, 4.0, 0.0);
+    float clear = 1.0 - a.w;
+    float3 m = mist(uv, t, 34.0, 19.0, 2.0, 0.5) * clear;
+
+    // Running drops cover their droplets, which cover the mist.
+    float run = a.z;
+    float2 n = mix(m.xy, a.xy, run);
+    float cover = max(m.z, run);
+    float lens = mix(0.16, 0.34, run);
+
+    // Through a drop the street is upside down and smaller.
+    float2 seen = p + float2(-n.x, n.y) * lens;
+
+    // The street, out of focus through the glass: dark above, a haze low down, and its lamps as
+    // discs with a soft edge and a brighter rim. One pass over the lamps gives the view here, the
+    // view through the drop, and the drop's own sharp picture of each lamp.
+    // The warm haze the street lamps cast low down.
+    half3 haze = houselight.rgb * half(0.07 * smoothstep(0.55, 0.0, p.y));
+    half3 here = mix(velvet.rgb * 0.7, horizon.rgb * 1.7, half(smoothstep(0.95, -0.05, p.y))) + haze;
+    half3 skySeen = mix(velvet.rgb * 0.7, horizon.rgb * 1.7, half(smoothstep(0.95, -0.05, seen.y)));
+    half3 blurred = skySeen;
+    half3 sharp = half3(0.0);
+    // Five lamps, written out: the values are fixed, so no TV works them out for every pixel.
+    lamp(p, seen, float2(-0.3741 * aspect, 0.3175), 78.91, 0.1055, 0.9280, 0.775, 0.3408, t, here, blurred, sharp);
+    lamp(p, seen, float2(-0.2129 * aspect, 0.7219), 341.76, 0.0908, 0.5461, 0.039, 0.2318, t, here, blurred, sharp);
+    lamp(p, seen, float2(-0.0517 * aspect, 0.1704), 27.26, 0.0761, 0.1641, 0.304, 0.3638, t, here, blurred, sharp);
+    lamp(p, seen, float2(0.2634 * aspect, 0.0969), 98.03, 0.0614, 0.7821, 0.569, 0.2832, t, here, blurred, sharp);
+    lamp(p, seen, float2(0.4246 * aspect, 0.8278), 391.63, 0.1067, 0.4002, 0.833, 0.2017, t, here, blurred, sharp);
+
+    half3 col = here;
+    if (cover > 0.001) {
+        half3 inside = blurred * 0.75 + (skySeen + sharp) * 0.45;
+        float edge = length(n) / cover;
+        // The rim darkens where the glass bends the light away, which shows on the larger drops.
+        half3 drop = inside * half(1.0 - (0.1 + 0.3 * smoothstep(0.12, 0.34, lens)) * smoothstep(0.6, 1.0, edge));
+        // Light from the street gathers on each drop's lower edge.
+        drop += houselight.rgb * half(0.22 * smoothstep(0.45, 0.95, n.y / cover) * smoothstep(1.02, 0.8, edge));
+        col = mix(col, drop, half(cover));
     }
-    col *= half(0.85 - 0.2 * smoothstep(0.4, 1.0, abs(p.x) / aspect * 2.0));
-
-    float3 a = sheet(uv, t, 9.0, 4.0, 0.0);
-    float3 b = sheet(uv, t * 1.13, 15.0, 7.0, 5.3);
-    float2 s = beads(uv, 30.0, 18.0, 2.0);
-    float drop = max(max(a.x, b.x), s.x);
-    float trail = max(a.y, b.y);
-    float light = a.z + 0.7 * b.z + 0.35 * s.y;
-
-    // A drop gathers the street behind it: a touch brighter, and lit along its lower edge.
-    col = mix(col, col * 1.2 + houselight.rgb * 0.03, half(drop));
-    col += dust.rgb * half(0.1 * trail);
-    col += houselight.rgb * half(0.32 * light);
+    col *= half(0.88 - 0.2 * smoothstep(0.4, 1.0, abs(p.x) / aspect * 2.0));
     return half4(col, 1.0);
 }
