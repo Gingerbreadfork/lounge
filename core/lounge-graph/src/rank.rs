@@ -1,7 +1,7 @@
 //! Deterministic, explainable ordering.
 
-use crate::{Item, ItemKind};
-use std::collections::HashSet;
+use crate::{DeepLink, Item, ItemKind};
+use std::collections::HashMap;
 
 /// Most recently used first; items never used sort after used ones, alphabetically.
 pub fn by_recency_then_title(items: &mut [&Item]) {
@@ -15,10 +15,27 @@ pub fn by_recency_then_title(items: &mut [&Item]) {
     });
 }
 
-/// Keep the first item for each normalised title (continue-watching from several sources).
+/// One item for each normalised title (continue-watching from several sources), in the place of
+/// the first. Where titles collide, one that opens the title itself replaces one that only opens
+/// its app, such as a playing session beside the app's own Watch Next entry.
 pub fn dedupe_by_title(items: &mut Vec<&Item>) {
-    let mut seen: HashSet<String> = HashSet::new();
-    items.retain(|it| seen.insert(normalise(&it.title)));
+    let opens_title = |it: &Item| !matches!(it.deep_link, DeepLink::LaunchApp { .. });
+    let mut place: HashMap<String, usize> = HashMap::new();
+    let mut kept: Vec<&Item> = Vec::with_capacity(items.len());
+    for it in items.drain(..) {
+        match place.get(&normalise(&it.title)) {
+            Some(&i) => {
+                if !opens_title(kept[i]) && opens_title(it) {
+                    kept[i] = it;
+                }
+            }
+            None => {
+                place.insert(normalise(&it.title), kept.len());
+                kept.push(it);
+            }
+        }
+    }
+    *items = kept;
 }
 
 fn normalise(title: &str) -> String {
@@ -117,6 +134,21 @@ mod tests {
         let mut v = vec![&a, &b];
         dedupe_by_title(&mut v);
         assert_eq!(v.len(), 1);
+    }
+
+    #[test]
+    fn of_two_with_one_title_the_one_that_resumes_stays() {
+        let mut session = it("The Bear", Some(9));
+        session.id = "session".into();
+        session.deep_link = DeepLink::LaunchApp { package: "tv.app".into(), activity: String::new() };
+        let mut watch_next = it("The Bear", Some(5));
+        watch_next.id = "wn".into();
+        watch_next.deep_link = DeepLink::ViewUri("app://bear/s2e4".into());
+        let other = it("Alien", Some(7));
+        let mut v = vec![&session, &other, &watch_next];
+        dedupe_by_title(&mut v);
+        let ids: Vec<&str> = v.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, vec!["wn", "app:Alien"]);
     }
 
     #[test]
