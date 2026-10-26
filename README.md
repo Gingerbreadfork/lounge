@@ -54,7 +54,7 @@
 **Setting up and staying out of the way**
 
 - **Five screens on first run**, with a live preview of the home screen while you choose a theme.
-- **Power Setup.** Lounge talks to the TV's own debugging service after you allow it once on screen, or to Shizuku, to take the home role, grant its own accesses, drive HDMI-CEC, set the screensaver and compile itself ahead of time. Every command is shown before it runs and logged after.
+- **Power Setup.** Lounge talks to the TV's own debugging service after you allow it once on screen, or to Shizuku, to take the home role, grant its own accesses, drive HDMI-CEC, set the screensaver and compile itself ahead of time. Every action you start shows its command first, and the Power Setup page lists the last 60 that ran since Lounge started.
 - **A screensaver of its own.** The artwork from the Stage and the rows with a slow push-in, or one of nine slow abstract scenes drawn on the TV's graphics chip: Ink, Current, Rain, Smoke, Embers, Shallows, Lava, Aurora and Silk. Plugins can add their own.
 - **Live backgrounds.** Any of those scenes can run behind the home screen instead of the still light, dimmed so the tiles stay the brightest thing in the room, with the light still following focus over it. Off by default; it freezes after a minute without input and steps down when the TV's graphics chip is busy.
 - **Nothing leaves the house.** No accounts and no analytics. Lounge reaches only what you gave it an address for, the artwork the TV's other apps publish, and GitHub twice a day for updates, which Settings can turn off.
@@ -144,13 +144,14 @@ Fifteen ship in the APK, written against the same SDK as anyone else's. Turn on 
 use from the phone or the TV's settings; each asks only for what it needs.
 
 - **Jellyfin**, **Emby** and **Plex** put your server's resume points into Continue watching and
-  its newest additions into a row, and answer search. Items open in the server's own TV app.
+  its newest additions into a row, and answer search. Plex items open in the Plex app; Jellyfin
+  and Emby open their app, or the item's page where the TV has a browser.
 - **IPTV** turns an M3U playlist into channels in Live now and the guide, with programme
   information from an XMLTV feed.
 - **HDHomeRun** finds the tuner on your network and puts its channels and guide on the home
   screen; channels play in the TV's own player.
 - **Tvheadend**, **Channels DVR** and **NextPVR** do the same for a DVR, and add your recordings
-  as a row, with half-watched ones in Continue watching.
+  as a row. Channels DVR and NextPVR also put half-watched recordings in Continue watching.
 - **YouTube channels** follows channels and playlists through their public feeds, no account
   needed, and opens videos in the YouTube app.
 - **Internet Archive** fills rows with free feature films, cartoons and television from
@@ -239,15 +240,19 @@ and switches them off along with taking the home role, and it can turn them back
 
 Power Setup talks to the TV's own debugging service after you allow it once on screen, and from
 then on it can take the home role, grant the optional accesses, drive the TV over HDMI-CEC from a
-streamer, set the screensaver and compile Lounge ahead of time. Every action shows its command
-before it runs. Nothing it can do is hidden from you, and the two that change the living room,
-taking the home role and switching the TV's power, only ever happen when you press them.
+streamer, set the screensaver and compile Lounge ahead of time. Every action you start shows its
+command before it runs, and the Power Setup page lists the last 60 that ran since Lounge
+started, including the two it does on its own: installing an update and passing on keys from the
+phone.
+The two that change the living room, taking the home role and switching the TV's power, only ever
+happen when you press them.
 
 The screensaver is Lounge's own. It shows the artwork from the Stage and the rows with a slow
 push-in, the clock and a line naming the picture, or one of nine abstract scenes drawn on the
-TV's graphics chip: Ink, Lava, Aurora and Silk, each in the colours of your theme. Choose in
-Settings, Screensaver, Style. Plugins can add scenes of their own, and a shader file pushed to the
-TV shows up there too, for trying one out ([PLUGINS.md](PLUGINS.md#screensavers)).
+TV's graphics chip: Ink, Current, Rain, Smoke, Embers, Shallows, Lava, Aurora and Silk, each in
+the colours of your theme. Choose in Settings, Screensaver, Style. Plugins can add scenes of their
+own, and a shader file pushed to the TV shows up there too, for trying one out
+([PLUGINS.md](PLUGINS.md#screensavers)).
 
 After that first install Lounge keeps itself current. Twice a day it looks at the
 [Releases](../../releases) page, downloads a newer APK, checks it against the published hash
@@ -281,7 +286,7 @@ for an update, which Settings, Updates turns off. There are no accounts and no a
 
 ## Where it is
 
-Version 0.1.0, in daily use on a Google TV Streamer and a TCL television. The Stage, rows, live
+In daily use on a Google TV Streamer and a TCL television. The Stage, rows, live
 TV, inputs, search, the phone, plugins, Power Setup, the screensaver and the setup steps all
 work on real data. Still ahead: a place to find other people's plugins, profiles and a kids
 mode, remapping remote buttons, and Android 16 picture profiles. The Now playing card has had
