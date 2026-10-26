@@ -118,7 +118,7 @@ impl sdk::Plugin for Kodi {
             match kodi.call::<Channels>("PVR.GetChannels", json!({"channelgroupid": "alltv", "properties": ["channel", "channelnumber", "thumbnail", "hidden", "broadcastnow", "broadcastnext"]})) {
                 Ok(list) => {
                     for c in list.channels.iter().filter(|c| !c.hidden) {
-                        items.extend(kodi.channel_items(c, offset));
+                        items.extend(kodi.channel_items(c));
                         channels += 1;
                     }
                 }
@@ -471,7 +471,7 @@ impl Server {
     }
 
     /// The channel, and what is on it now and next.
-    pub fn channel_items(&self, c: &Channel, offset: i32) -> Vec<Item> {
+    pub fn channel_items(&self, c: &Channel) -> Vec<Item> {
         let name = if c.channel.trim().is_empty() { c.label.clone() } else { c.channel.clone() };
         let id = c.channelid.to_string();
         let action = Action { resolve: Some(format!("channel:{}", c.channelid)), title: Some(name.clone()), ..Default::default() };
@@ -487,8 +487,9 @@ impl Server {
             action: action.clone(),
             ..Default::default()
         }];
+        // Kodi keeps its guide in UTC, unlike its library's dates, which are in the TV's own time.
         for b in [&c.broadcastnow, &c.broadcastnext].into_iter().flatten() {
-            let (Some(start), Some(end)) = (parse_local(&b.starttime, offset), parse_local(&b.endtime, offset)) else { continue };
+            let (Some(start), Some(end)) = (parse_local(&b.starttime, 0), parse_local(&b.endtime, 0)) else { continue };
             if b.title.trim().is_empty() || end <= start {
                 continue;
             }
@@ -606,15 +607,15 @@ mod tests {
             "broadcastnow":{"broadcastid":900,"title":"The One Show","starttime":"2026-10-22 19:00:00","endtime":"2026-10-22 19:30:00","thumbnail":""},
             "broadcastnext":{"broadcastid":901,"title":"EastEnders","starttime":"2026-10-22 19:30:00","endtime":"2026-10-22 20:00:00","thumbnail":""}},
             {"channelid":4,"label":"Hidden","channel":"Hidden","channelnumber":99,"hidden":true}]}"#).unwrap();
-        let items = kodi().channel_items(&list.channels[0], 60);
+        let items = kodi().channel_items(&list.channels[0]);
         assert_eq!(items.len(), 3);
         assert_eq!(items[0].kind, ItemKind::Channel);
         assert_eq!(items[0].channel_number.as_deref(), Some("1"));
         assert_eq!(items[0].action.resolve.as_deref(), Some("channel:3"));
         assert!(items[0].logo.as_deref().unwrap().contains("bbc.png"));
         assert_eq!(items[1].title, "The One Show");
-        assert_eq!(items[1].start_ms, Some(sdk::epoch_ms(2026, 10, 22, 19, 0, 0, 60)));
-        assert_eq!(items[1].end_ms, Some(sdk::epoch_ms(2026, 10, 22, 19, 30, 0, 60)));
+        assert_eq!(items[1].start_ms, Some(sdk::epoch_ms(2026, 10, 22, 19, 0, 0, 0)));
+        assert_eq!(items[1].end_ms, Some(sdk::epoch_ms(2026, 10, 22, 19, 30, 0, 0)));
         assert_eq!(items[2].title, "EastEnders");
         assert!(items[2].thumbnail.is_none());
         assert!(list.channels[1].hidden);
