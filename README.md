@@ -10,6 +10,13 @@
 </p>
 
 <p align="center">
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/Gingerbreadfork/lounge?style=flat-square&labelColor=412399&color=FFA86B&label=release" alt="Latest release"></a>
+  <a href="../../actions/workflows/check.yml"><img src="https://img.shields.io/github/actions/workflow/status/Gingerbreadfork/lounge/check.yml?branch=main&style=flat-square&labelColor=412399&color=FFA86B&label=build" alt="Build status"></a>
+  <img src="https://img.shields.io/badge/Android_TV-9%2B-FFA86B?style=flat-square&labelColor=412399" alt="Android TV 9 and up">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Gingerbreadfork/lounge?style=flat-square&labelColor=412399&color=FFA86B" alt="MIT license"></a>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/home.png" width="920" alt="The Lounge home screen: a still from Charade large on the right, the title, year, director and a Continue button on the left, and a strip of what to watch next along the bottom">
 </p>
 
@@ -215,6 +222,9 @@ Download `Lounge-<version>.apk` from the [Releases](../../releases) page, or bui
    on USB debugging in Developer options, then choose Allow on the TV's prompt and tick Always
    allow.
 
+No USB stick? Install **Downloader** from the Play Store, open
+`github.com/Gingerbreadfork/lounge/releases` in it, choose the APK, and carry on from step 3.
+
 ### The advanced way: ADB
 
 With USB debugging on and a computer on the same network, this installs Lounge and makes it
@@ -245,7 +255,9 @@ Lounge checks the [Releases](../../releases) page twice a day, verifies a newer 
 published hash and installs it while you are in another app. From Android 12 there is no prompt
 after the first update, and with Power Setup there is none at all; otherwise a tile on the home
 screen offers it. On Google TV, Play Protect may warn the first time that it does not know the
-developer: choose More details, then Install anyway. Settings, Updates turns the check off.
+developer: choose More details, then Install anyway. Settings, Updates turns the check off, if
+you would rather manage updates yourself with [Obtainium](https://github.com/ImranR98/Obtainium)
+pointed at this repository.
 
 ## Under the hood
 
