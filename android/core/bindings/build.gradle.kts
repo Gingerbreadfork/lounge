@@ -88,7 +88,7 @@ abstract class UniffiBindgen : DefaultTask() {
         execOps.exec {
             workingDir = File(workspace.get())
             commandLine(
-                cargo.get(), "run", "-q", "-p", "uniffi-bindgen", "--release", "--",
+                cargo.get(), "run", "-q", "-p", "uniffi-bindgen", "--profile", "bindgen", "--",
                 "generate",
                 library.get().asFile.absolutePath,
                 "--language", "kotlin",
@@ -104,6 +104,8 @@ val companionRoot = rustRoot.dir("../companion")
 val rustSources = files(
     rustRoot.file("Cargo.toml"),
     rustRoot.file("Cargo.lock"),
+    rustRoot.file(".cargo/config.toml"),
+    rustRoot.file("rust-toolchain.toml"),
     rustRoot.dir("lounge-core"),
     rustRoot.dir("lounge-graph"),
     rustRoot.dir("lounge-store"),

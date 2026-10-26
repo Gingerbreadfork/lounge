@@ -15,7 +15,7 @@ members = [
 version = "0.3.1"
 edition = "2024"
 license = "MIT"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [workspace.dependencies]
 uniffi = { version = "0.32", features = ["tokio"] }
