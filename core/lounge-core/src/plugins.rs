@@ -193,6 +193,23 @@ pub(crate) fn host_permitted(manifest: &Manifest, host: &str, setting: &dyn Fn(&
     !local || manifest.fetch_hosts.iter().any(|allowed| allowed.eq_ignore_ascii_case(&h))
 }
 
+/// Stores one of a plugin's settings. Moving an address setting to another host forgets the
+/// plugin's passwords, so a password only ever goes to the server it was entered for, whoever
+/// changes the address.
+pub(crate) fn store_setting(store: &lounge_store::Store, manifest: &Manifest, id: &str, key: &str, value: Option<&str>) {
+    let value = value.map(str::trim).filter(|v| !v.is_empty());
+    if manifest.decides_origin(key) {
+        let old = store.plugin_setting(id, key).ok().flatten();
+        let host = |v: Option<&str>| v.and_then(lounge_plugin_api::host_in_setting);
+        if old.is_some() && host(old.as_deref()) != host(value) {
+            for secret in manifest.settings.iter().filter(|s| s.kind.is_secret()) {
+                let _ = store.plugin_setting_set(id, &secret.key, None);
+            }
+        }
+    }
+    let _ = store.plugin_setting_set(id, key, value);
+}
+
 /// `text` cut to at most `max` bytes on a character boundary.
 pub(crate) fn clip_bytes(text: &str, max: usize) -> &str {
     if text.len() <= max {
@@ -798,8 +815,9 @@ impl Inner {
         }
         let enabled = {
             let state = self.state.lock();
-            let _ = state.store.plugin_setting_set(id, key, value.as_deref().map(str::trim).filter(|v| !v.is_empty()));
-            state.plugins.iter().any(|p| p.id == id && p.enabled)
+            let Some(entry) = state.plugins.iter().find(|p| p.id == id) else { return };
+            store_setting(&state.store, &entry.manifest, id, key, value.as_deref());
+            entry.enabled
         };
         if enabled {
             self.plugins.refresh_soon(id);
@@ -852,6 +870,22 @@ mod tests {
         assert_eq!(r.this_device, vec!["localhost"]);
         assert!(!r.any_home_name);
         assert!(host_permitted(&m, "192.168.0.10", &|k| (k == "server").then(|| "http://192.168.0.10:8096".to_string())));
+    }
+
+    #[test]
+    fn a_password_does_not_follow_the_server_to_another_host() {
+        let store = lounge_store::Store::open_in_memory().unwrap();
+        let mut m = Manifest { fetch_hosts: vec!["$server".into()], ..Default::default() };
+        m.settings.push(lounge_plugin_api::SettingSpec { key: "server".into(), label: "Server".into(), kind: lounge_plugin_api::SettingKind::Url, required: true, help: None, default: None });
+        m.settings.push(lounge_plugin_api::SettingSpec { key: "password".into(), label: "Password".into(), kind: lounge_plugin_api::SettingKind::Password, required: false, help: None, default: None });
+        let password = |store: &lounge_store::Store| store.plugin_setting("p", "password").unwrap();
+        store_setting(&store, &m, "p", "server", Some("http://192.168.0.10:8096"));
+        store_setting(&store, &m, "p", "password", Some("hunter2"));
+        // The same host with a different path or port keeps it; another host does not.
+        store_setting(&store, &m, "p", "server", Some("http://192.168.0.10:8920/jellyfin"));
+        assert_eq!(password(&store).as_deref(), Some("hunter2"));
+        store_setting(&store, &m, "p", "server", Some("http://attacker.example"));
+        assert_eq!(password(&store), None);
     }
 
     #[test]

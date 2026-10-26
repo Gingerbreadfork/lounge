@@ -64,7 +64,7 @@ pub fn is_home_name(host: &str) -> bool {
 }
 
 /// The host a setting's value names, with or without its scheme.
-fn host_in_setting(value: &str) -> Option<String> {
+pub fn host_in_setting(value: &str) -> Option<String> {
     let value = value.trim();
     host_of(value).or_else(|| host_of(&format!("http://{value}")))
 }
@@ -211,6 +211,12 @@ impl Manifest {
         hosts.sort();
         hosts.dedup();
         hosts
+    }
+
+    /// Whether changing setting `key` can move where the plugin connects: an address setting, or
+    /// one the allow list names with `$key`.
+    pub fn decides_origin(&self, key: &str) -> bool {
+        self.settings.iter().any(|s| s.key == key && s.kind == SettingKind::Url) || self.fetch_hosts.iter().any(|h| h.strip_prefix('$') == Some(key))
     }
 
     /// Whether the allow list has [LOCAL_NETWORK].

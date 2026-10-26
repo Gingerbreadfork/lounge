@@ -1,6 +1,6 @@
 //! The companion server's view of the core: snapshots, actions, layout, plugins, backup.
 
-use crate::{engine, now_ms, worker, CompanionStatus, Inner, PairingInfo};
+use crate::{engine, now_ms, plugins, worker, CompanionStatus, Inner, PairingInfo};
 use lounge_companion::{CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, RowRef};
 use lounge_graph::Layout;
 use serde::{Deserialize, Serialize};
@@ -269,9 +269,14 @@ impl CompanionActions for CoreActions {
             let mut state = inner.state.lock();
             state.graph.layout = layout.clone();
             state.store.save_layout(&layout).map_err(|e| e.to_string())?;
+            // Only settings an installed plugin declares, and never a secret, which no backup
+            // carries; each goes through the rule that keeps passwords with their server.
             for p in &backup.plugins {
+                let Some(manifest) = state.plugins.iter().find(|e| e.id == p.id).map(|e| e.manifest.clone()) else { continue };
                 for (k, v) in &p.settings {
-                    let _ = state.store.plugin_setting_set(&p.id, k, Some(v));
+                    if manifest.settings.iter().any(|s| &s.key == k && !s.kind.is_secret()) {
+                        plugins::store_setting(&state.store, &manifest, &p.id, k, Some(v));
+                    }
                 }
             }
         }
