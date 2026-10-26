@@ -503,6 +503,9 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
     }
     if done.deferred {
         defer(inner, |p| p.apps = Some(apps));
+    } else {
+        // A pass still waiting with an older list would bring it back.
+        inner.state.lock().pending_art.apps = None;
     }
     Ok(())
 }
@@ -792,6 +795,8 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         defer(inner, move |pending| {
             pending.plugins.insert(plugin, ready);
         });
+    } else {
+        inner.state.lock().pending_art.plugins.remove(plugin);
     }
     Ok(())
 }
