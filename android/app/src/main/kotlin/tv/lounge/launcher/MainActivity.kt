@@ -44,6 +44,7 @@ import tv.lounge.design.colors
 import tv.lounge.design.systemReducedMotion
 import tv.lounge.design.toArgbInt
 import tv.lounge.core.DeviceTier
+import tv.lounge.core.reason
 import tv.lounge.feature.home.HomeScreen
 import tv.lounge.feature.home.OtherHome
 import tv.lounge.feature.home.RecoveryReason
@@ -276,7 +277,7 @@ class MainActivity : ComponentActivity() {
                         error is CoreException.Storage -> RecoveryReason.Storage
                         else -> RecoveryReason.Other
                     },
-                    detail = (error as? CoreException.Storage)?.detail ?: error?.message,
+                    detail = error?.reason,
                     otherHomes = otherHomes,
                     onTryAgain = { fresh ->
                         val failed = withContext(Dispatchers.IO) { app.reopenCore(fresh) }

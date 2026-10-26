@@ -67,6 +67,8 @@ import tv.lounge.core.ChannelInfo
 import tv.lounge.core.CoreClient
 import tv.lounge.core.Diagnostics
 import tv.lounge.core.PairingInfo
+import tv.lounge.core.companionFailure
+import tv.lounge.core.reason
 import tv.lounge.design.Dimens
 import tv.lounge.design.Dot
 import tv.lounge.design.Hairline
@@ -454,12 +456,12 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
     fun refresh() {
         status = core.companionStatus()
         if (status.running && (pairing == null || pairing!!.expiresMs < System.currentTimeMillis())) {
-            core.companionPairing().onSuccess { pairing = it; error = null }.onFailure { error = it.message }
+            core.companionPairing().onSuccess { pairing = it; error = null }.onFailure { error = it.reason }
         }
     }
     LaunchedEffect(enabled) {
         if (enabled && !core.companionStatus().running) {
-            core.startCompanion(CoreClient.COMPANION_PORT).onFailure { error = it.message }
+            core.startCompanion(CoreClient.COMPANION_PORT).onFailure { error = companionFailure(it) }
         }
         if (!enabled) { core.stopCompanion(); pairing = null }
         refresh()

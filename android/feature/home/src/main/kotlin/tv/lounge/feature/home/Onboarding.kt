@@ -35,6 +35,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,6 +68,7 @@ import kotlinx.coroutines.withContext
 import tv.lounge.core.CoreClient
 import tv.lounge.core.HomeSnapshot
 import tv.lounge.core.PairingInfo
+import tv.lounge.core.companionFailure
 import tv.lounge.design.ButtonKind
 import tv.lounge.design.Dimens
 import tv.lounge.design.LoungeButton
@@ -495,9 +498,16 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
     val colors = LoungeTheme.colors
     var pairing by remember { mutableStateOf<PairingInfo?>(null) }
     var url by remember { mutableStateOf<String?>(null) }
+    var failed by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(uiPrefs.companionEnabled) {
+        failed = null
         if (!uiPrefs.companionEnabled) { pairing = null; return@LaunchedEffect }
-        if (!core.companionStatus().running) core.startCompanion(CoreClient.COMPANION_PORT)
+        if (!core.companionStatus().running) {
+            core.startCompanion(CoreClient.COMPANION_PORT).onFailure {
+                failed = companionFailure(it)
+                return@LaunchedEffect
+            }
+        }
         url = core.companionStatus().url
         while (true) {
             val p = pairing
@@ -506,7 +516,13 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
         }
     }
     val p = pairing
-    if (!uiPrefs.companionEnabled || p == null) {
+    val why = failed
+    if (why != null) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Lamp(LoungeIcons.Phone)
+            Text(why, style = LoungeTheme.typography.body, color = colors.dust, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 560.dp))
+        }
+    } else if (!uiPrefs.companionEnabled || p == null) {
         Lamp(LoungeIcons.Phone)
     } else {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

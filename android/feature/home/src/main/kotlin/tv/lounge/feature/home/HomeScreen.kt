@@ -64,6 +64,7 @@ import tv.lounge.core.HomeSnapshot
 import tv.lounge.core.LayoutCommand
 import tv.lounge.core.StageSpotlight
 import tv.lounge.core.Tile
+import tv.lounge.core.reason
 import tv.lounge.design.FieldSleep
 import tv.lounge.design.LightField
 import tv.lounge.design.LocalLightState
@@ -709,7 +710,7 @@ private fun rowTitle(snapshot: HomeSnapshot, rowId: String): String =
 
 /** Errors as sentences a viewer can act on, never a stack trace or an intent dump (DESIGN.md §8). */
 internal fun friendlyError(e: Throwable, title: String): String {
-    val m = e.message.orEmpty()
+    val m = e.reason
     return when {
         "No Activity found" in m || "ActivityNotFound" in m -> "Nothing on this TV can open $title. Is its app still installed?"
         "not installed" in m -> "$title isn't installed on this TV."

@@ -4,6 +4,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Why a core call failed, as the core put it, without the binding's field names. */
+val Throwable.reason: String
+    get() = when (this) {
+        is CoreException.Storage -> detail
+        is CoreException.Platform -> detail
+        is CoreException.Plugin -> detail
+        is CoreException.Companion -> detail
+        is CoreException.UnknownAction -> "Lounge doesn't know how to do $action"
+        is PlatformException.Failed -> detail
+        else -> message ?: javaClass.simpleName
+    }
+
+/** The companion's failure to start, worded for the TV. */
+fun companionFailure(e: Throwable): String =
+    if ("in use" in e.reason) "Another app on this TV is using port ${CoreClient.COMPANION_PORT}, so the companion can't start."
+    else "The companion couldn't start: ${e.reason}"
+
 /**
  * Adapter over the generated [Core]: exposes [HomeSnapshot]s as a [StateFlow] and keeps the
  * generated types out of the UI layer's constructors.
