@@ -4,7 +4,7 @@
 //! differs is refused by the installer.
 
 use crate::{api::Manifest, PluginError, Result};
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, VerifyingKey};
 use std::io::{Read, Write};
 use std::path::Path;
 
@@ -35,7 +35,8 @@ impl Bundle {
     pub fn verify(&self) -> Result<()> {
         let key = VerifyingKey::from_bytes(&self.publisher).map_err(|_| PluginError::Signature)?;
         let sig = Signature::from_bytes(&self.signature);
-        key.verify(&Self::signed_bytes(&self.manifest_json, &self.wasm), &sig)
+        // Strict: no weak keys or signatures that other verifiers would read differently.
+        key.verify_strict(&Self::signed_bytes(&self.manifest_json, &self.wasm), &sig)
             .map_err(|_| PluginError::Signature)
     }
 
