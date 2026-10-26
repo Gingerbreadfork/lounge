@@ -170,8 +170,22 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             Spacer(Modifier.height(8.dp))
             Hairline(Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
-            // Removing deletes the plugin's files, so it runs off the main thread.
-            SheetRow(icon = LoungeIcons.Trash, title = "Remove", accent = colors.ember, onClick = { scope.launch { withContext(Dispatchers.IO) { core.removePlugin(p.id) }; onRemoved() } })
+            // Removing forgets the plugin's servers and passwords too, so it asks once more first;
+            // moving away takes the question back. It deletes files, so it runs off the main thread.
+            var confirming by remember(p.id) { mutableStateOf(false) }
+            SheetRow(
+                icon = LoungeIcons.Trash,
+                title = if (confirming) "Yes, remove it and its settings" else "Remove",
+                accent = colors.ember,
+                modifier = Modifier.onFocusChanged { if (!it.isFocused) confirming = false },
+                onClick = {
+                    if (!confirming) {
+                        confirming = true
+                    } else {
+                        scope.launch { withContext(Dispatchers.IO) { core.removePlugin(p.id) }; onRemoved() }
+                    }
+                },
+            )
         }
     }
     SheetFootnote(
