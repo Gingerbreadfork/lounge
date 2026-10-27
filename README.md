@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="920" alt="The Lounge home screen: a still from Charade large on the right, the title, year, director and a Continue button on the left, and a strip of what to watch next along the bottom">
+  <img src="docs/screenshots/home.png" width="920" alt="The Lounge home screen: a still from Static Bloom large on the right, its magenta light on the wall and the Continue button, the title, year and director on the left, and a strip of what to watch next along the bottom">
 </p>
 
 ## At a glance
@@ -124,8 +124,8 @@ also run behind the home screen, dimmed so the tiles stay the brightest thing in
 it the home screen, pairing a phone, done. Every one is reachable again from Settings.
 
 <p align="center">
-  <img src="docs/screenshots/rows.png" width="49%" alt="The Stage lowered to a band of its picture's own light, with the rows below it: Continue watching, Your apps, Games">
-  <img src="docs/screenshots/tile-menu.png" width="49%" alt="The long-press menu beside a tile, with Pin to Stage and Hide, and the room dimmed around it">
+  <img src="docs/screenshots/rows.png" width="49%" alt="The Stage lowered to a band of its picture's own light, with the rows below it: Just added, then a row of posters">
+  <img src="docs/screenshots/tile-menu.png" width="49%" alt="The long-press menu beside a poster, with Pin to Stage and Hide, and the room dimmed around it">
 </p>
 
 ## The phone
@@ -182,7 +182,8 @@ from the phone or the TV's settings.
 
 A sixteenth, **Sample library**, lives in the repository but not the APK: eighteen public-domain
 films with their posters, so you can see Lounge with something on it. The pictures in this file
-use it. [PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin on your TV.
+show a made-up horror library instead: every title, poster and name in them is invented.
+[PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin on your TV.
 
 Plugin submissions are welcome. Open a pull request that adds yours under `plugins/` once it
 passes the [checklist](PLUGINS.md#checklist-before-you-share-it) in PLUGINS.md.
