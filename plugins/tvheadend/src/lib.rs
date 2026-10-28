@@ -476,7 +476,7 @@ impl Server {
             channel_name: Some(c.name.clone()),
             channel_number: c.number.clone(),
             logo: self.picture(&c.icon_public_url),
-            action: Action::play(self.public_url(&format!("stream/channel/{}?profile={}", c.uuid, self.profile)), c.name.clone()),
+            action: Action::play(self.public_url(&format!("stream/channel/{}?profile={}", c.uuid, url_encode(&self.profile))), c.name.clone()),
             ..Default::default()
         }
     }
@@ -497,7 +497,7 @@ impl Server {
             start_ms: Some(e.start * 1000),
             end_ms: Some(e.stop * 1000),
             thumbnail: self.picture(&e.image),
-            action: if is_search { Action::play(self.public_url(&format!("stream/channel/{}?profile={}", e.channel_uuid, self.profile)), e.title.clone()) } else { Action::default() },
+            action: if is_search { Action::play(self.public_url(&format!("stream/channel/{}?profile={}", e.channel_uuid, url_encode(&self.profile))), e.title.clone()) } else { Action::default() },
             ..Default::default()
         }
     }
