@@ -144,6 +144,8 @@ pub struct Channel {
     /// The tvg-id as written, which guide programmes refer to; repeats share it.
     pub tvg_id: Option<String>,
     pub name: String,
+    /// The name the guide knows the channel by, when the playlist gives one besides its title.
+    pub tvg_name: Option<String>,
     pub number: Option<String>,
     pub logo: Option<String>,
     pub group: Option<String>,
@@ -214,6 +216,7 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Cha
                 out.push(Channel {
                     id,
                     tvg_id,
+                    tvg_name: attrs.get("tvg-name").map(|n| n.trim().to_string()).filter(|n| !n.is_empty() && *n != name),
                     name,
                     number: attrs.get("tvg-chno").cloned().filter(|s| !s.is_empty()).or_else(|| Some(index.to_string())),
                     logo: attrs.get("tvg-logo").cloned().filter(|s| s.starts_with("http")),
@@ -360,7 +363,10 @@ pub struct Guide<'a> {
     channels: &'a [Channel],
     by_id: FastMap<&'a str, usize>,
     by_name: FastMap<String, usize>,
-    /// Guide channel ids that match no tvg-id, matched to a bucket by display name.
+    /// Guide channel ids in lower case, for guides that write them differently.
+    by_folded_id: FastMap<String, usize>,
+    /// Guide channel ids that match no tvg-id exactly, matched to a bucket by its id in another
+    /// case or by display name.
     aliases: FastMap<String, usize>,
     /// Indices into `channels` for each bucket; several when a tvg-id repeats.
     buckets: Vec<Vec<usize>>,
@@ -392,6 +398,7 @@ impl<'a> Guide<'a> {
     /// most `budget` items.
     pub fn new(channels: &'a [Channel], window: (i64, i64), budget: usize) -> Guide<'a> {
         let mut by_id = FastMap::default();
+        let mut by_folded_id = FastMap::default();
         let mut by_name = FastMap::default();
         let mut buckets: Vec<Vec<usize>> = Vec::new();
         for (i, c) in channels.iter().enumerate() {
@@ -400,20 +407,22 @@ impl<'a> Guide<'a> {
                 buckets.len() - 1
             });
             buckets[bucket].push(i);
-            let name = normalise(&c.name);
-            if !name.is_empty() {
-                by_name.entry(name).or_insert(bucket);
+            by_folded_id.entry(c.guide_id().to_lowercase()).or_insert(bucket);
+            for name in std::iter::once(&c.name).chain(&c.tvg_name).map(|n| normalise(n)) {
+                if !name.is_empty() {
+                    by_name.entry(name).or_insert(bucket);
+                }
             }
         }
         let programmes = vec![Vec::new(); buckets.len()];
-        Guide { channels, by_id, by_name, aliases: FastMap::default(), buckets, programmes, stored: 0, keep: usize::MAX, deadline_ms: i64::MAX, window, budget, seen: 0, matched: 0 }
+        Guide { channels, by_id, by_folded_id, by_name, aliases: FastMap::default(), buckets, programmes, stored: 0, keep: usize::MAX, deadline_ms: i64::MAX, window, budget, seen: 0, matched: 0 }
     }
 
     fn alias(&mut self, guide_id: &str, display_name: &str) {
         if self.by_id.contains_key(guide_id) {
             return;
         }
-        if let Some(&bucket) = self.by_name.get(&normalise(display_name)) {
+        if let Some(&bucket) = self.by_folded_id.get(&guide_id.to_lowercase()).or_else(|| self.by_name.get(&normalise(display_name))) {
             self.aliases.entry(guide_id.to_string()).or_insert(bucket);
         }
     }
@@ -877,7 +886,7 @@ mod tests {
     const HOUR: i64 = 3_600_000;
 
     fn channel(id: &str, name: &str) -> Channel {
-        Channel { id: id.into(), tvg_id: Some(id.into()), name: name.into(), number: None, logo: None, group: None, url: format!("http://s/{id}") }
+        Channel { id: id.into(), tvg_id: Some(id.into()), name: name.into(), tvg_name: None, number: None, logo: None, group: None, url: format!("http://s/{id}") }
     }
 
     fn at(stamp: &str) -> i64 {
@@ -1070,6 +1079,19 @@ http://s/n2
         let items = guide.into_items();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].channel_id.as_deref(), Some("abc.au"));
+    }
+
+    #[test]
+    fn the_guide_finds_a_channel_by_tvg_name_or_its_id_in_another_case() {
+        let m3u = "#EXTINF:-1 tvg-name=\"BBC One\",UK: BBC One HD\nhttp://s/1\n#EXTINF:-1 tvg-id=\"ITV1.uk\",ITV\nhttp://s/2\n";
+        let (chans, _) = parse_m3u(m3u, None, 10);
+        let xml = r#"<tv><channel id="bbc1"><display-name>BBC One</display-name></channel><channel id="itv1.uk"><display-name>ITV1</display-name></channel>
+<programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="bbc1"><title>News</title></programme>
+<programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="itv1.uk"><title>Quiz</title></programme></tv>"#;
+        let mut guide = Guide::new(&chans, (at("20261018230000"), at("20261019060000")), 100);
+        read_guide(xml.as_bytes(), &mut guide, MAX_GUIDE_BYTES).unwrap();
+        let titles: Vec<String> = guide.into_items().into_iter().map(|i| i.title).collect();
+        assert_eq!(titles, ["News", "Quiz"]);
     }
 
     #[test]
