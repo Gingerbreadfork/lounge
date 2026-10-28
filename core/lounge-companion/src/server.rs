@@ -270,7 +270,7 @@ fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
-/// The paired token a request carries, found by `require_token`.
+/// The id of the paired device a request comes from, found by `require_token`.
 #[derive(Clone)]
 struct Paired(String);
 
@@ -298,18 +298,22 @@ fn cookie_route(method: &Method, path: &str) -> bool {
     method == Method::GET && matches!(path, "/api/art" | "/api/ws" | "/api/backup")
 }
 
-/// Every paired route: the token is checked here, before the handler reads the body.
+/// Every paired route: the token is checked here, before the handler reads the body. The session
+/// cookie stands in for it on the cookie routes only.
 async fn require_token(State(app): State<Shared>, mut req: Request, next: Next) -> Response {
     let headers = req.headers();
-    let token = bearer(headers).or_else(|| cookie_route(req.method(), req.uri().path()).then(|| cookie(headers, SESSION_COOKIE)).flatten());
-    let Some(token) = token else {
+    let device = if let Some(token) = bearer(headers) {
+        let name = headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).map(device_name).unwrap_or_else(|| "Phone".to_string());
+        app.tokens.authenticate(&token, now_ms(), &name)
+    } else if let Some(session) = cookie_route(req.method(), req.uri().path()).then(|| cookie(headers, SESSION_COOKIE)).flatten() {
+        app.tokens.authenticate_session(&session, now_ms())
+    } else {
         return ApiError(StatusCode::UNAUTHORIZED, "pair this phone with the TV first".into()).into_response();
     };
-    let name = headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).map(device_name).unwrap_or_else(|| "Phone".to_string());
-    if !app.tokens.authenticate(&token, now_ms(), &name) {
+    let Some(device) = device else {
         return ApiError(StatusCode::UNAUTHORIZED, "this phone is no longer paired".into()).into_response();
-    }
-    req.extensions_mut().insert(Paired(token));
+    };
+    req.extensions_mut().insert(Paired(device));
     next.run(req).await
 }
 
@@ -378,11 +382,13 @@ async fn pair(State(app): State<Shared>, ConnectInfo(peer): ConnectInfo<SocketAd
     }
 }
 
-/// Hands the page a cookie for the routes it loads by URL. Strict same-site, never readable by
-/// script, scoped to the API.
-async fn session(Extension(Paired(token)): Extension<Paired>) -> Response {
-    let cookie = format!("{SESSION_COOKIE}={token}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=31536000");
-    (StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response()
+/// Hands the page a cookie for the routes it loads by URL. It holds a value of its own, not the
+/// token, because a browser sends it to every port on the TV's address. Strict same-site, never
+/// readable by script, scoped to the API.
+async fn session(State(app): State<Shared>, Extension(Paired(device)): Extension<Paired>) -> Result<Response, ApiError> {
+    let session = app.tokens.new_session(&device).ok_or_else(|| ApiError(StatusCode::SERVICE_UNAVAILABLE, "the TV could not start a session".into()))?;
+    let cookie = format!("{SESSION_COOKIE}={session}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=31536000");
+    Ok((StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response())
 }
 
 /// "Pixel 8 · Chrome" from a user agent, roughly.
@@ -568,8 +574,8 @@ async fn diagnostics(State(app): State<Shared>) -> Result<Response, ApiError> {
     Ok(json_raw(on_core(&app, |a| a.diagnostics_json()).await?))
 }
 
-async fn devices(State(app): State<Shared>, Extension(Paired(token)): Extension<Paired>) -> Response {
-    Json(app.tokens.devices(Some(&token))).into_response()
+async fn devices(State(app): State<Shared>, Extension(Paired(device)): Extension<Paired>) -> Response {
+    Json(app.tokens.devices(Some(&device))).into_response()
 }
 
 async fn revoke_device(State(app): State<Shared>, AxPath(id): AxPath<String>) -> Result<StatusCode, ApiError> {

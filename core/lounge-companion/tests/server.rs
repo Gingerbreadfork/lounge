@@ -62,7 +62,7 @@ impl CompanionActions for Fake {
         Ok(())
     }
     fn art_roots(&self) -> Vec<PathBuf> {
-        Vec::new()
+        vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests")]
     }
     fn temp_dir(&self) -> PathBuf {
         std::env::temp_dir()
@@ -93,6 +93,48 @@ fn send(port: u16, request: &str) -> (u16, String) {
     (status, text)
 }
 
+/// Send a request that asks to close the connection, and return the whole response as sent.
+fn exchange(port: u16, request: &str) -> String {
+    let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    s.write_all(request.as_bytes()).unwrap();
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);
+    out
+}
+
+fn json_body(response: &str) -> serde_json::Value {
+    serde_json::from_str(response.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("")).unwrap_or_else(|e| panic!("{e}: {response}"))
+}
+
+/// The session cookie's value `POST /api/session` hands a paired phone.
+fn session_cookie(port: u16, host: &str, token: &str) -> String {
+    let response = exchange(port, &format!("POST /api/session HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
+    response
+        .lines()
+        .filter_map(|l| l.split_once(':'))
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .and_then(|(_, v)| v.trim().strip_prefix("lounge_session=")?.split(';').next().map(str::to_string))
+        .unwrap_or_else(|| panic!("no session cookie: {response}"))
+}
+
+/// Forget the phone a token belongs to, as another phone or the TV would.
+fn forget(port: u16, host: &str, token: &str) {
+    let devices = json_body(&exchange(port, &format!("GET /api/devices HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n")));
+    let id = devices.as_array().unwrap().iter().find(|d| d["current"] == true).unwrap()["id"].as_str().unwrap().to_string();
+    let (status, _) = send(port, &format!("DELETE /api/devices/{id} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\n\r\n"));
+    assert_eq!(status, 204);
+}
+
+/// A request for one of the fake's artwork files: this test file itself.
+fn art_request(host: &str) -> String {
+    let path: String = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/server.rs")
+        .bytes()
+        .map(|b| if b.is_ascii_alphanumeric() || b"/._-".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") })
+        .collect();
+    format!("GET /api/art?path={path} HTTP/1.1\r\nHost: {host}\r\n")
+}
+
 #[test]
 fn the_server_checks_before_it_listens() {
     let dir = tempfile::tempdir().unwrap();
@@ -115,7 +157,7 @@ fn the_server_checks_before_it_listens() {
     let (status, head) = send(port, &format!("POST /api/session HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Length: 0\r\n\r\n"));
     assert_eq!(status, 204);
     assert!(head.contains("set-cookie: lounge_session=") && head.contains("httponly") && head.contains("samesite=strict"), "{head}");
-    let cookie = format!("Cookie: lounge_session={token}");
+    let cookie = format!("Cookie: lounge_session={}", session_cookie(port, &host, &token));
     let (status, _) = send(port, &format!("GET /api/backup HTTP/1.1\r\nHost: {host}\r\n{cookie}\r\n\r\n"));
     assert_eq!(status, 200);
     let (status, _) = send(port, &format!("GET /api/state HTTP/1.1\r\nHost: {host}\r\n{cookie}\r\n\r\n"));
@@ -127,6 +169,31 @@ fn the_server_checks_before_it_listens() {
     let big = "x".repeat(100 * 1024);
     let (status, _) = send(port, &format!("POST /api/text HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{big}", big.len()));
     assert_eq!(status, 413);
+}
+
+#[test]
+fn the_cookie_is_a_key_of_its_own() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
+    let session = session_cookie(port, &host, &token);
+    assert_ne!(session, token);
+
+    // The cookie opens pictures, and the token does not work as one.
+    let art = art_request(&host);
+    assert_eq!(send(port, &format!("{art}Cookie: lounge_session={session}\r\n\r\n")).0, 200);
+    assert_eq!(send(port, &format!("{art}Cookie: lounge_session={token}\r\n\r\n")).0, 401);
+
+    // Nothing the token unlocks takes the cookie's value, as a cookie or as a token.
+    assert_eq!(send(port, &format!("GET /api/state HTTP/1.1\r\nHost: {host}\r\nCookie: lounge_session={session}\r\n\r\n")).0, 401);
+    assert_eq!(send(port, &format!("GET /api/state HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {session}\r\n\r\n")).0, 401);
+    assert_eq!(send(port, &format!("GET /api/state HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\n\r\n")).0, 200);
+
+    // Forgetting the phone takes its cookie with it.
+    forget(port, &host, &token);
+    assert_eq!(send(port, &format!("{art}Cookie: lounge_session={session}\r\n\r\n")).0, 401);
 }
 
 #[test]
@@ -168,10 +235,11 @@ fn the_live_socket_upgrades() {
     let port = companion.port;
     let host = format!("127.0.0.1:{port}");
     let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
+    let session = session_cookie(port, &host, &token);
     let (status, _) = send(
         port,
         &format!(
-            "GET /api/ws HTTP/1.1\r\nHost: {host}\r\nCookie: lounge_session={token}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+            "GET /api/ws HTTP/1.1\r\nHost: {host}\r\nCookie: lounge_session={session}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
         ),
     );
     assert_eq!(status, 101);
