@@ -10,6 +10,7 @@ use std::collections::HashMap;
 pub struct Jellyfin;
 
 const APP_PACKAGE: &str = "org.jellyfin.androidtv";
+const WEEK_MS: i64 = 7 * 86_400_000;
 /// The client header, sent as `Authorization`, which every Jellyfin reads; newer servers ignore
 /// `X-Emby-Authorization` and `api_key` unless legacy authorization is switched on. It names this
 /// TV by an id of its own, since the server signs out an older session of the same user and id.
@@ -51,7 +52,7 @@ impl sdk::Plugin for Jellyfin {
         }
     }
 
-    fn refresh(_ctx: &RefreshContext) -> Result<Vec<Item>, String> {
+    fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let session = Session::connect()?;
         let mut items = Vec::new();
         let resume: ItemsResponse = session.get_json(&format!(
@@ -80,7 +81,9 @@ impl sdk::Plugin for Jellyfin {
             session.user_id
         ))?;
         for it in latest {
-            items.push(session.latest_item(&it));
+            let mut item = session.latest_item(&it);
+            item.is_new = item.added_ms.is_some_and(|t| ctx.now_ms - t < WEEK_MS);
+            items.push(item);
         }
         let favourites: ItemsResponse = session.get_json(&format!(
             "/Users/{}/Items?Recursive=true&IsFavorite=true&IncludeItemTypes=Movie,Series&SortBy=SortName&Limit=60&Fields=Overview,DateCreated&EnableImageTypes=Primary,Backdrop",
@@ -305,7 +308,6 @@ impl Session {
             thumbnail: (!it.backdrop_tags.is_empty()).then(|| self.image(&it.id, "Backdrop/0", "maxWidth=1280")),
             row: Some("recent".into()),
             action: open(it),
-            is_new: true,
             ..Default::default()
         }
     }
@@ -315,7 +317,6 @@ impl Session {
         let mut item = self.latest_item(it);
         item.id = format!("fav:{}", it.id);
         item.row = Some("favourites".into());
-        item.is_new = false;
         item.weight = weight;
         item
     }
