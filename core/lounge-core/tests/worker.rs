@@ -127,3 +127,46 @@ fn a_pin_past_the_stage_s_places_replaces_the_oldest() {
     assert_eq!(now.len(), 6);
     assert!(!now.contains(&"app:app1.tv".to_string()));
 }
+
+#[cfg(unix)]
+#[test]
+fn pictures_that_cannot_be_written_leave_the_worker_idle() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let config = CoreConfig {
+        data_dir: dir.path().join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::B,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    // More icons than one pass prepares, all opaque, so each fails as it is written.
+    let icons = dir.path().join("icons");
+    std::fs::create_dir_all(&icons).unwrap();
+    let apps: Vec<AppRecord> = (0..8)
+        .map(|n| {
+            let path = icons.join(format!("{n}.png"));
+            image::RgbaImage::from_pixel(64, 36, image::Rgba([40, 80, 20 * n, 255])).save(&path).unwrap();
+            AppRecord { icon_path: Some(path.to_string_lossy().into_owned()), ..app(&format!("app{n}.tv")) }
+        })
+        .collect();
+    let art = dir.path().join("cache").join("art");
+    std::fs::create_dir_all(&art).unwrap();
+    std::fs::set_permissions(&art, std::fs::Permissions::from_mode(0o555)).unwrap();
+    if std::fs::File::create(art.join("probe")).is_ok() {
+        // This user writes past the permissions, so no picture would fail.
+        return;
+    }
+    let core = Core::open(config, Arc::new(Quiet)).unwrap();
+    let latest = Arc::new(Latest::default());
+    core.add_listener(latest.clone());
+    core.ingest_apps(apps);
+    wait_for("the apps", || latest.0.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "allapps" && r.tiles.len() == 8)));
+    let settled = core.diagnostics().revision;
+    std::thread::sleep(Duration::from_secs(1));
+    assert_eq!(core.diagnostics().revision, settled, "the worker kept rebuilding");
+    std::fs::set_permissions(&art, std::fs::Permissions::from_mode(0o755)).unwrap();
+}

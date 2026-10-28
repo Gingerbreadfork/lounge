@@ -341,10 +341,16 @@ impl ArtPlan {
                 }
             }
         }
-        if let Err(e) = state.lock().store.artwork_put_many(&rows) {
-            tracing::warn!("remember artwork: {e}");
-        }
-        ArtDone { results: prepared, deferred }
+        let remembered = match state.lock().store.artwork_put_many(&rows) {
+            Ok(()) => !rows.is_empty(),
+            Err(e) => {
+                tracing::warn!("remember artwork: {e}");
+                false
+            }
+        };
+        // A pass that remembered nothing would meet the same sources next time, so the rest
+        // waits for the next ingest instead.
+        ArtDone { results: prepared, deferred: deferred && remembered }
     }
 }
 
