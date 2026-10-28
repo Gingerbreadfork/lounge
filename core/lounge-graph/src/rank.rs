@@ -16,16 +16,16 @@ pub fn by_recency_then_title(items: &mut [&Item]) {
 }
 
 /// One item for each normalised title (continue-watching from several sources), in the place of
-/// the first. Where titles collide, one that opens the title itself replaces one that only opens
-/// its app, such as a playing session beside the app's own Watch Next entry.
+/// the first. Where titles collide, the one whose link reaches the title most directly wins: a
+/// Watch Next entry beside a playing session that only opens its app, or a server's resume point
+/// beside a Trakt entry that only searches for the title.
 pub fn dedupe_by_title(items: &mut Vec<&Item>) {
-    let opens_title = |it: &Item| !matches!(it.deep_link, DeepLink::LaunchApp { .. });
     let mut place: HashMap<String, usize> = HashMap::new();
     let mut kept: Vec<&Item> = Vec::with_capacity(items.len());
     for it in items.drain(..) {
         match place.get(&normalise(&it.title)) {
             Some(&i) => {
-                if !opens_title(kept[i]) && opens_title(it) {
+                if reach(it) > reach(kept[i]) {
                     kept[i] = it;
                 }
             }
@@ -36,6 +36,17 @@ pub fn dedupe_by_title(items: &mut Vec<&Item>) {
         }
     }
     *items = kept;
+}
+
+/// How directly an item's link reaches its title: only the app, a search for the title, or the
+/// title itself.
+fn reach(it: &Item) -> u8 {
+    match &it.deep_link {
+        DeepLink::LaunchApp { .. } => 0,
+        DeepLink::Control(c) if c.starts_with("search:") => 1,
+        DeepLink::ViewUri(u) if u.contains("action=android.search.action.GLOBAL_SEARCH") => 1,
+        _ => 2,
+    }
 }
 
 fn normalise(title: &str) -> String {
@@ -149,6 +160,26 @@ mod tests {
         dedupe_by_title(&mut v);
         let ids: Vec<&str> = v.iter().map(|i| i.id.as_str()).collect();
         assert_eq!(ids, vec!["wn", "app:Alien"]);
+    }
+
+    #[test]
+    fn a_resume_point_beats_a_search_for_the_same_title() {
+        let mut trakt = it("Severance", Some(9));
+        trakt.id = "trakt".into();
+        trakt.deep_link = DeepLink::Control("search:Severance".into());
+        let mut server = it("Severance", Some(5));
+        server.id = "jellyfin".into();
+        server.deep_link = DeepLink::ViewOrLaunch { uri: "intent:#Intent;end".into(), package: "org.jellyfin.androidtv".into() };
+        let mut session = it("Severance", Some(3));
+        session.id = "session".into();
+        session.deep_link = DeepLink::LaunchApp { package: "tv.app".into(), activity: String::new() };
+        let mut v = vec![&trakt, &server, &session];
+        dedupe_by_title(&mut v);
+        assert_eq!(v.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), vec!["jellyfin"]);
+
+        let mut v = vec![&session, &trakt];
+        dedupe_by_title(&mut v);
+        assert_eq!(v.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), vec!["trakt"]);
     }
 
     #[test]
