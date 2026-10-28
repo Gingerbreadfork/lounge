@@ -228,6 +228,8 @@ pub struct MetObject {
     pub public_domain: bool,
     #[serde(default)]
     pub classification: String,
+    #[serde(rename = "objectName", default)]
+    pub object_name: String,
 }
 
 /// The next page of the Met's paintings as ids, each looked up, and the offset to use next time.
@@ -279,7 +281,9 @@ fn met_original_fits(url: &str) -> bool {
 }
 
 pub fn met_painting(o: MetObject, original_fits: &mut dyn FnMut(&str) -> bool) -> Option<Painting> {
-    if !o.public_domain || o.image.is_empty() || !o.classification.starts_with("Paintings") || o.title.trim().is_empty() {
+    // The American Wing leaves the classification empty and names the object instead.
+    let painting = o.classification.starts_with("Paintings") || (o.classification.is_empty() && o.object_name.eq_ignore_ascii_case("Painting"));
+    if !o.public_domain || o.image.is_empty() || !painting || o.title.trim().is_empty() {
         return None;
     }
     let url = if !o.original.is_empty() && original_fits(&o.original) { o.original } else { o.image };
@@ -475,6 +479,22 @@ mod tests {
         g.hang((0..3).map(|i| Painting { museum: CMA.into(), ..painting(&format!("cma:{i}")) }).collect());
         let ids: Vec<String> = g.show(6).into_iter().map(|p| p.id).collect();
         assert_eq!(ids, ["cma:0", "met:0", "cma:1", "met:1", "cma:2", "met:2"]);
+    }
+
+    #[test]
+    fn american_paintings_count_as_paintings() {
+        let o = |classification: &str, name: &str| MetObject {
+            object_id: 1,
+            title: "The Gulf Stream".into(),
+            image: "https://images.metmuseum.org/web-large/x.jpg".into(),
+            public_domain: true,
+            classification: classification.into(),
+            object_name: name.into(),
+            ..Default::default()
+        };
+        assert!(met_painting(o("", "Painting"), &mut |_| false).is_some());
+        assert!(met_painting(o("", "Vase"), &mut |_| false).is_none());
+        assert!(met_painting(o("Paintings", ""), &mut |_| false).is_some());
     }
 
     #[test]
