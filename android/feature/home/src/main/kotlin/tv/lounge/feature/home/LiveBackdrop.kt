@@ -1,11 +1,19 @@
 package tv.lounge.feature.home
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.HardwareRenderer
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.RenderNode
 import android.graphics.RuntimeShader
 import android.graphics.Shader
+import android.hardware.HardwareBuffer
+import android.media.Image
+import android.media.ImageReader
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -61,11 +69,12 @@ private const val SLOW_MS = 40f
 private const val HOPELESS_MS = 500f
 private const val START_DIVISOR = 2
 private const val MAX_DIVISOR = 3
-private const val RENDERER = 3
+private const val RENDERER = 4
 
-// The room's light over a live scene: the scene dimmed and held under a ceiling so the tiles stay
-// the brightest things in the room, the focused tile's spill and the playbill's light as the
-// still field draws them, and one level of blue noise against banding.
+// The room's light over a live scene, drawn at the screen's own size over the scaled-up scene:
+// the scene dimmed and held under a ceiling so the tiles stay the brightest things in the room,
+// the focused tile's spill and the playbill's light as the still field draws them, and one level
+// of blue noise a pixel against banding.
 private const val LIVE_FINISH_SKSL = """
 uniform shader scene;
 uniform shader blue;
@@ -175,8 +184,9 @@ fun LiveBackdrop(style: ShaderStyle, state: LightState, onUnusable: (String) -> 
 
 /**
  * Draws the scene on its own thread, thirty times a second, at a fraction of the window's size
- * that the compositor scales up. When frames take too long the fraction gets smaller, and a scene
- * too heavy even at a third is given up on.
+ * in a layer of its own, then the lights and the dither over the scaled-up layer at full size.
+ * When frames take too long the fraction gets smaller, and a scene too heavy even at a third is
+ * given up on.
  */
 @RequiresApi(33)
 private class BackdropRenderer(context: Context, private val style: ShaderStyle, private val colors: LoungeColors, private val onUnusable: (String) -> Unit) : SurfaceHolder.Callback {
@@ -197,6 +207,17 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
     private var program: Program? = null
     private val finish = RuntimeShader(LIVE_FINISH_SKSL)
     private val paint = Paint()
+    private val scenePaint = Paint()
+    // The scene is drawn small into a buffer the GPU can sample, and the finish reads it scaled.
+    private val sceneNode = RenderNode("lounge-scene")
+    private var sceneRenderer: HardwareRenderer? = null
+    private var sceneReader: ImageReader? = null
+    private var sceneWidth = 0
+    private var sceneHeight = 0
+    private var shownImage: Image? = null
+    private var lastImage: Image? = null
+    private var sceneShader: Shader? = null
+    private val sceneMatrix = Matrix()
     private var given = false
 
     override fun surfaceCreated(h: SurfaceHolder) {
@@ -205,12 +226,10 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
 
     override fun surfaceChanged(h: SurfaceHolder, format: Int, width: Int, height: Int) {
         scope.launch {
-            // The first change carries the view's size; later ones report the buffer we asked for.
             if (viewWidth == 0) {
                 viewWidth = width
                 viewHeight = height
                 Log.i(TAG, "backdrop: ${style.id} surface ${width}x${height}, drawing at 1/$divisor")
-                resize()
                 start()
             }
         }
@@ -228,15 +247,15 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
 
     fun close() {
         scope.cancel()
+        thread.execute {
+            drawing.lock()
+            try {
+                releaseSceneTarget()
+            } finally {
+                drawing.unlock()
+            }
+        }
         thread.shutdown()
-    }
-
-    /** Asks for a buffer at 1/[divisor] of the view, on the main thread, where the holder must be told. */
-    private fun resize() {
-        val h = holder ?: return
-        val width = ceil(viewWidth / divisor.toFloat()).toInt().coerceAtLeast(1)
-        val height = ceil(viewHeight / divisor.toFloat()).toInt().coerceAtLeast(1)
-        main.post { h.setFixedSize(width, height) }
     }
 
     private fun giveUp(why: String) {
@@ -305,7 +324,6 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
                         }
                         divisor++
                         memory.edit().putInt(memoryKey, divisor).apply()
-                        resize()
                         settleUntil = System.currentTimeMillis() + SETTLE_MS
                         reported = false
                     }
@@ -324,6 +342,68 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
         }
     }
 
+    /** Draws the scene at [sw] by [sh] into a buffer the GPU can sample, as a shader scaled to the window. */
+    private fun renderScene(p: Program, sw: Int, sh: Int, time: Float): Shader? {
+        if (sw != sceneWidth || sh != sceneHeight) {
+            releaseSceneTarget()
+            val reader = ImageReader.newInstance(sw, sh, PixelFormat.RGBA_8888, 3, HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
+            sceneReader = reader
+            sceneRenderer = HardwareRenderer().apply {
+                isOpaque = true
+                setLightSourceGeometry(0f, 0f, 800f, 20f)
+                setLightSourceAlpha(0f, 0f)
+                setSurface(reader.surface)
+                setContentRoot(sceneNode)
+            }
+            sceneWidth = sw
+            sceneHeight = sh
+        }
+        p.provide(sw.toFloat(), sh.toFloat(), time, 12f, colors)
+        scenePaint.shader = p.shader
+        sceneNode.setPosition(0, 0, sw, sh)
+        val sc = sceneNode.beginRecording(sw, sh)
+        try {
+            sc.drawRect(0f, 0f, sw.toFloat(), sh.toFloat(), scenePaint)
+        } finally {
+            sceneNode.endRecording()
+        }
+        sceneRenderer?.createRenderRequest()?.setWaitForPresent(true)?.syncAndDraw()
+        // One frame is drawn per acquire, and two stay held, so the third slot is always this one.
+        val image = sceneReader?.acquireNextImage() ?: return sceneShader
+        val buffer = image.hardwareBuffer
+        val bitmap = buffer?.let { Bitmap.wrapHardwareBuffer(it, null) }
+        buffer?.close()
+        if (bitmap == null) {
+            image.close()
+            return sceneShader
+        }
+        // The frame before stays open until this one is posted, so a buffer is never refilled
+        // while the GPU may still read it.
+        lastImage?.close()
+        lastImage = shownImage
+        shownImage = image
+        sceneMatrix.setScale(divisor.toFloat(), divisor.toFloat())
+        return BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+            filterMode = BitmapShader.FILTER_MODE_LINEAR
+            setLocalMatrix(sceneMatrix)
+            sceneShader = this
+        }
+    }
+
+    private fun releaseSceneTarget() {
+        lastImage?.close()
+        lastImage = null
+        shownImage?.close()
+        shownImage = null
+        sceneShader = null
+        sceneRenderer?.destroy()
+        sceneRenderer = null
+        sceneReader?.close()
+        sceneReader = null
+        sceneWidth = 0
+        sceneHeight = 0
+    }
+
     private fun drawLocked(time: Float) {
         val h = holder ?: return
         val p = program ?: return
@@ -335,20 +415,22 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
             null
         } ?: return
         try {
-            val w = canvas.width.toFloat()
-            val hgt = canvas.height.toFloat()
-            val d = viewWidth / w
-            p.provide(w, hgt, time, 12f, colors)
-            finish.setInputShader("scene", p.shader)
+            val w = canvas.width
+            val hgt = canvas.height
+            val d = divisor.toFloat()
+            val sw = ceil(w / d).toInt().coerceAtLeast(1)
+            val sh = ceil(hgt / d).toInt().coerceAtLeast(1)
+            val scene = renderScene(p, sw, sh, time) ?: return
+            finish.setInputShader("scene", scene)
             finish.setFloatUniform("level", l.level)
-            finish.setFloatUniform("spill", l.spill.x / d, l.spill.y / d)
-            finish.setFloatUniform("spillR", l.spillRadius / d)
+            finish.setFloatUniform("spill", l.spill.x, l.spill.y)
+            finish.setFloatUniform("spillR", l.spillRadius)
             finish.setFloatUniform("spillAlpha", l.spillAlpha)
             finish.setColorUniform("spillColor", android.graphics.Color.valueOf(l.spillColor.red, l.spillColor.green, l.spillColor.blue, 1f))
             val bill = l.bill
             if (bill != null) {
-                finish.setFloatUniform("bill", bill.x / d, bill.y / d)
-                finish.setFloatUniform("billRadii", (l.billRadii.x / d).coerceAtLeast(1f), (l.billRadii.y / d).coerceAtLeast(1f))
+                finish.setFloatUniform("bill", bill.x, bill.y)
+                finish.setFloatUniform("billRadii", l.billRadii.x.coerceAtLeast(1f), l.billRadii.y.coerceAtLeast(1f))
                 finish.setFloatUniform("billAlpha", l.billAlpha)
                 finish.setColorUniform("billColor", android.graphics.Color.valueOf(l.billColor.red, l.billColor.green, l.billColor.blue, 1f))
             } else {
@@ -358,7 +440,7 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
                 finish.setColorUniform("billColor", android.graphics.Color.valueOf(0f, 0f, 0f, 1f))
             }
             paint.shader = finish
-            canvas.drawRect(0f, 0f, w, hgt, paint)
+            canvas.drawRect(0f, 0f, w.toFloat(), hgt.toFloat(), paint)
         } catch (e: Exception) {
             Log.w(TAG, "backdrop: draw failed: $e")
             giveUp("it does not draw: $e")

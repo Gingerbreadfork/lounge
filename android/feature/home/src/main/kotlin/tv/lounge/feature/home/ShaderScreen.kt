@@ -1,6 +1,8 @@
 package tv.lounge.feature.home
 
+import android.graphics.BitmapShader
 import android.graphics.RuntimeShader
+import android.graphics.Shader
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
@@ -14,13 +16,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
-import tv.lounge.design.BlueNoiseDither
+import tv.lounge.design.BlueNoise
 import tv.lounge.design.LoungeTheme
 
-// Lounge's finishing pass, drawn together with every scene: the room's vignette, the house lights
-// and a ceiling on highlights so nothing glares at night. Dither goes over it at the screen's size.
+// Lounge's finishing pass, drawn at the screen's own size over every scene: the room's vignette,
+// the house lights, a ceiling on highlights so nothing glares at night, and one level of blue
+// noise a pixel against banding.
 private const val FINISH_SKSL = """
 uniform shader scene;
+uniform shader blue;
 uniform float2 resolution;
 uniform float brightness;
 
@@ -33,6 +37,7 @@ half4 main(float2 coord) {
     if (m > 0.72) {
         c *= (0.72 + (m - 0.72) * 0.45) / m;
     }
+    c += blue.eval(coord).r;
     return half4(c, 1.0);
 }
 """
@@ -57,7 +62,6 @@ fun ShaderScreensaver(style: ShaderStyle, onUnusable: (String) -> Unit, preview:
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (Build.VERSION.SDK_INT >= 33) {
             SaverSurface(style, lights, motion.reducedMotion, !preview, onUnusable)
-            BlueNoiseDither(Modifier.fillMaxSize())
         } else {
             LaunchedEffect(Unit) { onUnusable("abstract screensavers need Android 13") }
         }
@@ -68,12 +72,14 @@ fun ShaderScreensaver(style: ShaderStyle, onUnusable: (String) -> Unit, preview:
 @RequiresApi(33)
 @Composable
 private fun SaverSurface(style: ShaderStyle, lights: State<Float>, slow: Boolean, keepResolution: Boolean, onUnusable: (String) -> Unit) {
-    val finish = remember { RuntimeShader(FINISH_SKSL) }
+    val finish = remember {
+        RuntimeShader(FINISH_SKSL).apply { setInputShader("blue", BitmapShader(BlueNoise.bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)) }
+    }
     // A scene with fine detail starts at full size on a TV with the GPU for it (DESIGN.md §5.5).
     val full = style.fine && LoungeTheme.visuals.tierA
     val quality = remember(keepResolution, full) { SceneQuality("saver", startDivisor = if (full) 1f else 2f, maxDivisor = 6f, gpuBudgetMs = 24f, keepResolution = keepResolution) }
-    SceneSurface(style, quality, finish, slow, paused = { false }, onUnusable = onUnusable) {
-        finish.setFloatUniform("resolution", size.width, size.height)
+    SceneSurface(style, quality, finish, slow, paused = { false }, onUnusable = onUnusable, finishKey = lights.value) { width, height ->
+        finish.setFloatUniform("resolution", width, height)
         finish.setFloatUniform("brightness", lights.value)
     }
 }

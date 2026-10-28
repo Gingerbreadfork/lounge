@@ -2,6 +2,7 @@ package tv.lounge.feature.home
 
 import android.app.Activity
 import android.content.ContextWrapper
+import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
 import android.os.Handler
 import android.os.Looper
@@ -11,25 +12,30 @@ import android.view.FrameMetrics
 import android.view.Window
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntSize
 import java.util.Calendar
 import kotlin.math.ceil
 import kotlinx.coroutines.delay
@@ -48,7 +54,7 @@ private const val BACKED_UP_MS = 8f
 private const val SETTLE_NS = 2_500_000_000L
 /** Frames this slow, three in a row, mean no step down will save the scene, so it ends at once. */
 private const val HOPELESS_MS = 500f
-private const val RENDERER = 3
+private const val RENDERER = 4
 
 /**
  * How a scene is allowed to cost: where it starts, how far it may step down before it is given
@@ -121,10 +127,11 @@ internal fun compileScene(style: ShaderStyle, colors: LoungeColors): Result<Prog
 }
 
 /**
- * A scene and a finishing pass drawn at a fraction of the screen's resolution and scaled up,
- * thirty times a second. When the GPU cannot keep up the fraction gets smaller, and a scene too
- * heavy even at [SceneQuality.maxDivisor] is given up on. While [paused] the clock stops and
- * nothing is drawn. [prepareFinish] sets the finishing pass's uniforms for the frame.
+ * A scene drawn at a fraction of the screen's resolution and scaled up, with the finishing pass
+ * over it at the screen's own size, thirty times a second. When the GPU cannot keep up the
+ * fraction gets smaller, and a scene too heavy even at [SceneQuality.maxDivisor] is given up on.
+ * While [paused] the clock stops and nothing is drawn. [prepareFinish] sets the finishing pass's
+ * uniforms for the screen's size, and runs again when [finishKey] changes.
  */
 @RequiresApi(33)
 @Composable
@@ -135,7 +142,8 @@ internal fun SceneSurface(
     slow: Boolean,
     paused: () -> Boolean,
     onUnusable: (String) -> Unit,
-    prepareFinish: DrawScope.(divisor: Float) -> Unit,
+    finishKey: Any?,
+    prepareFinish: (width: Float, height: Float) -> Unit,
 ) {
     val colors = LoungeTheme.colors
     // A pushed or plugin program can take long enough to compile to stall the screen.
@@ -155,7 +163,6 @@ internal fun SceneSurface(
     val start = quality.startDivisor
     val memoryKey = remember(style) { "$RENDERER:${quality.memoryPrefix}:${style.id}:${style.source.hashCode()}" }
     val divisor = remember(memoryKey) { mutableFloatStateOf(memory.getFloat(memoryKey, start).coerceIn(start, quality.maxDivisor)) }
-    val finishBrush = remember(finish) { ShaderBrush(finish) }
     val gpu = remember { GpuTimes() }
     val view = LocalView.current
     DisposableEffect(view) {
@@ -238,28 +245,46 @@ internal fun SceneSurface(
         }
     }
 
-    Canvas(
+    val sceneBrush = remember(program) { ShaderBrush(program.shader) }
+    var full by remember { mutableStateOf(IntSize.Zero) }
+    // An effect keeps the uniforms it was made with, so it is made again when they change.
+    val effect = remember(finish, full, finishKey) {
+        if (full == IntSize.Zero) {
+            null
+        } else {
+            prepareFinish(full.width.toFloat(), full.height.toFloat())
+            RenderEffect.createRuntimeShaderEffect(finish, "scene").asComposeRenderEffect()
+        }
+    }
+    Box(
         Modifier
             .fillMaxSize()
-            .layout { measurable, constraints ->
-                val d = divisor.floatValue
-                val placeable = measurable.measure(
-                    Constraints.fixed(ceil(constraints.maxWidth / d).toInt(), ceil(constraints.maxHeight / d).toInt()),
-                )
-                layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
-            }
+            .onSizeChanged { full = it }
             .graphicsLayer {
-                scaleX = divisor.floatValue
-                scaleY = divisor.floatValue
-                transformOrigin = TransformOrigin(0f, 0f)
+                renderEffect = effect
                 compositingStrategy = CompositingStrategy.Offscreen
             },
     ) {
-        program.provide(size.width, size.height, time.floatValue, hour.floatValue, colors)
-        // The scene is bound again each frame: a child keeps the uniforms it had when bound.
-        finish.setInputShader("scene", program.shader)
-        prepareFinish(divisor.floatValue)
-        drawRect(finishBrush)
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .layout { measurable, constraints ->
+                    val d = divisor.floatValue
+                    val placeable = measurable.measure(
+                        Constraints.fixed(ceil(constraints.maxWidth / d).toInt(), ceil(constraints.maxHeight / d).toInt()),
+                    )
+                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+                }
+                .graphicsLayer {
+                    scaleX = divisor.floatValue
+                    scaleY = divisor.floatValue
+                    transformOrigin = TransformOrigin(0f, 0f)
+                    compositingStrategy = CompositingStrategy.Offscreen
+                },
+        ) {
+            program.provide(size.width, size.height, time.floatValue, hour.floatValue, colors)
+            drawRect(sceneBrush)
+        }
     }
 }
 
