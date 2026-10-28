@@ -1,7 +1,7 @@
 //! Internet Archive: three rows of free, legally hosted video from archive.org collections,
 //! and search across those collections. A row lists a collection's best-rated items; selecting one
 //! looks up its files and plays the MP4 in the TV's own player.
-use lounge_plugin_sdk::{self as sdk, host, Action, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::HashSet;
 
@@ -53,7 +53,8 @@ impl sdk::Plugin for Archive {
             let docs = match search(&collection_query(&collection, true), wanted) {
                 Ok(d) => d,
                 Err(e) => {
-                    failures.push(format!("{collection}: {e}"));
+                    sdk::warn!("{collection}: {e}");
+                    failures.push(e);
                     continue;
                 }
             };
@@ -62,10 +63,7 @@ impl sdk::Plugin for Archive {
             items.extend(docs.into_iter().enumerate().map(|(i, d)| item_for(&d, Some(row), (count - i) as i32)));
         }
         if items.is_empty() {
-            return Err(format!("archive.org gave nothing back. {}", failures.join("; ")));
-        }
-        for f in &failures {
-            sdk::warn!("{f}");
+            return Err(failures.into_iter().next().unwrap_or_else(|| "archive.org has nothing in these collections. Check the collection names in the plugin's settings.".into()));
         }
         sdk::info!("{} items", items.len());
         Ok(items)
@@ -78,7 +76,10 @@ impl sdk::Plugin for Archive {
     }
 
     fn resolve(action: &str) -> Result<Action, String> {
-        let identifier = action.strip_prefix("play:").ok_or_else(|| format!("unknown action {action}"))?;
+        let identifier = action.strip_prefix("play:").ok_or_else(|| {
+            sdk::warn!("unknown action {action}");
+            "This tile is out of date. Refresh the plugin, then try again.".to_string()
+        })?;
         let meta: Metadata = get_json(&format!("https://archive.org/metadata/{identifier}"))?;
         let file = best_video(&meta.files).ok_or_else(|| "This item has no playable video file".to_string())?;
         let title = meta.metadata.and_then(|m| m.title.map(|t| t.into_string())).unwrap_or_else(|| identifier.to_string());
@@ -222,8 +223,15 @@ fn unique_docs(docs: Vec<Doc>) -> Vec<Doc> {
 }
 
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
-    let body = host::get_text(url)?;
-    serde_json::from_str(&body).map_err(|e| format!("unexpected answer from archive.org: {e}"))
+    let r = sdk::fetch_online("archive.org", &HttpRequest::get(url))?;
+    if !r.ok() {
+        sdk::warn!("HTTP {} for {}", r.status, sdk::redact_url(url));
+        return Err(sdk::online_error("archive.org", r.status));
+    }
+    serde_json::from_str(&r.body).map_err(|e| {
+        sdk::warn!("unexpected answer from archive.org: {e}");
+        sdk::unreadable("The Internet Archive", "archive.org")
+    })
 }
 
 fn item_for(d: &Doc, row: Option<&str>, weight: i32) -> Item {
