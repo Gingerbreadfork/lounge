@@ -321,11 +321,16 @@ private fun StepAccess(core: CoreClient, context: Context, tick: Int) {
     val tv = remember(tick) { hasTvListings(context) }
     val notifications = remember(tick) { hasNotificationAccess(context) }
     val usage = remember(tick) { hasUsageAccess(context) }
+    val scope = rememberCoroutineScope()
+    // The request waits on the core, which may still be loading, so it runs off the main thread.
+    fun allow(name: String) {
+        scope.launch { withContext(Dispatchers.IO) { core.perform("permission:$name") } }
+    }
     Heading("What may Lounge see?", "Each one adds a part of the home screen. Nothing leaves this device; say no to any of them.")
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        AccessRow(LoungeIcons.Play, "TV listings", "Continue watching, channels and the guide", tv) { core.perform("permission:tv_listings") }
-        AccessRow(LoungeIcons.Equaliser, "Now playing", "What is playing, with play and pause", notifications) { core.perform("permission:notifications") }
-        AccessRow(LoungeIcons.Apps, "Usage access", "Your apps sorted by what you open", usage) { core.perform("permission:usage") }
+        AccessRow(LoungeIcons.Play, "TV listings", "Continue watching, channels and the guide", tv) { allow("tv_listings") }
+        AccessRow(LoungeIcons.Equaliser, "Now playing", "What is playing, with play and pause", notifications) { allow("notifications") }
+        AccessRow(LoungeIcons.Apps, "Usage access", "Your apps sorted by what you open", usage) { allow("usage") }
     }
     Spacer(Modifier.height(20.dp))
     Text("Now playing and usage access open a system screen; press Back to come back here.", style = LoungeTheme.typography.caption, color = colors.dust)

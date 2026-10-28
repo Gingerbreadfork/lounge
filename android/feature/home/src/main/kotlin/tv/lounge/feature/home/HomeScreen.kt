@@ -807,7 +807,7 @@ private fun SheetContent(
                 onSetLite = { on -> scope.launch { prefs.setLiteMode(on) } },
                 onSetReducedMotion = { on -> scope.launch { prefs.setReducedMotion(on) } },
                 onSetShowMobileApps = { on -> scope.launch { prefs.setShowMobileApps(on) } },
-                onRequestPermission = { name -> closeAll(); core.perform("permission:$name") },
+                onRequestPermission = { name -> closeAll(); scope.launch { withContext(Dispatchers.IO) { core.perform("permission:$name") } } },
                 onChannels = { open(Overlay.Channels) },
                 onPlugins = { open(Overlay.Plugins) },
                 onCompanion = { open(Overlay.Companion) },
