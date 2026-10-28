@@ -212,7 +212,7 @@ the installer refuses a bundle where the two disagree. The SDK writes both from
 ```
 
 **Where an item goes.** A `resume` item joins Continue watching and is a candidate for the
-Stage. A `channel` joins Live now and the guide, and `schedule` items fill in what is on it. A
+Stage; one with no position or progress, such as a show's next episode, is shown as up next. A `channel` joins Live now and the guide, and `schedule` items fill in what is on it. A
 `program` goes into the row its `row` names; without one it goes nowhere. A `wallpaper` is a
 picture for the screensaver: give it the picture as `thumbnail`, a `title` and, if you like, a
 `subtitle`, which goes under the title on the screen; it needs no `action`. The picture is

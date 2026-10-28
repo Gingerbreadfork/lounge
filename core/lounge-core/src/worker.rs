@@ -719,13 +719,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         let hero = pick(&art, w.hero).or(pick(&art, w.hero_fit));
         let logo = pick(&art, w.logo);
         let Some(deep_link) = plugin_link(plugin, p) else { continue };
-        let kind = match p.kind {
-            PluginItemKind::Resume => ItemKind::Resume,
-            PluginItemKind::Channel => ItemKind::Channel,
-            PluginItemKind::Wallpaper => ItemKind::Wallpaper,
-            PluginItemKind::Program | PluginItemKind::Schedule => ItemKind::Program,
-            PluginItemKind::Screensaver => continue,
-        };
+        let Some(kind) = home_kind(p) else { continue };
         let id = format!("plugin:{plugin}:{}", p.id);
         let a = &p.action;
         let mut it = Item::content(&id, kind, &source, &p.title, deep_link);
@@ -758,6 +752,10 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         match p.kind {
             PluginItemKind::Resume => {
                 it.flags.watch_next = true;
+                if kind == ItemKind::Program {
+                    // A next episode was not added today just because Lounge first saw it now.
+                    it.added_ms = p.added_ms;
+                }
                 // Without a time from the plugin, the time it was first seen stands, so it does not
                 // jump to the front of Continue watching with every refresh.
                 if it.last_used_ms.is_none() {
@@ -794,6 +792,20 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         inner.state.lock().pending_art.plugins.remove(plugin);
     }
     Ok(())
+}
+
+/// Where a plugin item lives at home, or `None` for one that never shows there. A resume item with
+/// no position yet is a show's next episode: it joins Continue watching as up next, the way a
+/// Watch Next entry for the next episode does, rather than as something to continue.
+fn home_kind(p: &lounge_plugin_api::Item) -> Option<ItemKind> {
+    Some(match p.kind {
+        PluginItemKind::Resume if p.position_ms.is_none() && p.progress.is_none() => ItemKind::Program,
+        PluginItemKind::Resume => ItemKind::Resume,
+        PluginItemKind::Channel => ItemKind::Channel,
+        PluginItemKind::Wallpaper => ItemKind::Wallpaper,
+        PluginItemKind::Program | PluginItemKind::Schedule => ItemKind::Program,
+        PluginItemKind::Screensaver => return None,
+    })
 }
 
 /// What selecting a plugin item does. Wallpapers do nothing; a schedule entry without an action
@@ -1162,6 +1174,15 @@ mod tests {
     fn slug_is_stable_and_safe() {
         assert_eq!(slug("The Bear: S2 E4 — \"Honeydew\""), "the-bear-s2-e4-honeydew");
         assert_eq!(slug("   "), "");
+    }
+
+    #[test]
+    fn a_next_episode_is_up_next_not_continued() {
+        let item = |position_ms, progress| lounge_plugin_api::Item { kind: PluginItemKind::Resume, position_ms, progress, ..Default::default() };
+        assert_eq!(home_kind(&item(None, None)), Some(ItemKind::Program));
+        assert_eq!(home_kind(&item(Some(60_000), None)), Some(ItemKind::Resume));
+        assert_eq!(home_kind(&item(None, Some(0.4))), Some(ItemKind::Resume));
+        assert_eq!(home_kind(&lounge_plugin_api::Item { kind: PluginItemKind::Screensaver, ..Default::default() }), None);
     }
 
     #[test]
