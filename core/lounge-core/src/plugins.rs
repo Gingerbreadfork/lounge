@@ -175,7 +175,7 @@ fn older(a: &str, b: &str) -> bool {
 
 /// Stores one of a plugin's settings. Moving an address setting to another host forgets the
 /// plugin's passwords, so a password only ever goes to the server it was entered for, whoever
-/// changes the address.
+/// changes the address. A secret that is itself an address is kept, as it goes only to its own.
 pub(crate) fn store_setting(store: &lounge_store::Store, manifest: &Manifest, id: &str, key: &str, value: Option<&str>) {
     // A password is kept exactly as typed, since spaces at its ends can be part of it.
     let password = manifest.settings.iter().any(|s| s.key == key && s.kind == lounge_plugin_api::SettingKind::Password);
@@ -184,7 +184,7 @@ pub(crate) fn store_setting(store: &lounge_store::Store, manifest: &Manifest, id
         let old = store.plugin_setting(id, key).ok().flatten();
         let host = |v: Option<&str>| v.and_then(lounge_plugin_api::host_in_setting);
         if old.is_some() && host(old.as_deref()) != host(value) {
-            for secret in manifest.settings.iter().filter(|s| s.kind.is_secret()) {
+            for secret in manifest.settings.iter().filter(|s| s.kind.is_secret() && s.key != key && !manifest.decides_origin(&s.key)) {
                 let _ = store.plugin_setting_set(id, &secret.key, None);
             }
         }
@@ -911,6 +911,20 @@ mod tests {
         assert_eq!(password(&store).as_deref(), Some(" pass phrase "));
         store_setting(&store, &m, "p", "server", Some("  http://192.168.0.10:8096 "));
         assert_eq!(store.plugin_setting("p", "server").unwrap().as_deref(), Some("http://192.168.0.10:8096"));
+    }
+
+    #[test]
+    fn a_secret_address_stays_when_another_address_moves() {
+        let store = lounge_store::Store::open_in_memory().unwrap();
+        let mut m = Manifest { fetch_hosts: vec!["$playlist_url".into(), "$epg_url".into()], ..Default::default() };
+        for key in ["playlist_url", "epg_url"] {
+            m.settings.push(lounge_plugin_api::SettingSpec { key: key.into(), label: key.into(), kind: lounge_plugin_api::SettingKind::SecretUrl, required: false, help: None, default: None });
+        }
+        store_setting(&store, &m, "p", "playlist_url", Some("http://iptv.example/get.php?username=u&password=p"));
+        store_setting(&store, &m, "p", "epg_url", Some("http://iptv.example/xmltv.php"));
+        store_setting(&store, &m, "p", "epg_url", Some("https://guide.example/epg.xml.gz"));
+        assert_eq!(store.plugin_setting("p", "playlist_url").unwrap().as_deref(), Some("http://iptv.example/get.php?username=u&password=p"));
+        assert_eq!(store.plugin_setting("p", "epg_url").unwrap().as_deref(), Some("https://guide.example/epg.xml.gz"));
     }
 
     #[test]
