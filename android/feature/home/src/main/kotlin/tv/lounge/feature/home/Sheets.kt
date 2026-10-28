@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,7 +64,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tv.lounge.core.ChannelInfo
+import tv.lounge.core.CompanionStatus
 import tv.lounge.core.CoreClient
 import tv.lounge.core.Diagnostics
 import tv.lounge.core.PairingInfo
@@ -457,20 +462,26 @@ fun QuickSettingsSheet(
 @Composable
 fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
-    var status by remember { mutableStateOf(core.companionStatus()) }
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<CompanionStatus?>(null) }
     var pairing by remember { mutableStateOf<PairingInfo?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    fun refresh() {
-        status = core.companionStatus()
-        if (status.running && (pairing == null || pairing!!.expiresMs < System.currentTimeMillis())) {
-            core.companionPairing().onSuccess { pairing = it; error = null }.onFailure { error = it.reason }
+    // Starting binds a port and a new code writes its picture, so the server's calls run off the main thread.
+    suspend fun refresh() {
+        val s = withContext(Dispatchers.IO) { core.companionStatus() }
+        status = s
+        if (s.running && (pairing == null || pairing!!.expiresMs < System.currentTimeMillis())) {
+            withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; error = null }.onFailure { error = it.reason }
         }
     }
     LaunchedEffect(enabled) {
-        if (enabled && !core.companionStatus().running) {
-            core.startCompanion(CoreClient.COMPANION_PORT).onFailure { error = companionFailure(it) }
+        if (enabled) {
+            withContext(Dispatchers.IO) { if (core.companionStatus().running) null else core.startCompanion(CoreClient.COMPANION_PORT) }
+                ?.onFailure { error = companionFailure(it) }
+        } else {
+            withContext(Dispatchers.IO) { core.stopCompanion() }
+            pairing = null
         }
-        if (!enabled) { core.stopCompanion(); pairing = null }
         refresh()
     }
     WhileStarted {
@@ -485,14 +496,15 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
         icon = LoungeIcons.Phone,
         title = if (enabled) "On" else "Off",
         value = if (enabled) "Turn off" else "Turn on",
-        accent = if (enabled && status.running) colors.signal else colors.dust,
+        accent = if (enabled && status?.running == true) colors.signal else colors.dust,
         onClick = { onSetEnabled(!enabled) },
         focusRequester = firstFocus,
     )
     Spacer(Modifier.height(20.dp))
+    val s = status
     if (enabled) {
         val p = pairing
-        if (status.running && p != null) {
+        if (s != null && s.running && p != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Box(Modifier.size(250.dp).clip(RoundedCornerShape(16.dp)).background(colors.limelight)) {
                     coil3.compose.AsyncImage(model = p.qrPngPath, contentDescription = "Pairing code", modifier = Modifier.fillMaxSize())
@@ -502,22 +514,35 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
                 Spacer(Modifier.height(6.dp))
                 Text(p.code.chunked(3).joinToString(" "), style = LoungeTheme.typography.displayL, color = colors.limelight)
                 Spacer(Modifier.height(10.dp))
-                Text(status.url?.let { "at $it" } ?: "", style = LoungeTheme.typography.caption, color = colors.dust)
+                Text(s.url?.let { "at $it" } ?: "", style = LoungeTheme.typography.caption, color = colors.dust)
             }
             Spacer(Modifier.height(20.dp))
-            SheetRow(icon = LoungeIcons.Refresh, title = "New code", onClick = { core.companionPairing().onSuccess { pairing = it } })
+            SheetRow(
+                icon = LoungeIcons.Refresh,
+                title = "New code",
+                onClick = { scope.launch { withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it } } },
+            )
         } else if (error != null) {
             Text(error!!, style = LoungeTheme.typography.meta, color = colors.ember)
         } else {
             Text("Starting…", style = LoungeTheme.typography.meta, color = colors.dust)
         }
-        Spacer(Modifier.height(8.dp))
-        SheetRow(
-            icon = LoungeIcons.Phone,
-            title = "Paired phones",
-            value = if (status.paired == 0u) "None" else "${status.paired}, forget all",
-            onClick = { if (status.paired > 0u) { core.companionForgetAll(); refresh() } },
-        )
+        if (s != null) {
+            Spacer(Modifier.height(8.dp))
+            SheetRow(
+                icon = LoungeIcons.Phone,
+                title = "Paired phones",
+                value = if (s.paired == 0u) "None" else "${s.paired}, forget all",
+                onClick = {
+                    if (s.paired > 0u) {
+                        scope.launch {
+                            withContext(Dispatchers.IO) { core.companionForgetAll() }
+                            refresh()
+                        }
+                    }
+                },
+            )
+        }
     }
     SheetFootnote(
         "Everything stays on your home network.",

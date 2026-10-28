@@ -202,7 +202,7 @@ class MainActivity : ComponentActivity() {
             val on = prefs.companionEnabled.first()
             android.util.Log.i("Lounge", "companion: enabled=$on at start")
             if (on) {
-                core.startCompanion(COMPANION_PORT)
+                withContext(Dispatchers.IO) { core.startCompanion(COMPANION_PORT) }
                     .onSuccess { android.util.Log.i("Lounge", "companion: ${it.url}") }
                     .onFailure { android.util.Log.w("Lounge", "companion: ${it.message}") }
             }

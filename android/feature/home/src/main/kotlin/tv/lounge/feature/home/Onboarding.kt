@@ -461,7 +461,7 @@ private fun StepPhone(core: CoreClient, prefs: Prefs, uiPrefs: Prefs.UiPrefs) {
             scope.launch {
                 prefs.setCompanionEnabled(on)
                 // Off stops the server too, as Settings does.
-                if (!on) core.stopCompanion()
+                if (!on) withContext(Dispatchers.IO) { core.stopCompanion() }
             }
         },
     )
@@ -505,19 +505,19 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
     var pairing by remember { mutableStateOf<PairingInfo?>(null) }
     var url by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf<String?>(null) }
+    // Starting binds a port and a new code writes its picture, so the server's calls run off the main thread.
     LaunchedEffect(uiPrefs.companionEnabled) {
         failed = null
         if (!uiPrefs.companionEnabled) { pairing = null; return@LaunchedEffect }
-        if (!core.companionStatus().running) {
-            core.startCompanion(CoreClient.COMPANION_PORT).onFailure {
+        withContext(Dispatchers.IO) { if (core.companionStatus().running) null else core.startCompanion(CoreClient.COMPANION_PORT) }
+            ?.onFailure {
                 failed = companionFailure(it)
                 return@LaunchedEffect
             }
-        }
-        url = core.companionStatus().url
+        url = withContext(Dispatchers.IO) { core.companionStatus().url }
         while (true) {
             val p = pairing
-            if (p == null || p.expiresMs < System.currentTimeMillis()) core.companionPairing().onSuccess { pairing = it }
+            if (p == null || p.expiresMs < System.currentTimeMillis()) withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it }
             delay(5_000)
         }
     }
