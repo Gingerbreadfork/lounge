@@ -307,7 +307,8 @@ unless `lounge.storeFile`, `lounge.storePassword`, `lounge.keyAlias` and `lounge
 are set in `~/.gradle/gradle.properties`.
 
 Every push builds and tests the whole thing on GitHub and keeps the APK as an artifact named
-`lounge-apk`. Pushing a tag publishes a release; [docs/RELEASING.md](docs/RELEASING.md) has the
+`lounge-apk-debug-signed`. It is signed with the debug key, so no release can update it once
+installed. Pushing a tag publishes a release; [docs/RELEASING.md](docs/RELEASING.md) has the
 rules and the secrets it needs.
 
 ## Working on it

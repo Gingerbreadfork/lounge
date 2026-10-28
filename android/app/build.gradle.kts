@@ -5,6 +5,10 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// A real release key comes from ~/.gradle/gradle.properties (lounge.storeFile, storePassword,
+// keyAlias, keyPassword); without one, release builds sign with the debug key.
+val releaseStore = providers.gradleProperty("lounge.storeFile").orNull?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "tv.lounge.launcher"
     compileSdk = 37
@@ -18,9 +22,6 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
-    // A real release key comes from ~/.gradle/gradle.properties (lounge.storeFile, storePassword,
-    // keyAlias, keyPassword); without one, release builds sign with the debug key.
-    val releaseStore = providers.gradleProperty("lounge.storeFile").orNull
     signingConfigs {
         if (releaseStore != null) {
             create("release") {
@@ -63,6 +64,15 @@ android {
     packaging {
         jniLibs { useLegacyPackaging = false }
         resources.excludes += setOf("META-INF/AL2.0", "META-INF/LGPL2.1")
+    }
+}
+
+// A release signed with the debug key installs, but no release signed with the real key can update it.
+if (releaseStore == null) {
+    tasks.named { it == "packageRelease" || it == "packageProfile" }.configureEach {
+        doFirst {
+            logger.warn("Warning: $name signs with the debug key because lounge.storeFile is not set. No real release can update this APK.")
+        }
     }
 }
 

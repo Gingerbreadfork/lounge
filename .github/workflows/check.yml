@@ -104,5 +104,5 @@ jobs:
         working-directory: android
       - uses: actions/upload-artifact@v7
         with:
-          name: lounge-apk
+          name: lounge-apk-debug-signed
           path: android/app/build/outputs/apk/release/app-release.apk
