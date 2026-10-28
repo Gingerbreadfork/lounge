@@ -69,7 +69,7 @@ impl sdk::Plugin for NextPvr {
                     let mut item = s.recording_item(r, (count - i) as i32);
                     item.is_new &= sdk::new_this_week(item.added_ms, ctx.now_ms);
                     if item.kind == ItemKind::Resume {
-                        item.last_used_ms = watched.observe(r.id, r.playback_position.unwrap_or(0), ctx.now_ms);
+                        item.last_used_ms = watched.observe(r.id, r.playback_position.unwrap_or(0), ctx.now_ms, r.start_ms());
                     }
                     items.push(item);
                 }
@@ -467,11 +467,14 @@ impl Watched {
         host::kv_get(WATCHED_KEY).and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or_default()
     }
 
-    /// The last time the position was seen to change, or `None` while that is not known.
-    pub fn observe(&mut self, id: i64, position: i64, now_ms: i64) -> Option<i64> {
+    /// The last time the position was seen to change, or `None` for a recording first started
+    /// since the last refresh. On the first refresh nothing is known yet, so a recording takes
+    /// the time it was recorded rather than all of them jumping to the front together.
+    pub fn observe(&mut self, id: i64, position: i64, now_ms: i64, recorded_ms: i64) -> Option<i64> {
         let last_used = match self.seen.get(&id) {
             Some(&(before, when)) if before == position => when,
             Some(_) => Some(now_ms),
+            None if self.seen.is_empty() => Some(recorded_ms),
             None => None,
         };
         self.now.insert(id, (position, last_used));
@@ -575,16 +578,16 @@ mod tests {
     }
 
     #[test]
-    fn watching_is_dated_only_once_the_position_moves() {
+    fn watching_is_dated_when_the_position_moves() {
         let mut w = Watched::default();
-        assert_eq!(w.observe(10, 1800, 1_000), None);
+        assert_eq!(w.observe(10, 1800, 1_000, 500), Some(500));
         let mut w = Watched { seen: w.now, now: BTreeMap::new() };
-        assert_eq!(w.observe(10, 1800, 2_000), None);
+        assert_eq!(w.observe(10, 1800, 2_000, 500), Some(500));
         let mut w = Watched { seen: w.now, now: BTreeMap::new() };
-        assert_eq!(w.observe(10, 2400, 3_000), Some(3_000));
+        assert_eq!(w.observe(10, 2400, 3_000, 500), Some(3_000));
         let mut w = Watched { seen: w.now, now: BTreeMap::new() };
-        assert_eq!(w.observe(10, 2400, 4_000), Some(3_000));
-        assert_eq!(w.observe(11, 60, 4_000), None);
+        assert_eq!(w.observe(10, 2400, 4_000, 500), Some(3_000));
+        assert_eq!(w.observe(11, 60, 4_000, 700), None);
         let json = serde_json::to_string(&Watched { seen: w.now, now: BTreeMap::new() }).unwrap();
         let back: Watched = serde_json::from_str(&json).unwrap();
         assert_eq!(back.seen[&10], (2400, Some(3_000)));
