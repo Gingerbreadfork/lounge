@@ -165,7 +165,7 @@ impl Session {
             && let (Some(token), Some(user_id)) = (host::kv_get_string("token"), host::kv_get_string("user_id"))
         {
             let s = Session { server: server.clone(), token, user_id, device_id: device_id.clone() };
-            let probe = host::fetch(&s.request(&format!("/Users/{}", s.user_id)))?;
+            let probe = sdk::fetch_from("Emby", &server, &s.request(&format!("/Users/{}", s.user_id)))?;
             if probe.ok() {
                 return Ok(s);
             }
@@ -186,14 +186,17 @@ impl Session {
             body: Some(body),
             timeout_ms: 0,
         };
-        let response = host::fetch(&req)?;
-        if response.status == 401 {
-            return Err("Emby rejected the username or password".into());
+        let response = sdk::fetch_from("Emby", &server, &req)?;
+        match response.status {
+            401 => return Err("Emby rejected the username or password. Check them in the plugin's settings.".into()),
+            404 => return Err(sdk::wrong_server("Emby", &server)),
+            _ if !response.ok() => return Err(sdk::answered_error("Emby", &server, response.status)),
+            _ => {}
         }
-        if !response.ok() {
-            return Err(format!("Emby answered HTTP {}", response.status));
-        }
-        let auth: AuthResponse = serde_json::from_str(&response.body).map_err(|e| format!("unexpected sign-in response: {e}"))?;
+        let auth: AuthResponse = serde_json::from_str(&response.body).map_err(|e| {
+            sdk::warn!("unexpected sign-in response: {e}");
+            sdk::wrong_server("Emby", &server)
+        })?;
         host::kv_set("token", auth.access_token.as_bytes());
         host::kv_set("user_id", auth.user.id.as_bytes());
         host::kv_set("session_for", owner.as_bytes());
@@ -207,11 +210,15 @@ impl Session {
     }
 
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, String> {
-        let r = host::fetch(&self.request(path))?;
+        let r = sdk::fetch_from("Emby", &self.server, &self.request(path))?;
         if !r.ok() {
-            return Err(format!("HTTP {} for {path}", r.status));
+            sdk::warn!("HTTP {} for {path}", r.status);
+            return Err(sdk::answered_error("Emby", &self.server, r.status));
         }
-        serde_json::from_str(&r.body).map_err(|e| format!("unexpected response for {path}: {e}"))
+        serde_json::from_str(&r.body).map_err(|e| {
+            sdk::warn!("unexpected response for {path}: {e}");
+            sdk::unreadable("Emby", &self.server)
+        })
     }
 
     fn image(&self, item_id: &str, kind: &str, size: &str) -> String {
