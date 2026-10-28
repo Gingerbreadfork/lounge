@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import tv.lounge.core.ProgramKind
 import tv.lounge.core.ProgramRecord
 import tv.lounge.core.WatchNextType
+import tv.lounge.platform.ArtworkFetcher
 import java.io.File
 
 /**
@@ -33,9 +34,7 @@ import java.io.File
  */
 class TvProviderCollector(private val context: Context) {
     private val resolver = context.contentResolver
-    private val artwork = ArtworkFetcher(resolver, File(context.cacheDir, "tvart")) { authority ->
-        runCatching { context.packageManager.resolveContentProvider(authority, 0)?.packageName == context.packageName }.getOrDefault(true)
-    }
+    private val artwork = ArtworkFetcher(context, File(context.cacheDir, "tvart"))
     /** One snapshot at a time: they share the artwork cache, and pruning must not see another's downloads. */
     private val collecting = Mutex()
 

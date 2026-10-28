@@ -1,6 +1,7 @@
-package tv.lounge.collector.tvprovider
+package tv.lounge.platform
 
 import android.content.ContentResolver
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,11 @@ class ArtworkFetcher(
     private val maxAgeMs: Long = 7L * 86_400_000L,
     private val isOwnAuthority: (String) -> Boolean,
 ) {
+    /** A fetcher reading as [context]'s app, which refuses the providers that app publishes. */
+    constructor(context: Context, dir: File, maxAgeMs: Long = 7L * 86_400_000L) : this(context.contentResolver, dir, maxAgeMs, { authority ->
+        runCatching { context.packageManager.resolveContentProvider(authority, 0)?.packageName == context.packageName }.getOrDefault(true)
+    })
+
     private val failures = HashMap<String, Long>()
     private val gate = Semaphore(4)
 
