@@ -46,7 +46,7 @@ impl sdk::Plugin for Emby {
         }
     }
 
-    fn refresh(_ctx: &RefreshContext) -> Result<Vec<Item>, String> {
+    fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let session = Session::connect()?;
         let mut items = Vec::new();
         let resume: ItemsResponse = session.get_json(&format!(
@@ -61,7 +61,9 @@ impl sdk::Plugin for Emby {
             session.user_id
         ))?;
         for it in latest {
-            items.push(session.latest_item(&it));
+            let mut item = session.latest_item(&it);
+            item.is_new = sdk::new_this_week(item.added_ms, ctx.now_ms);
+            items.push(item);
         }
         sdk::dedup_ids(&mut items);
         sdk::info!("{} items from {}", items.len(), sdk::redact_url(&session.server));
@@ -278,7 +280,6 @@ impl Session {
             thumbnail: (!it.backdrop_tags.is_empty()).then(|| self.image(&it.id, "Backdrop/0", "maxWidth=1280")),
             row: Some("recent".into()),
             action: self.open(it),
-            is_new: true,
             ..Default::default()
         }
     }

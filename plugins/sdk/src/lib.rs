@@ -378,6 +378,12 @@ pub fn last_guide_still_showing(ctx: &RefreshContext) -> bool {
     ctx.since_ms.is_some_and(|t| ctx.now_ms - t < i64::from(ctx.window_hours.max(1)) * 3_600_000)
 }
 
+/// Whether something added at `added_ms` arrived within the past week, the span a New badge
+/// stands for.
+pub fn new_this_week(added_ms: Option<i64>, now_ms: i64) -> bool {
+    added_ms.is_some_and(|t| (0..7 * 86_400_000).contains(&(now_ms - t)))
+}
+
 /// The error for a refresh that failed only because its guide did.
 pub const GUIDE_KEPT: &str = "The guide didn't come through, so the TV is showing the last one it had. It tries again in a few minutes.";
 
@@ -694,6 +700,14 @@ impl ScheduleBudget {
 #[cfg(test)]
 mod helper_tests {
     use super::*;
+
+    #[test]
+    fn new_means_this_week() {
+        let now = 30 * 86_400_000;
+        assert!(new_this_week(Some(now - 86_400_000), now));
+        assert!(!new_this_week(Some(now - 8 * 86_400_000), now));
+        assert!(!new_this_week(None, now));
+    }
 
     #[test]
     fn the_last_guide_counts_while_it_reaches_into_the_window() {

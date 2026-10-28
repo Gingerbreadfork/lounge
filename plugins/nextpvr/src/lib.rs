@@ -67,6 +67,7 @@ impl sdk::Plugin for NextPvr {
                 let count = recs.len();
                 for (i, r) in recs.iter().enumerate() {
                     let mut item = s.recording_item(r, (count - i) as i32);
+                    item.is_new &= sdk::new_this_week(item.added_ms, ctx.now_ms);
                     if item.kind == ItemKind::Resume {
                         item.last_used_ms = watched.observe(r.id, r.playback_position.unwrap_or(0), ctx.now_ms);
                     }

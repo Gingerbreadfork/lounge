@@ -50,7 +50,11 @@ impl sdk::Plugin for Channels {
         match host::get_text(&format!("{base}/dvr/files")).and_then(|body| newest_recordings(&body, max_recordings)) {
             Ok(files) => {
                 let count = files.len();
-                items.extend(files.iter().enumerate().map(|(i, f)| recording_item(&base, f, (count - i) as i32)));
+                items.extend(files.iter().enumerate().map(|(i, f)| {
+                    let mut item = recording_item(&base, f, (count - i) as i32);
+                    item.is_new &= sdk::new_this_week(item.added_ms, ctx.now_ms);
+                    item
+                }));
             }
             Err(e) if e == host::TOO_LARGE => sdk::warn!("the recordings list is larger than the 8 MB a plugin may read, so recordings are left out; the channels and guide are not affected"),
             Err(e) => sdk::warn!("recordings unavailable: {e}"),

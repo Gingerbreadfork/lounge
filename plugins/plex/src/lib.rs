@@ -36,7 +36,7 @@ impl sdk::Plugin for Plex {
         }
     }
 
-    fn refresh(_ctx: &RefreshContext) -> Result<Vec<Item>, String> {
+    fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let server = Server::connect()?;
         let mut items = Vec::new();
         let on_deck: Container = server.get_json("/library/onDeck")?;
@@ -60,7 +60,8 @@ impl sdk::Plugin for Plex {
         recent.sort_by_key(|m| std::cmp::Reverse(m.added_at.unwrap_or(0)));
         recent.truncate(RECENT);
         for m in &recent {
-            if let Some(item) = server.recent_item(m) {
+            if let Some(mut item) = server.recent_item(m) {
+                item.is_new = sdk::new_this_week(item.added_ms, ctx.now_ms) && m.view_count.unwrap_or(0) == 0;
                 items.push(item);
             }
         }
@@ -184,6 +185,8 @@ pub struct Metadata {
     pub last_viewed_at: Option<i64>,
     #[serde(rename = "addedAt")]
     pub added_at: Option<i64>,
+    #[serde(rename = "viewCount")]
+    pub view_count: Option<i64>,
     #[serde(default)]
     pub thumb: Option<String>,
     #[serde(default)]
@@ -299,7 +302,6 @@ impl Server {
             thumbnail,
             row: Some("recent".into()),
             action: self.open(m),
-            is_new: true,
             ..Default::default()
         })
     }
