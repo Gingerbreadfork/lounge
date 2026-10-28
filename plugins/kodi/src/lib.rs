@@ -93,30 +93,17 @@ impl sdk::Plugin for Kodi {
                 }
             };
             let Some(e) = next.filter(|e| !in_progress.contains(&e.episodeid)) else { continue };
-            let mut item = kodi.episode_item(&e, false, offset);
-            item.row = Some("upnext".into());
+            let mut item = kodi.up_next_item(&e, show, offset);
             item.weight = (UP_NEXT_SHOWS - i) as i32;
-            item.added_ms = parse_local(show.lastplayed.as_deref().unwrap_or(""), offset);
-            if item.poster.is_none() {
-                item.poster = kodi.art(show.art.get("poster"));
-            }
             items.push(item);
             up_next += 1;
         }
 
         let recent_movies: Movies = kodi.call("VideoLibrary.GetRecentlyAddedMovies", json!({"properties": MOVIE_PROPS, "limits": {"end": RECENT}}))?;
         let recent_episodes: Episodes = kodi.call("VideoLibrary.GetRecentlyAddedEpisodes", json!({"properties": EPISODE_PROPS, "limits": {"end": RECENT}}))?;
-        let mut recent: Vec<Item> = recent_movies.movies.iter().filter(|m| m.playcount == 0).map(|m| kodi.movie_item(m, false, offset)).collect();
-        recent.extend(recent_episodes.episodes.iter().filter(|e| e.playcount == 0).map(|e| kodi.episode_item(e, false, offset)));
-        recent.sort_by_key(|i| std::cmp::Reverse(i.added_ms.unwrap_or(0)));
-        recent.truncate(RECENT);
+        let recent = kodi.recent_items(&recent_movies.movies, &recent_episodes.episodes, offset, ctx.now_ms);
         let added = recent.len();
-        for (i, mut item) in recent.into_iter().enumerate() {
-            item.row = Some("recent".into());
-            item.weight = (RECENT - i) as i32;
-            item.is_new = item.added_ms.is_some_and(|t| ctx.now_ms - t < 7 * 86_400_000);
-            items.push(item);
-        }
+        items.extend(recent);
 
         let mut channels = 0;
         if host::setting("pvr").map(|v| v != "false").unwrap_or(true) {
@@ -509,6 +496,35 @@ impl Server {
         }
     }
 
+    /// The next episode of `show`. Up next and the New row give their tiles ids of their own, so
+    /// an episode in both keeps a tile in each.
+    pub fn up_next_item(&self, e: &Episode, show: &Show, offset: i32) -> Item {
+        let mut item = self.episode_item(e, false, offset);
+        item.id = format!("next:{}", item.id);
+        item.row = Some("upnext".into());
+        item.added_ms = parse_local(show.lastplayed.as_deref().unwrap_or(""), offset);
+        if item.poster.is_none() {
+            item.poster = self.art(show.art.get("poster"));
+        }
+        item
+    }
+
+    /// The unwatched films and episodes added lately, newest first. A film part-way through is
+    /// still new, so these tiles carry ids apart from its resume point.
+    pub fn recent_items(&self, movies: &[Movie], episodes: &[Episode], offset: i32, now_ms: i64) -> Vec<Item> {
+        let mut recent: Vec<Item> = movies.iter().filter(|m| m.playcount == 0).map(|m| self.movie_item(m, false, offset)).collect();
+        recent.extend(episodes.iter().filter(|e| e.playcount == 0).map(|e| self.episode_item(e, false, offset)));
+        recent.sort_by_key(|i| std::cmp::Reverse(i.added_ms.unwrap_or(0)));
+        recent.truncate(RECENT);
+        for (i, item) in recent.iter_mut().enumerate() {
+            item.id = format!("recent:{}", item.id);
+            item.row = Some("recent".into());
+            item.weight = (RECENT - i) as i32;
+            item.is_new = item.added_ms.is_some_and(|t| now_ms - t < 7 * 86_400_000);
+        }
+        recent
+    }
+
     pub fn show_item(&self, s: &Show) -> Item {
         let title = if s.title.trim().is_empty() { s.label.clone() } else { s.title.clone() };
         Item {
@@ -678,6 +694,25 @@ mod tests {
         assert!(item.thumbnail.as_deref().unwrap().ends_with("/image/image%3A%2F%2Fa%2F"));
         assert_eq!(item.added_ms, Some(sdk::epoch_ms(2026, 10, 21, 8, 0, 0, 0)));
         assert_eq!(item.progress, None);
+    }
+
+    #[test]
+    fn a_new_film_part_watched_keeps_its_tile_in_the_new_row() {
+        let movies: Movies = serde_json::from_str(r#"{"movies":[{"movieid":12,"title":"Charade","runtime":6780,"playcount":0,"dateadded":"2026-10-20 10:00:00",
+            "resume":{"position":1700,"total":6780}}]}"#).unwrap();
+        let episodes: Episodes = serde_json::from_str(r#"{"episodes":[{"episodeid":77,"title":"Honeydew","showtitle":"The Bear","season":2,"episode":4,"playcount":0,
+            "dateadded":"2026-10-21 08:00:00","tvshowid":5}]}"#).unwrap();
+        let show: Show = serde_json::from_str(r#"{"tvshowid":5,"title":"The Bear","lastplayed":"2026-10-19 20:00:00"}"#).unwrap();
+        let now = sdk::epoch_ms(2026, 10, 22, 0, 0, 0, 0);
+        let k = kodi();
+        let mut items = vec![k.movie_item(&movies.movies[0], true, 0), k.up_next_item(&episodes.episodes[0], &show, 0)];
+        items.extend(k.recent_items(&movies.movies, &episodes.episodes, 0, now));
+        assert_eq!(sdk::dedup_ids(&mut items), 0);
+        let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, ["movie:12", "next:episode:77", "recent:episode:77", "recent:movie:12"]);
+        assert_eq!(items[1].row.as_deref(), Some("upnext"));
+        assert!(items[2..].iter().all(|i| i.row.as_deref() == Some("recent") && i.is_new));
+        assert_eq!(items[3].action.resolve.as_deref(), Some("movie:12"));
     }
 
     #[test]
