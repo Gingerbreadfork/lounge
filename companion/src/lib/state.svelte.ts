@@ -126,7 +126,7 @@ export async function connect() {
     unpair,
   );
   // The socket may already have delivered a newer snapshot than this first read.
-  api.state().then((s) => { if (!app.state || s.snapshot.revision >= app.state.snapshot.revision) app.state = s; }).catch((e) => {
+  api.state().then((s) => { if (!app.state?.snapshot || (s.snapshot && s.snapshot.revision >= app.state.snapshot.revision)) app.state = s; }).catch((e) => {
     if (e?.status === 401) unpair();
     else app.error = e?.message ?? 'The TV did not answer.';
   });

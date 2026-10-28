@@ -64,9 +64,9 @@
     if (!layout) return;
     change({ pinnedApps: layout.pinnedApps.filter((p) => p !== pkg) }, 'Unpinned');
   }
-  let snapshotTiles = $derived(app.state?.snapshot.rows.flatMap((r) => r.tiles) ?? []);
+  let snapshotTiles = $derived(app.state?.snapshot?.rows.flatMap((r) => r.tiles) ?? []);
   function tileTitle(id: string) {
-    return snapshotTiles.find((t) => t.id === id)?.title ?? app.state?.snapshot.stage.strip.find((t) => t.id === id)?.title ?? id;
+    return snapshotTiles.find((t) => t.id === id)?.title ?? app.state?.snapshot?.stage.strip.find((t) => t.id === id)?.title ?? id;
   }
   function appTitle(pkg: string) {
     return snapshotTiles.find((t) => t.id === `app:${pkg}`)?.title ?? pkg;

@@ -17,7 +17,7 @@
 
   // The light follows what is on the TV: the spotlight's palette tints the companion's accent.
   $effect(() => {
-    const sp = app.state?.snapshot.stage.spotlights[0];
+    const sp = app.state?.snapshot?.stage.spotlights[0];
     const light = sp ? `#${((sp.lightArgb >>> 0) & 0xffffff).toString(16).padStart(6, '0')}` : '#f2b263';
     document.documentElement.style.setProperty('--light', light);
   });

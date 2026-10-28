@@ -21,7 +21,8 @@ export type NowPlaying = {
 };
 export type Wallpaper = { artworkPath: string; title: string; subtitle?: string | null; source: string; framed?: boolean };
 export type Snapshot = { revision: number; generatedAtMs: number; stage: { spotlights: Spotlight[]; strip: Tile[] }; rows: Row[]; nowPlaying?: NowPlaying | null; wallpapers?: Wallpaper[] };
-export type State = { device: { name: string; model: string; version: string; tier: string }; snapshot: Snapshot };
+/** The snapshot is null while the TV is shutting down. */
+export type State = { device: { name: string; model: string; version: string; tier: string }; snapshot: Snapshot | null };
 export type Layout = { rowOrder: string[]; availableRows: { id: string; title: string }[]; hidden: string[]; pinnedApps: string[]; stagePins: string[]; enabledChannels: number[] };
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
 export type Plugin = {
