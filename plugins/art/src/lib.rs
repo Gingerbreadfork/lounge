@@ -65,13 +65,15 @@ impl sdk::Plugin for Art {
         if !met_on && !cma_on {
             return Err("Turn on at least one museum in the plugin's settings".into());
         }
+        // An equal share each, so the museum that sends more per refresh cannot fill the walls.
+        let share = GALLERY_CAP / (usize::from(met_on) + usize::from(cma_on));
         let mut gallery = Gallery::load().filter(|g| g.query == query).unwrap_or_else(|| Gallery { query: query.clone(), ..Default::default() });
         let mut problems = Vec::new();
         if met_on {
             match met_slice(&query, gallery.met_offset, &gallery) {
                 Ok((found, next)) => {
                     gallery.met_offset = next;
-                    gallery.hang(found);
+                    gallery.hang(found, share);
                 }
                 Err(e) => problems.push(format!("{MET}: {e}")),
             }
@@ -80,7 +82,7 @@ impl sdk::Plugin for Art {
             match cma_slice(&query, gallery.cma_skip) {
                 Ok((found, next)) => {
                     gallery.cma_skip = next;
-                    gallery.hang(found);
+                    gallery.hang(found, share);
                 }
                 Err(e) => problems.push(format!("{CMA}: {e}")),
             }
@@ -161,10 +163,17 @@ impl Gallery {
         self.paintings.iter().any(|p| p.id == id)
     }
 
-    /// Adds what a museum sent, newest in front, and lets the oldest go past the cap.
-    pub fn hang(&mut self, found: Vec<Painting>) {
+    /// Adds what a museum sent, newest in front, and lets each museum's oldest go past `share`
+    /// and the gallery's past the cap.
+    pub fn hang(&mut self, found: Vec<Painting>, share: usize) {
         let mut fresh: Vec<Painting> = found.into_iter().filter(|p| !self.knows(&p.id)).collect();
         fresh.append(&mut self.paintings);
+        let mut held: std::collections::HashMap<String, usize> = Default::default();
+        fresh.retain(|p| {
+            let n = held.entry(p.museum.clone()).or_default();
+            *n += 1;
+            *n <= share
+        });
         fresh.truncate(GALLERY_CAP);
         self.paintings = fresh;
     }
@@ -458,8 +467,8 @@ mod tests {
     #[test]
     fn the_wall_changes_a_little_each_time_and_the_gallery_keeps_its_cap() {
         let mut g = Gallery::default();
-        g.hang((0..9).map(|i| painting(&format!("met:{i}"))).collect());
-        g.hang(vec![painting("met:0"), painting("met:9")]);
+        g.hang((0..9).map(|i| painting(&format!("met:{i}"))).collect(), GALLERY_CAP);
+        g.hang(vec![painting("met:0"), painting("met:9")], GALLERY_CAP);
         assert_eq!(g.paintings.len(), 10);
         assert_eq!(g.paintings[0].id, "met:9");
         let first: Vec<String> = g.show(6).into_iter().map(|p| p.id).collect();
@@ -468,17 +477,28 @@ mod tests {
         assert_ne!(first, second);
         assert_eq!(first[2..], second[..4]);
         assert_eq!(g.show(50).len(), 10);
-        g.hang((0..400).map(|i| painting(&format!("cma:{i}"))).collect());
+        g.hang((0..400).map(|i| painting(&format!("cma:{i}"))).collect(), GALLERY_CAP);
         assert_eq!(g.paintings.len(), GALLERY_CAP);
     }
 
     #[test]
     fn the_museums_take_turns_on_the_wall() {
         let mut g = Gallery::default();
-        g.hang((0..3).map(|i| painting(&format!("met:{i}"))).collect());
-        g.hang((0..3).map(|i| Painting { museum: CMA.into(), ..painting(&format!("cma:{i}")) }).collect());
+        g.hang((0..3).map(|i| painting(&format!("met:{i}"))).collect(), GALLERY_CAP / 2);
+        g.hang((0..3).map(|i| Painting { museum: CMA.into(), ..painting(&format!("cma:{i}")) }).collect(), GALLERY_CAP / 2);
         let ids: Vec<String> = g.show(6).into_iter().map(|p| p.id).collect();
         assert_eq!(ids, ["cma:0", "met:0", "cma:1", "met:1", "cma:2", "met:2"]);
+    }
+
+    #[test]
+    fn each_museum_keeps_its_share_of_the_gallery() {
+        let mut g = Gallery::default();
+        g.hang((0..20).map(|i| painting(&format!("met:{i}"))).collect(), GALLERY_CAP / 2);
+        for round in 0..5 {
+            g.hang((0..60).map(|i| Painting { museum: CMA.into(), ..painting(&format!("cma:{round}:{i}")) }).collect(), GALLERY_CAP / 2);
+        }
+        assert_eq!(g.paintings.iter().filter(|p| p.museum == MET).count(), 20);
+        assert_eq!(g.paintings.iter().filter(|p| p.museum == CMA).count(), GALLERY_CAP / 2);
     }
 
     #[test]
