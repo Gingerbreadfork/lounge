@@ -14,7 +14,7 @@ const TOKEN_KEY: &str = "token";
 const DEVICE_KEY: &str = "device";
 const USER_KEY: &str = "user";
 const AVATARS_KEY: &str = "avatars";
-const DEFAULT_APP: &str = "tv.twitch.android.viewer";
+const DEFAULT_APP: &str = "tv.twitch.android.app";
 /// Previews change every few minutes; the address changes with them so the TV fetches a new one.
 const PREVIEW_MS: i64 = 10 * 60_000;
 
