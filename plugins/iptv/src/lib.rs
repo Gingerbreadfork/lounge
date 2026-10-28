@@ -189,7 +189,8 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Cha
     let mut pending: Option<(HashMap<String, String>, String)> = None;
     let mut index = 0usize;
     for raw in text.lines() {
-        let line = raw.trim();
+        // A byte order mark can open the file even where #EXTM3U is missing.
+        let line = raw.trim_start_matches('\u{feff}').trim();
         if line.is_empty() {
             continue;
         }
@@ -232,11 +233,12 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Cha
 /// Splits what follows `#EXTINF:` into the duration with its attributes, and the title, which
 /// is everything after the first comma outside quotes.
 fn split_extinf(rest: &str) -> (&str, &str) {
-    let mut quoted = false;
+    let mut quote: Option<char> = None;
     for (i, c) in rest.char_indices() {
-        match c {
-            '"' => quoted = !quoted,
-            ',' if !quoted => return (&rest[..i], rest[i + 1..].trim()),
+        match (c, quote) {
+            ('"' | '\'', None) => quote = Some(c),
+            (c, Some(q)) if c == q => quote = None,
+            (',', None) => return (&rest[..i], rest[i + 1..].trim()),
             _ => {}
         }
     }
@@ -251,11 +253,11 @@ fn parse_attrs(s: &str) -> HashMap<String, String> {
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t') {
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
             i += 1;
         }
         let key_start = i;
-        while i < bytes.len() && bytes[i] != b'=' && bytes[i] != b' ' {
+        while i < bytes.len() && bytes[i] != b'=' && !bytes[i].is_ascii_whitespace() {
             i += 1;
         }
         let key = &s[key_start..i];
@@ -263,10 +265,11 @@ fn parse_attrs(s: &str) -> HashMap<String, String> {
             continue;
         }
         i += 1;
-        let value = if i < bytes.len() && bytes[i] == b'"' {
+        let value = if i < bytes.len() && (bytes[i] == b'"' || bytes[i] == b'\'') {
+            let quote = bytes[i];
             i += 1;
             let start = i;
-            while i < bytes.len() && bytes[i] != b'"' {
+            while i < bytes.len() && bytes[i] != quote {
                 i += 1;
             }
             let v = &s[start..i.min(bytes.len())];
@@ -274,7 +277,7 @@ fn parse_attrs(s: &str) -> HashMap<String, String> {
             v
         } else {
             let start = i;
-            while i < bytes.len() && bytes[i] != b' ' {
+            while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
                 i += 1;
             }
             &s[start..i]
@@ -958,6 +961,16 @@ http://s/3
         assert_eq!(chans[1].name, "Plain, with a comma");
         assert_eq!(chans[2].name, "Fallback name");
         assert_eq!(parse_m3u(m3u, Some("sport, uk"), 10).0.len(), 1);
+    }
+
+    #[test]
+    fn odd_playlists_still_parse() {
+        let m3u = "\u{feff}#EXTINF:-1\ttvg-id='one.uk' group-title='News, UK',One\nhttp://s/1\n\
+            #EXTINF:-1 tvg-id=\"two\",Two\nhttp://s/2\n";
+        let (channels, _) = parse_m3u(m3u, Some("News, UK"), 10);
+        assert_eq!(channels.len(), 1);
+        assert_eq!(channels[0].tvg_id.as_deref(), Some("one.uk"));
+        assert_eq!(channels[0].name, "One");
     }
 
     #[test]
