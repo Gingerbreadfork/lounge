@@ -17,6 +17,10 @@ const LISTING_FETCHES: usize = 48;
 const GUIDE_KEYS: i64 = 16;
 /// Set once the per-channel guide keys of earlier versions have been removed.
 const GUIDE_MOVED_KEY: &str = "guide_moved";
+/// How many channels' old keys that removal has reached, kept between refreshes.
+const GUIDE_MOVING_KEY: &str = "guide_moving";
+/// Old keys removed per refresh, well inside the host's 1,000 writes for one call.
+const MOVE_DELETES: usize = 500;
 /// Largest guide value written to one key, under the host's 256 KB.
 const GUIDE_KEY_BYTES: usize = 240 * 1024;
 
@@ -240,10 +244,17 @@ impl Server {
     /// keeps the rest from last time, in a fixed number of store keys.
     fn listings(&self, channels: &[Channel], now_ms: i64, window_end: i64, budget: usize) -> Vec<Item> {
         if host::kv_get(GUIDE_MOVED_KEY).is_none() {
-            for c in channels {
+            let from = host::kv_get_string(GUIDE_MOVING_KEY).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+            let (span, done) = move_span(from, channels.len());
+            for c in &channels[span] {
                 host::kv_delete(&format!("epg:{}", c.channel_id));
             }
-            host::kv_set(GUIDE_MOVED_KEY, b"1");
+            if done {
+                host::kv_set(GUIDE_MOVED_KEY, b"1");
+                host::kv_delete(GUIDE_MOVING_KEY);
+            } else {
+                host::kv_set(GUIDE_MOVING_KEY, (from + MOVE_DELETES).to_string().as_bytes());
+            }
         }
         let cursor = host::kv_get_string(CURSOR_KEY).and_then(|c| c.parse::<usize>().ok()).unwrap_or(0) % channels.len().max(1);
         let fresh: Vec<usize> = (0..channels.len().min(LISTING_FETCHES)).map(|i| (cursor + i) % channels.len()).collect();
@@ -468,9 +479,25 @@ fn first_sentence(s: &str) -> String {
     s[..cut].trim().to_string()
 }
 
+/// The channels whose old guide keys this refresh removes, and whether that finishes the job.
+fn move_span(from: usize, channels: usize) -> (std::ops::Range<usize>, bool) {
+    let start = from.min(channels);
+    let end = (start + MOVE_DELETES).min(channels);
+    (start..end, end == channels)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn old_guide_keys_go_a_slice_at_a_time() {
+        assert_eq!(move_span(0, 120), (0..120, true));
+        assert_eq!(move_span(0, 1_200), (0..500, false));
+        assert_eq!(move_span(500, 1_200), (500..1_000, false));
+        assert_eq!(move_span(1_000, 1_200), (1_000..1_200, true));
+        assert_eq!(move_span(1_500, 1_200), (1_200..1_200, true));
+    }
 
     fn server() -> Server {
         Server { base: "http://npvr:8866".into(), sid: "S1".into() }
