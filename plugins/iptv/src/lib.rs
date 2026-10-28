@@ -826,7 +826,22 @@ fn decode(raw: &[u8], max: usize) -> String {
     let mut out = String::new();
     let mut i = 0;
     while i < raw.len() && out.len() < max {
-        let next = raw[i..].iter().position(|&b| b == b'<' || b == b'&').map_or(raw.len(), |n| i + n).min(i + max);
+        let end = raw[i..].iter().position(|&b| b == b'<' || b == b'&').map_or(raw.len(), |n| i + n);
+        let room = max - out.len();
+        let next = if end - i > room {
+            // Cut where the room runs out, but never in the middle of a character.
+            let mut at = i + room;
+            while at > i && raw[at] & 0xC0 == 0x80 {
+                at -= 1;
+            }
+            match (at == i, out.is_empty()) {
+                (true, false) => break,
+                (true, true) => i + room,
+                _ => at,
+            }
+        } else {
+            end
+        };
         out.push_str(&String::from_utf8_lossy(&raw[i..next]));
         i = next;
         let rest = &raw[i.min(raw.len())..];
@@ -1025,6 +1040,14 @@ http://s/3
         assert_eq!(guide_in_header("#EXTM3U\n#EXTINF:-1 url-tvg=\"http://no\",One\n"), None);
         assert_eq!(xtream_guide("http://tv.example:8080/get.php?username=u1&password=p1&type=m3u_plus&output=ts").as_deref(), Some("http://tv.example:8080/xmltv.php?username=u1&password=p1"));
         assert_eq!(xtream_guide("http://tv.example/list.m3u"), None);
+    }
+
+    #[test]
+    fn a_long_field_is_cut_between_characters() {
+        let text = "é".repeat(10);
+        let out = decode(text.as_bytes(), 5);
+        assert_eq!(out, "éé");
+        assert!(!decode(&[0x80; 12], 5).is_empty());
     }
 
     #[test]
