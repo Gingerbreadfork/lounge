@@ -167,6 +167,12 @@ impl Channel {
     }
 }
 
+/// Films and series an Xtream playlist lists beside its channels, which play as files, not live.
+fn is_on_demand(url: &str) -> bool {
+    let path = url.split(['?', '#', '|']).next().unwrap_or(url).to_ascii_lowercase();
+    path.contains("/movie/") || path.contains("/series/")
+}
+
 /// Parse an extended M3U, keeping the first `limit` channels in `only_group` (every group when
 /// `None`); also returns how many channels the group has. Attributes on `#EXTINF` (`tvg-id`,
 /// `tvg-name`, `tvg-logo`, `tvg-chno`, `group-title`) are optional.
@@ -187,6 +193,9 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Cha
         } else if line.starts_with('#') {
             continue;
         } else if let Some((attrs, name)) = pending.take() {
+            if is_on_demand(line) {
+                continue;
+            }
             index += 1;
             let name = if name.is_empty() { attrs.get("tvg-name").cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Channel {index}")) } else { name };
             let tvg_id = attrs.get("tvg-id").map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
@@ -936,6 +945,19 @@ http://s/3
         assert_eq!(chans[1].name, "Plain, with a comma");
         assert_eq!(chans[2].name, "Fallback name");
         assert_eq!(parse_m3u(m3u, Some("sport, uk"), 10).0.len(), 1);
+    }
+
+    #[test]
+    fn films_and_series_are_not_channels() {
+        let m3u = "#EXTM3U\n\
+            #EXTINF:-1 tvg-id=\"one\" group-title=\"News\",One\nhttp://x.tv:8080/live/u/p/1.ts\n\
+            #EXTINF:-1 group-title=\"VOD | Drama\",A Film (2019)\nhttp://x.tv:8080/movie/u/p/77.mkv\n\
+            #EXTINF:-1 group-title=\"Series\",A Show S01 E01\nhttp://x.tv:8080/series/u/p/78.mp4\n\
+            #EXTINF:-1 group-title=\"News\",Two\nhttp://x.tv:8080/u/p/2\n";
+        let (channels, total) = parse_m3u(m3u, None, 100);
+        assert_eq!(channels.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["One", "Two"]);
+        assert_eq!(total, 2);
+        assert_eq!(channels[1].number.as_deref(), Some("2"));
     }
 
     #[test]
