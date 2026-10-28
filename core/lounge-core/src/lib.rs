@@ -594,6 +594,8 @@ pub(crate) struct Inner {
     pub started_ms: i64,
     /// What the tiles of the latest plugin search open, by tile id.
     pub search_links: Mutex<std::collections::HashMap<String, lounge_graph::DeepLink>>,
+    /// The plugin whose item was opened last, refreshed once Lounge is back in front.
+    pub opened_plugin: Mutex<Option<String>>,
 }
 
 impl Inner {
@@ -696,6 +698,7 @@ impl Core {
             companion: Mutex::new(None),
             started_ms: now_ms(),
             search_links: Mutex::new(std::collections::HashMap::new()),
+            opened_plugin: Mutex::new(None),
         });
         inner.queue_depth.fetch_add(1, Ordering::Relaxed);
         let _ = inner.tx.send(worker::Job::LoadGraph);
@@ -841,6 +844,10 @@ impl Core {
         self.count();
         self.inner.screen_on.store(on, Ordering::Relaxed);
         if on {
+            // Back from watching something a plugin offered, so its resume points have moved.
+            if let Some(plugin) = self.inner.opened_plugin.lock().take() {
+                self.inner.plugins.refresh_soon(&plugin);
+            }
             self.enqueue(worker::Job::Rebuild);
         }
     }

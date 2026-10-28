@@ -667,6 +667,9 @@ pub(crate) fn perform(inner: &Inner, action: &str) -> Result<(), CoreError> {
         "open" => {
             let link = {
                 let state = inner.state.lock();
+                if let Some(plugin) = plugin_of(target, state.graph.get(target).map(|it| it.source.as_str())) {
+                    *inner.opened_plugin.lock() = Some(plugin);
+                }
                 match state.graph.get(target) {
                     // A schedule entry with nothing of its own to open plays through its channel.
                     Some(it) if it.deep_link == DeepLink::None && it.channel_id.is_some() => {
@@ -703,6 +706,14 @@ pub(crate) fn perform(inner: &Inner, action: &str) -> Result<(), CoreError> {
                 .map_err(platform_err)
         }
         _ => Err(unknown()),
+    }
+}
+
+/// The plugin an opened item came from: a home item's source, or a plugin search tile's id.
+fn plugin_of(target: &str, source: Option<&str>) -> Option<String> {
+    match source {
+        Some(source) => source.strip_prefix("plugin:").map(str::to_string),
+        None => target.strip_prefix("search:").and_then(|t| t.split_once(':')).map(|(plugin, _)| plugin.to_string()),
     }
 }
 
@@ -790,6 +801,13 @@ mod tests {
         assert_eq!(left_text(23 * 60_000), "23 minutes left");
         assert_eq!(left_text(95 * 60_000), "1 h 35 min left");
         assert_eq!(left_text(120 * 60_000), "2 h left");
+    }
+
+    #[test]
+    fn an_opened_item_names_its_plugin() {
+        assert_eq!(plugin_of("plugin:jellyfin:resume:1", Some("plugin:jellyfin")).as_deref(), Some("jellyfin"));
+        assert_eq!(plugin_of("search:plex:latest:9", None).as_deref(), Some("plex"));
+        assert_eq!(plugin_of("app:com.netflix.ninja", Some("apps")), None);
     }
 
     #[test]
