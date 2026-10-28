@@ -3,7 +3,7 @@
 //! favourites into rows of their own, and searches the library. Items open on their page in the
 //! Jellyfin Android TV app.
 
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -193,7 +193,7 @@ impl Session {
             && let (Some(token), Some(user_id)) = (host::kv_get_string("token"), host::kv_get_string("user_id"))
         {
             let s = Session { server: server.clone(), token, user_id, device_id: device_id.clone() };
-            let probe = fetch(&server, &s.request(&format!("/Users/{}", s.user_id)))?;
+            let probe = sdk::fetch_from("Jellyfin", &server, &s.request(&format!("/Users/{}", s.user_id)))?;
             if probe.ok() {
                 return Ok(s);
             }
@@ -214,7 +214,7 @@ impl Session {
             body: Some(body),
             timeout_ms: 0,
         };
-        let response = fetch(&server, &req)?;
+        let response = sdk::fetch_from("Jellyfin", &server, &req)?;
         match response.status {
             401 => return Err("Jellyfin rejected the username or password. Check them in the plugin's settings.".into()),
             404 => return Err(sdk::wrong_server("Jellyfin", &server)),
@@ -238,7 +238,7 @@ impl Session {
     }
 
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, String> {
-        let r = fetch(&self.server, &self.request(path))?;
+        let r = sdk::fetch_from("Jellyfin", &self.server, &self.request(path))?;
         if !r.ok() {
             sdk::warn!("HTTP {} for {path}", r.status);
             return Err(sdk::answered_error("Jellyfin", &self.server, r.status));
@@ -327,14 +327,6 @@ impl Session {
         item.weight = weight;
         item
     }
-}
-
-/// Fetches `req`, turning any failure into a sentence for the TV. The cause goes to the log.
-fn fetch(server: &str, req: &HttpRequest) -> Result<HttpResponse, String> {
-    host::fetch(req).map_err(|e| {
-        sdk::warn!("{e}");
-        sdk::didnt_answer("Jellyfin", server)
-    })
 }
 
 /// Opens the item's page in the Jellyfin app, whose start screen takes an item id the way the
@@ -518,9 +510,10 @@ mod tests {
 
     #[test]
     fn errors_name_the_server_and_what_to_check() {
+        let s = Session { server: "http://192.168.0.20:8096".into(), token: "t".into(), user_id: "u".into(), device_id: "tv-1".into() };
         // Off the TV there is no host, so every fetch fails as an unreachable server would.
         assert_eq!(
-            fetch("http://192.168.0.20:8096", &HttpRequest::get("http://192.168.0.20:8096/Users/u")).err().as_deref(),
+            s.get_json::<serde_json::Value>("/Users/u").err().as_deref(),
             Some("Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.")
         );
     }
