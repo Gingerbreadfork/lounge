@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Other apps' rows name their artwork by plain http as often as not; only that artwork and the
-     https update check use Android's network stack. -->
+<!-- Other apps' rows name their artwork by plain http as often as not, on any host, so cleartext
+     stays allowed. The hosts updates come from never allow it. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">github.com</domain>
+        <domain includeSubdomains="true">githubusercontent.com</domain>
+    </domain-config>
 </network-security-config>
