@@ -92,25 +92,31 @@ fn lineup(base: &str) -> Result<Vec<Channel>, String> {
     get_json(&format!("{base}/devices/ANY/channels")).or_else(|e| get_json(&format!("{base}/api/channels")).map_err(|_| e))
 }
 
-/// The newest `max` finished recordings, read from the server's list one at a time so a large
-/// library is never held whole.
+/// Most part-watched recordings kept for Continue watching.
+const MAX_STARTED: usize = 40;
+
+/// The newest part-watched recordings and the newest `max` of the other finished ones, read from
+/// the server's list one at a time so a large library is never held whole.
 pub fn newest_recordings(json: &str, max: usize) -> Result<Vec<Recording>, String> {
-    let newest_first = |files: &mut Vec<Recording>| {
+    let newest_first = |files: &mut Vec<Recording>, keep: usize| {
         files.sort_by_key(|f| std::cmp::Reverse(f.airing.time));
-        files.truncate(max);
+        files.truncate(keep);
     };
-    let mut kept = Vec::new();
+    let (mut started, mut kept) = (Vec::new(), Vec::new());
     sdk::for_each_in_array(json, |r: Recording| {
         if r.completed && !r.cancelled && !r.delete && r.duration > 60.0 {
-            kept.push(r);
-            if kept.len() >= 2 * max {
-                newest_first(&mut kept);
+            let (list, keep) = if r.in_progress() { (&mut started, MAX_STARTED) } else { (&mut kept, max) };
+            list.push(r);
+            if list.len() >= 2 * keep {
+                newest_first(list, keep);
             }
         }
     })
     .map_err(|e| format!("unexpected recordings list: {e}"))?;
-    newest_first(&mut kept);
-    Ok(kept)
+    newest_first(&mut started, MAX_STARTED);
+    newest_first(&mut kept, max);
+    started.extend(kept);
+    Ok(started)
 }
 
 sdk::export_plugin!(Channels);
@@ -195,6 +201,14 @@ pub struct Recording {
     pub updated_at: i64,
 }
 
+impl Recording {
+    /// Watched past the first minute and short of the end, so it belongs in Continue watching.
+    fn in_progress(&self) -> bool {
+        let position_ms = self.playback_time * 1000.0;
+        !self.watched && position_ms > 60_000.0 && position_ms < self.duration * 1000.0 * 0.95
+    }
+}
+
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
     let body = host::get_text(url)?;
     serde_json::from_str(&body).map_err(|e| format!("unexpected answer from {}: {e}", sdk::redact_url(url)))
@@ -248,7 +262,7 @@ pub fn recording_item(base: &str, r: &Recording, weight: i32) -> Item {
     let a = &r.airing;
     let duration_ms = (r.duration * 1000.0) as i64;
     let position_ms = (r.playback_time * 1000.0) as i64;
-    let in_progress = !r.watched && position_ms > 60_000 && (position_ms as f64) < r.duration * 1000.0 * 0.95;
+    let in_progress = r.in_progress();
     let mut item = Item {
         id: format!("rec:{}", r.id),
         kind: if in_progress { ItemKind::Resume } else { ItemKind::Program },
@@ -354,5 +368,14 @@ mod tests {
         let ids: Vec<&str> = kept.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(ids, ["499", "498", "496", "495", "494"]);
         assert!(newest_recordings("{\"error\": \"nope\"}", 5).is_err());
+    }
+
+    #[test]
+    fn part_watched_recordings_stay_past_the_rows_limit() {
+        let json = r#"[{"ID": "new", "Airing": {"Time": 1760003600}, "Completed": true, "Duration": 1800},
+            {"ID": "newer", "Airing": {"Time": 1760007200}, "Completed": true, "Duration": 1800},
+            {"ID": "old", "Airing": {"Time": 1760000000}, "Completed": true, "Duration": 1800, "PlaybackTime": 600}]"#;
+        let ids: Vec<String> = newest_recordings(json, 1).unwrap().into_iter().map(|r| r.id).collect();
+        assert_eq!(ids, ["old", "newer"]);
     }
 }

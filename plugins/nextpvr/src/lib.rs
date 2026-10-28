@@ -62,7 +62,7 @@ impl sdk::Plugin for NextPvr {
                 let max = host::setting("recordings").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(30).clamp(1, 100);
                 let mut recs: Vec<Recording> = list.recordings.into_iter().filter(|r| r.status.as_deref().unwrap_or("ready") == "ready").collect();
                 recs.sort_by_key(|r| std::cmp::Reverse(r.start_ms()));
-                recs.truncate(max);
+                recs = keep_newest(recs, max);
                 let mut watched = Watched::load();
                 let count = recs.len();
                 for (i, r) in recs.iter().enumerate() {
@@ -204,6 +204,29 @@ impl Recording {
     fn start_ms(&self) -> i64 {
         self.start_time_ticks.map(ms_from_any).or_else(|| self.start_time.as_deref().and_then(sdk::parse_iso8601)).unwrap_or(0)
     }
+
+    /// Watched past the first minute and short of the end, so it belongs in Continue watching.
+    fn in_progress(&self) -> bool {
+        let position_ms = self.playback_position.map(|p| p * 1000).unwrap_or(0);
+        match self.duration_seconds.map(|d| d * 1000) {
+            Some(d) if d > 0 => position_ms > 60_000 && (position_ms as f64) < d as f64 * 0.95,
+            _ => false,
+        }
+    }
+}
+
+/// Of recordings sorted newest first, every part-watched one for Continue watching and the
+/// newest `max` of the rest for the row.
+fn keep_newest(recs: Vec<Recording>, max: usize) -> Vec<Recording> {
+    let mut finished = 0;
+    recs.into_iter()
+        .filter(|r| {
+            r.in_progress() || {
+                finished += 1;
+                finished <= max
+            }
+        })
+        .collect()
 }
 
 /// NextPVR gives times in seconds or milliseconds depending on the call; both land as milliseconds.
@@ -298,10 +321,7 @@ impl Server {
     fn recording_item(&self, r: &Recording, weight: i32) -> Item {
         let duration_ms = r.duration_seconds.map(|d| d * 1000);
         let position_ms = r.playback_position.map(|p| p * 1000).unwrap_or(0);
-        let in_progress = match duration_ms {
-            Some(d) if d > 0 => position_ms > 60_000 && (position_ms as f64) < d as f64 * 0.95,
-            _ => false,
-        };
+        let in_progress = r.in_progress();
         let mut item = Item {
             id: format!("rec:{}", r.id),
             kind: if in_progress { ItemKind::Resume } else { ItemKind::Program },
@@ -489,6 +509,15 @@ fn move_span(from: usize, channels: usize) -> (std::ops::Range<usize>, bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn part_watched_recordings_stay_past_the_rows_limit() {
+        let rec = |id: i64, position: i64| -> Recording {
+            serde_json::from_value(serde_json::json!({"id": id, "name": "R", "durationSeconds": 1800, "playbackPosition": position})).unwrap()
+        };
+        let kept = keep_newest(vec![rec(5, 0), rec(4, 0), rec(3, 0), rec(2, 600), rec(1, 0)], 2);
+        assert_eq!(kept.iter().map(|r| r.id).collect::<Vec<_>>(), [5, 4, 2]);
+    }
 
     #[test]
     fn old_guide_keys_go_a_slice_at_a_time() {
