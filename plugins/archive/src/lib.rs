@@ -123,6 +123,8 @@ pub enum Text {
     One(String),
     Many(Vec<String>),
     Number(f64),
+    /// Any other shape, such as a list of years, so one odd field does not lose the whole answer.
+    Other(serde_json::Value),
 }
 
 impl Text {
@@ -131,7 +133,17 @@ impl Text {
             Text::One(s) => s,
             Text::Many(v) => v.into_iter().next().unwrap_or_default(),
             Text::Number(n) => format!("{}", n as i64),
+            Text::Other(v) => first_text(&v),
         }
+    }
+}
+
+fn first_text(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Number(n) => n.as_i64().map_or_else(|| n.to_string(), |i| i.to_string()),
+        serde_json::Value::Array(a) => a.first().map(first_text).unwrap_or_default(),
+        _ => String::new(),
     }
 }
 
@@ -408,6 +420,16 @@ mod tests {
         ]"#).unwrap();
         assert_eq!(best_video(&files).unwrap().name, "news.ogv");
         assert!(best_video(&files[..1]).is_none());
+    }
+
+    #[test]
+    fn an_odd_field_does_not_lose_the_answer() {
+        let r: SearchResponse = serde_json::from_str(r#"{"response": {"docs": [
+            {"identifier": "a", "title": "A", "year": [1925, 1926], "creator": {"name": "x"}},
+            {"identifier": "b", "title": "B"}
+        ]}}"#).unwrap();
+        assert_eq!(item_for(&r.response.docs[0], None, 0).subtitle.as_deref(), Some("1925"));
+        assert_eq!(r.response.docs.len(), 2);
     }
 
     #[test]
