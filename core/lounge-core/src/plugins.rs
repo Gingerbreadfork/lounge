@@ -6,7 +6,7 @@ use crate::{now_ms, screensavers, worker, Inner, PluginInfo, PluginSettingInfo};
 use lounge_plugin_api::{valid_plugin_id, Action, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
 use lounge_plugins::host::{kept, kept_results, Host, Limits, LoadedPlugin, Services, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
-use lounge_plugins::http::{host_permitted, reach, Fetcher, Reach};
+use lounge_plugins::http::{host_permitted, reach, redact, Fetcher, Reach};
 use lounge_store::PluginRow;
 use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -143,7 +143,8 @@ impl Services for CoreServices {
         self.with_store(|s| s.plugin_setting(plugin, key).ok().flatten()).flatten()
     }
     fn log(&self, plugin: &str, level: i32, message: &str) {
-        push_log(&self.logs, plugin, level, message);
+        let message = redact_urls(message);
+        push_log(&self.logs, plugin, level, &message);
         match level {
             3 => tracing::warn!("plugin {plugin}: {message}"),
             _ => tracing::info!("plugin {plugin}: {message}"),
@@ -204,14 +205,41 @@ pub(crate) fn clip_bytes(text: &str, max: usize) -> &str {
     &text[..end]
 }
 
+/// `text` with each URL in it cut down to where it leads, so a plugin's log and errors, which
+/// every paired phone can read, never carry a password or token it fetched with.
+fn redact_urls(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("://") {
+        let start = rest[..at]
+            .char_indices()
+            .rev()
+            .take_while(|(_, c)| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+            .last()
+            .map_or(at, |(i, _)| i);
+        out.push_str(&rest[..start]);
+        if start == at {
+            out.push_str("://");
+            rest = &rest[at + 3..];
+            continue;
+        }
+        let end = rest[at..].find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '<' | '>' | '`')).map_or(rest.len(), |i| at + i);
+        out.push_str(&redact(&rest[start..end]));
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 fn push_log(logs: &Mutex<HashMap<String, VecDeque<String>>>, plugin: &str, level: i32, message: &str) {
     let tag = ["debug", "info", "warn", "error"].get(level as usize).copied().unwrap_or("log");
+    let line = format!("{} {tag}: {}", now_ms(), clip_bytes(&redact_urls(message), LOG_LINE_BYTES));
     let mut logs = logs.lock();
     let q = logs.entry(plugin.to_string()).or_default();
     if q.len() >= LOG_LINES {
         q.pop_front();
     }
-    q.push_back(format!("{} {tag}: {}", now_ms(), clip_bytes(message, LOG_LINE_BYTES)));
+    q.push_back(line);
 }
 
 impl PluginManager {
@@ -743,7 +771,7 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
             inner.enqueue_job(worker::Job::PluginItems { plugin: id.to_string(), items });
         }
         Err(e) => {
-            let e = clip_bytes(&e, 1000).to_string();
+            let e = clip_bytes(&redact_urls(&e), 1000).to_string();
             tracing::warn!("plugin {id}: {e}");
             push_log(&inner.plugins.logs, id, 3, &e);
             let _ = inner.state.lock().store.plugin_set_refresh(id, now_ms(), Some(&e));
@@ -948,6 +976,16 @@ mod tests {
         assert_eq!(clip_bytes("héllo", 2), "h");
         assert_eq!(clip_bytes("héllo", 3), "hé");
         assert_eq!(clip_bytes("abc", 10), "abc");
+    }
+
+    #[test]
+    fn a_plugin_s_log_shows_where_an_address_leads_and_nothing_more() {
+        let logs = Mutex::new(HashMap::new());
+        push_log(&logs, "p", 1, "GET https://user:pw@host/path?token=x failed");
+        let line = logs.lock()["p"][0].clone();
+        assert!(line.ends_with(" info: GET https://host/path failed"), "{line}");
+        assert_eq!(redact_urls("→http://u:p@a.tv/x?k=v and \"ftp://b.tv/y#z\""), "→http://a.tv/x and \"ftp://b.tv/y\"");
+        assert_eq!(redact_urls("odd :// text, no address"), "odd :// text, no address");
     }
 
     #[test]
