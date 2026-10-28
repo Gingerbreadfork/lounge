@@ -123,12 +123,19 @@ impl Fetcher {
                     out_headers.insert(k.as_str().to_ascii_lowercase(), v.to_string());
                 }
             }
-            let bytes = response
+            // ureq's limit counts bytes before they are unpacked, so the unpacked body is capped too.
+            let mut bytes = Vec::new();
+            response
                 .body_mut()
                 .with_config()
                 .limit(self.max_body as u64)
-                .read_to_vec()
-                .map_err(|e| fetch_error(e, &url))?;
+                .reader()
+                .take(self.max_body as u64 + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|e| fetch_error(e.into(), &url))?;
+            if bytes.len() > self.max_body {
+                return Err(fetch_error(ureq::Error::BodyExceedsLimit(self.max_body as u64), &url));
+            }
             return Ok(match String::from_utf8(bytes) {
                 Ok(text) => HttpResponse { status, headers: out_headers, body: text, body_base64: None },
                 Err(e) => HttpResponse { status, headers: out_headers, body: String::new(), body_base64: Some(base64_encode(e.as_bytes())) },
@@ -187,8 +194,12 @@ impl Fetcher {
                     if n == 0 {
                         break;
                     }
-                    std::io::Write::write_all(&mut file, &buf[..n])?;
+                    // The reader's limit counts packed bytes; what lands on disk is held to `max`.
                     total += n as u64;
+                    if total > max as u64 {
+                        return Err(fetch_error(ureq::Error::BodyExceedsLimit(max as u64), &url));
+                    }
+                    std::io::Write::write_all(&mut file, &buf[..n])?;
                 }
                 Ok(total)
             })();
@@ -573,5 +584,38 @@ mod tests {
         let req = HttpRequest::get(format!("http://127.0.0.1:{first_port}/start")).header("X-Plex-Token", "secret");
         let r = fetcher.fetch(&req, &|_| true).unwrap();
         assert_eq!(r.body, "clean");
+    }
+
+    #[test]
+    fn a_compressed_body_is_capped_at_its_unpacked_size() {
+        // Zeros pack down to far less than the cap, so only the unpacked size can exceed it.
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+        std::io::Write::write_all(&mut gz, &vec![0u8; 1 << 20]).unwrap();
+        let packed = gz.finish().unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for _ in 0..2 {
+                if let Ok((mut s, _)) = listener.accept() {
+                    let mut buf = [0u8; 2048];
+                    let _ = s.read(&mut buf);
+                    let head = format!("HTTP/1.1 200 OK\r\ncontent-encoding: gzip\r\ncontent-length: {}\r\nconnection: close\r\n\r\n", packed.len());
+                    let _ = std::io::Write::write_all(&mut s, head.as_bytes());
+                    let _ = std::io::Write::write_all(&mut s, &packed);
+                }
+            }
+        });
+        let mut fetcher = Fetcher::new();
+        fetcher.max_body = 64 * 1024;
+        let Err(err) = fetcher.fetch(&HttpRequest::get(format!("http://127.0.0.1:{port}/")), &|_| true) else {
+            panic!("an oversized body was read");
+        };
+        assert!(err.to_string().contains("body is larger than"), "{err}");
+        let dir = tempfile::tempdir().unwrap();
+        let Err(err) = fetcher.download(&format!("http://127.0.0.1:{port}/art"), dir.path(), 64 * 1024, Duration::from_secs(5), &|_| true) else {
+            panic!("an oversized download was kept");
+        };
+        assert!(err.to_string().contains("body is larger than"), "{err}");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
     }
 }

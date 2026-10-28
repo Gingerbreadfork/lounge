@@ -1101,6 +1101,7 @@ name = "lounge-plugins"
 version = "0.4.2"
 dependencies = [
  "ed25519-dalek",
+ "flate2",
  "hex",
  "lounge-plugin-api",
  "parking_lot",
