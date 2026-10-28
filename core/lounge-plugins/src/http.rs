@@ -166,6 +166,9 @@ impl Fetcher {
         let deadline = Instant::now() + timeout.min(DEFAULT_TIMEOUT);
         let mut url = url.to_string();
         for _hop in 0..5 {
+            if !is_web(&url) {
+                return Err(PluginError::Denied(format!("{} is not an http or https link", redact(&url))));
+            }
             let host = host_of(&url).ok_or_else(|| PluginError::Fetch(format!("bad url {}", redact(&url))))?;
             if !allowed(&host) {
                 return Err(PluginError::Denied(format!("host {host} is not in the plugin's allow list")));
@@ -259,11 +262,14 @@ pub struct Reach {
     pub home: Vec<String>,
     /// Whether any home-network literal or `.local` name may lead there as well.
     pub any_home_name: bool,
+    /// Whether every name may lead into the home network, link-local addresses aside: for a link
+    /// a person gave, not one a plugin builds.
+    pub whole_home: bool,
 }
 
 /// Where a plugin's fetches may lead besides the public internet, with its settings filled in.
 pub fn reach(manifest: &Manifest, setting: &dyn Fn(&str) -> Option<String>) -> Reach {
-    Reach { this_device: local_hosts(manifest), home: manifest.home_hosts(setting), any_home_name: manifest.reaches_local_network() }
+    Reach { this_device: local_hosts(manifest), home: manifest.home_hosts(setting), any_home_name: manifest.reaches_local_network(), whole_home: false }
 }
 
 /// Hosts that may lead back into the TV: only loopback names and address literals the plugin
@@ -308,13 +314,14 @@ impl Resolver for GuardedResolver {
         if self.reach.this_device.contains(&host) {
             return Ok(addrs);
         }
-        let home = self.reach.home.contains(&host) || (self.reach.any_home_name && is_home_name(&host));
+        let named = self.reach.home.contains(&host) || (self.reach.any_home_name && is_home_name(&host));
         let mut out = self.empty();
         let mut kept_out_of_home = false;
         for addr in addrs.iter() {
             if is_own_address(addr.ip()) {
                 continue;
             }
+            let home = named || (self.reach.whole_home && !is_link_local(addr.ip()));
             if !home && is_local_network(addr.ip()) {
                 kept_out_of_home = true;
                 continue;
@@ -341,6 +348,18 @@ pub fn is_own_address(ip: IpAddr) -> bool {
     }
     // Binding succeeds only to an address the device itself holds.
     std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).is_ok()
+}
+
+fn is_link_local(ip: IpAddr) -> bool {
+    match ip.to_canonical() {
+        IpAddr::V4(v4) => v4.is_link_local(),
+        IpAddr::V6(v6) => v6.is_unicast_link_local(),
+    }
+}
+
+/// An http or https link, the only kind a download follows.
+fn is_web(url: &str) -> bool {
+    url.split_once("://").is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https"))
 }
 
 /// `url` without a user name and password, and those as an `Authorization: Basic` value. ureq
@@ -565,6 +584,53 @@ mod tests {
         });
         let r = named.fetch(&HttpRequest::get(format!("http://127.0.0.1:{port}/")), &|_| true).unwrap();
         assert_eq!(r.body, "ok");
+    }
+
+    #[test]
+    fn a_link_a_person_gave_reaches_the_home_network_but_never_this_device() {
+        let dir = tempfile::tempdir().unwrap();
+        let fail = |reach: Reach, url: &str| match Fetcher::guarded(reach).download(url, dir.path(), 1024, Duration::from_millis(500), &|_| true) {
+            Ok(_) => panic!("{url} was downloaded"),
+            Err(e) => e.to_string(),
+        };
+        let given = Reach { whole_home: true, ..Reach::default() };
+
+        // Loopback is refused by any name, before a request is made.
+        let tv = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        tv.set_nonblocking(true).unwrap();
+        let port = tv.local_addr().unwrap().port();
+        for url in [format!("http://127.0.0.1:{port}/a.lgp"), format!("http://localhost:{port}/a.lgp"), format!("http://[::1]:{port}/a.lgp")] {
+            let err = fail(given.clone(), &url);
+            assert!(err.contains("this device"), "{url}: {err}");
+        }
+
+        // A home address is tried and simply does not answer; a link-local one is never tried.
+        let err = fail(given.clone(), "http://192.168.77.1:9/a.lgp");
+        assert!(!err.contains("home network"), "{err}");
+        let err = fail(given.clone(), "http://169.254.77.1:9/a.lgp");
+        assert!(err.contains("home network"), "{err}");
+        let err = fail(given.clone(), "file:///etc/passwd");
+        assert!(err.contains("not an http or https link"), "{err}");
+
+        // Redirects keep to the same rules.
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let server_port = server.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for location in ["ftp://example.com/a.lgp".to_string(), format!("http://localhost:{port}/a.lgp")] {
+                if let Ok((mut s, _)) = server.accept() {
+                    let mut buf = [0u8; 2048];
+                    let _ = s.read(&mut buf);
+                    let reply = format!("HTTP/1.1 302 Found\r\nlocation: {location}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n");
+                    let _ = std::io::Write::write_all(&mut s, reply.as_bytes());
+                }
+            }
+        });
+        let test_server = Reach { this_device: vec!["127.0.0.1".into()], ..given };
+        let err = fail(test_server.clone(), &format!("http://127.0.0.1:{server_port}/one"));
+        assert!(err.contains("not an http or https link"), "{err}");
+        let err = fail(test_server, &format!("http://127.0.0.1:{server_port}/two"));
+        assert!(err.contains("this device"), "{err}");
+        assert!(tv.accept().is_err(), "a request reached this device");
     }
 
     #[test]

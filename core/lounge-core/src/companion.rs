@@ -3,6 +3,7 @@
 use crate::{engine, now_ms, plugins, worker, CompanionStatus, Inner, PairingInfo};
 use lounge_companion::{CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, RowRef};
 use lounge_graph::Layout;
+use lounge_plugins::http::{Fetcher, Reach};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
@@ -302,10 +303,31 @@ impl CompanionActions for CoreActions {
 
     fn download(&self, url: &str, into: &Path) -> Result<(), String> {
         let dir = into.parent().ok_or("bad path")?;
-        // A bundle the user asked for by address, from the phone: any host they named is fine.
-        let fetched = lounge_plugins::http::Fetcher::new()
+        // A bundle the person linked from the phone may come from the internet or the home
+        // network, but the link must not reach the TV's own services.
+        let reach = Reach { whole_home: true, ..Reach::default() };
+        let fetched = Fetcher::guarded(reach)
             .download(url, dir, 16 * 1024 * 1024, std::time::Duration::from_secs(20), &|_| true)
             .map_err(|e| e.to_string())?;
         std::fs::rename(&fetched.path, into).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_link_to_install_from_never_reaches_the_tv_itself() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let dir = tempfile::tempdir().unwrap();
+        let actions = CoreActions { inner: Weak::new() };
+        for url in [format!("http://127.0.0.1:{port}/a.lgp"), format!("http://localhost:{port}/a.lgp")] {
+            let err = actions.download(&url, &dir.path().join("a.lgp")).unwrap_err();
+            assert!(err.contains("this device"), "{url}: {err}");
+        }
+        assert!(listener.accept().is_err(), "a request reached the TV");
     }
 }
