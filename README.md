@@ -168,7 +168,8 @@ from the phone or the TV's settings.
 
 | Plugin | What it adds |
 |---|---|
-| Jellyfin, Emby, Plex | Your server's resume points in Continue watching, its newest additions as a row, and search |
+| Jellyfin | Your server's resume points in Continue watching, its newest additions as a row, and search, each opening on its page in the Jellyfin app |
+| Emby, Plex | Your server's resume points in Continue watching, its newest additions as a row, and search |
 | Kodi | A Kodi library: resume points, the next episodes, recent additions and Live TV, played on whichever Kodi you choose |
 | Trakt | What you paused, what is next and your watchlist, whichever service they live on |
 | IPTV | An M3U playlist as channels, with a guide from XMLTV |

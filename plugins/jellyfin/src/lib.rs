@@ -1,6 +1,6 @@
 //! Jellyfin plugin: signs in with the user's credentials, publishes resume points into Continue
 //! watching and the newest library additions into a "Recently added" row, and searches the
-//! library. Items open in the Jellyfin Android TV app.
+//! library. Items open on their page in the Jellyfin Android TV app.
 
 use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
 use serde::Deserialize;
@@ -217,15 +217,6 @@ impl Session {
         format!("{}/Items/{item_id}/Images/{kind}?{size}&quality=90", self.server)
     }
 
-    fn open(&self, item: &MediaItem) -> Action {
-        Action {
-            view: Some(format!("{}/web/index.html#!/details?id={}", self.server, item.id)),
-            fallback_launch: Some(APP_PACKAGE.into()),
-            title: Some(item.name.clone()),
-            ..Default::default()
-        }
-    }
-
     fn resume_item(&self, it: &MediaItem) -> Item {
         let is_episode = it.kind == "Episode";
         let title = if is_episode { it.series_name.clone().unwrap_or_else(|| it.name.clone()) } else { it.name.clone() };
@@ -260,7 +251,7 @@ impl Session {
             last_used_ms: it.user_data.as_ref().and_then(|u| u.last_played.as_deref()).and_then(parse_iso8601),
             poster,
             thumbnail,
-            action: self.open(it),
+            action: open(it),
             ..Default::default()
         }
     }
@@ -278,10 +269,24 @@ impl Session {
             poster: Some(self.image(if is_episode { it.series_id.as_deref().unwrap_or(&it.id) } else { &it.id }, "Primary", "maxHeight=600")),
             thumbnail: (!it.backdrop_tags.is_empty()).then(|| self.image(&it.id, "Backdrop/0", "maxWidth=1280")),
             row: Some("recent".into()),
-            action: self.open(it),
+            action: open(it),
             is_new: true,
             ..Default::default()
         }
+    }
+}
+
+/// Opens the item's page in the Jellyfin app, whose start screen takes an item id the way the
+/// app's own Watch Next entries pass it.
+fn open(item: &MediaItem) -> Action {
+    Action {
+        view: Some(format!(
+            "intent:#Intent;component={APP_PACKAGE}/org.jellyfin.androidtv.ui.startup.StartupActivity;S.ItemId={};end",
+            url_encode(&item.id)
+        )),
+        fallback_launch: Some(APP_PACKAGE.into()),
+        title: Some(item.name.clone()),
+        ..Default::default()
     }
 }
 
@@ -336,8 +341,19 @@ mod tests {
         assert_eq!(item.duration_ms, Some(1_800_000));
         assert_eq!(item.thumbnail.as_deref(), Some("http://jf:8096/Items/e1/Images/Primary?maxWidth=960&quality=90"));
         assert!(item.poster.unwrap().contains("/Items/s1/Images/Primary"));
+        assert_eq!(
+            item.action.view.as_deref(),
+            Some("intent:#Intent;component=org.jellyfin.androidtv/org.jellyfin.androidtv.ui.startup.StartupActivity;S.ItemId=e1;end")
+        );
         assert_eq!(item.action.fallback_launch.as_deref(), Some(APP_PACKAGE));
         assert_eq!(url_encode("the bear & co"), "the+bear+%26+co");
+    }
+
+    #[test]
+    fn an_item_id_cannot_add_to_the_intent() {
+        let it = MediaItem { id: "e1;component=x/.Y;end".into(), ..Default::default() };
+        let view = open(&it).view.unwrap();
+        assert!(view.ends_with(";S.ItemId=e1%3Bcomponent%3Dx%2F.Y%3Bend;end"), "{view}");
     }
 
     #[test]
