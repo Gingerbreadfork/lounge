@@ -80,10 +80,10 @@ impl sdk::Plugin for Archive {
             sdk::warn!("unknown action {action}");
             "This tile is out of date. Refresh the plugin, then try again.".to_string()
         })?;
-        let meta: Metadata = get_json(&format!("https://archive.org/metadata/{identifier}"))?;
+        let meta: Metadata = get_json(&format!("https://archive.org/metadata/{}", encode_path(identifier)))?;
         let file = best_video(&meta.files).ok_or_else(|| "This item has no playable video file".to_string())?;
         let title = meta.metadata.and_then(|m| m.title.map(|t| t.into_string())).unwrap_or_else(|| identifier.to_string());
-        Ok(Action::play(format!("https://archive.org/download/{identifier}/{}", encode_path(&file.name)), title))
+        Ok(Action::play(format!("https://archive.org/download/{}/{}", encode_path(identifier), encode_path(&file.name)), title))
     }
 }
 
