@@ -846,13 +846,13 @@ private fun SheetContent(
             firstFocus = first,
         )
         Overlay.Channels -> {
-            var channels by remember { mutableStateOf(emptyList<tv.lounge.core.ChannelInfo>()) }
+            var channels by remember { mutableStateOf<List<tv.lounge.core.ChannelInfo>?>(null) }
             LaunchedEffect(Unit) { channels = withContext(Dispatchers.IO) { core.availableChannels() } }
             ChannelsSheet(
                 channels = channels,
                 onToggle = { ch ->
                     core.command(if (ch.enabled) LayoutCommand.DisableChannel(ch.id) else LayoutCommand.EnableChannel(ch.id))
-                    channels = channels.map { if (it.id == ch.id) it.copy(enabled = !it.enabled) else it }
+                    channels = channels?.map { if (it.id == ch.id) it.copy(enabled = !it.enabled) else it }
                 },
                 firstFocus = first,
             )

@@ -525,17 +525,18 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
     )
 }
 
-/** Rows other apps publish to the TV provider; each can be shown on the home screen. */
+/**
+ * Rows other apps publish to the TV provider; each can be shown on the home screen. [channels] is
+ * null until read, and nothing takes focus before then.
+ */
 @Composable
-fun ChannelsSheet(channels: List<ChannelInfo>, onToggle: (ChannelInfo) -> Unit, firstFocus: FocusRequester) {
+fun ChannelsSheet(channels: List<ChannelInfo>?, onToggle: (ChannelInfo) -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
     SheetHeading("Channels from apps", "Turn on the ones you want as rows on your home screen.")
-    if (channels.isEmpty()) {
-        Text("No app has published a channel yet.", style = LoungeTheme.typography.meta, color = colors.dust)
-        Spacer(Modifier.height(24.dp))
-        SheetRow(icon = LoungeIcons.Info, title = "Nothing to turn on", onClick = {}, focusRequester = firstFocus)
-    } else {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    when {
+        channels == null -> Text("Loading…", style = LoungeTheme.typography.meta, color = colors.dust)
+        channels.isEmpty() -> Text("No app has published a channel yet.", style = LoungeTheme.typography.meta, color = colors.dust)
+        else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             channels.forEachIndexed { i, ch ->
                 SheetRow(
                     icon = LoungeIcons.Tv,
@@ -549,6 +550,8 @@ fun ChannelsSheet(channels: List<ChannelInfo>, onToggle: (ChannelInfo) -> Unit, 
         }
     }
     SheetFootnote("Apps decide what goes in their channels; Lounge only chooses which to show.")
+    // The list can arrive after the sheet's own request for focus has given up.
+    LaunchedEffect(channels != null) { if (!channels.isNullOrEmpty()) firstFocus.requestWhenReady() }
 }
 
 @Composable
