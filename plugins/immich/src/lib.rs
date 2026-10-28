@@ -22,7 +22,7 @@ impl sdk::Plugin for Immich {
             description: "An album shared from Immich becomes the screensaver.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Wallpaper],
-            fetch_hosts: vec!["$link".into(), "*".into()],
+            fetch_hosts: vec!["$link".into()],
             refresh_minutes: 6 * 60,
             rows: vec![],
             settings: vec![

@@ -36,7 +36,7 @@ impl sdk::Plugin for Jellyfin {
             description: "Continue watching, recently added and favourites from your Jellyfin server.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
-            fetch_hosts: vec!["$server".into(), "*".into()],
+            fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
             rows: vec![
                 RowSpec { id: "recent".into(), title: "Recently added on Jellyfin".into(), style: RowStyle::Poster },

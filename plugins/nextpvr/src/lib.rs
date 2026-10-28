@@ -33,7 +33,7 @@ impl sdk::Plugin for NextPvr {
             description: "Live channels, the guide and your recordings from a NextPVR server.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
-            fetch_hosts: vec!["$server".into(), "*".into()],
+            fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
             rows: vec![RowSpec { id: "recordings".into(), title: "Recordings".into(), style: RowStyle::Landscape }],
             settings: vec![
