@@ -159,9 +159,10 @@ A plugin is a WebAssembly module in a signed `.lgp` bundle. It runs inside the c
 budget and a memory cap, with no access to Android, the file system, sockets or other plugins:
 it can only fetch from the hosts its manifest names, keep a small private store, read its
 settings and log. What it publishes becomes tiles, Stage spotlights, channels in the guide or
-rows of its own. The TV pins each publisher's key on first install and refuses an update signed
-by anyone else. Any language that targets core WebAssembly will do: the interface is eight
-imports and six exports with JSON in between.
+rows of its own. The TV pins each publisher's key when you install a plugin and refuses an
+update signed by anyone else; the plugins built into the APK are vouched for by the APK
+itself. Any language that targets core WebAssembly will do: the interface is eight imports
+and six exports with JSON in between.
 
 Fifteen ship in the APK, written against the same SDK as anyone else's. Turn on the ones you use
 from the phone or the TV's settings.

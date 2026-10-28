@@ -13,8 +13,9 @@ The release stops before it builds unless:
 - the repository has the plugin publisher key as `LOUNGE_PUBLISHER_KEY`, the contents of
   `~/.config/lounge/publisher.key`.
 
-Without the keys, a debug-signed APK would not install over a signed one, and plugins signed
-with another key would be refused by every TV that pinned yours. Store the publisher key with:
+Without the keys, a debug-signed APK would not install over a signed one, and the built-in
+plugins would carry a key made on the spot, which every TV would then pin instead of yours.
+Store the publisher key with:
 
 ```sh
 gh secret set LOUNGE_PUBLISHER_KEY < ~/.config/lounge/publisher.key

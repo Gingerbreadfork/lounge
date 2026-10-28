@@ -273,7 +273,12 @@ impl PluginManager {
         let installed: Option<Manifest> = existing.and_then(|prev| serde_json::from_str(&prev.manifest_json).ok());
         if let Some(prev) = existing {
             if prev.publisher != bundle.publisher_hex() {
-                return Err(format!("{} is signed by a different publisher than the installed version", bundle.manifest.name));
+                // The APK vouches for the plugins it carries, so its copy replaces one an earlier
+                // APK installed even when another machine signed it.
+                if !(built_in && prev.built_in) {
+                    return Err(format!("{} is signed by a different publisher than the installed version", bundle.manifest.name));
+                }
+                tracing::info!("built-in plugin {} changed publisher from {} to {}", bundle.manifest.id, prev.publisher, bundle.publisher_hex());
             }
             // A copy from the phone may be newer than the one bundled with Lounge; neither rolls back.
             if let Some(old) = &installed

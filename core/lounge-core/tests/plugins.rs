@@ -119,8 +119,13 @@ fn bundle(dir: &std::path::Path) -> std::path::PathBuf {
 }
 
 fn signed(dir: &std::path::Path, manifest: &str, wasm: &[u8]) -> std::path::PathBuf {
+    signed_by(7, dir, manifest, wasm)
+}
+
+/// As `signed`, by the publisher whose key is `seed` repeated.
+fn signed_by(seed: u8, dir: &std::path::Path, manifest: &str, wasm: &[u8]) -> std::path::PathBuf {
     use ed25519_dalek::{Signer, SigningKey};
-    let key = SigningKey::from_bytes(&[7u8; 32]);
+    let key = SigningKey::from_bytes(&[seed; 32]);
     let sig = key.sign(&lounge_plugins::bundle::Bundle::signed_bytes(manifest.as_bytes(), wasm));
     let path = dir.join("testdvr.lgp");
     lounge_plugins::bundle::Bundle::write(&path, manifest.as_bytes(), wasm, &key.verifying_key().to_bytes(), &sig.to_bytes()).unwrap();
@@ -247,4 +252,41 @@ fn an_update_never_rolls_back_and_is_turned_off_when_it_asks_for_more() {
     let wider = core.install_plugin(version("3", r#""a.example","b.example""#), false).unwrap();
     assert!(!wider.enabled);
     assert!(core.plugin_log(ID.into()).iter().any(|l| l.contains("b.example")));
+}
+
+#[test]
+fn only_a_built_in_plugin_follows_a_new_apk_to_another_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = CoreConfig {
+        data_dir: dir.path().join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::A,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    let core = Core::open(config, Arc::new(Recorder::default())).unwrap();
+    let bundle = |id: &str, version: &str, seed: u8| {
+        let manifest = format!(r#"{{"id":"{id}","name":"Test DVR","version":"{version}","kinds":["epg"],"fetch_hosts":[]}}"#);
+        signed_by(seed, dir.path(), &manifest, &module(&manifest, "[]", "[]")).to_string_lossy().into_owned()
+    };
+
+    // One that came with Lounge takes the next APK's copy, signed elsewhere, and stays on.
+    let first = core.install_plugin(bundle(ID, "1", 7), true).unwrap();
+    core.set_plugin_enabled(ID.into(), true);
+    let moved = core.install_plugin(bundle(ID, "1.1", 8), true).unwrap();
+    assert_ne!(moved.publisher, first.publisher);
+    assert_eq!(moved.version, "1.1");
+    assert!(moved.enabled && moved.built_in);
+    // Nobody else's copy replaces it.
+    assert!(core.install_plugin(bundle(ID, "2", 9), false).is_err());
+
+    // One the person installed is never replaced by a copy signed by someone else.
+    let theirs = "tv.lounge.theirs";
+    core.install_plugin(bundle(theirs, "1", 7), false).unwrap();
+    assert!(core.install_plugin(bundle(theirs, "2", 8), true).is_err());
+    assert!(core.install_plugin(bundle(theirs, "2", 8), false).is_err());
+    assert!(core.install_plugin(bundle(theirs, "2", 7), false).is_ok());
 }
