@@ -504,11 +504,20 @@ impl Graph {
         v
     }
 
-    /// Pictures plugins published for the screensaver, by weight then recency.
+    /// Pictures plugins published for the screensaver, each source's by weight then recency, the
+    /// sources taking turns so one with many pictures cannot crowd out the rest.
     pub fn wallpapers(&self) -> Vec<&Item> {
         let mut v: Vec<&Item> = self.items.values().filter(|it| it.kind == ItemKind::Wallpaper && !self.is_hidden(&it.id)).collect();
         v.sort_by(|a, b| b.weight.cmp(&a.weight).then_with(|| b.added_ms.cmp(&a.added_ms)).then_with(|| a.id.cmp(&b.id)));
-        v
+        let mut by_source: std::collections::BTreeMap<&str, std::collections::VecDeque<&Item>> = Default::default();
+        for it in v {
+            by_source.entry(it.source.as_str()).or_default().push_back(it);
+        }
+        let mut out = Vec::new();
+        while by_source.values().any(|q| !q.is_empty()) {
+            out.extend(by_source.values_mut().filter_map(|q| q.pop_front()));
+        }
+        out
     }
 
     pub fn count_source(&self, source: &str) -> usize {
@@ -652,6 +661,20 @@ mod tests {
         g.hide("plugin:x:c");
         let ids: Vec<&str> = g.wallpapers().iter().map(|it| it.id.as_str()).collect();
         assert_eq!(ids, vec!["plugin:x:b", "plugin:x:a"]);
+    }
+
+    #[test]
+    fn wallpaper_sources_take_turns() {
+        let mut g = Graph::new(Layout::default());
+        for (source, n) in [("plugin:immich", 5), ("plugin:art", 2)] {
+            for i in 0..n {
+                let mut it = Item::content(&format!("{source}:{i}"), ItemKind::Wallpaper, source, "Picture", DeepLink::None);
+                it.weight = 300 - i;
+                g.upsert(it);
+            }
+        }
+        let ids: Vec<&str> = g.wallpapers().iter().map(|it| it.id.as_str()).collect();
+        assert_eq!(ids, ["plugin:art:0", "plugin:immich:0", "plugin:art:1", "plugin:immich:1", "plugin:immich:2", "plugin:immich:3", "plugin:immich:4"]);
     }
 
     #[test]
