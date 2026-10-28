@@ -93,6 +93,9 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
         android.util.Log.i("Lounge", "startup: application onCreate took ${android.os.SystemClock.uptimeMillis() - startedAt} ms")
     }
 
+    /** Whether the core has opened, or failed to, so [awaitCoreOrNull] returns at once. */
+    val coreSettled: Boolean get() = coreReady.count == 0L
+
     /** The core, opened at process start, or null if it failed to open; blocks only if the caller got here first. */
     fun awaitCoreOrNull(): CoreClient? {
         val t0 = android.os.SystemClock.uptimeMillis()

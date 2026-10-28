@@ -28,6 +28,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import tv.lounge.design.LocalUiSounds
 import tv.lounge.design.UiSounds
 import androidx.core.view.WindowCompat
@@ -98,13 +102,27 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this) { }
 
         tv.lounge.feature.home.startupReference = { activityStartedAt }
-        val tier = DeviceTierDetector.detect(this)
         // The preferences read at process start, so the first frame is already in the chosen
         // theme and the window behind it matches.
         val app = application as LoungeApplication
         val startPrefs = app.startPrefs ?: Prefs.UiPrefs()
-        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(LoungeThemeVariant.valueOf(startPrefs.theme.name).colors().velvet.toArgbInt()))
-        core = app.awaitCoreOrNull() ?: return showRecovery(app, startPrefs)
+        val velvet = LoungeThemeVariant.valueOf(startPrefs.theme.name).colors().velvet
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(velvet.toArgbInt()))
+        // The core opens on its own thread from process start and is usually ready by now. While a
+        // long migration holds it up, the velvet shows and the main thread stays free for input.
+        fun show(opened: CoreClient?) = if (opened != null) showHome(opened, startPrefs) else showRecovery(app, startPrefs)
+        if (app.coreSettled) {
+            show(app.awaitCoreOrNull())
+        } else {
+            setContent { Box(Modifier.fillMaxSize().background(velvet)) }
+            lifecycleScope.launch { show(withContext(Dispatchers.IO) { app.awaitCoreOrNull() }) }
+        }
+    }
+
+    /** Shows the home on [opened] and starts everything that feeds it. */
+    private fun showHome(opened: CoreClient, startPrefs: Prefs.UiPrefs) {
+        core = opened
+        val tier = DeviceTierDetector.detect(this)
         setContent {
             val uiPrefs by prefs.all.collectAsState(initial = startPrefs)
             val reduced = uiPrefs.reducedMotion ?: systemReducedMotion()
@@ -126,7 +144,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        android.util.Log.i("Lounge", "startup: setContent returned +${android.os.SystemClock.uptimeMillis() - t0} ms after activity start")
+        android.util.Log.i("Lounge", "startup: setContent returned +${android.os.SystemClock.uptimeMillis() - activityStartedAt} ms after activity start")
 
         // Sound decoding and re-indexing wait for the persisted snapshot to draw; the collectors
         // then start one at a time. A first run with nothing persisted starts them at once.
@@ -239,6 +257,8 @@ class MainActivity : ComponentActivity() {
                     .debounce(1500).collect { collectTvNow() }
             }
         }
+        // A core that arrived after Lounge came to the front missed its resume.
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) resumeHome()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -393,8 +413,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // The recovery screen does not count as the home being in front, so a quiet update can still install.
-        if (!::core.isInitialized) return
+        // Neither the recovery screen nor the wait for the core counts as the home being in front,
+        // so a quiet update can still install.
+        if (::core.isInitialized) resumeHome()
+    }
+
+    private fun resumeHome() {
         core.setScreenState(true)
         updates.noteForeground(true)
         core.setUtcOffsetMinutes(TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
