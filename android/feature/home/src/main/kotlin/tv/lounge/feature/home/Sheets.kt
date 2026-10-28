@@ -132,12 +132,28 @@ fun <K : Any> RightSheet(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp),
                 ) {
+                    // The trap only holds focus that is already inside, so a sheet still loading or
+                    // with nothing to focus keeps it on this anchor instead of the home behind.
+                    val anchor = remember { FocusRequester() }
+                    var contentHasFocus by remember { mutableStateOf(false) }
+                    Box(Modifier.size(1.dp).focusRequester(anchor).focusProperties { canFocus = !contentHasFocus }.focusable())
                     Swap(key, rise = 0.dp, shiftX = if (forward) 8.dp else (-8).dp, durationMs = 180) { shown ->
                         val firstFocus = remember { FocusRequester() }
-                        Column { content(firstFocus, shown) }
-                        // A sheet coming back mid-swap is still composed, so focus follows the live copy.
                         val live = LocalSwapSlotActive.current.value
-                        LaunchedEffect(live) { if (live) firstFocus.requestWhenReady() }
+                        val scope = rememberCoroutineScope()
+                        Column(
+                            Modifier.onFocusChanged {
+                                contentHasFocus = it.hasFocus
+                                if (!it.hasFocus && live && !leaving) scope.launch { anchor.requestWhenReady() }
+                            },
+                        ) { content(firstFocus, shown) }
+                        // A sheet coming back mid-swap is still composed, so focus follows the live copy.
+                        LaunchedEffect(live) {
+                            if (live) {
+                                anchor.requestWhenReady()
+                                firstFocus.requestWhenReady()
+                            }
+                        }
                     }
                 }
             }
