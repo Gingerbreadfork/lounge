@@ -313,6 +313,7 @@ impl PluginManager {
             installed_ms: now_ms(),
             last_refresh_ms: None,
             last_error: None,
+            last_success_ms: None,
         };
         Ok((row, bundle.manifest))
     }
@@ -688,7 +689,7 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
     let (entry, since) = {
         let state = inner.state.lock();
         let Some(entry) = state.plugins.iter().find(|p| p.id == id && p.enabled).cloned() else { return };
-        let since = state.store.plugins().ok().and_then(|rows| rows.into_iter().find(|r| r.id == id).and_then(|r| r.last_refresh_ms));
+        let since = state.store.plugins().ok().and_then(|rows| rows.into_iter().find(|r| r.id == id).and_then(|r| r.last_success_ms));
         (entry, since)
     };
     let ctx = RefreshContext {

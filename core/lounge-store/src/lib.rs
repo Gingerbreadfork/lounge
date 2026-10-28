@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS plugins (
     built_in INTEGER NOT NULL DEFAULT 0,
     installed_ms INTEGER NOT NULL,
     last_refresh_ms INTEGER,
-    last_error TEXT
+    last_error TEXT,
+    last_success_ms INTEGER
 );
 CREATE TABLE IF NOT EXISTS plugin_kv (
     plugin TEXT NOT NULL,
@@ -106,7 +107,7 @@ CREATE TABLE IF NOT EXISTS usage_hours (
 );
 "#;
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 pub struct Store {
     conn: Connection,
@@ -122,8 +123,11 @@ pub struct PluginRow {
     pub enabled: bool,
     pub built_in: bool,
     pub installed_ms: i64,
+    /// When the last refresh finished, whether it worked or not.
     pub last_refresh_ms: Option<i64>,
     pub last_error: Option<String>,
+    /// When the last refresh that worked finished.
+    pub last_success_ms: Option<i64>,
 }
 
 impl Store {
@@ -187,10 +191,27 @@ impl Store {
             // Stage's light at 4); let it re-prepare.
             self.conn.execute("DELETE FROM artwork", [])?;
         }
+        if current < 5 && !self.has_column("plugins", "last_success_ms")? {
+            // A new database has the column already. In an older one, a refresh that left no
+            // error was a successful one.
+            self.conn.execute_batch(
+                "ALTER TABLE plugins ADD COLUMN last_success_ms INTEGER;
+                 UPDATE plugins SET last_success_ms = last_refresh_ms WHERE last_error IS NULL;",
+            )?;
+        }
         if current < SCHEMA_VERSION {
             self.set_meta("schema_version", &SCHEMA_VERSION.to_string())?;
         }
         Ok(())
+    }
+
+    fn has_column(&self, table: &str, column: &str) -> Result<bool> {
+        let n: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+            params![table, column],
+            |r| r.get(0),
+        )?;
+        Ok(n > 0)
     }
 
     pub fn db_bytes(&self) -> u64 {
@@ -444,18 +465,18 @@ impl Store {
 
     pub fn plugin_upsert(&self, row: &PluginRow) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO plugins(id, manifest, publisher, enabled, built_in, installed_ms, last_refresh_ms, last_error)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "INSERT INTO plugins(id, manifest, publisher, enabled, built_in, installed_ms, last_refresh_ms, last_error, last_success_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(id) DO UPDATE SET manifest = excluded.manifest, publisher = excluded.publisher, built_in = excluded.built_in,
-             last_refresh_ms = NULL, last_error = NULL",
-            params![row.id, row.manifest_json, row.publisher, row.enabled as i64, row.built_in as i64, row.installed_ms, row.last_refresh_ms, row.last_error],
+             last_refresh_ms = NULL, last_error = NULL, last_success_ms = NULL",
+            params![row.id, row.manifest_json, row.publisher, row.enabled as i64, row.built_in as i64, row.installed_ms, row.last_refresh_ms, row.last_error, row.last_success_ms],
         )?;
         Ok(())
     }
 
     pub fn plugins(&self) -> Result<Vec<PluginRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, manifest, publisher, enabled, built_in, installed_ms, last_refresh_ms, last_error FROM plugins ORDER BY installed_ms",
+            "SELECT id, manifest, publisher, enabled, built_in, installed_ms, last_refresh_ms, last_error, last_success_ms FROM plugins ORDER BY installed_ms",
         )?;
         let rows = stmt.query_map([], |r| {
             Ok(PluginRow {
@@ -467,6 +488,7 @@ impl Store {
                 installed_ms: r.get(5)?,
                 last_refresh_ms: r.get(6)?,
                 last_error: r.get(7)?,
+                last_success_ms: r.get(8)?,
             })
         })?;
         let mut out = Vec::new();
@@ -491,8 +513,13 @@ impl Store {
         Ok(())
     }
 
+    /// Record a finished refresh; only one without an error moves `last_success_ms`.
     pub fn plugin_set_refresh(&self, id: &str, at_ms: i64, error: Option<&str>) -> Result<()> {
-        self.conn.execute("UPDATE plugins SET last_refresh_ms = ?2, last_error = ?3 WHERE id = ?1", params![id, at_ms, error])?;
+        self.conn.execute(
+            "UPDATE plugins SET last_refresh_ms = ?2, last_error = ?3,
+             last_success_ms = CASE WHEN ?3 IS NULL THEN ?2 ELSE last_success_ms END WHERE id = ?1",
+            params![id, at_ms, error],
+        )?;
         Ok(())
     }
 
@@ -722,7 +749,7 @@ mod tests {
     #[test]
     fn plugin_tables() {
         let mut s = Store::open_in_memory().unwrap();
-        let row = PluginRow { id: "tv.lounge.iptv".into(), manifest_json: "{}".into(), publisher: "ab".into(), enabled: false, built_in: true, installed_ms: 1, last_refresh_ms: None, last_error: None };
+        let row = PluginRow { id: "tv.lounge.iptv".into(), manifest_json: "{}".into(), publisher: "ab".into(), enabled: false, built_in: true, installed_ms: 1, last_refresh_ms: None, last_error: None, last_success_ms: None };
         s.plugin_upsert(&row).unwrap();
         s.plugin_set_enabled("tv.lounge.iptv", true).unwrap();
         s.plugin_setting_set("tv.lounge.iptv", "playlist_url", Some("http://x")).unwrap();
@@ -736,6 +763,47 @@ mod tests {
         s.plugin_remove("tv.lounge.iptv").unwrap();
         assert!(s.plugins().unwrap().is_empty());
         assert!(s.plugin_kv_get("tv.lounge.iptv", "token").unwrap().is_none());
+    }
+
+    #[test]
+    fn a_failed_refresh_keeps_the_last_success() {
+        let s = Store::open_in_memory().unwrap();
+        let row = PluginRow { id: "p".into(), manifest_json: "{}".into(), publisher: "ab".into(), enabled: true, built_in: false, installed_ms: 1, last_refresh_ms: None, last_error: None, last_success_ms: None };
+        s.plugin_upsert(&row).unwrap();
+        s.plugin_set_refresh("p", 10, None).unwrap();
+        s.plugin_set_refresh("p", 20, Some("offline")).unwrap();
+        let got = &s.plugins().unwrap()[0];
+        assert_eq!((got.last_refresh_ms, got.last_success_ms), (Some(20), Some(10)));
+        assert_eq!(got.last_error.as_deref(), Some("offline"));
+        s.plugin_set_refresh("p", 30, None).unwrap();
+        let got = &s.plugins().unwrap()[0];
+        assert_eq!((got.last_refresh_ms, got.last_success_ms, got.last_error.as_deref()), (Some(30), Some(30), None));
+    }
+
+    #[test]
+    fn an_older_database_gains_the_last_success() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lounge.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO meta VALUES ('schema_version', '4');
+                 CREATE TABLE plugins (id TEXT PRIMARY KEY, manifest TEXT NOT NULL, publisher TEXT NOT NULL,
+                     enabled INTEGER NOT NULL DEFAULT 0, built_in INTEGER NOT NULL DEFAULT 0,
+                     installed_ms INTEGER NOT NULL, last_refresh_ms INTEGER, last_error TEXT);
+                 INSERT INTO plugins VALUES ('ok', '{}', 'ab', 1, 0, 1, 10, NULL);
+                 INSERT INTO plugins VALUES ('failed', '{}', 'ab', 1, 0, 2, 20, 'offline');",
+            )
+            .unwrap();
+        }
+        let s = Store::open(&path).unwrap();
+        let rows = s.plugins().unwrap();
+        assert_eq!(rows[0].last_success_ms, Some(10));
+        assert_eq!(rows[1].last_success_ms, None);
+        assert_eq!(s.meta("schema_version").unwrap().as_deref(), Some("5"));
+        drop(s);
+        assert!(Store::open(&path).is_ok());
     }
 
     #[test]
