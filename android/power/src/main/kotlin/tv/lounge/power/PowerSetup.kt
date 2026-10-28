@@ -158,8 +158,8 @@ class PowerSetup(private val context: Context) {
 
     private val home = ComponentName(context.packageName, "tv.lounge.launcher.MainActivity").flattenToShortString()
 
-    val homeRole = PowerAction("home", "Make Lounge the home screen", "Pressing Home brings Lounge up; the stock launcher stays installed.", "cmd package set-home-activity $home")
-    val tvListings = PowerAction("tv_listings", "Allow TV listings", "Lets Lounge read Watch Next, channels and the guide.", "pm grant ${context.packageName} android.permission.READ_TV_LISTINGS")
+    val homeRole = PowerAction("home", "Make Lounge the home screen", "Pressing Home brings Lounge up; the stock launcher stays installed.", homeCommand(home, userId))
+    val tvListings = PowerAction("tv_listings", "Allow TV listings", "Lets Lounge read Watch Next, channels and the guide.", grantCommand(context.packageName, "android.permission.READ_TV_LISTINGS", userId))
     val notificationAccess = PowerAction("notifications", "Allow Now playing", "Lets Lounge see what is playing and control it.", "cmd notification allow_listener ${context.packageName}/tv.lounge.collector.media.NowPlayingListener")
     val usageAccess = PowerAction("usage", "Allow usage access", "Sorts Your apps by what you actually open.", "appops set ${context.packageName} GET_USAGE_STATS allow")
     val quickAnimations = PowerAction("animations", "Faster system animations", "Sets the three animation scales to 0.5×.", "settings put global window_animation_scale 0.5; settings put global transition_animation_scale 0.5; settings put global animator_duration_scale 0.5")
@@ -307,6 +307,8 @@ class PowerSetup(private val context: Context) {
         /** Home screens whose whole app is off. One with only its activity off, as a finished setup leaves it, is left alone. */
         fun switchedOff(homes: List<HomeApp>): List<HomeApp> = homes.filter { !it.appEnabled }
 
+        fun homeCommand(component: String, userId: Int) = "cmd package set-home-activity --user $userId $component"
+        fun grantCommand(packageName: String, permission: String, userId: Int) = "pm grant --user $userId $packageName $permission"
         fun disableCommand(packageName: String, userId: Int) = "pm disable-user --user $userId ${shellQuote(packageName)}"
         fun enableCommand(packageName: String, userId: Int) = "pm enable --user $userId ${shellQuote(packageName)}"
 

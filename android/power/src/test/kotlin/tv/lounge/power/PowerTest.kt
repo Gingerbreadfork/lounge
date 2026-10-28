@@ -110,5 +110,7 @@ class PowerTest {
     fun homeCommandsNameTheUserAndQuoteThePackage() {
         assertEquals("pm disable-user --user 0 'com.google.android.apps.tv.launcherx'", PowerSetup.disableCommand("com.google.android.apps.tv.launcherx", 0))
         assertEquals("pm enable --user 10 'a'\\''b'", PowerSetup.enableCommand("a'b", 10))
+        assertEquals("cmd package set-home-activity --user 10 tv.lounge/.Main", PowerSetup.homeCommand("tv.lounge/.Main", 10))
+        assertEquals("pm grant --user 10 tv.lounge android.permission.READ_TV_LISTINGS", PowerSetup.grantCommand("tv.lounge", "android.permission.READ_TV_LISTINGS", 10))
     }
 }
