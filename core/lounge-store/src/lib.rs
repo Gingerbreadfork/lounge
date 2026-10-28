@@ -292,6 +292,22 @@ impl Store {
         Ok(())
     }
 
+    /// As `upsert_items` for rows of one source, with the JSON already encoded.
+    pub fn upsert_items_encoded(&mut self, source: &str, rows: &[EncodedItem], now_ms: i64) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT INTO items(id, source, kind, json, updated_ms) VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(id) DO UPDATE SET source = excluded.source, kind = excluded.kind, json = excluded.json, updated_ms = excluded.updated_ms",
+            )?;
+            for r in rows {
+                stmt.execute(params![r.id, source, r.kind, r.json, now_ms])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Insert or update items without touching the rest of their source.
     pub fn upsert_items(&mut self, items: &[Item], now_ms: i64) -> Result<()> {
         let tx = self.conn.transaction()?;

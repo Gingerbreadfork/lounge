@@ -87,13 +87,14 @@ fn the_worker_carries_on_after_a_panic() {
     });
 }
 
-/// Keeps the latest snapshot.
+/// Keeps the latest snapshot and counts them.
 #[derive(Default)]
-struct Latest(Mutex<Option<HomeSnapshot>>);
+struct Latest(Mutex<Option<HomeSnapshot>>, AtomicUsize);
 
 impl SnapshotListener for Latest {
     fn on_snapshot(&self, s: HomeSnapshot) {
         *self.0.lock() = Some(s);
+        self.1.fetch_add(1, Ordering::SeqCst);
     }
 }
 
@@ -169,4 +170,75 @@ fn pictures_that_cannot_be_written_leave_the_worker_idle() {
     std::thread::sleep(Duration::from_secs(1));
     assert_eq!(core.diagnostics().revision, settled, "the worker kept rebuilding");
     std::fs::set_permissions(&art, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// Waits for the rebuild after `revision` to publish: rebuilds run one after another, so once the
+/// one after it has started, it has finished.
+fn settle(core: &Core, revision: u64) {
+    wait_for("a rebuild", || core.diagnostics().revision > revision);
+    core.set_screen_state(true);
+    wait_for("the rebuild after it", || core.diagnostics().revision > revision + 1);
+}
+
+#[test]
+fn pictures_left_for_later_passes_end_as_a_full_ingest_would() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = CoreConfig {
+        data_dir: dir.path().join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::B,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    // Twenty icons and five banners at six a pass: the first ingest and four passes.
+    let pictures = dir.path().join("pictures");
+    std::fs::create_dir_all(&pictures).unwrap();
+    let picture = |name: String, width: u32, n: u8| {
+        let path = pictures.join(name);
+        image::RgbaImage::from_pixel(width, 64, image::Rgba([40, 80, 12 * n, 255])).save(&path).unwrap();
+        Some(path.to_string_lossy().into_owned())
+    };
+    let mut apps: Vec<AppRecord> = (0..20u8)
+        .map(|n| AppRecord {
+            icon_path: picture(format!("icon{n}.png"), 64, n),
+            banner_path: if n % 4 == 0 { picture(format!("banner{n}.png"), 128, n) } else { None },
+            ..app(&format!("app{n}.tv"))
+        })
+        .collect();
+    apps.push(app("plain.tv"));
+    let core = Core::open(config.clone(), Arc::new(Quiet)).unwrap();
+    let latest = Arc::new(Latest::default());
+    core.add_listener(latest.clone());
+    core.ingest_apps(apps.clone());
+    let icons = |s: &HomeSnapshot| s.rows.iter().find(|r| r.id == "allapps").map_or(0, |r| r.tiles.iter().filter(|t| t.icon_path.is_some()).count());
+    wait_for("every icon", || latest.0.lock().as_ref().is_some_and(|s| icons(s) == 20));
+    let passes = latest.0.lock().clone().unwrap();
+    // One for the listener's first snapshot, then at most one a pass with one to spare.
+    assert!(latest.1.load(Ordering::SeqCst) <= 1 + 5 + 1, "{} snapshots", latest.1.load(Ordering::SeqCst));
+
+    // A pass writes only the items it dresses, so an app with no pictures keeps its first write.
+    let db = rusqlite::Connection::open(dir.path().join("data").join("lounge.db")).unwrap();
+    let written = |id: &str| -> i64 { db.query_row("SELECT updated_ms FROM items WHERE id = ?1", [id], |r| r.get(0)).unwrap() };
+    assert!(written("app:plain.tv") < written("app:app19.tv"));
+    drop(db);
+
+    // A restart builds its home from what the passes stored. A rebuild publishes only a home
+    // that differs, so the one it opened with stays.
+    drop(core);
+    let core = Core::open(config, Arc::new(Quiet)).unwrap();
+    let revision = core.diagnostics().revision;
+    core.set_screen_state(true);
+    settle(&core, revision);
+    assert_eq!(core.snapshot().rows, passes.rows);
+    assert_eq!(core.snapshot().stage, passes.stage);
+
+    // Every picture is ready now, so this ingest dresses each app at once.
+    let revision = core.diagnostics().revision;
+    core.ingest_apps(apps);
+    settle(&core, revision);
+    assert_eq!(core.snapshot().rows, passes.rows);
+    assert_eq!(core.snapshot().stage, passes.stage);
 }

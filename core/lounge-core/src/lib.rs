@@ -614,6 +614,8 @@ pub(crate) struct State {
     pub art_dir: PathBuf,
     /// How many pictures prepare at once: each one holds its full-size decode while it works.
     pub art_threads: usize,
+    /// The `art_threads` threads pictures are prepared on.
+    pub art_pool: Option<Arc<rayon::ThreadPool>>,
     pub permissions: Permissions,
     pub now_playing: Option<NowPlaying>,
     /// A downloaded update waiting for the person; the version it would install.
@@ -659,6 +661,12 @@ impl Core {
         };
         let art_dir = lounge_artwork::out_dir_for(&PathBuf::from(&config.cache_dir));
         let art_threads = match config.tier { DeviceTier::A => 2, _ => 1 };
+        let art_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(art_threads)
+            .thread_name(|i| format!("lounge-art-{i}"))
+            .build()
+            .ok()
+            .map(Arc::new);
         let plugin_entries = plugins::entries_from_rows(&plugin_rows);
         let (plugin_manager, refresh_rx, calls_rx, plugin_services) =
             plugins::PluginManager::new(&PathBuf::from(&config.data_dir), &PathBuf::from(&config.cache_dir));
@@ -674,6 +682,7 @@ impl Core {
                 revision,
                 art_dir,
                 art_threads,
+                art_pool,
                 permissions: Permissions::default(),
                 update: None,
                 now_playing: None,

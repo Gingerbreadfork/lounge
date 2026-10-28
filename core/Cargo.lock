@@ -1069,6 +1069,7 @@ dependencies = [
  "lounge-store",
  "parking_lot",
  "rayon",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

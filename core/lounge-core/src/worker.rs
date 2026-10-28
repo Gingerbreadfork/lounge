@@ -11,7 +11,7 @@ use lounge_artwork::{prepare_many, Prepared, Style};
 use lounge_graph::{Artwork, DeepLink, Item, ItemKind};
 use parking_lot::Mutex;
 use rayon::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -49,14 +49,15 @@ pub(crate) enum Job {
     Housekeeping,
 }
 
-/// Ingests whose pictures did not all fit in one pass. Each pass prepares a few, publishes what
-/// it has, and queues the next, so layout commands and other ingests never wait for long.
+/// Ingests whose pictures did not all fit in one pass. Each pass prepares the next few of each,
+/// writes just the items they dress, and queues the next, so layout commands and other ingests
+/// never wait for long.
 #[derive(Default)]
 pub(crate) struct PendingArt {
-    apps: Option<Vec<AppRecord>>,
-    /// The latest programme records, kept in `State::last_programs`, still want pictures.
+    /// By source, what its latest ingest still has to prepare.
+    backlogs: HashMap<String, ArtBacklog>,
+    /// The latest programme records, kept in `State::last_programs`, want a new plan.
     programs: bool,
-    plugins: HashMap<String, Vec<ReadyItem>>,
     queued: bool,
 }
 
@@ -218,10 +219,16 @@ pub(crate) struct ArtPlan {
     index: HashMap<(String, Style), usize>,
 }
 
-/// The pictures of one ingest: what is ready, and whether some sources had to wait.
+/// A source file and the wants it serves, by index and style.
+type Group = (String, Vec<(usize, Style)>);
+
+/// The pictures of one plan: what is ready, and the sources that had to wait, in order.
 pub(crate) struct ArtDone {
     pub results: Vec<Option<Prepared>>,
-    pub deferred: bool,
+    rest: VecDeque<Group>,
+    /// Whether it decoded pictures but could remember none: the next pass would meet the same
+    /// sources, so the rest waits for the next ingest instead.
+    stalled: bool,
 }
 
 impl ArtPlan {
@@ -247,9 +254,9 @@ impl ArtPlan {
     /// Look everything up, then decode at most `sources` of the files that missed, in the order
     /// they were asked for. The state lock is taken per lookup, never across the whole plan.
     pub(crate) fn run(self, state: &Mutex<State>, sources: usize) -> ArtDone {
-        let (art_dir, threads) = {
+        let (art_dir, pool) = {
             let st = state.lock();
-            (st.art_dir.clone(), st.art_threads)
+            (st.art_dir.clone(), st.art_pool.clone())
         };
         let mut signatures: HashMap<&str, Option<(u64, i64)>> = HashMap::new();
         let mut prepared: Vec<Option<Prepared>> = Vec::with_capacity(self.wants.len());
@@ -297,9 +304,9 @@ impl ArtPlan {
             }
         }
         if order.is_empty() {
-            return ArtDone { results: prepared, deferred: false };
+            return ArtDone { results: prepared, rest: VecDeque::new(), stalled: false };
         }
-        let deferred = order.len() > sources;
+        let rest = order.iter().skip(sources).map(|src| (src.to_string(), by_src.remove(src).unwrap_or_default())).collect();
         let groups: Vec<(&str, Vec<(usize, Style)>)> = order.into_iter().take(sources).map(|src| (src, by_src.remove(src).unwrap_or_default())).collect();
         let work = |groups: &[(&str, Vec<(usize, Style)>)]| -> Vec<Vec<(usize, Outcome)>> {
             groups
@@ -317,9 +324,9 @@ impl ArtPlan {
                 })
                 .collect()
         };
-        let done = match rayon::ThreadPoolBuilder::new().num_threads(threads.max(1)).build() {
-            Ok(pool) => pool.install(|| work(&groups)),
-            Err(_) => work(&groups),
+        let done = match &pool {
+            Some(pool) => pool.install(|| work(&groups)),
+            None => work(&groups),
         };
         release_freed_memory();
         let mut rows = Vec::new();
@@ -348,9 +355,22 @@ impl ArtPlan {
                 false
             }
         };
-        // A pass that remembered nothing would meet the same sources next time, so the rest
-        // waits for the next ingest instead.
-        ArtDone { results: prepared, deferred: deferred && remembered }
+        ArtDone { results: prepared, rest, stalled: !remembered }
+    }
+}
+
+impl ArtDone {
+    /// What is left for later passes and the items it dresses, or `None` when nothing is.
+    fn backlog(self, items: Vec<(String, ItemArt)>, dress: Dress, persist: fn(&Item) -> bool) -> Option<ArtBacklog> {
+        if self.rest.is_empty() || self.stalled {
+            return None;
+        }
+        let mut waiting = vec![false; self.results.len()];
+        for &(i, _) in self.rest.iter().flat_map(|(_, styles)| styles) {
+            waiting[i] = true;
+        }
+        let items = items.into_iter().filter(|(_, w)| w.slots().any(|i| waiting[i])).collect();
+        Some(ArtBacklog { results: self.results, queue: self.rest, items, dress, persist })
     }
 }
 
@@ -380,12 +400,27 @@ fn release_freed_memory() {
     }
 }
 
-/// Remember an ingest whose pictures are not all ready, and make sure a pass is queued.
-fn defer(inner: &Inner, f: impl FnOnce(&mut PendingArt)) {
+/// What one ingest still has to prepare, in the order it asked, and the items those pictures dress.
+struct ArtBacklog {
+    results: Vec<Option<Prepared>>,
+    queue: VecDeque<Group>,
+    items: Vec<(String, ItemArt)>,
+    dress: Dress,
+    /// Whether a dressed item is written to the store as well as the graph.
+    persist: fn(&Item) -> bool,
+}
+
+/// Keep what `source` has still to prepare and make sure a pass is queued, or forget it when
+/// nothing is left.
+fn defer(inner: &Inner, source: &str, backlog: Option<ArtBacklog>) {
     let queue = {
         let mut state = inner.state.lock();
-        f(&mut state.pending_art);
-        !std::mem::replace(&mut state.pending_art.queued, true)
+        let pending = &mut state.pending_art;
+        match backlog {
+            Some(b) => pending.backlogs.insert(source.to_string(), b),
+            None => pending.backlogs.remove(source),
+        };
+        !pending.backlogs.is_empty() && !std::mem::replace(&mut pending.queued, true)
     };
     if queue {
         inner.enqueue_job(Job::MoreArt);
@@ -401,18 +436,22 @@ pub(crate) fn want_program_art(inner: &Inner, state: &mut State) {
     }
 }
 
-/// The next pass over every ingest still waiting for pictures.
+/// The next pass: a batch from every backlog, then a new plan for the programmes if one was asked.
 fn more_art(inner: &Inner) {
-    let pending = {
+    let (programs, sources) = {
         let mut state = inner.state.lock();
-        std::mem::take(&mut state.pending_art)
+        let pending = &mut state.pending_art;
+        pending.queued = false;
+        (std::mem::take(&mut pending.programs), pending.backlogs.keys().cloned().collect::<Vec<_>>())
     };
-    if let Some(apps) = pending.apps
-        && let Err(e) = ingest_apps(inner, apps)
-    {
-        tracing::error!("ingest apps failed: {e}");
+    for source in sources {
+        let backlog = inner.state.lock().pending_art.backlogs.remove(&source);
+        if let Some(backlog) = backlog {
+            let rest = next_batch(inner, &source, backlog);
+            defer(inner, &source, rest);
+        }
     }
-    if pending.programs {
+    if programs {
         // Nothing has been read from the TV provider yet this time: there is nothing to prepare,
         // and an empty ingest would throw away what is stored.
         let programs = inner.state.lock().last_programs.clone();
@@ -422,11 +461,63 @@ fn more_art(inner: &Inner) {
             tracing::error!("ingest programs failed: {e}");
         }
     }
-    for (plugin, items) in pending.plugins {
-        if let Err(e) = ingest_plugin_items(inner, &plugin, items) {
-            tracing::error!("ingest plugin {plugin} failed: {e}");
+}
+
+/// Prepare the next few sources of a backlog and write just the items they dress. Returns the
+/// backlog while sources remain and the pass did not stall.
+fn next_batch(inner: &Inner, source: &str, mut backlog: ArtBacklog) -> Option<ArtBacklog> {
+    let take = art_sources(&inner.state).min(backlog.queue.len());
+    let mut plan = ArtPlan::new();
+    let mut slots = Vec::new();
+    let mut touched = vec![false; backlog.results.len()];
+    for (src, styles) in backlog.queue.drain(..take) {
+        for (i, style) in styles {
+            touched[i] = true;
+            slots.extend(plan.want(Some(src.as_str()), style).map(|j| (i, j)));
         }
     }
+    let waiting: Vec<&(String, ItemArt)> = backlog.items.iter().filter(|(_, w)| w.slots().any(|i| touched[i])).collect();
+    // Items gone from the graph, such as those of a plugin turned off, want no pictures.
+    let present = {
+        let state = inner.state.lock();
+        waiting.iter().any(|(id, _)| state.graph.get(id).is_some())
+    };
+    if !waiting.is_empty() && !present {
+        return None;
+    }
+    let mut done = plan.run(&inner.state, take);
+    for (i, j) in slots {
+        backlog.results[i] = done.results[j].take();
+    }
+    let dressed: Vec<Item> = {
+        let state = inner.state.lock();
+        waiting
+            .iter()
+            .filter_map(|(id, w)| {
+                let mut it = state.graph.get(id)?.clone();
+                (backlog.dress)(&mut it, w, &backlog.results);
+                Some(it)
+            })
+            .collect()
+    };
+    let (kept, loose): (Vec<Item>, Vec<Item>) = dressed.into_iter().partition(|it| (backlog.persist)(it));
+    let encoded = lounge_store::encode_items(&kept);
+    {
+        let mut state = inner.state.lock();
+        let state = &mut *state;
+        // Only items still in the graph: those of a plugin turned off meanwhile stay gone.
+        let written = encoded.and_then(|mut rows| {
+            rows.retain(|r| state.graph.get(&r.id).is_some());
+            state.store.upsert_items_encoded(source, &rows, now_ms())
+        });
+        stored(source, written);
+        for it in kept.into_iter().chain(loose) {
+            if state.graph.get(&it.id).is_some() {
+                state.graph.upsert(it);
+            }
+        }
+    }
+    (!done.stalled && !backlog.queue.is_empty()).then_some(backlog)
 }
 
 /// When each item of `source` was first seen, so a refresh never makes old things look new.
@@ -455,41 +546,27 @@ fn aspect(p: Option<&Prepared>) -> f32 {
 
 fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::StoreError> {
     let mut plan = ArtPlan::new();
-    let wants: Vec<_> = apps
+    let wants: Vec<ItemArt> = apps
         .iter()
-        .map(|a| {
-            (
-                plan.want(a.banner_path.as_deref(), Style::AppBanner),
-                plan.want(a.banner_path.as_deref(), Style::HeroBanner),
-                plan.want(a.banner_path.as_deref(), Style::Backdrop),
-                plan.want(a.icon_path.as_deref(), Style::Icon),
-            )
+        .map(|a| ItemArt {
+            landscape: plan.want(a.banner_path.as_deref(), Style::AppBanner),
+            hero: plan.want(a.banner_path.as_deref(), Style::HeroBanner),
+            backdrop: plan.want(a.banner_path.as_deref(), Style::Backdrop),
+            logo: plan.want(a.icon_path.as_deref(), Style::Icon),
+            ..Default::default()
         })
         .collect();
     let done = plan.run(&inner.state, art_sources(&inner.state));
-    let art = done.results;
 
     let mut items = Vec::with_capacity(apps.len());
-    for (app, (banner, hero, backdrop, icon)) in apps.iter().zip(wants) {
-        let banner = pick(&art, banner);
-        let icon = pick(&art, icon);
+    let mut dressed = Vec::with_capacity(apps.len());
+    for (app, w) in apps.iter().zip(wants) {
         let mut it = Item::app(&app.package, &app.activity, &app.label);
         it.last_used_ms = app.last_used_ms;
         it.added_ms = Some(app.installed_ms);
         it.flags.is_game = app.is_game;
-        it.flags.has_banner = banner.is_some();
-        it.art_aspect = aspect(banner);
-        it.artwork = Artwork {
-            landscape: banner.map(|p| p.path.clone()),
-            hero: pick(&art, hero).map(|p| p.path.clone()),
-            backdrop: pick(&art, backdrop).map(|p| p.path.clone()),
-            logo: icon.map(|p| p.path.clone()),
-            poster: None,
-            palette: banner.or(icon).map(|p| p.palette),
-            glow: Vec::new(),
-            wallpaper: None,
-            focal_y: 0.5,
-        };
+        dress_app(&mut it, &w, &done.results);
+        dressed.push((it.id.clone(), w));
         items.push(it);
     }
     let rows = lounge_store::encode_items(&items)?;
@@ -507,21 +584,36 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
             Err(e) => tracing::error!("could not read app usage: {e}"),
         }
     }
-    if done.deferred {
-        defer(inner, |p| p.apps = Some(apps));
-    } else {
-        // A pass still waiting with an older list would bring it back.
-        inner.state.lock().pending_art.apps = None;
-    }
+    defer(inner, "apps", done.backlog(dressed, dress_app, |_| true));
     Ok(())
+}
+
+/// An app's banner fills its wide places and its icon is its logo.
+fn dress_app(it: &mut Item, w: &ItemArt, art: &[Option<Prepared>]) {
+    let banner = pick(art, w.landscape);
+    let icon = pick(art, w.logo);
+    it.flags.has_banner = banner.is_some();
+    it.art_aspect = aspect(banner);
+    it.artwork = Artwork {
+        landscape: banner.map(|p| p.path.clone()),
+        hero: pick(art, w.hero).map(|p| p.path.clone()),
+        backdrop: pick(art, w.backdrop).map(|p| p.path.clone()),
+        logo: icon.map(|p| p.path.clone()),
+        poster: None,
+        palette: banner.or(icon).map(|p| p.palette),
+        glow: Vec::new(),
+        wallpaper: None,
+        focal_y: 0.5,
+    };
 }
 
 // ---------------------------------------------------------------------------
 // TV provider: Watch Next, preview programmes, channels, schedule
 // ---------------------------------------------------------------------------
 
+/// Which of a plan's pictures dress one item.
 #[derive(Default)]
-struct ProgramArt {
+struct ItemArt {
     poster: Option<usize>,
     landscape: Option<usize>,
     hero: Option<usize>,
@@ -531,6 +623,34 @@ struct ProgramArt {
     wallpaper: Option<usize>,
 }
 
+impl ItemArt {
+    fn slots(&self) -> impl Iterator<Item = usize> {
+        [self.poster, self.landscape, self.hero, self.hero_fit, self.backdrop, self.logo, self.wallpaper].into_iter().flatten()
+    }
+}
+
+/// Sets an item's pictures from those ready so far.
+type Dress = fn(&mut Item, &ItemArt, &[Option<Prepared>]);
+
+fn dress_content(it: &mut Item, w: &ItemArt, art: &[Option<Prepared>]) {
+    let poster = pick(art, w.poster);
+    let landscape = pick(art, w.landscape);
+    let hero = pick(art, w.hero).or(pick(art, w.hero_fit));
+    let logo = pick(art, w.logo);
+    it.art_aspect = aspect(hero.or(landscape).or(poster));
+    it.artwork = Artwork {
+        poster: poster.map(|x| x.path.clone()),
+        landscape: landscape.map(|x| x.path.clone()),
+        hero: hero.map(|x| x.path.clone()),
+        backdrop: pick(art, w.backdrop).map(|x| x.path.clone()),
+        logo: logo.map(|x| x.path.clone()),
+        palette: landscape.or(poster).or(logo).map(|x| x.palette),
+        glow: hero.map(|x| x.glow.clone()).unwrap_or_default(),
+        wallpaper: pick(art, w.wallpaper).map(|x| x.path.clone()),
+        focal_y: hero.map(|x| x.focal_y).unwrap_or(0.5),
+    };
+}
+
 fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lounge_store::StoreError> {
     let now = now_ms();
     let (enabled_channels, seen) = {
@@ -538,7 +658,7 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
         (state.graph.layout.enabled_channels.clone(), first_seen(&state, "tvprovider"))
     };
     let mut plan = ArtPlan::new();
-    let wants: Vec<ProgramArt> = programs
+    let wants: Vec<ItemArt> = programs
         .iter()
         .map(|p| {
             // Pictures only for what can be on screen: preview rows the person switched on, and
@@ -549,14 +669,14 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
                 ProgramKind::WatchNext | ProgramKind::Channel => true,
             };
             if !shown {
-                return ProgramArt::default();
+                return ItemArt::default();
             }
             // A 16:9 thumbnail is the landscape source when there is one; the poster is used
             // in its own orientation and as the Stage's framed art when it is portrait.
             let wide = p.thumbnail_path.as_deref().or(if p.poster_is_portrait { None } else { p.poster_path.as_deref() });
             let portrait = if p.poster_is_portrait { p.poster_path.as_deref() } else { None };
             let schedule = p.kind == ProgramKind::Schedule;
-            ProgramArt {
+            ItemArt {
                 poster: if schedule { None } else { plan.want(portrait, Style::Poster) },
                 landscape: plan.want(wide.or(p.poster_path.as_deref()), Style::Landscape),
                 hero: plan.want(wide, Style::Hero),
@@ -568,26 +688,10 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
         })
         .collect();
     let done = plan.run(&inner.state, art_sources(&inner.state));
-    let art = done.results;
 
     let mut items = Vec::with_capacity(programs.len());
+    let mut dressed = Vec::with_capacity(programs.len());
     for (p, w) in programs.iter().zip(wants) {
-        let poster = pick(&art, w.poster);
-        let landscape = pick(&art, w.landscape);
-        let hero = pick(&art, w.hero).or(pick(&art, w.hero_fit));
-        let logo = pick(&art, w.logo);
-        let artwork = Artwork {
-            poster: poster.map(|x| x.path.clone()),
-            landscape: landscape.map(|x| x.path.clone()),
-            hero: hero.map(|x| x.path.clone()),
-            backdrop: pick(&art, w.backdrop).map(|x| x.path.clone()),
-            logo: logo.map(|x| x.path.clone()),
-            palette: landscape.or(poster).or(logo).map(|x| x.palette),
-            glow: hero.map(|x| x.glow.clone()).unwrap_or_default(),
-            wallpaper: None,
-            focal_y: hero.map(|x| x.focal_y).unwrap_or(0.5),
-        };
-        let art_aspect = aspect(hero.or(landscape).or(poster));
         let deep_link = match p.kind {
             ProgramKind::Channel | ProgramKind::Schedule => DeepLink::Tune(p.intent_uri.clone().unwrap_or_default()),
             _ => match &p.intent_uri {
@@ -612,8 +716,7 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
         };
         let mut it = Item::content(&p.id, kind, "tvprovider", &p.title, deep_link);
         it.owner = Some(p.package.clone());
-        it.artwork = artwork;
-        it.art_aspect = art_aspect;
+        dress_content(&mut it, &w, &done.results);
         it.season = p.season.clone();
         it.episode = p.episode.clone();
         it.duration_ms = p.duration_ms;
@@ -646,11 +749,11 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
                 it.airing_end_ms = p.end_ms;
             }
         }
+        dressed.push((it.id.clone(), w));
         items.push(it);
     }
-    // Schedule rows are regenerated seconds after launch and go stale within hours, so the graph
-    // holds them and the database does not. Persisted items are encoded here, before the lock.
-    let persisted: Vec<Item> = items.iter().filter(|it| !(it.kind == ItemKind::Program && it.airing_start_ms.is_some())).cloned().collect();
+    // Persisted items are encoded here, before the lock.
+    let persisted: Vec<Item> = items.iter().filter(|it| stored_program(it)).cloned().collect();
     let rows = lounge_store::encode_items(&persisted)?;
     {
         let mut state = inner.state.lock();
@@ -658,10 +761,14 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
         state.graph.replace_source("tvprovider", items);
         state.last_programs = programs;
     }
-    if done.deferred {
-        defer(inner, |pending| pending.programs = true);
-    }
+    defer(inner, "tvprovider", done.backlog(dressed, dress_content, stored_program));
     Ok(())
+}
+
+/// Schedule rows are regenerated seconds after launch and go stale within hours, so the graph
+/// holds them and the database does not.
+fn stored_program(it: &Item) -> bool {
+    !(it.kind == ItemKind::Program && it.airing_start_ms.is_some())
 }
 
 fn progress(position_ms: Option<i64>, duration_ms: Option<i64>) -> Option<f32> {
@@ -689,7 +796,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
     let mut ids = HashSet::new();
     let ready: Vec<ReadyItem> = ready.into_iter().filter(|r| ids.insert(r.item.id.clone())).collect();
     let mut plan = ArtPlan::new();
-    let wants: Vec<ProgramArt> = ready
+    let wants: Vec<ItemArt> = ready
         .iter()
         .map(|r| {
             // `poster` is portrait art, `thumbnail` is 16:9; whichever exists feeds the other size.
@@ -697,9 +804,9 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             let portrait = r.poster.as_deref();
             if r.item.kind == PluginItemKind::Wallpaper {
                 let style = Style::wallpaper(r.item.framed, inner.config.uhd_wallpapers());
-                return ProgramArt { wallpaper: plan.want(wide.or(portrait), style), ..Default::default() };
+                return ItemArt { wallpaper: plan.want(wide.or(portrait), style), ..Default::default() };
             }
-            ProgramArt {
+            ItemArt {
                 poster: plan.want(portrait, Style::Poster),
                 landscape: plan.want(wide.or(portrait), Style::Landscape),
                 hero: plan.want(wide, Style::Hero),
@@ -711,19 +818,15 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         })
         .collect();
     let done = plan.run(&inner.state, art_sources(&inner.state));
-    let art = done.results;
     let now = now_ms();
 
     let mut items = Vec::with_capacity(ready.len());
+    let mut dressed = Vec::with_capacity(ready.len());
     for (r, w) in ready.iter().zip(wants) {
         let p = &r.item;
         if p.title.trim().is_empty() || p.id.trim().is_empty() {
             continue;
         }
-        let poster = pick(&art, w.poster);
-        let landscape = pick(&art, w.landscape);
-        let hero = pick(&art, w.hero).or(pick(&art, w.hero_fit));
-        let logo = pick(&art, w.logo);
         let Some(deep_link) = plugin_link(plugin, p) else { continue };
         let Some(kind) = home_kind(p) else { continue };
         let id = format!("plugin:{plugin}:{}", p.id);
@@ -743,18 +846,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         it.flags.framed = p.framed;
         it.channel_id = p.channel_id.as_deref().map(|c| channel_key(plugin, c));
         it.channel_name = p.channel_name.clone();
-        it.art_aspect = aspect(hero.or(landscape).or(poster));
-        it.artwork = Artwork {
-            poster: poster.map(|x| x.path.clone()),
-            landscape: landscape.map(|x| x.path.clone()),
-            hero: hero.map(|x| x.path.clone()),
-            backdrop: pick(&art, w.backdrop).map(|x| x.path.clone()),
-            logo: logo.map(|x| x.path.clone()),
-            palette: landscape.or(poster).or(logo).map(|x| x.palette),
-            glow: hero.map(|x| x.glow.clone()).unwrap_or_default(),
-            wallpaper: pick(&art, w.wallpaper).map(|x| x.path.clone()),
-            focal_y: hero.map(|x| x.focal_y).unwrap_or(0.5),
-        };
+        dress_content(&mut it, &w, &done.results);
         match p.kind {
             PluginItemKind::Resume => {
                 it.flags.watch_next = true;
@@ -778,6 +870,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
             }
             PluginItemKind::Program | PluginItemKind::Wallpaper | PluginItemKind::Screensaver => {}
         }
+        dressed.push((it.id.clone(), w));
         items.push(it);
     }
     let rows = lounge_store::encode_items(&items)?;
@@ -789,14 +882,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         stored(&source, state.store.replace_items_encoded(&source, &rows, now));
         state.graph.replace_source(&source, items);
     }
-    if done.deferred {
-        let plugin = plugin.to_string();
-        defer(inner, move |pending| {
-            pending.plugins.insert(plugin, ready);
-        });
-    } else {
-        inner.state.lock().pending_art.plugins.remove(plugin);
-    }
+    defer(inner, &source, done.backlog(dressed, dress_content, |_| true));
     Ok(())
 }
 
