@@ -31,7 +31,7 @@ impl sdk::Plugin for Immich {
                     label: "Shared album link".into(),
                     kind: SettingKind::Url,
                     required: true,
-                    help: Some("In Immich open the album, Share, Create link, and paste the whole address, like https://photos.example.com/share/AbC123…".into()),
+                    help: Some("In Immich open the album, Share, Create link, and paste the whole address, like https://photos.example.com/share/AbC123… or its custom /s/ address.".into()),
                     default: None,
                 },
                 SettingSpec { key: "password".into(), label: "Link password".into(), kind: SettingKind::Password, required: false, help: Some("Only if the shared link has one.".into()), default: None },
@@ -43,11 +43,11 @@ impl sdk::Plugin for Immich {
 
     fn refresh(_ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let link = host::required_setting("link", "Shared album link")?;
-        let (base, key) = parse_link(&link)?;
+        let (base, name) = parse_link(&link)?;
         let password = host::secret("password").filter(|p| !p.is_empty());
         let max = host::setting("max").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(60).clamp(1, 300);
-        let auth = query(&key, password.as_deref());
-        let shared = shared_link(&base, &key, password.as_deref())?;
+        let auth = query(&name, password.as_deref());
+        let shared = shared_link(&base, &name, password.as_deref())?;
         let album = shared.album.as_ref().and_then(|a| a.album_name.clone()).unwrap_or_else(|| "Photos".into());
         // Older servers list an album's pictures with the link; newer ones serve them a month at a time.
         let (mut pictures, album_id) = match shared.album {
@@ -88,20 +88,20 @@ fn get(url: &str) -> Result<String, String> {
 
 /// The shared link and its album. From 2.6 a link with a password is signed in to first; older
 /// servers have no sign-in and take the password with the request instead.
-fn shared_link(base: &str, key: &str, password: Option<&str>) -> Result<SharedLink, String> {
+fn shared_link(base: &str, name: &str, password: Option<&str>) -> Result<SharedLink, String> {
     let body = match password {
         Some(p) => {
-            let mut login = HttpRequest::get(format!("{base}/api/shared-links/login?{}", query(key, None)))
+            let mut login = HttpRequest::get(format!("{base}/api/shared-links/login?{}", query(name, None)))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json");
             login.method = "POST".into();
             login.body = Some(serde_json::json!({ "password": p }).to_string());
             match send(&login)? {
-                (404, _) => get(&format!("{base}/api/shared-links/me?{}", query(key, Some(p))))?,
+                (404, _) => get(&format!("{base}/api/shared-links/me?{}", query(name, Some(p))))?,
                 (status, body) => answer(status, body)?,
             }
         }
-        None => get(&format!("{base}/api/shared-links/me?{}", query(key, None)))?,
+        None => get(&format!("{base}/api/shared-links/me?{}", query(name, None)))?,
     };
     serde_json::from_str(&body).map_err(|e| format!("unexpected answer from Immich: {e}"))
 }
@@ -301,21 +301,26 @@ impl Asset {
     }
 }
 
-/// "https://photos.example.com/share/AbC123" → the server and the link's key.
+/// "https://photos.example.com/share/AbC123" → the server and how a request names the link: by
+/// its key, or by the custom slug of a /s/ address.
 pub fn parse_link(link: &str) -> Result<(String, String), String> {
     let link = link.trim().trim_end_matches('/');
-    let (base, key) = link.split_once("/share/").ok_or_else(|| "That is not a shared link: it should contain /share/ followed by the key".to_string())?;
-    let key: String = key.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
-    if key.is_empty() || !(base.starts_with("http://") || base.starts_with("https://")) {
-        return Err("That is not a shared link: it should look like https://photos.example.com/share/AbC123".into());
+    let token = |rest: &str| rest.chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '~')).collect::<String>();
+    let (base, name) = match (link.split_once("/share/"), link.split_once("/s/")) {
+        (Some((base, rest)), _) => (base, Some(token(rest)).filter(|k| !k.is_empty()).map(|k| format!("key={k}"))),
+        (None, Some((base, rest))) => (base, Some(token(rest)).filter(|k| !k.is_empty()).map(|k| format!("slug={k}"))),
+        (None, None) => return Err("That is not a shared link: it should contain /share/ or /s/ followed by the link's name".into()),
+    };
+    match name {
+        Some(name) if base.starts_with("http://") || base.starts_with("https://") => Ok((base.to_string(), name)),
+        _ => Err("That is not a shared link: it should look like https://photos.example.com/share/AbC123".into()),
     }
-    Ok((base.to_string(), key))
 }
 
-fn query(key: &str, password: Option<&str>) -> String {
+fn query(name: &str, password: Option<&str>) -> String {
     match password {
-        Some(p) => format!("key={key}&password={}", url_encode(p)),
-        None => format!("key={key}"),
+        Some(p) => format!("{name}&password={}", url_encode(p)),
+        None => name.to_string(),
     }
 }
 
@@ -357,7 +362,8 @@ mod tests {
 
     #[test]
     fn links_split_into_server_and_key() {
-        assert_eq!(parse_link("https://photos.example.com/share/AbC-123_x/").unwrap(), ("https://photos.example.com".into(), "AbC-123_x".into()));
+        assert_eq!(parse_link("https://photos.example.com/share/AbC-123_x/").unwrap(), ("https://photos.example.com".into(), "key=AbC-123_x".into()));
+        assert_eq!(parse_link("https://photos.example.com/s/summer-2025").unwrap(), ("https://photos.example.com".into(), "slug=summer-2025".into()));
         assert!(parse_link("https://photos.example.com/albums/1").is_err());
         assert!(parse_link("photos.example.com/share/k").is_err());
     }
@@ -428,7 +434,7 @@ mod tests {
 
     #[test]
     fn the_key_and_password_travel_as_query() {
-        assert_eq!(query("k", None), "key=k");
-        assert_eq!(query("k", Some("p w")), "key=k&password=p%20w");
+        assert_eq!(query("key=k", None), "key=k");
+        assert_eq!(query("slug=s", Some("p w")), "slug=s&password=p%20w");
     }
 }
