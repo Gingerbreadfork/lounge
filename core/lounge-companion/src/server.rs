@@ -305,8 +305,7 @@ fn cookie_route(method: &Method, path: &str) -> bool {
 async fn require_token(State(app): State<Shared>, mut req: Request, next: Next) -> Response {
     let headers = req.headers();
     let device = if let Some(token) = bearer(headers) {
-        let name = headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).map(device_name).unwrap_or_else(|| "Phone".to_string());
-        app.tokens.authenticate(&token, now_ms(), &name)
+        app.tokens.authenticate(&token, now_ms())
     } else if let Some(session) = cookie_route(req.method(), req.uri().path()).then(|| cookie(headers, SESSION_COOKIE)).flatten() {
         app.tokens.authenticate_session(&session, now_ms())
     } else {
@@ -360,9 +359,11 @@ fn json_raw(s: String) -> Response {
     ([(header::CONTENT_TYPE, "application/json")], s).into_response()
 }
 
+/// A typed code, or the key from a QR link.
 #[derive(Deserialize)]
 struct PairBody {
-    code: String,
+    code: Option<String>,
+    link: Option<String>,
 }
 
 async fn pair(State(app): State<Shared>, ConnectInfo(peer): ConnectInfo<SocketAddr>, headers: HeaderMap, Json(body): Json<PairBody>) -> Result<Response, ApiError> {
@@ -371,17 +372,24 @@ async fn pair(State(app): State<Shared>, ConnectInfo(peer): ConnectInfo<SocketAd
         .and_then(|v| v.to_str().ok())
         .map(device_name)
         .unwrap_or_else(|| "Phone".to_string());
-    match app.tokens.redeem(body.code.trim(), &name, peer.ip(), now_ms()) {
-        Ok(token) => Ok(Json(serde_json::json!({ "token": token, "device": app.actions.device_info().name })).into_response()),
-        Err(crate::auth::RedeemError::LockedOut) => {
-            tracing::warn!("companion: pairing locked out for {} after repeated wrong codes", peer.ip());
-            Err(ApiError(StatusCode::TOO_MANY_REQUESTS, "too many wrong codes; wait a moment and ask the TV for a new one".into()))
-        }
-        Err(crate::auth::RedeemError::Wrong) => {
-            tracing::warn!("companion: wrong pairing code from {name}");
-            Err(ApiError(StatusCode::FORBIDDEN, "wrong or expired code".into()))
-        }
-    }
+    let token = match (body.link, body.code) {
+        (Some(link), _) => app.tokens.redeem_link(link.trim(), &name, now_ms()).ok_or_else(|| {
+            tracing::warn!("companion: expired pairing link from {name}");
+            ApiError(StatusCode::FORBIDDEN, "expired pairing link".into())
+        }),
+        (None, Some(code)) => app.tokens.redeem(code.trim(), &name, peer.ip(), now_ms()).map_err(|e| match e {
+            crate::auth::RedeemError::LockedOut => {
+                tracing::warn!("companion: pairing locked out for {} after repeated wrong codes", peer.ip());
+                ApiError(StatusCode::TOO_MANY_REQUESTS, "too many wrong codes; wait a moment and ask the TV for a new one".into())
+            }
+            crate::auth::RedeemError::Wrong => {
+                tracing::warn!("companion: wrong pairing code from {name}");
+                ApiError(StatusCode::FORBIDDEN, "wrong or expired code".into())
+            }
+        }),
+        (None, None) => Err(bad("a pairing code or link is needed".into())),
+    }?;
+    Ok(Json(serde_json::json!({ "token": token, "device": app.actions.device_info().name })).into_response())
 }
 
 /// Hands the page a cookie for the routes it loads by URL. It holds a value of its own, not the

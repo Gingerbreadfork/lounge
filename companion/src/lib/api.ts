@@ -63,6 +63,7 @@ async function call<T>(method: string, path: string, body?: unknown, raw?: BodyI
 
 export const api = {
   pair: (code: string) => call<{ token: string; device: string }>('POST', '/api/pair', { code }),
+  pairLink: (link: string) => call<{ token: string; device: string }>('POST', '/api/pair', { link }),
   session: () => call<void>('POST', '/api/session'),
   state: () => call<State>('GET', '/api/state'),
   key: (key: string) => call<void>('POST', '/api/key', { key }),

@@ -103,8 +103,25 @@ fn exchange(port: u16, request: &str) -> String {
     out
 }
 
+fn status(response: &str) -> u16 {
+    response.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0)
+}
+
 fn json_body(response: &str) -> serde_json::Value {
     serde_json::from_str(response.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("")).unwrap_or_else(|e| panic!("{e}: {response}"))
+}
+
+/// Exchange a typed `code` or a QR `link`'s key at `POST /api/pair`, as the page does.
+fn post_pair(port: u16, host: &str, field: &str, value: &str) -> String {
+    let body = format!("{{\"{field}\":\"{value}\"}}");
+    exchange(port, &format!("POST /api/pair HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()))
+}
+
+/// Pair a phone the way scanning the TV's QR code does, and return its token.
+fn pair(companion: &Companion, host: &str) -> String {
+    let link = companion.new_pairing(&format!("http://{host}"), now()).unwrap().link;
+    let response = post_pair(companion.port, host, "link", &link);
+    json_body(&response)["token"].as_str().unwrap_or_else(|| panic!("no token: {response}")).to_string()
 }
 
 /// The session cookie's value `POST /api/session` hands a paired phone.
@@ -153,7 +170,7 @@ fn the_server_checks_before_it_listens() {
     assert_eq!(status, 421);
 
     // A paired phone gets a cookie; it opens the backup, not the rest of the API.
-    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
+    let token = pair(&companion, &host);
     let (status, head) = send(port, &format!("POST /api/session HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Length: 0\r\n\r\n"));
     assert_eq!(status, 204);
     assert!(head.contains("set-cookie: lounge_session=") && head.contains("httponly") && head.contains("samesite=strict"), "{head}");
@@ -177,7 +194,7 @@ fn the_cookie_is_a_key_of_its_own() {
     let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
     let port = companion.port;
     let host = format!("127.0.0.1:{port}");
-    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
+    let token = pair(&companion, &host);
     let session = session_cookie(port, &host, &token);
     assert_ne!(session, token);
 
@@ -194,6 +211,33 @@ fn the_cookie_is_a_key_of_its_own() {
     // Forgetting the phone takes its cookie with it.
     forget(port, &host, &token);
     assert_eq!(send(port, &format!("{art}Cookie: lounge_session={session}\r\n\r\n")).0, 401);
+}
+
+#[test]
+fn a_qr_link_pairs_once_for_a_token_of_its_own() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let link = companion.new_pairing(&format!("http://{host}"), now()).unwrap().link;
+    let state = |bearer: &str| send(port, &format!("GET /api/state HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {bearer}\r\n\r\n")).0;
+    assert_eq!(state(&link), 401);
+
+    let response = post_pair(port, &host, "link", &link);
+    assert_eq!(status(&response), 200, "{response}");
+    let token = json_body(&response)["token"].as_str().unwrap().to_string();
+    assert_ne!(token, link);
+    assert_eq!(state(&token), 200);
+
+    // The key in the link is spent and never opens anything.
+    assert_eq!(state(&link), 401);
+    assert_eq!(status(&post_pair(port, &host, "link", &link)), 403);
+
+    // A typed code still pairs as it did.
+    let code = companion.new_pairing(&format!("http://{host}"), now()).unwrap().code;
+    let response = post_pair(port, &host, "code", &code);
+    assert_eq!(status(&response), 200, "{response}");
+    assert_eq!(state(json_body(&response)["token"].as_str().unwrap()), 200);
 }
 
 #[test]
@@ -234,7 +278,7 @@ fn the_live_socket_upgrades() {
     let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
     let port = companion.port;
     let host = format!("127.0.0.1:{port}");
-    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
+    let token = pair(&companion, &host);
     let session = session_cookie(port, &host, &token);
     let (status, _) = send(
         port,
@@ -304,7 +348,7 @@ fn a_forgotten_phone_loses_its_live_socket() {
     let host = format!("127.0.0.1:{port}");
 
     // Forgotten from another phone, it gets no more snapshots and is told why.
-    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
+    let token = pair(&companion, &host);
     let mut socket = open_socket(port, &host, &session_cookie(port, &host, &token));
     assert_eq!(frame(&mut socket).0, TEXT);
     forget(port, &host, &token);
@@ -314,7 +358,7 @@ fn a_forgotten_phone_loses_its_live_socket() {
     assert_eq!(close_code(&payload), 4401);
 
     // Forgotten from the TV, its socket closes without waiting for a new snapshot.
-    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
+    let token = pair(&companion, &host);
     let mut socket = open_socket(port, &host, &session_cookie(port, &host, &token));
     assert_eq!(frame(&mut socket).0, TEXT);
     companion.forget_all();

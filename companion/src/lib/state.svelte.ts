@@ -72,22 +72,39 @@ export function dismissShare() {
 
 export function start() {
   window.addEventListener('hashchange', () => (app.route = parseRoute(location.hash)));
-  // A pairing link carries the token in the fragment: #token=…
-  const m = location.hash.match(/token=([A-Za-z0-9_-]+)/);
-  if (m) {
-    setToken(m[1]);
-    app.paired = true;
+  // A pairing link carries a one-time key in the fragment, #token=…, which the TV swaps for this
+  // phone's own token.
+  const link = location.hash.match(/token=([A-Za-z0-9_-]+)/)?.[1];
+  if (link) {
     history.replaceState(null, '', '#/home');
     app.route = { page: 'home' };
   }
   if (location.pathname === '/share' || sharedLink()) {
     handleShare();
   }
+  if (link) {
+    pairByLink(link);
+    return;
+  }
   if (!app.paired) {
     app.route = { page: 'pair' };
     return;
   }
   connect();
+}
+
+/** A phone that was already paired keeps its token when the link has expired. */
+async function pairByLink(link: string) {
+  try {
+    const r = await api.pairLink(link);
+    setToken(r.token);
+    app.paired = true;
+    toast(`Paired with ${r.device}`);
+  } catch (e: any) {
+    toast(e?.status === 403 ? 'That QR code has expired. Open Settings › Phone companion on the TV for a new one.' : (e?.message ?? 'The TV did not answer.'));
+  }
+  if (app.paired) connect();
+  else app.route = { page: 'pair' };
 }
 
 export async function connect() {

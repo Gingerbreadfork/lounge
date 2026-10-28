@@ -50,17 +50,17 @@ pub struct Device {
 #[serde(rename_all = "camelCase")]
 pub struct PairingInfo {
     pub code: String,
-    /// The token the link carries; the code hands out a different one.
-    pub token: String,
+    /// The one-time key the link carries, which is never a token itself.
+    pub link: String,
     pub url: String,
     pub expires_ms: i64,
 }
 
-/// A live code and link, each with its own token, so whoever photographs the code on screen can
-/// never end up with the token of the phone that typed it. Using either retires both.
+/// A live code and link. Either one exchanges once for a token that is never shown anywhere, and
+/// using either retires both.
 struct Pending {
-    link_token: String,
-    code_token: String,
+    link: String,
+    token: String,
     expires_ms: i64,
 }
 
@@ -123,17 +123,17 @@ impl TokenStore {
         self.devices.lock().len()
     }
 
-    /// A new six-digit code and the token it will hand out; the URL pairs by itself when opened.
-    /// Any earlier code stops working: one live code at a time.
+    /// A new six-digit code, and a URL whose page pairs by itself when opened. Any earlier code
+    /// stops working: one live code at a time.
     pub fn new_pairing(&self, base_url: &str, now_ms: i64) -> Result<PairingInfo, String> {
         let failed = || "the TV's random number source failed, so no code was made".to_string();
-        let (link_token, code_token) = (random_token().ok_or_else(failed)?, random_token().ok_or_else(failed)?);
+        let (link, token) = (random_token().ok_or_else(failed)?, random_token().ok_or_else(failed)?);
         let code = format!("{:06}", random_u32().ok_or_else(failed)? % 1_000_000);
         let expires_ms = now_ms + CODE_TTL_MS;
         let mut pending = self.pending.lock();
         pending.clear();
-        pending.insert(code.clone(), Pending { link_token: link_token.clone(), code_token, expires_ms });
-        Ok(PairingInfo { url: format!("{base_url}/#token={link_token}"), code, token: link_token, expires_ms })
+        pending.insert(code.clone(), Pending { link: link.clone(), token, expires_ms });
+        Ok(PairingInfo { url: format!("{base_url}/#token={link}"), code, link, expires_ms })
     }
 
     /// Exchange a code for its token and register the device. Wrong codes lock out the address
@@ -153,8 +153,8 @@ impl TokenStore {
         match pending {
             Some(pending) => {
                 self.lockouts.lock().by_address.remove(&from);
-                self.register(&pending.code_token, device_name, now_ms);
-                Ok(pending.code_token)
+                self.register(&pending.token, device_name, now_ms);
+                Ok(pending.token)
             }
             None => {
                 let mut l = self.lockouts.lock();
@@ -178,32 +178,35 @@ impl TokenStore {
         }
     }
 
-    /// A token from a pairing URL registers itself on first use. Returns the device's id.
-    pub fn register(&self, token: &str, device_name: &str, now_ms: i64) -> String {
+    /// Exchange the key a QR link carries for a token and register the device. The key sat in a
+    /// URL, where a picture or a browser's history can keep it, so it works once and is never a
+    /// token itself.
+    pub fn redeem_link(&self, link: &str, device_name: &str, now_ms: i64) -> Option<String> {
+        let mut pending = self.pending.lock();
+        let code = pending.iter().find(|(_, p)| p.link == link && p.expires_ms >= now_ms).map(|(c, _)| c.clone())?;
+        let used = pending.remove(&code)?;
+        drop(pending);
+        self.register(&used.token, device_name, now_ms);
+        Some(used.token)
+    }
+
+    /// Adds the device a token was just handed to.
+    fn register(&self, token: &str, device_name: &str, now_ms: i64) {
         let h = hash(token);
         let mut devices = self.devices.lock();
-        if let Some(d) = devices.iter().find(|d| d.token_hash == h) {
-            return d.id.clone();
+        if devices.iter().any(|d| d.token_hash == h) {
+            return;
         }
         // The id only names the device in the list; without randomness the hash serves.
         let id = random_token().map(|t| t[..12].to_string()).unwrap_or_else(|| h[..12].to_string());
-        devices.push(Device { id: id.clone(), name: device_name.to_string(), created_ms: now_ms, last_seen_ms: now_ms, token_hash: h, session_hash: String::new() });
+        devices.push(Device { id, name: device_name.to_string(), created_ms: now_ms, last_seen_ms: now_ms, token_hash: h, session_hash: String::new() });
         self.save(&devices);
-        id
     }
 
-    /// The id of the device a token was handed out to, whether registered or still pending from
-    /// a QR link. A token from a QR link registers its phone on first use, under `device_name`.
-    pub fn authenticate(&self, token: &str, now_ms: i64, device_name: &str) -> Option<String> {
+    /// The id of the device a token was handed to.
+    pub fn authenticate(&self, token: &str, now_ms: i64) -> Option<String> {
         let h = hash(token);
-        if let Some(id) = self.seen(|d| d.token_hash == h, now_ms) {
-            return Some(id);
-        }
-        let mut pending = self.pending.lock();
-        let code = pending.iter().find(|(_, p)| p.link_token == token && p.expires_ms >= now_ms).map(|(c, _)| c.clone())?;
-        pending.remove(&code);
-        drop(pending);
-        Some(self.register(token, device_name, now_ms))
+        self.seen(|d| d.token_hash == h, now_ms)
     }
 
     /// The id of the device a session cookie was handed to. The cookie is its own secret, so it
@@ -303,15 +306,16 @@ mod tests {
         assert_eq!(p.code.len(), 6);
         assert!(store.redeem("000000", "Phone", PHONE, 1_000).is_err() || p.code == "000000");
         let token = store.redeem(&p.code, "Pixel", PHONE, 2_000).unwrap();
-        // The code's token is the phone's own; the link's, seen on screen, is retired with it.
-        assert_ne!(token, p.token);
-        assert!(store.authenticate(&p.token, 2_500, "Camera").is_none());
+        // The link, seen on screen, is retired with the code and never was the token.
+        assert_ne!(token, p.link);
+        assert!(store.redeem_link(&p.link, "Camera", 2_500).is_none());
+        assert!(store.authenticate(&p.link, 2_500).is_none());
         assert!(store.redeem(&p.code, "Pixel", PHONE, 2_000).is_err());
-        assert!(store.authenticate(&token, 3_000, "Phone").is_some());
-        assert!(store.authenticate("nope", 3_000, "Phone").is_none());
+        assert!(store.authenticate(&token, 3_000).is_some());
+        assert!(store.authenticate("nope", 3_000).is_none());
         assert_eq!(store.count(), 1);
         let reopened = TokenStore::open(dir.path());
-        assert!(reopened.authenticate(&token, 4_000, "Phone").is_some());
+        assert!(reopened.authenticate(&token, 4_000).is_some());
     }
 
     fn wrong_code(p: &PairingInfo) -> &'static str {
@@ -345,7 +349,7 @@ mod tests {
         }
         assert_eq!(store.redeem(&p.code, "x", PHONE, 20), Err(RedeemError::LockedOut));
         // The QR link still pairs, and typed codes work again once the window has passed.
-        assert!(store.authenticate(&p.token, 30, "Phone").is_some());
+        assert!(store.redeem_link(&p.link, "Phone", 30).is_some());
         let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 100).unwrap();
         assert!(store.redeem(&p2.code, "x", PHONE, CODE_TTL_MS + 200).is_ok());
     }
@@ -359,19 +363,24 @@ mod tests {
         if old.code != new.code {
             assert_eq!(store.redeem(&old.code, "x", PHONE, 20), Err(RedeemError::Wrong));
         }
-        assert!(store.authenticate(&old.token, 20, "Phone").is_none());
+        assert!(store.redeem_link(&old.link, "Phone", 20).is_none());
         assert!(store.redeem(&new.code, "x", PHONE, 30).is_ok());
     }
 
     #[test]
-    fn qr_token_registers_on_first_use_and_expires() {
+    fn a_qr_link_pairs_once_and_expires() {
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::open(dir.path());
         let p = store.new_pairing("http://tv:8787", 0).unwrap();
-        assert!(store.authenticate(&p.token, CODE_TTL_MS + 1, "Phone").is_none());
+        assert!(store.redeem_link(&p.link, "Phone", CODE_TTL_MS + 1).is_none());
         let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 1).unwrap();
-        assert!(store.authenticate(&p2.token, CODE_TTL_MS + 10, "Pixel 8 · Chrome").is_some());
-        assert!(store.authenticate(&p2.token, 2 * CODE_TTL_MS + 10, "Phone").is_some());
+        let token = store.redeem_link(&p2.link, "Pixel 8 · Chrome", CODE_TTL_MS + 10).unwrap();
+        assert_ne!(token, p2.link);
+        assert!(store.authenticate(&p2.link, CODE_TTL_MS + 20).is_none());
+        assert!(store.redeem_link(&p2.link, "Camera", CODE_TTL_MS + 20).is_none());
+        assert!(store.redeem(&p2.code, "Camera", PHONE, CODE_TTL_MS + 20).is_err());
+        assert!(store.authenticate(&token, 2 * CODE_TTL_MS + 10).is_some());
+        assert_eq!(store.count(), 1);
         assert_eq!(store.devices(None)[0]["name"], "Pixel 8 · Chrome");
     }
 }
