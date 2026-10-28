@@ -44,11 +44,11 @@ impl sdk::Plugin for Iptv {
         // Provider links often carry the account's user name and password, so both are secrets.
         let playlist_url = host::secret("playlist_url").filter(|v| !v.trim().is_empty()).ok_or("Playlist URL is not set")?;
         let group = host::setting("group");
-        let (channels, total) = parse_m3u(&host::get_text(&playlist_url)?, group.as_deref(), sdk::MAX_ITEMS);
+        let (channels, total) = parse_m3u(&playlist(&playlist_url)?, group.as_deref(), sdk::MAX_ITEMS);
         if channels.is_empty() {
             return Err(match group {
-                Some(g) => format!("the playlist has no channels in the group \"{g}\""),
-                None => "the playlist has no channels".into(),
+                Some(g) => format!("The playlist has no channels in the group \"{g}\". Check the group's name in the plugin's settings."),
+                None => "The playlist has no channels. Check the playlist URL in the plugin's settings.".into(),
             });
         }
         if total > channels.len() {
@@ -75,6 +75,32 @@ impl sdk::Plugin for Iptv {
 }
 
 sdk::export_plugin!(Iptv);
+
+/// Downloads the playlist as text. A failure names the playlist's server and what to check, and
+/// its cause goes to the log.
+fn playlist(url: &str) -> Result<String, String> {
+    let r = host::fetch(&HttpRequest::get(url)).map_err(|e| {
+        sdk::warn!("{e}");
+        if e == host::TOO_LARGE { TOO_LARGE_PLAYLIST.to_string() } else { playlist_error(url, None) }
+    })?;
+    if !r.ok() {
+        return Err(playlist_error(url, Some(r.status)));
+    }
+    Ok(if r.body_base64.is_some() { String::from_utf8_lossy(&sdk::body_bytes(r)).into_owned() } else { r.body })
+}
+
+const TOO_LARGE_PLAYLIST: &str = "The playlist is larger than the 8 MB a plugin may read. Ask your provider for a smaller one, such as live channels only.";
+
+/// The error for a playlist that did not arrive, with the server's HTTP `status` if it answered.
+/// Only the host and port are named, since the rest of the address holds the account.
+fn playlist_error(url: &str, status: Option<u16>) -> String {
+    let at = sdk::address(url);
+    let host = at.split(['/', '?']).next().unwrap_or_default();
+    match status {
+        Some(s) => format!("The playlist server at {host} answered with error {s}. Check the playlist URL, then try again."),
+        None => format!("The playlist server didn't answer at {host}. Check the playlist URL, then try again."),
+    }
+}
 
 /// Fetches the guide and reads it as it unpacks, keeping only what fits in `budget` items.
 fn guide(url: &str, channels: &[Channel], ctx: &RefreshContext, budget: usize) -> Result<Vec<Item>, String> {
@@ -900,6 +926,14 @@ mod tests {
         let mut guide = Guide::new(channels, window, budget);
         read_guide(xml.as_bytes(), &mut guide, MAX_GUIDE_BYTES).unwrap();
         guide.into_items()
+    }
+
+    #[test]
+    fn a_failed_playlist_names_only_its_server() {
+        let url = "http://me:secret@iptv.example.com:8080/get.php?username=me&password=secret";
+        assert_eq!(playlist_error(url, Some(403)), "The playlist server at iptv.example.com:8080 answered with error 403. Check the playlist URL, then try again.");
+        assert_eq!(playlist_error("https://lists.example.org/me.m3u", None), "The playlist server didn't answer at lists.example.org. Check the playlist URL, then try again.");
+        assert_eq!(playlist(url).err().as_deref(), Some("The playlist server didn't answer at iptv.example.com:8080. Check the playlist URL, then try again."));
     }
 
     #[test]
