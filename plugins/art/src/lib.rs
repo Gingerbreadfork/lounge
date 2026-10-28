@@ -73,7 +73,7 @@ impl sdk::Plugin for Art {
                     gallery.met_offset = next;
                     gallery.hang(found, share);
                 }
-                Err(e) => problems.push(format!("{MET}: {e}")),
+                Err(e) => problems.push(e),
             }
         }
         if cma_on {
@@ -82,7 +82,7 @@ impl sdk::Plugin for Art {
                     gallery.cma_skip = next;
                     gallery.hang(found, share);
                 }
-                Err(e) => problems.push(format!("{CMA}: {e}")),
+                Err(e) => problems.push(e),
             }
         }
         if !met_on {
@@ -91,15 +91,11 @@ impl sdk::Plugin for Art {
         if !cma_on {
             gallery.paintings.retain(|p| p.museum != CMA);
         }
-        if gallery.paintings.is_empty() {
-            return Err(if problems.is_empty() {
-                format!("No paintings match \"{query}\". Try a painter's surname or a subject.")
-            } else {
-                problems.join("; ")
-            });
-        }
         for p in &problems {
             sdk::warn!("{p}");
+        }
+        if gallery.paintings.is_empty() {
+            return Err(problems.into_iter().next().unwrap_or_else(|| format!("No paintings match \"{query}\". Try a painter's surname or a subject.")));
         }
         let shown = gallery.show(max);
         gallery.save();
@@ -239,12 +235,25 @@ pub struct MetObject {
     pub object_name: String,
 }
 
+/// A museum's answer at `url`. A failure is a sentence for the TV, and its cause goes to the log.
+fn get_json<T: serde::de::DeserializeOwned>(museum: &str, url: &str) -> Result<T, String> {
+    let r = sdk::fetch_online(museum, &HttpRequest::get(url))?;
+    if !r.ok() {
+        sdk::warn!("HTTP {} for {}", r.status, sdk::redact_url(url));
+        return Err(sdk::online_error(museum, r.status));
+    }
+    serde_json::from_str(&r.body).map_err(|e| {
+        sdk::warn!("unexpected answer from {museum}: {e}");
+        sdk::unreadable(museum, &sdk::host_in_setting(url).unwrap_or_default())
+    })
+}
+
 /// The next page of the Met's paintings as ids, each looked up, and the offset to use next time.
 fn met_slice(query: &str, offset: usize, gallery: &Gallery) -> Result<(Vec<Painting>, usize), String> {
     let q = if query.is_empty() { "painting".to_string() } else { url_encode(query) };
     let highlights = if query.is_empty() { "&isHighlight=true" } else { "" };
     let url = format!("https://collectionapi.metmuseum.org/public/collection/v1.1/search?q={q}&hasImages=true{highlights}&limit={MET_PAGE}&offset={offset}");
-    let search: MetSearch = serde_json::from_str(&host::get_text(&url)?).map_err(|e| format!("unexpected search answer: {e}"))?;
+    let search: MetSearch = get_json(MET, &url)?;
     let ids = search.object_ids.unwrap_or_default();
     let next = if search.total == 0 || offset + MET_PAGE >= search.total { 0 } else { offset + MET_PAGE };
     let mut found = Vec::new();
@@ -397,7 +406,7 @@ impl CmaImage {
 fn cma_slice(query: &str, skip: usize) -> Result<(Vec<Painting>, usize), String> {
     let q = if query.is_empty() { String::new() } else { format!("&q={}", url_encode(query)) };
     let url = format!("https://openaccess-api.clevelandart.org/api/artworks/?type=Painting&has_image=1&cc0=1&limit={CMA_PAGE}&skip={skip}&fields=id,title,creators,creation_date,images{q}");
-    let page: CmaPage = serde_json::from_str(&host::get_text(&url)?).map_err(|e| format!("unexpected answer: {e}"))?;
+    let page: CmaPage = get_json(CMA, &url)?;
     let next = if page.info.total == 0 || skip + CMA_PAGE >= page.info.total { 0 } else { skip + CMA_PAGE };
     Ok((page.data.into_iter().filter_map(cma_painting).collect(), next))
 }
