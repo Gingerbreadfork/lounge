@@ -348,6 +348,12 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
     let subtitle = match it.kind {
         ItemKind::Resume | ItemKind::MediaSession => Some(content_meta(graph, it)),
         ItemKind::Program if it.flags.watch_next => Some(content_meta(graph, it)),
+        // An episode in a row leads with where it falls: "S2 E3, Honeydew".
+        ItemKind::Program => match (&it.season, &it.episode, &it.subtitle) {
+            (Some(s), Some(e), Some(sub)) => Some(format!("S{s} E{e}, {sub}")),
+            (Some(s), Some(e), None) => Some(format!("S{s} E{e}")),
+            _ => it.subtitle.clone(),
+        },
         _ => it.subtitle.clone(),
     };
     Tile {
@@ -801,6 +807,18 @@ mod tests {
         assert_eq!(left_text(23 * 60_000), "23 minutes left");
         assert_eq!(left_text(95 * 60_000), "1 h 35 min left");
         assert_eq!(left_text(120 * 60_000), "2 h left");
+    }
+
+    #[test]
+    fn an_episode_in_a_row_says_which_one() {
+        let g = Graph::default();
+        let mut it = Item::content("plugin:trakt:next:1", ItemKind::Program, "plugin:trakt", "The Bear", DeepLink::None);
+        it.subtitle = Some("Honeydew".into());
+        it.season = Some("2".into());
+        it.episode = Some("4".into());
+        assert_eq!(tile_for(&g, &it, TileKind::Landscape).subtitle.as_deref(), Some("S2 E4, Honeydew"));
+        it.season = None;
+        assert_eq!(tile_for(&g, &it, TileKind::Landscape).subtitle.as_deref(), Some("Honeydew"));
     }
 
     #[test]
