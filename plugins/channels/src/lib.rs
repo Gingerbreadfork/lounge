@@ -53,9 +53,14 @@ impl sdk::Plugin for Channels {
         match host::get_text(&format!("{base}/dvr/files")).and_then(|body| newest_recordings(&body, max_recordings)) {
             Ok(files) => {
                 let count = files.len();
+                // A recording names its channel by number; the lineup has the name.
+                let names: std::collections::HashMap<String, &str> = channels.iter().map(|c| (c.number(), c.name.as_str())).collect();
                 items.extend(files.iter().enumerate().map(|(i, f)| {
                     let mut item = recording_item(&base, f, (count - i) as i32);
                     item.is_new &= sdk::new_this_week(item.added_ms, ctx.now_ms);
+                    if let Some(name) = item.channel_name.as_deref().and_then(|n| names.get(n.trim())).filter(|n| !n.is_empty()) {
+                        item.channel_name = Some(name.to_string());
+                    }
                     item
                 }));
             }
