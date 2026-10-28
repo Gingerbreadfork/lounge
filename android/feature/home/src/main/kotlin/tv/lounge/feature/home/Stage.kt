@@ -311,7 +311,7 @@ private fun lightIn(p: Float): Float {
 }
 
 /** The frame's rectangle and the picture's placement at a given progress (1 expanded, 0 lowered), in px. */
-private class FrameGeometry(density: Density, private val focalY: Float) {
+internal class FrameGeometry(density: Density, private val focalY: Float) {
     val safe = with(density) { Dimens.safeX.toPx() }
     val bandW = with(density) { BandWidth.toPx() }
     val bandH = with(density) { Dimens.collapsedStageHeight.toPx() }
@@ -326,11 +326,14 @@ private class FrameGeometry(density: Density, private val focalY: Float) {
     fun height(p: Float) = bandH + (artH - bandH) * p
     fun scale(p: Float) = width(p) / bandW
 
-    /** The picture's top edge: its focal line at the frame's middle, never showing the frame's background. */
+    /**
+     * The picture's top edge: its focal line at the frame's middle, never showing the frame's background.
+     * A picture no taller than the frame sits at its top.
+     */
     fun pictureTop(p: Float): Float {
         val fh = height(p)
         val ph = pictureH * scale(p)
-        return (fh / 2f - focalY * ph).coerceIn(fh - ph, 0f)
+        return (fh / 2f - focalY * ph).coerceAtMost(0f).coerceAtLeast(minOf(fh - ph, 0f))
     }
 
     /** The frame's outline, in the coordinates of a node whose left edge sits at [originX]. */
