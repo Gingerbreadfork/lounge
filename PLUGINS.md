@@ -18,8 +18,8 @@ different corner of the interface:
   a gzipped guide read in chunks within a memory and time budget, and the 2,000 places shared
   fairly between channels.
 - `plugins/jellyfin` and `plugins/emby`: sign in to a server with a password, publish resume
-  points and new arrivals, answer search. Secrets, a cached token in the key-value store, deep
-  links into another app.
+  points and new arrivals, answer search. Secrets, a cached token in the key-value store, and
+  in Jellyfin's case deep links into another app; Emby's app has none, so its tiles launch it.
 - `plugins/plex`: the same with a token instead of a password, and pictures through the
   server's resizer.
 - `plugins/youtube`: a list setting parsed into sources, an Atom feed read with `quick-xml`,
@@ -331,7 +331,7 @@ Everything a plugin can do, as the SDK exposes it under `host`:
 
 | Function | What it does |
 |---|---|
-| `fetch(request)` | An HTTP request to a host in `fetch_hosts`. Bodies are capped at 8 MB, and a larger one fails with `host::TOO_LARGE`; a response body is text when it is valid UTF-8, otherwise base64 in `body_base64`, which `sdk::body_bytes` turns into bytes. Redirects are followed only to allowed hosts, and your headers go only to the origin you addressed: a redirect to another host, port or scheme drops them. `timeout_ms` shortens one request; none takes longer than 20 s, redirects included. At most 64 calls per invocation, sharing a 60 s budget. |
+| `fetch(request)` | An HTTP request to a host in `fetch_hosts`. Bodies are capped at 8 MB once unpacked, and a larger one fails with `host::TOO_LARGE`; a response body is text when it is valid UTF-8, otherwise base64 in `body_base64`, which `sdk::body_bytes` turns into bytes. Redirects are followed only to allowed hosts, and your headers go only to the origin you addressed: a redirect to another host, port or scheme drops them. `timeout_ms` shortens one request; none takes longer than 20 s, redirects included. At most 64 calls per invocation, sharing a 60 s budget. |
 | `get_text(url)` | `fetch` for a GET that must return text, failing on anything but 2xx. Its errors name the address without its query string or password, so they are safe to log; `sdk::redact` does the same for your own messages. |
 | `kv_get`, `kv_get_string`, `kv_set`, `kv_delete` | A private store: 256 keys of up to 256 KB each. Survives restarts and updates; cleared when the plugin is removed. Cache tokens and the last refresh's result here. |
 | `setting(key)` | A setting's value, or its manifest default. Nothing for a `password`. |
