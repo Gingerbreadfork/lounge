@@ -73,6 +73,9 @@ impl sdk::Plugin for Tvheadend {
                 Ok(grid) => grid,
                 Err(e) => {
                     sdk::warn!("guide unavailable: {e}");
+                    if page == 0 && sdk::last_guide_still_showing(ctx) {
+                        return Err(sdk::GUIDE_KEPT.into());
+                    }
                     break;
                 }
             };

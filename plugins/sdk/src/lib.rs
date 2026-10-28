@@ -372,6 +372,15 @@ pub fn server_address(value: &str) -> String {
     if address.contains("://") { address.to_string() } else { format!("http://{address}") }
 }
 
+/// Whether the guide from the last good refresh still reaches into the window. A refresh whose
+/// guide failed should then fail as well, so the TV keeps that guide instead of showing none.
+pub fn last_guide_still_showing(ctx: &RefreshContext) -> bool {
+    ctx.since_ms.is_some_and(|t| ctx.now_ms - t < i64::from(ctx.window_hours.max(1)) * 3_600_000)
+}
+
+/// The error for a refresh that failed only because its guide did.
+pub const GUIDE_KEPT: &str = "The guide didn't come through, so the TV is showing the last one it had. It tries again in a few minutes.";
+
 /// `url` without its query string, fragment, user name or password, for messages people read.
 pub fn redact_url(url: &str) -> String {
     let (scheme, rest) = match url.find("://") {
@@ -685,6 +694,14 @@ impl ScheduleBudget {
 #[cfg(test)]
 mod helper_tests {
     use super::*;
+
+    #[test]
+    fn the_last_guide_counts_while_it_reaches_into_the_window() {
+        let ctx = |since| RefreshContext { now_ms: 100 * 3_600_000, since_ms: since, window_hours: 12, ..Default::default() };
+        assert!(last_guide_still_showing(&ctx(Some(95 * 3_600_000))));
+        assert!(!last_guide_still_showing(&ctx(Some(88 * 3_600_000))));
+        assert!(!last_guide_still_showing(&ctx(None)));
+    }
 
     #[test]
     fn server_addresses_are_tidied() {

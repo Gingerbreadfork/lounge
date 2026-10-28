@@ -44,10 +44,16 @@ impl sdk::Plugin for HdHomeRun {
         }
         channels.truncate(sdk::MAX_ITEMS);
         let guide: Vec<GuideChannel> = match &device.device_auth {
-            Some(auth) => get_json(&format!("https://api.hdhomerun.com/api/guide?DeviceAuth={}", url_encode(auth))).unwrap_or_else(|e| {
-                sdk::warn!("guide unavailable: {e}");
-                Vec::new()
-            }),
+            Some(auth) => match get_json(&format!("https://api.hdhomerun.com/api/guide?DeviceAuth={}", url_encode(auth))) {
+                Ok(guide) => guide,
+                Err(e) => {
+                    sdk::warn!("guide unavailable: {e}");
+                    if sdk::last_guide_still_showing(ctx) {
+                        return Err(sdk::GUIDE_KEPT.into());
+                    }
+                    Vec::new()
+                }
+            },
             None => Vec::new(),
         };
         let mut items: Vec<Item> = Vec::new();

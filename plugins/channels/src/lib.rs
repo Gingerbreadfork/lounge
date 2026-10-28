@@ -76,6 +76,9 @@ impl sdk::Plugin for Channels {
         });
         if let Err(e) = read {
             sdk::warn!("guide unavailable: {e}");
+            if sdk::last_guide_still_showing(ctx) {
+                return Err(sdk::GUIDE_KEPT.into());
+            }
         }
         let schedule = schedule.finish();
         sdk::info!("{} channels, {} programmes, {recordings} recordings", channels.len(), schedule.len());
