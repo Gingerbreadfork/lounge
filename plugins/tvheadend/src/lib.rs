@@ -100,8 +100,10 @@ impl sdk::Plugin for Tvheadend {
 
     fn search(query: &str, limit: u32) -> Result<Vec<Item>, String> {
         let s = Server::from_settings()?;
-        let grid: Grid<Event> = s.get_json(&format!("/api/epg/events/grid?title={}&limit={}", url_encode(query), limit.clamp(1, 40)))?;
-        Ok(grid.entries.iter().map(|e| s.event_item(e, Some(ItemKind::Program))).collect())
+        let tag = s.tag.as_deref().map(|t| format!("&channelTag={}", url_encode(t))).unwrap_or_default();
+        let grid: Grid<Event> = s.get_json(&format!("/api/epg/events/grid?title={}&limit=200&sort=start&dir=ASC{tag}", url_encode(query)))?;
+        let now = host::now_ms();
+        Ok(first_airings(grid.entries, limit.clamp(1, 40) as usize).iter().map(|e| s.search_item(e, now)).collect())
     }
 }
 
@@ -480,6 +482,18 @@ impl Server {
         }
     }
 
+    /// A search result. Choosing it tunes the channel to whatever is on now, so it says which
+    /// channel and when the programme airs.
+    fn search_item(&self, e: &Event, now_ms: i64) -> Item {
+        let mut item = self.event_item(e, Some(ItemKind::Program));
+        let when = airs(e.start * 1000, now_ms);
+        item.subtitle = Some(match e.channel_name.as_deref().filter(|c| !c.is_empty()) {
+            Some(c) => format!("{when}, {c}"),
+            None => when,
+        });
+        item
+    }
+
     fn recording_item(&self, r: &Recording, weight: i32) -> Item {
         let path = r.url.clone().filter(|u| !u.is_empty()).unwrap_or_else(|| format!("dvrfile/{}", r.uuid));
         Item {
@@ -506,6 +520,27 @@ struct Tag {
     uuid: String,
     #[serde(default)]
     name: String,
+}
+
+/// The earliest airing of each programme on each channel, from events sorted by start.
+fn first_airings(events: Vec<Event>, limit: usize) -> Vec<Event> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out: Vec<Event> = events.into_iter().filter(|e| seen.insert((e.title.to_lowercase(), e.channel_uuid.clone()))).collect();
+    out.truncate(limit);
+    out
+}
+
+/// "On now", "Starts in 20 minutes", "Starts in 3 h", "Starts in 2 days".
+fn airs(start_ms: i64, now_ms: i64) -> String {
+    let minutes = (start_ms - now_ms + 59_999) / 60_000;
+    match minutes {
+        ..=0 => "On now".into(),
+        1 => "Starts in 1 minute".into(),
+        2..=59 => format!("Starts in {minutes} minutes"),
+        60..=1_439 => format!("Starts in {} h", minutes / 60),
+        1_440..=2_879 => "Starts in 1 day".into(),
+        _ => format!("Starts in {} days", minutes / 1_440),
+    }
 }
 
 fn first_sentence(s: &str) -> String {
@@ -544,6 +579,21 @@ fn url_encode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn search_keeps_each_programmes_first_airing_and_says_when() {
+        let ev = |title: &str, channel: &str, start: i64| -> Event {
+            serde_json::from_value(serde_json::json!({"channelUuid": channel, "channelName": "BBC One", "title": title, "start": start, "stop": start + 1800})).unwrap()
+        };
+        let kept = first_airings(vec![ev("News", "c1", 100), ev("news", "c1", 200), ev("News", "c2", 300), ev("Quiz", "c1", 400)], 10);
+        assert_eq!(kept.iter().map(|e| (e.channel_uuid.as_str(), e.start)).collect::<Vec<_>>(), [("c1", 100), ("c2", 300), ("c1", 400)]);
+        assert_eq!(airs(1_000, 5_000), "On now");
+        assert_eq!(airs(20 * 60_000, 0), "Starts in 20 minutes");
+        assert_eq!(airs(3 * 3_600_000 + 60_000, 0), "Starts in 3 h");
+        assert_eq!(airs(3 * 86_400_000, 0), "Starts in 3 days");
+        let item = server().search_item(&ev("News", "c1", 0), 0);
+        assert_eq!(item.subtitle.as_deref(), Some("On now, BBC One"));
+    }
 
     fn server() -> Server {
         Server { base: "http://tvh:9981".into(), login: Some(("me".into(), "pw".into())), auth: RefCell::new(None), url_auth: "auth=tok".into(), profile: "pass".into(), tag: None }
