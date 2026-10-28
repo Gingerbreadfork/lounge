@@ -77,7 +77,8 @@ internal fun KeepStart(state: LazyListState, firstKey: Any?) {
  * A content row: a header with an optional badge and a pivot-scrolling tile list that remembers its
  * focused child (DESIGN.md §5.3). The header follows the light, the list keeps glow room, the
  * focused tile nudges at either end, and the room dims while a menu is open on [heldTileId] in
- * the row [heldRowId].
+ * the row [heldRowId]. Both are read inside the tiles' light, so a menu opening or closing
+ * recomposes only the tile it belongs to.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -91,8 +92,8 @@ fun ContentRow(
     onTileClick: (Tile) -> Unit,
     onTileLongPress: (Tile, Rect, FocusRequester) -> Unit,
     modifier: Modifier = Modifier,
-    heldTileId: String? = null,
-    heldRowId: String? = null,
+    heldTileId: () -> String? = { null },
+    heldRowId: () -> String? = { null },
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -108,7 +109,9 @@ fun ContentRow(
     val headerAlpha = remember { Animatable(if (focusedRow.value) 1f else 0.62f) }
     LaunchedEffect(focusedRow) { snapshotFlow { focusedRow.value }.collectLatest { headerAlpha.animateTo(if (it) 1f else 0.62f, motion.settle()) } }
     val nudge = remember { Animatable(0f) }
-    val roomDim = heldTileId != null
+    val heldTile = rememberUpdatedState(heldTileId)
+    val heldRow = rememberUpdatedState(heldRowId)
+    val roomDim = remember { derivedStateOf { heldTile.value() != null } }
     KeepStart(listState, row.tiles.firstOrNull()?.id)
 
     fun nudgeBy(px: Float) {
@@ -156,14 +159,14 @@ fun ContentRow(
             ) {
                 itemsIndexed(row.tiles, key = { _, t -> t.id }) { index, tile ->
                     // The same app can sit in several rows; only the one the menu came from is held.
-                    val held = heldTileId == tile.id && heldRowId == row.id
-                    // Each tile's light is a derived State: moving focus along the row changes
-                    // neighbours' brightness without recomposing a single tile.
-                    val lights = remember(index, roomDim) {
+                    val held = remember(tile.id, row.id) { derivedStateOf { heldTile.value() == tile.id && heldRow.value() == row.id } }
+                    // Each tile's light is a derived State: moving focus along the row, or the room
+                    // dimming for a menu, changes brightness without recomposing a single tile.
+                    val lights = remember(index) {
                         derivedStateOf {
                             val f = focusedIndex.value
                             when {
-                                roomDim -> Lights.Dimmed
+                                roomDim.value -> Lights.Dimmed
                                 !focusedRow.value -> Lights.OtherRow
                                 f == -1 -> Lights.Rested
                                 kotlin.math.abs(index - f) == 1 -> Lights.Neighbour
@@ -189,7 +192,7 @@ fun ContentRow(
                             },
                             onClick = { onTileClick(tile) },
                             onLongPress = { bounds -> onTileLongPress(tile, bounds, requesterFor(index)) },
-                            held = held,
+                            held = held.value,
                             nudge = nudgeRead,
                         )
                         if (row.kind == TileKind.POSTER) {

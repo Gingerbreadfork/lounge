@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -148,10 +149,11 @@ fun TileView(
         label = "tileGlow",
     )
     val rim = animateFloatAsState(if (lit) 1f else 0f, if (lit) motion.snap() else motion.settle(), label = "tileRim")
-    val initial = remember { (if (lit) Lights.Focused else lights.value).dimmed(idle) }
+    // Read unobserved: a change of light reaches the effect below and never recomposes the tile.
+    val initial = remember { (if (lit) Lights.Focused else Snapshot.withoutReadObservation { lights.value }).dimmed(idle) }
     val animBrightness = remember { Animatable(initial.first) }
     val animSaturation = remember { Animatable(initial.second) }
-    // Keyed on the State too: a row hands a new one when the room dims or the tile moves.
+    // Keyed on the State too: a row hands a new one when the tile moves.
     LaunchedEffect(lit, idle, lights) {
         snapshotFlow { (if (lit) Lights.Focused else lights.value).dimmed(idle) }.collectLatest { (b, sat) ->
             val spec = if (idle) motion.dim<Float>() else motion.settle()

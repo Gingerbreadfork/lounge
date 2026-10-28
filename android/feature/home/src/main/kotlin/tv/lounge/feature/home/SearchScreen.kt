@@ -83,8 +83,8 @@ fun SearchScreen(
     onQueryTaken: () -> Unit = {},
     /** A tile's menu sits over the screen. */
     covered: Boolean = false,
-    heldTileId: String? = null,
-    heldRowId: String? = null,
+    heldTileId: () -> String? = { null },
+    heldRowId: () -> String? = { null },
     /** Rows from the search plugins for a query; may take seconds. */
     searchPlugins: suspend (String) -> List<CoreRow> = { emptyList() },
 ) {

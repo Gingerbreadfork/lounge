@@ -151,6 +151,9 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     // A menu opened from a search result keeps Search open beneath it.
     val searchOpen = overlay == Overlay.Search || menu?.under == Overlay.Search
     val homeMenu = menu?.takeIf { it.under == Overlay.None }
+    // The rows read the open menu through these, so opening one recomposes only the tile it came from.
+    val heldMenu: () -> Overlay.TileMenu? = { state.overlay as? Overlay.TileMenu }
+    val heldHomeMenu: () -> Overlay.TileMenu? = { heldMenu()?.takeIf { it.under == Overlay.None } }
     val opaqueOverlay = searchOpen || overlay == Overlay.Onboarding || overlay == Overlay.AmbientPreview
     FieldSleep(light, { state.lastInputAt }, opaqueOverlay)
     // The rows the lowered Stage reveals are composed in idle frames while it is still up, so
@@ -500,8 +503,8 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                             },
                             onTileClick = { perform(it) },
                             onTileLongPress = { tile, bounds, fr -> openMenu(tile, row.id, bounds, fr) },
-                            heldTileId = homeMenu?.tile?.id,
-                            heldRowId = homeMenu?.rowId,
+                            heldTileId = { heldHomeMenu()?.tile?.id },
+                            heldRowId = { heldHomeMenu()?.rowId },
                         )
                     }
                 }
@@ -613,8 +616,8 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     pendingQuery = state.pendingSearch,
                     onQueryTaken = { state.pendingSearch = null },
                     covered = menu != null,
-                    heldTileId = menu?.tile?.id,
-                    heldRowId = menu?.rowId,
+                    heldTileId = { heldMenu()?.tile?.id },
+                    heldRowId = { heldMenu()?.rowId },
                     onTileFocused = { _, _ -> },
                     onTileClick = { perform(it) },
                     onTileLongPress = { tile, rowId, bounds, fr -> openMenu(tile, rowId, bounds, fr) },
