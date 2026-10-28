@@ -8,7 +8,7 @@ use crate::auth::{PairingInfo, TokenStore};
 use crate::{CompanionActions, CompanionError, LayoutPatch};
 use axum::body::Bytes;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{ConnectInfo, DefaultBodyLimit, Path as AxPath, Query, Request, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, FromRequest, Path as AxPath, Query, Request, State};
 use axum::http::{header, HeaderMap, Method, StatusCode, Uri};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -32,7 +32,8 @@ struct App {
     actions: Arc<dyn CompanionActions>,
     tokens: Arc<TokenStore>,
     revision: tokio::sync::watch::Sender<u64>,
-    /// One upload at a time: a bundle or a backup is held in memory while it is handled.
+    /// One upload at a time. An upload reads its body only once it holds this, so a bundle or a
+    /// backup waiting its turn is not yet in memory.
     uploads: tokio::sync::Semaphore,
 }
 
@@ -541,8 +542,14 @@ async fn plugins(State(app): State<Shared>) -> Result<Response, ApiError> {
     Ok(json_raw(on_core(&app, |a| a.plugins_json()).await?))
 }
 
-async fn install_plugin(State(app): State<Shared>, body: Bytes) -> Result<Response, ApiError> {
+/// The body of an upload that holds its turn, within the route's body limit.
+async fn upload_body(req: Request) -> Result<Bytes, ApiError> {
+    Bytes::from_request(req, &()).await.map_err(|e| ApiError(e.status(), e.body_text()))
+}
+
+async fn install_plugin(State(app): State<Shared>, req: Request) -> Result<Response, ApiError> {
     let _turn = app.uploads.acquire().await.map_err(|e| bad(e.to_string()))?;
+    let body = upload_body(req).await?;
     if body.is_empty() {
         return Err(bad("empty upload".into()));
     }
@@ -610,8 +617,9 @@ async fn backup(State(app): State<Shared>) -> Result<Response, ApiError> {
         .into_response())
 }
 
-async fn restore(State(app): State<Shared>, body: Bytes) -> Result<StatusCode, ApiError> {
+async fn restore(State(app): State<Shared>, req: Request) -> Result<StatusCode, ApiError> {
     let _turn = app.uploads.acquire().await.map_err(|e| bad(e.to_string()))?;
+    let body = upload_body(req).await?;
     let json = String::from_utf8(body.to_vec()).map_err(|_| bad("backup is not UTF-8".into()))?;
     on_core(&app, move |a| a.import_json(&json)).await?.map_err(bad)?;
     Ok(StatusCode::NO_CONTENT)

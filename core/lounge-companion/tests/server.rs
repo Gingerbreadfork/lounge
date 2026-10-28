@@ -240,6 +240,57 @@ fn a_qr_link_pairs_once_for_a_token_of_its_own() {
     assert_eq!(state(json_body(&response)["token"].as_str().unwrap()), 200);
 }
 
+/// What the server has sent on `s` up to the end of a response head, or nothing within `wait`.
+fn head(s: &mut TcpStream, wait: Duration) -> String {
+    s.set_read_timeout(Some(wait)).unwrap();
+    let mut buf = Vec::new();
+    let mut byte = [0u8; 1];
+    while !buf.ends_with(b"\r\n\r\n") {
+        match s.read(&mut byte) {
+            Ok(1) => buf.push(byte[0]),
+            _ => break,
+        }
+    }
+    String::from_utf8_lossy(&buf).into_owned()
+}
+
+#[test]
+fn an_upload_is_not_read_until_its_turn() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let token = pair(&companion, &host);
+    let backup = "{\"backup\":true}";
+
+    // Each upload waits for the server's "100 Continue", which it sends once it reads the body.
+    let start = || {
+        let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let request = format!(
+            "POST /api/restore HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Length: {}\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n",
+            backup.len()
+        );
+        s.write_all(request.as_bytes()).unwrap();
+        s
+    };
+    let mut first = start();
+    assert_eq!(status(&head(&mut first, Duration::from_secs(5))), 100);
+
+    // The first holds the turn while its body arrives, and the second's body is left unread.
+    let mut second = start();
+    assert_eq!(head(&mut second, Duration::from_millis(300)), "");
+    first.write_all(backup.as_bytes()).unwrap();
+    assert_eq!(status(&head(&mut first, Duration::from_secs(5))), 204);
+    assert_eq!(status(&head(&mut second, Duration::from_secs(5))), 100);
+    second.write_all(backup.as_bytes()).unwrap();
+    assert_eq!(status(&head(&mut second, Duration::from_secs(5))), 204);
+
+    // The route's limit still holds once an upload has its turn.
+    let big = "x".repeat(2 * 1024 * 1024 + 1);
+    let (status, _) = send(port, &format!("POST /api/restore HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Length: {}\r\n\r\n{big}", big.len()));
+    assert_eq!(status, 413);
+}
+
 #[test]
 fn connections_are_capped_and_stopping_does_not_wait_for_them() {
     let dir = tempfile::tempdir().unwrap();
