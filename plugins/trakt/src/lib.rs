@@ -217,12 +217,12 @@ impl Client {
                     Renewed::Use(t) => t,
                     Renewed::SignInAgain => {
                         host::kv_delete(TOKEN_KEY);
-                        return Err(device_step(&client_id, &secret, now_ms)?);
+                        device_step(&client_id, &secret, now_ms)?
                     }
                     Renewed::TryLater(e) => return Err(e),
                 }
             }
-            None => return Err(device_step(&client_id, &secret, now_ms)?),
+            None => device_step(&client_id, &secret, now_ms)?,
         };
         Ok(Client { client_id, token: token.access })
     }
@@ -262,23 +262,23 @@ fn post(path: &str, body: serde_json::Value, client_id: &str) -> Result<(u16, St
     Ok((r.status, r.body))
 }
 
-/// Either the token has just arrived, which ends with an error anyway so the refresh runs again
-/// with it, or the instruction to show. One poll per refresh is all the host's rhythm allows.
-fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<String, String> {
+/// The token once the sign-in has gone through, so the refresh goes on with it, or else the
+/// sentence the plugin's page shows meanwhile. One poll per refresh is all the host's rhythm
+/// allows.
+fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, String> {
     let pending: Option<Device> = host::kv_get(DEVICE_KEY).and_then(|v| serde_json::from_slice(&v).ok()).filter(|d: &Device| d.expires_ms > now_ms);
     if let Some(d) = pending {
         let (status, body) = post("/oauth/device/token", serde_json::json!({ "code": d.device_code, "client_id": client_id, "client_secret": secret }), client_id)?;
         match status {
             200 => {
                 let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| format!("unexpected sign-in answer: {e}"))?;
-                save_token(&t, now_ms);
                 host::kv_delete(DEVICE_KEY);
-                return Ok("Signed in. Press Refresh now.".into());
+                return Ok(save_token(&t, now_ms));
             }
-            400 | 429 => return Ok(instruction(&d)),
+            400 | 429 => return Err(instruction(&d)),
             418 => {
                 host::kv_delete(DEVICE_KEY);
-                return Ok("The sign-in was declined on trakt.tv. Press Refresh now for a new code.".into());
+                return Err("The sign-in was declined on trakt.tv. Press Refresh now for a new code.".into());
             }
             _ => host::kv_delete(DEVICE_KEY),
         }
@@ -293,7 +293,7 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<String, Str
     let a: DeviceAnswer = serde_json::from_str(&body).map_err(|e| format!("unexpected sign-in answer: {e}"))?;
     let d = Device { device_code: a.device_code, user_code: a.user_code, verification_url: a.verification_url, expires_ms: now_ms + a.expires_in * 1000 };
     host::kv_set(DEVICE_KEY, serde_json::to_string(&d).unwrap_or_default().as_bytes());
-    Ok(instruction(&d))
+    Err(instruction(&d))
 }
 
 fn instruction(d: &Device) -> String {

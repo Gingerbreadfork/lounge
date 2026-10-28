@@ -169,12 +169,12 @@ impl Client {
                     Renewed::SignInAgain => {
                         host::kv_delete(TOKEN_KEY);
                         host::kv_delete(USER_KEY);
-                        return Err(device_step(&client_id, now_ms)?);
+                        device_step(&client_id, now_ms)?
                     }
                     Renewed::TryLater(e) => return Err(e),
                 }
             }
-            None => return Err(device_step(&client_id, now_ms)?),
+            None => device_step(&client_id, now_ms)?,
         };
         Ok(Client { client_id, token: token.access })
     }
@@ -221,25 +221,25 @@ fn post_form(url: &str, form: &[(&str, &str)]) -> Result<(u16, String), String> 
     Ok((r.status, r.body))
 }
 
-/// Either the token has just arrived, which ends the refresh so the next one runs signed in,
-/// or the instruction to show. One poll per refresh is all the host's rhythm allows.
-fn device_step(client_id: &str, now_ms: i64) -> Result<String, String> {
+/// The token once the sign-in has gone through, so the refresh goes on with it, or else the
+/// sentence the plugin's page shows meanwhile. One poll per refresh is all the host's rhythm
+/// allows.
+fn device_step(client_id: &str, now_ms: i64) -> Result<Token, String> {
     let pending: Option<Device> = host::kv_get(DEVICE_KEY).and_then(|v| serde_json::from_slice(&v).ok()).filter(|d: &Device| d.expires_ms > now_ms);
     if let Some(d) = pending {
         let (status, body) = post_form(&format!("{ID}/token"), &[("client_id", client_id), ("scopes", SCOPES), ("device_code", &d.device_code), ("grant_type", "urn:ietf:params:oauth:grant-type:device_code")])?;
         if (200..300).contains(&status) {
             let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| format!("unexpected sign-in answer: {e}"))?;
-            save_token(&t, now_ms);
             host::kv_delete(DEVICE_KEY);
-            return Ok("Signed in. Press Refresh now.".into());
+            return Ok(save_token(&t, now_ms));
         }
         let why = serde_json::from_str::<Failure>(&body).map(|f| f.message).unwrap_or_default();
         if why.contains("authorization_pending") || why.contains("slow_down") {
-            return Ok(instruction(&d));
+            return Err(instruction(&d));
         }
         host::kv_delete(DEVICE_KEY);
         if why.contains("access_denied") {
-            return Ok("The sign-in was declined on twitch.tv. Press Refresh now for a new code.".into());
+            return Err("The sign-in was declined on twitch.tv. Press Refresh now for a new code.".into());
         }
     }
     let (status, body) = post_form(&format!("{ID}/device"), &[("client_id", client_id), ("scopes", SCOPES)])?;
@@ -254,7 +254,7 @@ fn device_step(client_id: &str, now_ms: i64) -> Result<String, String> {
     let a: DeviceAnswer = serde_json::from_str(&body).map_err(|e| format!("unexpected sign-in answer: {e}"))?;
     let d = Device { device_code: a.device_code, user_code: a.user_code, verification_uri: a.verification_uri, expires_ms: now_ms + a.expires_in * 1000 };
     host::kv_set(DEVICE_KEY, serde_json::to_string(&d).unwrap_or_default().as_bytes());
-    Ok(instruction(&d))
+    Err(instruction(&d))
 }
 
 fn instruction(d: &Device) -> String {
