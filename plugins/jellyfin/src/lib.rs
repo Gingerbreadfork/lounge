@@ -10,7 +10,6 @@ use std::collections::HashMap;
 pub struct Jellyfin;
 
 const APP_PACKAGE: &str = "org.jellyfin.androidtv";
-const WEEK_MS: i64 = 7 * 86_400_000;
 /// The client header, sent as `Authorization`, which every Jellyfin reads; newer servers ignore
 /// `X-Emby-Authorization` and `api_key` unless legacy authorization is switched on. It names this
 /// TV by an id of its own, since the server signs out an older session of the same user and id.
@@ -82,7 +81,7 @@ impl sdk::Plugin for Jellyfin {
         ))?;
         for it in latest {
             let mut item = session.latest_item(&it);
-            item.is_new = item.added_ms.is_some_and(|t| ctx.now_ms - t < WEEK_MS);
+            item.is_new = sdk::new_this_week(item.added_ms, ctx.now_ms);
             items.push(item);
         }
         let favourites: ItemsResponse = session.get_json(&format!(
