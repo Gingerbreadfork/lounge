@@ -42,13 +42,14 @@ sealed interface Overlay {
 enum class FocusRegion { TopBar, Stage, Rows }
 
 /** One requester per top-bar button, so an overlay can hand focus back to the button that opened it. */
+@Stable
 class TopBarFocus {
     val search = FocusRequester()
     val guide = FocusRequester()
     val tvControls = FocusRequester()
     val nowPlaying = FocusRequester()
     val settings = FocusRequester()
-    /** The button that last had focus. */
+    /** The button that last had focus; not read by composition. */
     var last: FocusRequester = search
 }
 
