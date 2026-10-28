@@ -96,19 +96,38 @@ export function argb(v: number): string {
   return `#${(n & 0xffffff).toString(16).padStart(6, '0')}`;
 }
 
-/** Live snapshots over one WebSocket; reconnects with backoff. */
-export function liveState(onState: (s: State) => void, onStatus: (connected: boolean) => void): () => void {
+/** The live socket's close code for a phone the TV has forgotten. */
+const UNPAIRED = 4401;
+
+/** Live snapshots over one WebSocket; reconnects with backoff until the TV has forgotten this
+ *  phone, then calls `onUnpaired`. */
+export function liveState(onState: (s: State) => void, onStatus: (connected: boolean) => void, onUnpaired: () => void): () => void {
   let ws: WebSocket | null = null;
   let closed = false;
   let delay = 1000;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const unpaired = () => {
+    if (closed) return;
+    closed = true;
+    onUnpaired();
+  };
   const connect = () => {
     if (closed) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    let opened = false;
     ws = new WebSocket(`${proto}://${location.host}/api/ws`);
-    ws.onopen = () => { delay = 1000; onStatus(true); };
+    ws.onopen = () => { opened = true; delay = 1000; onStatus(true); };
     ws.onmessage = (e) => { try { onState(JSON.parse(e.data)); } catch { /* ignore */ } };
-    ws.onclose = () => { onStatus(false); if (!closed) { timer = setTimeout(connect, delay); delay = Math.min(delay * 2, 15000); } };
+    ws.onclose = (e) => {
+      onStatus(false);
+      if (closed) return;
+      if (e.code === UNPAIRED) { unpaired(); return; }
+      // A refused socket looks the same as an unreachable TV. A new session tells a forgotten
+      // phone apart, and renews the cookie if that was what failed.
+      if (!opened) api.session().catch((err) => { if (err?.status === 401) unpaired(); });
+      timer = setTimeout(connect, delay);
+      delay = Math.min(delay * 2, 15000);
+    };
     ws.onerror = () => ws?.close();
   };
   // Coming back to the app, or to the network, tries at once rather than waiting out the backoff.

@@ -106,6 +106,7 @@ export async function connect() {
   stopLive = liveState(
     (s) => { app.state = s; app.error = null; },
     (c) => { app.connected = c; if (c) app.everConnected = true; },
+    unpair,
   );
   // The socket may already have delivered a newer snapshot than this first read.
   api.state().then((s) => { if (!app.state || s.snapshot.revision >= app.state.snapshot.revision) app.state = s; }).catch((e) => {

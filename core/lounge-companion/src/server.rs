@@ -7,7 +7,7 @@
 use crate::auth::{PairingInfo, TokenStore};
 use crate::{CompanionActions, CompanionError, LayoutPatch};
 use axum::body::Bytes;
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, DefaultBodyLimit, Path as AxPath, Query, Request, State};
 use axum::http::{header, HeaderMap, Method, StatusCode, Uri};
 use axum::middleware::{self, Next};
@@ -37,6 +37,8 @@ struct App {
 }
 
 const SESSION_COOKIE: &str = "lounge_session";
+/// The live socket's close code for a phone the TV has forgotten; the page unpairs on it.
+const CLOSE_UNPAIRED: u16 = 4401;
 /// Request bodies are small JSON except on the two upload routes.
 const BODY_LIMIT: usize = 64 * 1024;
 const BUNDLE_LIMIT: usize = 16 * 1024 * 1024;
@@ -422,7 +424,7 @@ fn state_json(app: &App) -> String {
     )
 }
 
-async fn ws(State(app): State<Shared>, headers: HeaderMap, upgrade: WebSocketUpgrade) -> Result<Response, ApiError> {
+async fn ws(State(app): State<Shared>, Extension(Paired(device)): Extension<Paired>, headers: HeaderMap, upgrade: WebSocketUpgrade) -> Result<Response, ApiError> {
     // A socket opened by some other site's page is refused even with the cookie.
     let origin_host = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()).map(|o| o.split_once("://").map(|(_, h)| h).unwrap_or(o).to_string());
     let host = headers.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("");
@@ -430,32 +432,41 @@ async fn ws(State(app): State<Shared>, headers: HeaderMap, upgrade: WebSocketUpg
         return Err(ApiError(StatusCode::FORBIDDEN, "cross-site socket".into()));
     }
     // The phone only ever sends pings here, so a large message is refused before it is read.
-    Ok(upgrade.max_message_size(4096).max_frame_size(4096).on_upgrade(move |socket| ws_loop(app, socket)))
+    Ok(upgrade.max_message_size(4096).max_frame_size(4096).on_upgrade(move |socket| ws_loop(app, socket, device)))
 }
 
-async fn ws_loop(app: Shared, mut socket: WebSocket) {
+/// Pushes each new snapshot for as long as the device stays paired. Once it is forgotten the
+/// socket closes with `CLOSE_UNPAIRED`.
+async fn ws_loop(app: Shared, mut socket: WebSocket, device: String) {
     let mut rx = app.revision.subscribe();
+    let mut revoked = app.tokens.revocations();
     if socket.send(Message::Text(state_json(&app).into())).await.is_err() {
         return;
     }
     loop {
         tokio::select! {
             changed = rx.changed() => {
-                if changed.is_err() { break; }
-                if socket.send(Message::Text(state_json(&app).into())).await.is_err() { break; }
+                if changed.is_err() { return; }
+                if !app.tokens.is_paired(&device) { break; }
+                if socket.send(Message::Text(state_json(&app).into())).await.is_err() { return; }
+            }
+            changed = revoked.changed() => {
+                if changed.is_err() { return; }
+                if !app.tokens.is_paired(&device) { break; }
             }
             incoming = socket.recv() => {
                 match incoming {
                     Some(Ok(Message::Ping(p))) => { let _ = socket.send(Message::Pong(p)).await; }
-                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => return,
                     _ => {}
                 }
             }
             _ = tokio::time::sleep(std::time::Duration::from_secs(25)) => {
-                if socket.send(Message::Ping(Bytes::new())).await.is_err() { break; }
+                if socket.send(Message::Ping(Bytes::new())).await.is_err() { return; }
             }
         }
     }
+    let _ = socket.send(Message::Close(Some(CloseFrame { code: CLOSE_UNPAIRED, reason: "this phone is no longer paired".into() }))).await;
 }
 
 /// Runs a call into the launcher on tokio's blocking threads. The server has two workers, and a

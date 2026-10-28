@@ -1,7 +1,7 @@
 //! The server over a real socket: what an unpaired client gets, and what the cookie opens.
 
 use lounge_companion::{Companion, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch};
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -243,6 +243,84 @@ fn the_live_socket_upgrades() {
         ),
     );
     assert_eq!(status, 101);
+}
+
+/// Open the live socket with a session cookie and read past the upgrade's response.
+fn open_socket(port: u16, host: &str, session: &str) -> BufReader<TcpStream> {
+    let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    s.write_all(
+        format!(
+            "GET /api/ws HTTP/1.1\r\nHost: {host}\r\nCookie: lounge_session={session}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+        )
+        .as_bytes(),
+    )
+    .unwrap();
+    let mut socket = BufReader::new(s);
+    let mut line = String::new();
+    socket.read_line(&mut line).unwrap();
+    assert!(line.contains(" 101 "), "{line}");
+    while line != "\r\n" {
+        line.clear();
+        socket.read_line(&mut line).unwrap();
+    }
+    socket
+}
+
+/// The next frame the server sends, as its opcode and payload.
+fn frame(socket: &mut impl Read) -> (u8, Vec<u8>) {
+    let mut head = [0u8; 2];
+    socket.read_exact(&mut head).unwrap();
+    let len = match head[1] & 0x7f {
+        126 => {
+            let mut n = [0u8; 2];
+            socket.read_exact(&mut n).unwrap();
+            u16::from_be_bytes(n) as usize
+        }
+        127 => {
+            let mut n = [0u8; 8];
+            socket.read_exact(&mut n).unwrap();
+            u64::from_be_bytes(n) as usize
+        }
+        n => n as usize,
+    };
+    let mut payload = vec![0u8; len];
+    socket.read_exact(&mut payload).unwrap();
+    (head[0] & 0x0f, payload)
+}
+
+const TEXT: u8 = 1;
+const CLOSE: u8 = 8;
+
+fn close_code(payload: &[u8]) -> u16 {
+    u16::from_be_bytes([payload[0], payload[1]])
+}
+
+#[test]
+fn a_forgotten_phone_loses_its_live_socket() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+
+    // Forgotten from another phone, it gets no more snapshots and is told why.
+    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
+    let mut socket = open_socket(port, &host, &session_cookie(port, &host, &token));
+    assert_eq!(frame(&mut socket).0, TEXT);
+    forget(port, &host, &token);
+    companion.notify();
+    let (op, payload) = frame(&mut socket);
+    assert_eq!(op, CLOSE);
+    assert_eq!(close_code(&payload), 4401);
+
+    // Forgotten from the TV, its socket closes without waiting for a new snapshot.
+    let token = companion.new_pairing(&format!("http://{host}"), now()).unwrap().token;
+    let mut socket = open_socket(port, &host, &session_cookie(port, &host, &token));
+    assert_eq!(frame(&mut socket).0, TEXT);
+    companion.forget_all();
+    let (op, payload) = frame(&mut socket);
+    assert_eq!(op, CLOSE);
+    assert_eq!(close_code(&payload), 4401);
 }
 
 fn now() -> i64 {

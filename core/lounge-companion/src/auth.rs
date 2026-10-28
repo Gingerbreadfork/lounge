@@ -76,6 +76,8 @@ pub struct TokenStore {
     devices: Mutex<Vec<Device>>,
     pending: Mutex<HashMap<String, Pending>>,
     lockouts: Mutex<Lockouts>,
+    /// Ticks whenever a device is forgotten, so its open sockets can close at once.
+    revoked: tokio::sync::watch::Sender<()>,
 }
 
 impl TokenStore {
@@ -91,7 +93,8 @@ impl TokenStore {
             },
             Err(_) => Vec::new(),
         };
-        TokenStore { path, devices: Mutex::new(devices), pending: Mutex::new(HashMap::new()), lockouts: Mutex::new(Lockouts::default()) }
+        let revoked = tokio::sync::watch::channel(()).0;
+        TokenStore { path, devices: Mutex::new(devices), pending: Mutex::new(HashMap::new()), lockouts: Mutex::new(Lockouts::default()), revoked }
     }
 
     fn save(&self, devices: &[Device]) {
@@ -242,6 +245,7 @@ impl TokenStore {
         let changed = devices.len() != before;
         if changed {
             self.save(&devices);
+            self.revoked.send_replace(());
         }
         changed
     }
@@ -251,6 +255,16 @@ impl TokenStore {
         devices.clear();
         self.save(&devices);
         self.pending.lock().clear();
+        self.revoked.send_replace(());
+    }
+
+    pub fn is_paired(&self, device_id: &str) -> bool {
+        self.devices.lock().iter().any(|d| d.id == device_id)
+    }
+
+    /// Wakes whenever a device is forgotten.
+    pub fn revocations(&self) -> tokio::sync::watch::Receiver<()> {
+        self.revoked.subscribe()
     }
 }
 
