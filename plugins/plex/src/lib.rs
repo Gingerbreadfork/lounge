@@ -46,9 +46,10 @@ impl sdk::Plugin for Plex {
         // Asked of each movie and TV library, so music and photos never take the row's places.
         let wanted = libraries_setting();
         let sections: Container = server.get_json("/library/sections")?;
-        let chosen = video_sections(&sections.media_container.directory, &wanted);
+        let mut chosen = video_sections(&sections.media_container.directory, &wanted);
         if chosen.is_empty() && !wanted.is_empty() {
-            sdk::warn!("no movie or TV library is called {}", wanted.join(" or "));
+            sdk::warn!("no movie or TV library is called {}, so every one is used; check the names in the plugin's settings", wanted.join(" or "));
+            chosen = video_sections(&sections.media_container.directory, &[]);
         }
         let mut recent: Vec<Metadata> = Vec::new();
         for section in chosen {
