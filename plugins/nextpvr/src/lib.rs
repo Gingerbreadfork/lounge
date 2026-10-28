@@ -2,7 +2,7 @@
 //! into Continue watching and the rest fill a "Recordings" row. The server wants a session
 //! signed in with its PIN; the session is kept between refreshes, and play addresses are
 //! worked out when something is selected so they always carry a live session.
-use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -88,7 +88,11 @@ impl sdk::Plugin for NextPvr {
 
     fn resolve(action: &str) -> Result<Action, String> {
         let s = Server::connect()?;
-        let (what, rest) = action.split_once(':').ok_or_else(|| format!("unknown action {action}"))?;
+        let unknown = || {
+            sdk::warn!("unknown action {action}");
+            "This tile is out of date. Refresh the plugin, then try again.".to_string()
+        };
+        let (what, rest) = action.split_once(':').ok_or_else(unknown)?;
         let (id, title) = rest.split_once('|').unwrap_or((rest, rest));
         match what {
             "live" => Ok(Action::play(format!("{}/live?channel={id}&client=lounge&sid={}", s.base, s.sid), title)),
@@ -99,7 +103,7 @@ impl sdk::Plugin for NextPvr {
                 play.start_ms = start;
                 Ok(play)
             }
-            _ => Err(format!("unknown action {action}")),
+            _ => Err(unknown()),
         }
     }
 }
@@ -252,22 +256,25 @@ impl Server {
             }
         }
         let pin = host::secret("pin").map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).unwrap_or_else(|| "0000".into());
-        let init: Status = get_json(&format!("{base}/service?method=session.initiate&ver=1.0&device=lounge&format=json")).map_err(|e| format!("No NextPVR at {}: {e}", sdk::redact_url(&base)))?;
+        let init: Status = get_json(&base, "session.initiate", "&ver=1.0&device=lounge")?;
         let (sid, salt) = match (init.sid, init.salt) {
             (Some(sid), Some(salt)) => (sid, salt),
-            _ => return Err("NextPVR did not start a session".into()),
+            _ => return Err(format!("NextPVR at {} didn't start a session. Check the server, then try again.", sdk::address(&base))),
         };
         let digest = md5_hex(&format!(":{}:{salt}", md5_hex(&pin)));
-        let login: Status = get_json(&format!("{base}/service?method=session.login&sid={sid}&md5={digest}&format=json")).map_err(|e| format!("session.login: {e}"))?;
+        let login: Status = get_json(&base, "session.login", &format!("&sid={sid}&md5={digest}"))?;
         if login.stat != "ok" {
-            return Err(format!("NextPVR rejected the PIN{}", login.msg.map(|m| format!(": {m}")).unwrap_or_default()));
+            if let Some(m) = login.msg {
+                sdk::warn!("session.login: {m}");
+            }
+            return Err("NextPVR rejected the PIN. Check it in the plugin's settings.".into());
         }
         host::kv_set(SESSION_KEY, serde_json::to_string(&SavedSession { base: base.clone(), sid: sid.clone() }).unwrap_or_default().as_bytes());
         Ok(Server { base, sid })
     }
 
     fn call<T: serde::de::DeserializeOwned>(&self, method: &str, params: &str) -> Result<T, String> {
-        get_json(&format!("{}/service?method={method}&sid={}{params}&format=json", self.base, self.sid)).map_err(|e| format!("{method}: {e}"))
+        get_json(&self.base, method, &format!("&sid={}{params}", self.sid))
     }
 
     /// The guide needs one call per channel, so each refresh takes the next slice of channels and
@@ -495,9 +502,18 @@ impl Watched {
     }
 }
 
-fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
-    let body = host::get_text(url)?;
-    serde_json::from_str(&body).map_err(|e| format!("unexpected answer from NextPVR: {e}"))
+/// Calls `method` of NextPVR's service at `base` with `params`. A failure names the server and what
+/// to check, and the method and cause go to the log.
+fn get_json<T: serde::de::DeserializeOwned>(base: &str, method: &str, params: &str) -> Result<T, String> {
+    let r = sdk::fetch_from("NextPVR", base, &HttpRequest::get(format!("{base}/service?method={method}{params}&format=json")))?;
+    if !r.ok() {
+        sdk::warn!("HTTP {} for {method}", r.status);
+        return Err(sdk::answered_error("NextPVR", base, r.status));
+    }
+    serde_json::from_str(&r.body).map_err(|e| {
+        sdk::warn!("unexpected answer to {method}: {e}");
+        sdk::unreadable("NextPVR", base)
+    })
 }
 
 pub fn md5_hex(s: &str) -> String {
