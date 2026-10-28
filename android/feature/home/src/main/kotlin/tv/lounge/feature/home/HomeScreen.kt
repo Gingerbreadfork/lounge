@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
@@ -135,6 +136,8 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
             state.idle = true
         }
     }
+    // Coming back from another app counts as input; the Home key that brings Lounge back never reaches Compose.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { state.touched() }
     // First run: the persisted snapshot paints first, then the setup steps come up over it.
     LaunchedEffect(uiPrefs.loaded, uiPrefs.onboardingDone) {
         if (uiPrefs.loaded && !uiPrefs.onboardingDone && state.overlay == Overlay.None) {
@@ -282,6 +285,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 // Home from another app: the rows are already home when the window appears. After
                 // a while away the Stage opens on its first tile again (DESIGN.md 6.4).
                 UiCommand.GoHome -> {
+                    state.touched()
                     val now = System.currentTimeMillis()
                     if (now - state.lastHomeAt > HOME_KEEPS_PLACE_MS) {
                         state.stageTileId = null
