@@ -5,7 +5,10 @@ plugins {
 android {
     namespace = "tv.lounge.power"
     compileSdk = 37
-    defaultConfig { minSdk = 28 }
+    defaultConfig {
+        minSdk = 28
+        consumerProguardFiles("consumer-rules.pro")
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
