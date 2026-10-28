@@ -1,5 +1,5 @@
 //! Internet Archive: three rows of free, legally hosted video from archive.org collections,
-//! and search across its films. A row lists a collection's best-rated items; selecting one
+//! and search across those collections. A row lists a collection's best-rated items; selecting one
 //! looks up its files and plays the MP4 in the TV's own player.
 use lounge_plugin_sdk::{self as sdk, host, Action, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
@@ -47,7 +47,7 @@ impl sdk::Plugin for Archive {
         let mut failures = Vec::new();
         let mut shown = HashSet::new();
         for (row, _, default) in ROWS {
-            let collection = host::setting(&format!("{row}_collection")).map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).unwrap_or_else(|| default.to_string());
+            let collection = collection_for(row, default);
             // A few extra, as an item already in an earlier row is left out of this one.
             let wanted = per_row + 8;
             let docs = match search(&collection_query(&collection, true), wanted) {
@@ -73,8 +73,8 @@ impl sdk::Plugin for Archive {
 
     fn search(query: &str, limit: u32) -> Result<Vec<Item>, String> {
         let Some(title) = title_query(query) else { return Ok(Vec::new()) };
-        let q = format!("{title} AND mediatype:movies");
-        Ok(search(&q, limit.clamp(1, 40) as usize)?.iter().map(|d| item_for(d, None, 0)).collect())
+        let collections: Vec<String> = ROWS.iter().map(|(row, _, default)| collection_for(row, default)).collect();
+        Ok(search(&search_query(&title, &collections), limit.clamp(1, 40) as usize)?.iter().map(|d| item_for(d, None, 0)).collect())
     }
 
     fn resolve(action: &str) -> Result<Action, String> {
@@ -167,13 +167,28 @@ impl ArchiveFile {
     }
 }
 
+/// The collection a row shows: its setting, or the row's own default.
+fn collection_for(row: &str, default: &str) -> String {
+    host::setting(&format!("{row}_collection")).map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).unwrap_or_else(|| default.to_string())
+}
+
 /// A collection's films, leaving out what a living room row should not surprise anyone with.
 fn collection_query(collection: &str, well_rated: bool) -> String {
-    let base = format!("collection:{} AND mediatype:movies AND NOT (subject:({EXCLUDED}) OR title:({EXCLUDED}))", quote(collection));
+    let base = format!("collection:{} AND {}", quote(collection), suitable());
     if well_rated { format!("{base} AND avg_rating:[4 TO 5] AND num_reviews:[3 TO 100000]") } else { base }
 }
 
-const EXCLUDED: &str = "sex OR adult OR erotic OR erotica OR nudist OR nudism OR nudity OR sexploitation";
+/// A title search across the rows' collections, kept to what the rows would show.
+fn search_query(title: &str, collections: &[String]) -> String {
+    let within: Vec<String> = collections.iter().map(|c| quote(c)).collect();
+    format!("{title} AND collection:({}) AND {}", within.join(" OR "), suitable())
+}
+
+fn suitable() -> String {
+    format!("mediatype:movies AND NOT (subject:({EXCLUDED}) OR title:({EXCLUDED}))")
+}
+
+const EXCLUDED: &str = "sex OR adult OR erotic OR erotica OR nudist OR nudism OR nudity OR sexploitation OR burlesque OR striptease";
 
 fn search(query: &str, rows: usize) -> Result<Vec<Doc>, String> {
     let url = format!(
@@ -357,6 +372,14 @@ mod tests {
             {"name": "__ia_thumb.jpg", "format": "Item Tile", "size": "12290"}
         ]"#).unwrap();
         assert_eq!(best_video(&files).unwrap().name, "x.mp4");
+    }
+
+    #[test]
+    fn search_keeps_to_the_rows_collections_and_their_filter() {
+        let q = search_query("title:(girl*)", &["feature_films".into(), "classic_tv".into()]);
+        assert!(q.starts_with("title:(girl*) AND collection:(feature_films OR classic_tv) AND mediatype:movies AND NOT ("), "{q}");
+        assert!(q.contains("burlesque"));
+        assert!(collection_query("feature_films", false).ends_with(&suitable()));
     }
 
     #[test]
