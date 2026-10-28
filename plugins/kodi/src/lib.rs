@@ -134,15 +134,14 @@ impl sdk::Plugin for Kodi {
     fn search(query: &str, limit: u32) -> Result<Vec<Item>, String> {
         let kodi = Server::connect()?;
         let limit = limit.clamp(1, 50) as usize;
-        let mut items = Vec::new();
         let movies: Movies = kodi.call("VideoLibrary.GetMovies", json!({
             "filter": {"field": "title", "operator": "contains", "value": query}, "properties": MOVIE_PROPS, "limits": {"end": limit}
         }))?;
-        items.extend(movies.movies.iter().map(|m| kodi.movie_item(m, false, 0)));
         let shows: Shows = kodi.call("VideoLibrary.GetTVShows", json!({
             "filter": {"field": "title", "operator": "contains", "value": query}, "properties": ["title", "art", "lastplayed", "year"], "limits": {"end": limit}
         }))?;
-        items.extend(shows.tvshows.iter().map(|s| kodi.show_item(s)));
+        // Turn about, so a word that matches many films still finds the shows.
+        let mut items = take_turns(movies.movies.iter().map(|m| kodi.movie_item(m, false, 0)), shows.tvshows.iter().map(|s| kodi.show_item(s)));
         items.truncate(limit);
         Ok(items)
     }
@@ -556,9 +555,27 @@ fn base64(bytes: &[u8]) -> String {
     out
 }
 
+/// One from `a`, one from `b`, and so on, then whatever is left of the longer.
+fn take_turns<T>(a: impl IntoIterator<Item = T>, b: impl IntoIterator<Item = T>) -> Vec<T> {
+    let (mut a, mut b) = (a.into_iter(), b.into_iter());
+    let mut out = Vec::new();
+    loop {
+        match (a.next(), b.next()) {
+            (None, None) => return out,
+            (x, y) => out.extend(x.into_iter().chain(y)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn search_results_take_turns() {
+        assert_eq!(take_turns(["m1", "m2", "m3"], ["s1"]), ["m1", "s1", "m2", "m3"]);
+        assert_eq!(take_turns(Vec::<&str>::new(), ["s1", "s2"]), ["s1", "s2"]);
+    }
 
     fn kodi() -> Server {
         Server::new("http://kodi.lan:8080", Some("kodi"), "s3cret")
