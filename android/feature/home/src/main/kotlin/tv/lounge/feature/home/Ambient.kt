@@ -29,7 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.drawBehind
@@ -334,14 +336,20 @@ fun Screensaver(core: CoreClient, prefs: Prefs, preview: Boolean = false) {
     }
 }
 
-/** The screensaver shown in-app for a look; the first key press closes it. */
+/** The screensaver shown in-app for a look; the first key press closes it, except volume and mute. */
 @Composable
 fun AmbientPreview(core: CoreClient, prefs: Prefs, onClose: () -> Unit) {
     val focus = remember { FocusRequester() }
     Box(
         Modifier
             .fillMaxSize()
-            .onPreviewKeyEvent { e -> if (e.type == KeyEventType.KeyUp) { onClose(); true } else true }
+            .onPreviewKeyEvent { e ->
+                when {
+                    e.key == Key.VolumeUp || e.key == Key.VolumeDown || e.key == Key.VolumeMute -> false
+                    e.type == KeyEventType.KeyUp -> { onClose(); true }
+                    else -> true
+                }
+            }
             .focusRequester(focus)
             .focusable(),
     ) {
