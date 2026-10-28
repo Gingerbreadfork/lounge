@@ -13,6 +13,11 @@ const UP_NEXT_SHOWS: usize = 12;
 const RECENT: usize = 20;
 const IN_PROGRESS: usize = 30;
 
+/// The error for a call Kodi answers with an error of its own.
+const TURNED_DOWN: &str = "Kodi turned down the plugin's request. Check that Kodi is up to date, then try again.";
+/// The error for a tile whose action this version of the plugin does not know.
+const OUT_OF_DATE: &str = "This tile is out of date. Refresh the plugin, then try again.";
+
 impl sdk::Plugin for Kodi {
     fn manifest() -> Manifest {
         Manifest {
@@ -123,6 +128,7 @@ impl sdk::Plugin for Kodi {
                     }
                 }
                 // Kodi without a PVR client answers with an error, which is not a problem here.
+                Err(e) if e == TURNED_DOWN => sdk::info!("no Live TV"),
                 Err(e) => sdk::info!("no Live TV: {e}"),
             }
         }
@@ -155,8 +161,12 @@ impl sdk::Plugin for Kodi {
         if front && kodi.on_this_tv() && !kodi.answers() {
             return Ok(Action { launch: Some(app()), ..Default::default() });
         }
-        let (what, id) = action.split_once(':').ok_or_else(|| format!("unknown action {action}"))?;
-        let id: u64 = id.parse().map_err(|_| format!("unknown action {action}"))?;
+        let unknown = || {
+            sdk::warn!("unknown action {action}");
+            OUT_OF_DATE.to_string()
+        };
+        let (what, id) = action.split_once(':').ok_or_else(unknown)?;
+        let id: u64 = id.parse().map_err(|_| unknown())?;
         let item = match what {
             "movie" => json!({"movieid": id}),
             "episode" => json!({"episodeid": id}),
@@ -165,10 +175,11 @@ impl sdk::Plugin for Kodi {
                 let next = kodi.next_episode(id)?.or_else(|| kodi.first_episode(id).ok().flatten()).ok_or("Kodi has no episodes of this show")?;
                 json!({"episodeid": next.episodeid})
             }
-            _ => return Err(format!("unknown action {action}")),
+            _ => return Err(unknown()),
         };
         let resume = what != "channel";
-        kodi.call::<Value>("Player.Open", json!({"item": item, "options": {"resume": resume}})).map_err(|e| format!("Kodi would not play it: {e}"))?;
+        kodi.call::<Value>("Player.Open", json!({"item": item, "options": {"resume": resume}}))
+            .map_err(|e| if e == TURNED_DOWN { "Kodi would not play it. Refresh the plugin, then try again.".into() } else { e })?;
         Ok(if front { Action { launch: Some(app()), ..Default::default() } } else { Action::default() })
     }
 }
@@ -410,15 +421,24 @@ impl Server {
             }
         })?;
         match r.status {
-            401 => return Err("Kodi refused the username or password".into()),
-            s if !(200..300).contains(&s) => return Err(format!("Kodi answered HTTP {s} to {method}")),
+            401 => return Err("Kodi refused the username or password. Check them in the plugin's settings.".into()),
+            s if !(200..300).contains(&s) => {
+                sdk::warn!("HTTP {s} for {method}");
+                return Err(sdk::answered_error("Kodi", &self.base, s));
+            }
             _ => {}
         }
-        let reply: Reply<T> = serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer to {method}: {e}"))?;
+        let unreadable = |why: &str| {
+            sdk::warn!("unexpected answer to {method}: {why}");
+            sdk::unreadable("Kodi", &self.base)
+        };
+        let reply: Reply<T> = serde_json::from_str(&r.body).map_err(|e| unreadable(&e.to_string()))?;
         if let Some(e) = reply.error {
-            return Err(format!("{method}: {} ({})", e.message, e.code));
+            // Kodi without a PVR client turns down the PVR calls, which is no cause for a warning.
+            sdk::info!("{method}: {} ({})", e.message, e.code);
+            return Err(TURNED_DOWN.into());
         }
-        reply.result.ok_or_else(|| format!("{method}: no result"))
+        reply.result.ok_or_else(|| unreadable("no result"))
     }
 
     /// The first episode not yet watched, in season and episode order, specials left out.
