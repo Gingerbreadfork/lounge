@@ -34,8 +34,14 @@ impl sdk::Plugin for HdHomeRun {
             Some(d) => sdk::server_address(&d),
             None => discover()?,
         };
-        let device: Discover = get_json(&format!("{base}/discover.json")).map_err(|e| format!("No HDHomeRun at {}: {e}", sdk::redact_url(&base)))?;
-        let lineup: Vec<LineupEntry> = get_json(&device.lineup_url.clone().unwrap_or_else(|| format!("{base}/lineup.json")))?;
+        let device: Discover = get_json(&format!("{base}/discover.json")).map_err(|e| {
+            sdk::warn!("{e}");
+            format!("No HDHomeRun answered at {}. Check the tuner and its address, then try again.", sdk::address(&base))
+        })?;
+        let lineup: Vec<LineupEntry> = get_json(&device.lineup_url.clone().unwrap_or_else(|| format!("{base}/lineup.json"))).map_err(|e| {
+            sdk::warn!("{e}");
+            format!("The HDHomeRun at {} didn't send its channels. Check the tuner, then try again.", sdk::address(&base))
+        })?;
         let skip_drm = host::setting("skip_drm").map(|v| v != "false").unwrap_or(true);
         let mut numbers = HashSet::new();
         let mut channels: Vec<&LineupEntry> = lineup.iter().filter(|c| (!skip_drm || c.drm != Some(1)) && !c.url.is_empty() && numbers.insert(c.guide_number.as_str())).collect();
@@ -147,7 +153,10 @@ fn discover() -> Result<String, String> {
         #[serde(rename = "LineupURL")]
         lineup_url: Option<String>,
     }
-    let found: Vec<Found> = get_json("https://ipv4-api.hdhomerun.com/discover").map_err(|e| format!("Could not look for tuners: {e}. Enter the tuner's address instead."))?;
+    let found: Vec<Found> = get_json("https://ipv4-api.hdhomerun.com/discover").map_err(|e| {
+        sdk::warn!("{e}");
+        "Could not look for tuners. Check the TV's internet connection, or enter the tuner's address in the plugin's settings.".to_string()
+    })?;
     found
         .into_iter()
         .filter(|f| f.lineup_url.is_some())
