@@ -46,6 +46,7 @@ import tv.lounge.core.CoreClient
 import tv.lounge.core.PluginInfo
 import tv.lounge.core.PluginSettingInfo
 import tv.lounge.design.Hairline
+import tv.lounge.design.LocalSwapSlotActive
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.focusRing
@@ -55,22 +56,28 @@ import tv.lounge.design.lightGlow
 @Composable
 fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRequester, cameFrom: Overlay? = null) {
     val colors = LoungeTheme.colors
-    var plugins by remember { mutableStateOf(core.plugins()) }
-    // Each read waits on the core's lock, which a big refresh can hold, so the polls run off the main thread.
+    var plugins by remember { mutableStateOf<List<PluginInfo>?>(null) }
+    // Each read waits on the core's lock, which a big refresh can hold, so the reads run off the main thread.
     WhileStarted {
         while (true) {
-            delay(2000)
             plugins = withContext(Dispatchers.IO) { core.plugins() }
+            delay(2000)
         }
     }
+    // The rows land after the sheet first asks for focus; a copy being swapped out leaves focus alone.
+    val live = LocalSwapSlotActive.current
+    LaunchedEffect(plugins != null) { if (plugins != null && live.value) firstFocus.requestWhenReady() }
+    val list = plugins
     // Back from a plugin's page puts focus on that plugin, if it is still there.
-    val returnTo = (cameFrom as? Overlay.PluginDetail)?.id?.takeIf { id -> plugins.any { it.id == id } }
+    val returnTo = (cameFrom as? Overlay.PluginDetail)?.id?.takeIf { id -> list.orEmpty().any { it.id == id } }
     SheetHeading("Plugins", "Sources that add rows, channels and guide data. Each runs in its own sandbox.")
-    if (plugins.isEmpty()) {
+    if (list == null) {
+        Text("Loading…", style = LoungeTheme.typography.meta, color = colors.dust)
+    } else if (list.isEmpty()) {
         Text("No plugins installed.", style = LoungeTheme.typography.meta, color = colors.dust)
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            plugins.forEachIndexed { i, p ->
+            list.forEachIndexed { i, p ->
                 SheetRow(
                     icon = LoungeIcons.Apps,
                     title = p.name,
@@ -99,16 +106,24 @@ private fun statusWord(p: PluginInfo): String = when {
 @Composable
 fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
-    var info by remember { mutableStateOf(core.plugins().firstOrNull { it.id == pluginId }) }
+    var info by remember { mutableStateOf<PluginInfo?>(null) }
+    var loaded by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
-    var log by remember { mutableStateOf<List<String>>(emptyList()) }
+    var log by remember { mutableStateOf<List<String>?>(null) }
     val scope = rememberCoroutineScope()
     WhileStarted(pluginId) {
         while (true) {
-            delay(1500)
             info = withContext(Dispatchers.IO) { core.plugins().firstOrNull { it.id == pluginId } }
+            loaded = true
             if (showLog) log = withContext(Dispatchers.IO) { core.pluginLog(pluginId) }
+            delay(1500)
         }
+    }
+    val live = LocalSwapSlotActive.current
+    LaunchedEffect(loaded) { if (loaded && live.value) firstFocus.requestWhenReady() }
+    if (!loaded) {
+        Text("Loading…", style = LoungeTheme.typography.meta, color = colors.dust)
+        return
     }
     val p = info ?: run {
         SheetHeading("Plugin", "This plugin is no longer installed.")
@@ -150,8 +165,8 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             p.settings.forEach { s ->
                 SettingField(
                     setting = s,
-                    onCommit = { value -> core.setPluginSetting(p.id, s.key, value) },
-                    onToggle = { on -> core.setPluginSetting(p.id, s.key, if (on) "true" else "false") },
+                    onCommit = { value -> scope.launch { withContext(Dispatchers.IO) { core.setPluginSetting(p.id, s.key, value) } } },
+                    onToggle = { on -> scope.launch { withContext(Dispatchers.IO) { core.setPluginSetting(p.id, s.key, if (on) "true" else "false") } } },
                 )
             }
             Spacer(Modifier.height(8.dp))
@@ -159,12 +174,24 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
         if (p.enabled) {
             SheetRow(icon = LoungeIcons.Move, title = "Refresh now", onClick = { core.refreshPlugin(p.id) })
         }
-        SheetRow(icon = LoungeIcons.Info, title = "Log", value = if (showLog) "Hide" else "Show", onClick = { showLog = !showLog; if (showLog) log = core.pluginLog(pluginId) })
+        SheetRow(
+            icon = LoungeIcons.Info,
+            title = "Log",
+            value = if (showLog) "Hide" else "Show",
+            onClick = {
+                showLog = !showLog
+                if (showLog) scope.launch { log = withContext(Dispatchers.IO) { core.pluginLog(pluginId) } }
+            },
+        )
         if (showLog) {
             Column(Modifier.padding(start = 20.dp, top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (log.isEmpty()) Text("Nothing logged yet.", style = LoungeTheme.typography.caption, color = colors.dust)
-                log.takeLast(12).forEach { line ->
-                    Text(line.substringAfter(' '), style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val lines = log
+                when {
+                    lines == null -> Text("Loading…", style = LoungeTheme.typography.caption, color = colors.dust)
+                    lines.isEmpty() -> Text("Nothing logged yet.", style = LoungeTheme.typography.caption, color = colors.dust)
+                    else -> lines.takeLast(12).forEach { line ->
+                        Text(line.substringAfter(' '), style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }
