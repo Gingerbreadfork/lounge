@@ -360,7 +360,11 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         light_argb: it.light(),
         progress: it.progress,
         badge,
-        action: format!("open:{}", it.id),
+        action: match &it.deep_link {
+            // Said outright, so search can leave out a tile that would only open search again.
+            DeepLink::Control(c) if c.starts_with("search:") => format!("control:{c}"),
+            _ => format!("open:{}", it.id),
+        },
         pinned: it
             .package()
             .map(|p| graph.layout.pinned_apps.iter().any(|x| x == p))
@@ -786,6 +790,15 @@ mod tests {
         assert_eq!(left_text(23 * 60_000), "23 minutes left");
         assert_eq!(left_text(95 * 60_000), "1 h 35 min left");
         assert_eq!(left_text(120 * 60_000), "2 h left");
+    }
+
+    #[test]
+    fn a_tile_that_only_searches_says_so() {
+        let g = Graph::default();
+        let trakt = Item::content("plugin:trakt:next:1", ItemKind::Program, "plugin:trakt", "Severance", DeepLink::Control("search:Severance".into()));
+        assert_eq!(tile_for(&g, &trakt, TileKind::Landscape).action, "control:search:Severance");
+        let film = Item::content("plugin:jellyfin:latest:1", ItemKind::Program, "plugin:jellyfin", "Static Bloom", DeepLink::ViewUri("intent:#Intent;end".into()));
+        assert_eq!(tile_for(&g, &film, TileKind::Poster).action, "open:plugin:jellyfin:latest:1");
     }
 
     #[test]

@@ -265,7 +265,8 @@ private fun search(snapshot: HomeSnapshot, query: String): List<CoreRow> {
     }
     val seen = HashSet<String>()
     return snapshot.rows.mapNotNull { row ->
-        val hits = row.tiles.filter { matches(it) && seen.add(it.id) }
+        // A tile that only opens search would lead straight back here.
+        val hits = row.tiles.filter { matches(it) && !it.action.startsWith("control:search:") && seen.add(it.id) }
         if (hits.isEmpty()) null else row.copy(tiles = hits)
     }
 }
