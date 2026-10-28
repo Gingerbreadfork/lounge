@@ -324,3 +324,37 @@ fn a_film_that_plays_on_is_one_sitting() {
     let last_used: i64 = db.query_row("SELECT last_used_ms FROM app_usage WHERE package = 'film.app'", [], |r| r.get(0)).unwrap();
     assert_eq!(last_used, now);
 }
+
+/// Adds another listener from inside its first snapshot.
+struct Reentrant {
+    core: Mutex<Option<Arc<Core>>>,
+    added: Arc<Latest>,
+}
+
+impl SnapshotListener for Reentrant {
+    fn on_snapshot(&self, _: HomeSnapshot) {
+        let core = self.core.lock().take();
+        if let Some(core) = core {
+            core.add_listener(self.added.clone());
+        }
+    }
+}
+
+#[test]
+fn a_listener_may_add_another_from_its_first_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = Core::open(config(dir.path()), Arc::new(Quiet)).unwrap();
+    let added = Arc::new(Latest::default());
+    let listener = Arc::new(Reentrant { core: Mutex::new(Some(core.clone())), added: added.clone() });
+    let (done, returned) = std::sync::mpsc::channel();
+    let adding = core.clone();
+    std::thread::spawn(move || {
+        adding.add_listener(listener);
+        let _ = done.send(());
+    });
+    returned.recv_timeout(Duration::from_secs(5)).expect("add_listener never returned");
+    assert!(added.1.load(Ordering::SeqCst) >= 1);
+
+    core.ingest_apps(vec![app("one.app")]);
+    wait_for("the added listener's next snapshot", || added.0.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "allapps")));
+}

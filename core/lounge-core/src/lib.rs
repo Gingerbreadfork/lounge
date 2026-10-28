@@ -730,11 +730,20 @@ impl Core {
     /// Register for snapshots. The current snapshot is delivered immediately.
     pub fn add_listener(&self, listener: Arc<dyn SnapshotListener>) {
         self.count();
-        // Under the lock the worker holds while it publishes, so a snapshot published meanwhile
-        // is neither missed nor overtaken by this older one.
-        let mut listeners = self.inner.listeners.lock();
-        listener.on_snapshot(self.inner.snapshot.read().clone());
-        listeners.push(listener);
+        // Delivered with no lock held, so the listener may call back into the core. It is listed
+        // once nothing newer came out meanwhile, so it neither misses one nor ends on an older one.
+        let mut snapshot = self.inner.snapshot.read().clone();
+        loop {
+            let delivered = snapshot.revision;
+            listener.on_snapshot(snapshot);
+            let mut listeners = self.inner.listeners.lock();
+            let current = self.inner.snapshot.read();
+            if current.revision == delivered {
+                listeners.push(listener);
+                return;
+            }
+            snapshot = current.clone();
+        }
     }
 
     pub fn snapshot(&self) -> HomeSnapshot {
