@@ -65,13 +65,14 @@ impl sdk::Plugin for Jellyfin {
             "/Shows/NextUp?UserId={}&Limit=24&EnableResumable=false&EnableImageTypes=Primary,Backdrop,Thumb",
             session.user_id
         ))?;
-        if !next_up.items.is_empty() {
+        let next_up = not_started(next_up.items);
+        if !next_up.is_empty() {
             let played: ItemsResponse = session.get_json(&format!(
                 "/Users/{}/Items?Recursive=true&IncludeItemTypes=Episode&IsPlayed=true&SortBy=DatePlayed&SortOrder=Descending&Limit=200&EnableImages=false",
                 session.user_id
             ))?;
             let finished = Finished::from_plays(&played.items);
-            for it in next_up.items {
+            for it in next_up {
                 items.push(session.next_up_item(&it, &finished));
             }
         }
@@ -350,6 +351,12 @@ fn open(item: &MediaItem) -> Action {
     }
 }
 
+/// The next episodes not yet started. Older servers ignore `EnableResumable=false`, and a started
+/// episode already has a resume tile.
+fn not_started(next_up: Vec<MediaItem>) -> Vec<MediaItem> {
+    next_up.into_iter().filter(|it| !it.user_data.as_ref().and_then(|u| u.position_ticks).is_some_and(|t| t > 0)).collect()
+}
+
 /// When an episode of each series was last finished, from the most recent plays.
 struct Finished {
     by_series: HashMap<String, i64>,
@@ -470,6 +477,18 @@ mod tests {
         assert_eq!(finished.at(Some("sb")), parse_iso8601("2026-10-18T00:00:00Z"));
         assert_eq!(finished.at(Some("older")), parse_iso8601("2026-10-10T00:00:00Z"));
         assert_eq!(Finished::from_plays(&[]).at(Some("sa")), None);
+    }
+
+    #[test]
+    fn a_started_episode_up_next_is_left_to_its_resume_tile() {
+        let next_up: ItemsResponse = serde_json::from_str(
+            r#"{"Items":[{"Id":"a3","Name":"Three","Type":"Episode","SeriesId":"sa","UserData":{"PlaybackPositionTicks":9000000000,"Played":false}},
+                {"Id":"b2","Name":"Two","Type":"Episode","SeriesId":"sb","UserData":{"PlaybackPositionTicks":0,"Played":false}},
+                {"Id":"c1","Name":"One","Type":"Episode","SeriesId":"sc"}]}"#,
+        )
+        .unwrap();
+        let ids: Vec<String> = not_started(next_up.items).into_iter().map(|it| it.id).collect();
+        assert_eq!(ids, ["b2", "c1"]);
     }
 
     #[test]
