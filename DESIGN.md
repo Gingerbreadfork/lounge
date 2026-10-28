@@ -75,7 +75,7 @@ The light is applied in three places when a tile is focused:
 |---|---|
 | Glow | Outer shadow, `light` at 34 % alpha, blur 32 px, spread 0, offset 0 0. |
 | Shader wallpaper | Beneath the spill: a slow field of `light`-tinted clouds over the ground (`velvet` running into `horizon` toward the bottom right) at ±4 % luminance with a soft leak around the focus and fine grain; drifts imperceptibly (one cycle ≈ a minute), quieter by day, half in Blackout, still under reduced motion, absent in Lite. It is texture for the dark, never a picture. |
-| Backdrop spill | Radial gradient centred on the tile's centre, radius 1100 px, `light` at 16 % alpha fading to 0, drawn over `velvet` behind all rows. Moves with focus over 220 ms. Where the shader wallpaper runs, the spill and the playbill's light are computed inside that same pass (`LightField`) rather than drawn as two more blended layers; the look is identical. |
+| Backdrop spill | Radial gradient centred on the tile's centre, radius 1100 px, `light` at 16 % alpha fading to 0, drawn over `velvet` behind all rows. Moves with focus over 220 ms. Where the shader wallpaper runs, the ground is drawn at the screen's own size from a baked noise tile and redrawn only when its clock steps, the spill and the playbill's light are a half-size layer over it since they move every frame of a focus change, and the dither goes over both at full size (`LightField`); the look is identical. |
 | Neighbour lift | Tiles immediately left and right rise from 0.78 to 0.86 brightness (see 6.1), as if lit from the side. |
 
 The Stage's playbill column takes a stronger version: `light` at 22 % alpha spilling leftward from the artwork edge, so the title appears lit by the picture.

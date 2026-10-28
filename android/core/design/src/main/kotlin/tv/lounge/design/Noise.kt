@@ -1,4 +1,4 @@
-package tv.lounge.feature.home
+package tv.lounge.design
 
 import android.graphics.Bitmap
 import android.graphics.BitmapShader

@@ -1,6 +1,8 @@
 package tv.lounge.design
 
+import android.graphics.BitmapShader
 import android.graphics.RuntimeShader
+import android.graphics.Shader
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.Animatable
@@ -22,13 +24,10 @@ import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -37,16 +36,35 @@ import androidx.compose.ui.unit.Constraints
 import java.util.Calendar
 import kotlinx.coroutines.delay
 
-// The lit backdrop in one pass: slow clouds over the ground, the focused tile's spill and the
-// playbill's light from the artwork edge. It is drawn small and scaled up; the dither against
-// banding is laid over it at the screen's own resolution.
-private const val LIGHT_FIELD_SKSL = """
+// The ground of the lit backdrop at the screen's own size: slow clouds over velvet running into
+// the horizon, and one level of blue noise a pixel against banding. The clouds come from the
+// baked noise tile, one fetch a pixel, so a full-size draw is cheap; it happens only when the
+// field's clock steps.
+private const val FIELD_GROUND_SKSL = """
+uniform shader noise;
+uniform shader blue;
 uniform float2 size;
 uniform float time;
 uniform float amp;
 layout(color) uniform half4 base;
 layout(color) uniform half4 horizon;
 layout(color) uniform half4 tint;
+
+half4 main(float2 frag) {
+    float2 uv = frag / size;
+    float t = time * 0.018;
+    float clouds = noise.eval((uv * float2(2.6, 1.6) + float2(t, -t * 0.6)) * 16.0).r;
+    half3 ground = mix(base.rgb, horizon.rgb, half(clamp((uv.x + uv.y) * 0.5, 0.0, 1.0)));
+    half3 c = ground + tint.rgb * half((clouds - 0.5) * 0.09 * amp);
+    c += blue.eval(frag).r;
+    return half4(c, 1.0);
+}
+"""
+
+// The lights over the ground: the focused tile's spill and the playbill's light from the artwork
+// edge, with their own alpha so blending does the mixing. They move with every frame of a focus
+// change, so they are drawn at half size; a smooth falloff loses nothing to that.
+private const val FIELD_LIGHTS_SKSL = """
 uniform float2 spill;
 uniform float spillR;
 uniform float spillAlpha;
@@ -56,35 +74,13 @@ uniform float2 billRadii;
 uniform float billAlpha;
 layout(color) uniform half4 billColor;
 
-float hash(float2 p) {
-    return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
-}
-
-float noise(float2 p) {
-    float2 i = floor(p);
-    float2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float a = hash(i);
-    float b = hash(i + float2(1.0, 0.0));
-    float c = hash(i + float2(0.0, 1.0));
-    float d = hash(i + float2(1.0, 1.0));
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
 half4 main(float2 frag) {
-    float2 uv = frag / size;
-    float t = time * 0.018;
-    float clouds = noise(uv * float2(2.6, 1.6) + float2(t, -t * 0.6));
-    half3 ground = mix(base.rgb, horizon.rgb, half(clamp((uv.x + uv.y) * 0.5, 0.0, 1.0)));
-    half3 col = ground + tint.rgb * half((clouds - 0.5) * 0.09 * amp);
     float ds = length(frag - spill) / spillR;
     float s = pow(clamp(1.0 - ds / 0.7, 0.0, 1.0), 1.8) * spillAlpha;
-    col = mix(col, spillColor.rgb, half(s));
     float2 e = (frag - bill) / billRadii;
-    float db = length(e);
-    float bl = pow(clamp(1.0 - db, 0.0, 1.0), 1.6) * billAlpha;
-    col = mix(col, billColor.rgb, half(bl));
-    return half4(col, 1.0);
+    float bl = pow(clamp(1.0 - length(e), 0.0, 1.0), 1.6) * billAlpha;
+    half3 c = spillColor.rgb * half(s * (1.0 - bl)) + billColor.rgb * half(bl);
+    return half4(c, half(1.0 - (1.0 - s) * (1.0 - bl)));
 }
 """
 
@@ -97,33 +93,26 @@ data class BillLight(val center: Offset, val rx: Float, val ry: Float, val color
 private const val FIELD_SLEEPS_AFTER_MS = 60_000L
 
 /**
- * Everything lit behind the home screen, in one draw. With the shader on, the spill and the
- * playbill's light are part of the same pass; without it the bitmap spill is drawn alone.
+ * Everything lit behind the home screen. With the shader on, the ground is drawn and dithered at
+ * the screen's size and the lights at half size over it; without it the bitmap spill is drawn
+ * alone.
  */
 @Composable
 fun LightField(state: LightState, modifier: Modifier = Modifier) {
     val visuals = LoungeTheme.visuals
     if (visuals.shaderWallpaper && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         LightFieldImpl(state, modifier)
-        BlueNoiseDither(modifier)
     } else {
         BackdropSpill(state, modifier)
     }
 }
 
 /**
- * Dither at the screen's own resolution over anything drawn small and scaled up: one level of
- * blue noise on half the pixels. Without it a slow dark gradient quantises into contour lines
- * that drift on an 8-bit panel. Blue noise has no clumps, so at one level it reads as a smooth
- * surface rather than grain.
+ * A 64 × 64 blue-noise tile at half density: one level on half the pixels, wrapping without a
+ * seam. Added at the screen's own size to a slow dark gradient before it is quantised: without it
+ * the gradient breaks into contour lines that drift on an 8-bit panel, and blue noise has no
+ * clumps, so at one level it reads as a smooth surface rather than grain.
  */
-@Composable
-fun BlueNoiseDither(modifier: Modifier = Modifier) {
-    val brush = remember { ShaderBrush(ImageShader(BlueNoise.image, TileMode.Repeated, TileMode.Repeated)) }
-    Canvas(modifier.fillMaxSize()) { drawRect(brush, blendMode = BlendMode.Plus) }
-}
-
-/** A 64 × 64 blue-noise tile at half density: one level on half the pixels, wrapping without a seam. */
 object BlueNoise {
     /** Made by void-and-cluster, one bit a pixel. */
     private const val TILE = "q2K4mWl1TJtGLSXqrLKZSnXJawVKjWNxlLtkem1ifSsmSVbOqz6LTPOKTRHQRWRqiHOprh/xVuOutnRy4g2lDFaKJ4VaWrVqmbWouRPxLVuwpabttRdhKC7K3QZkzFbLRzRJbJZymW3YtarjWROrVVqK0xiz3GYwSrYqlswjKc910tT6jd3akqIYjoSyUEaazWexbOVPNXU7SjZTndyVipDZYrQUEfVpz1ObWvPWIS1zLTqHjHKfRCR1QXAnFdT12cVWXeqsoxYvFPuLWOa4q2DfCmIvJQ7I20CkvYRJ5Vsae23G+fxapqlKrBBLQxRZppaD9zY9s8U5MvgbYkCmdTdtK6Cr62oNgWSm9Zoeq9m+i8gOtuBUUkm8P6jCp91npSXAa1lag6wsqldLLpT0NfN3Wrpi1hWpFUCRk7VlJaalPW6SRiv6OVZGkl17fAmk0ujaswEBba87WtLC/teqFMhWrl5ieityl8JFTIlCkqZ4Ouphvy3Wbae2W61BujUFEoFZWTTS6+ncv0NVtiUEPSsiukrLuXuCcWombGWHTLsVqcpNGHoxq00XO+HvKUaI61CpHiNnbXdQ3tSxdJRxqK8gx1tLSw4LCrc4plx623m5lWWpo4TRpaRollyoqYysW09VFu+vNbNTktPiCHJsKlhsWFrnJkmzVU2PKy2TZ0o="
@@ -151,12 +140,36 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
-    val shader = remember { RuntimeShader(LIGHT_FIELD_SKSL) }
-    val brush = remember(shader) { ShaderBrush(shader) }
+    val ground = remember {
+        RuntimeShader(FIELD_GROUND_SKSL).apply {
+            setInputShader("noise", NoiseTexture.shader)
+            setInputShader("blue", BitmapShader(BlueNoise.bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT))
+        }
+    }
+    val groundBrush = remember(ground) { ShaderBrush(ground) }
+    val lights = remember { RuntimeShader(FIELD_LIGHTS_SKSL) }
+    val lightsBrush = remember(lights) { ShaderBrush(lights) }
 
     DisposableEffect(state) {
         state.fieldDrawsLights = true
         onDispose { state.fieldDrawsLights = false }
+    }
+
+    // The spill moves with focus over `travel` and takes the tile's colour over `curtain`,
+    // exactly as the bitmap spill does; the first light is placed, not swept into.
+    val spillCenter = remember { Animatable(Offset(960f, 540f), Offset.VectorConverter) }
+    val spillColor = remember { Animatable(colors.houselight) }
+    FollowLight(state, spillCenter, motion)
+    // The clouds take the light's colour only when their clock steps, so a colour tween never
+    // redraws the full-size ground every frame.
+    val cloudTint = remember { mutableStateOf(colors.houselight) }
+    LaunchedEffect(motion.reducedMotion) {
+        var placed = false
+        snapshotFlow { state.color }.collectLatest { target ->
+            if (motion.reducedMotion || !placed) spillColor.snapTo(target) else spillColor.animateTo(target, motion.curtain())
+            placed = true
+            if (motion.reducedMotion) cloudTint.value = target
+        }
     }
 
     // The clouds step a few times a second and each step recomposites the screen, so the clock
@@ -182,6 +195,7 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
                     delay(stepMs)
                     time.floatValue = ((System.nanoTime() - started - paused) / 1_000_000_000.0).toFloat()
                     state.clock = time.floatValue
+                    cloudTint.value = spillColor.value
                 }
             }
         }
@@ -192,19 +206,6 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
             night = isNight()
         }
     }
-
-    // The spill moves with focus over `travel` and takes the tile's colour over `curtain`,
-    // exactly as the bitmap spill does; the first light is placed, not swept into.
-    val spillCenter = remember { Animatable(Offset(960f, 540f), Offset.VectorConverter) }
-    val spillColor = remember { Animatable(colors.houselight) }
-    FollowLight(state, spillCenter, motion)
-    LaunchedEffect(motion.reducedMotion) {
-        var placed = false
-        snapshotFlow { state.color }.collectLatest { target ->
-            if (motion.reducedMotion || !placed) spillColor.snapTo(target) else spillColor.animateTo(target, motion.curtain())
-            placed = true
-        }
-    }
     val idleLevel = rememberIdleLevel(state.idle)
     // The spill goes and comes back over `settle` when nothing holds the light, not in a frame.
     val activeLevel = animateFloatAsState(if (state.active) 1f else 0f, if (state.active) motion.snap() else motion.settle(), label = "spillActive")
@@ -212,7 +213,19 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
     val ampBase = colors.spillScale * (if (night) 1f else 0.7f)
     val billAlpha = 0.22f * colors.spillScale
 
-    val scale = 3f
+    // An offscreen layer at the screen's size: the ground is drawn again only when its clock
+    // steps or the light's colour reaches it; every other frame just composites that texture.
+    Canvas(modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+        val tint = cloudTint.value
+        ground.setFloatUniform("size", size.width, size.height)
+        ground.setFloatUniform("time", time.floatValue)
+        ground.setFloatUniform("amp", ampBase * (0.5f + 0.5f * idleLevel.value))
+        ground.setColorUniform("base", android.graphics.Color.valueOf(colors.velvet.red, colors.velvet.green, colors.velvet.blue, 1f))
+        ground.setColorUniform("horizon", android.graphics.Color.valueOf(colors.horizon.red, colors.horizon.green, colors.horizon.blue, 1f))
+        ground.setColorUniform("tint", android.graphics.Color.valueOf(tint.red, tint.green, tint.blue, 1f))
+        drawRect(groundBrush)
+    }
+    val scale = 2f
     Canvas(
         modifier
             .fillMaxSize()
@@ -226,8 +239,6 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
                 )
                 layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
             }
-            // An offscreen layer: the shader runs over the small layer only when something in
-            // it changes; every other frame just composites that texture.
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -239,28 +250,22 @@ private fun LightFieldImpl(state: LightState, modifier: Modifier) {
         val sc = spillColor.value
         val bill = state.bill
         val level = idleLevel.value * state.warmth
-        shader.setFloatUniform("size", size.width, size.height)
-        shader.setFloatUniform("time", time.floatValue)
-        shader.setFloatUniform("amp", ampBase * (0.5f + 0.5f * idleLevel.value))
-        shader.setColorUniform("base", android.graphics.Color.valueOf(colors.velvet.red, colors.velvet.green, colors.velvet.blue, 1f))
-        shader.setColorUniform("horizon", android.graphics.Color.valueOf(colors.horizon.red, colors.horizon.green, colors.horizon.blue, 1f))
-        shader.setColorUniform("tint", android.graphics.Color.valueOf(sc.red, sc.green, sc.blue, 1f))
-        shader.setFloatUniform("spill", c.x / scale, c.y / scale)
-        shader.setFloatUniform("spillR", Dimens.spillRadius.toPx() / scale)
-        shader.setFloatUniform("spillAlpha", spillAlpha * level * activeLevel.value)
-        shader.setColorUniform("spillColor", android.graphics.Color.valueOf(sc.red, sc.green, sc.blue, 1f))
+        lights.setFloatUniform("spill", c.x / scale, c.y / scale)
+        lights.setFloatUniform("spillR", Dimens.spillRadius.toPx() / scale)
+        lights.setFloatUniform("spillAlpha", spillAlpha * level * activeLevel.value)
+        lights.setColorUniform("spillColor", android.graphics.Color.valueOf(sc.red, sc.green, sc.blue, 1f))
         if (bill != null) {
-            shader.setFloatUniform("bill", bill.center.x / scale, bill.center.y / scale)
-            shader.setFloatUniform("billRadii", (bill.rx / scale).coerceAtLeast(1f), (bill.ry / scale).coerceAtLeast(1f))
-            shader.setFloatUniform("billAlpha", billAlpha * level * bill.strength().coerceIn(0f, 1f))
-            shader.setColorUniform("billColor", android.graphics.Color.valueOf(bill.color.red, bill.color.green, bill.color.blue, 1f))
+            lights.setFloatUniform("bill", bill.center.x / scale, bill.center.y / scale)
+            lights.setFloatUniform("billRadii", (bill.rx / scale).coerceAtLeast(1f), (bill.ry / scale).coerceAtLeast(1f))
+            lights.setFloatUniform("billAlpha", billAlpha * level * bill.strength().coerceIn(0f, 1f))
+            lights.setColorUniform("billColor", android.graphics.Color.valueOf(bill.color.red, bill.color.green, bill.color.blue, 1f))
         } else {
-            shader.setFloatUniform("bill", -10000f, -10000f)
-            shader.setFloatUniform("billRadii", 1f, 1f)
-            shader.setFloatUniform("billAlpha", 0f)
-            shader.setColorUniform("billColor", android.graphics.Color.valueOf(0f, 0f, 0f, 1f))
+            lights.setFloatUniform("bill", -10000f, -10000f)
+            lights.setFloatUniform("billRadii", 1f, 1f)
+            lights.setFloatUniform("billAlpha", 0f)
+            lights.setColorUniform("billColor", android.graphics.Color.valueOf(0f, 0f, 0f, 1f))
         }
-        drawRect(brush)
+        drawRect(lightsBrush)
     }
 }
 
