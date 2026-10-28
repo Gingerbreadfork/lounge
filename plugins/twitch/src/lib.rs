@@ -108,7 +108,10 @@ fn after_renewal(current: Token, outcome: Result<Token, RenewError>, now_ms: i64
             sdk::warn!("could not renew the sign-in ({e}); using the current one");
             Renewed::Use(current)
         }
-        Err(RenewError::Failed(e)) => Renewed::TryLater(format!("Could not renew the Twitch sign-in ({e}); it tries again on the next refresh")),
+        Err(RenewError::Failed(e)) => {
+            sdk::warn!("could not renew the sign-in ({e})");
+            Renewed::TryLater("Could not renew the Twitch sign-in. It tries again on the next refresh.".into())
+        }
     }
 }
 
@@ -181,7 +184,8 @@ impl Client {
 
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, String> {
         let req = HttpRequest::get(format!("{API}{path}")).header("Client-Id", &self.client_id).header("Authorization", &format!("Bearer {}", self.token));
-        let r = host::fetch(&req)?;
+        let r = sdk::fetch_online("Twitch", &req)?;
+        let path = path.split('?').next().unwrap_or(path);
         match r.status {
             401 => {
                 expire_token();
@@ -189,11 +193,15 @@ impl Client {
             }
             s if !(200..300).contains(&s) => {
                 let why = serde_json::from_str::<Failure>(&r.body).map(|f| f.message).unwrap_or_default();
-                return Err(format!("Twitch answered HTTP {s} for {}{}", path.split('?').next().unwrap_or(path), if why.is_empty() { String::new() } else { format!(": {why}") }));
+                sdk::warn!("HTTP {s} for {path}: {why}");
+                return Err(sdk::online_error("Twitch", s));
             }
             _ => {}
         }
-        serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer for {}: {e}", path.split('?').next().unwrap_or(path)))
+        serde_json::from_str(&r.body).map_err(|e| {
+            sdk::warn!("unexpected answer for {path}: {e}");
+            sdk::unreadable("Twitch", "twitch.tv")
+        })
     }
 
     /// The signed-in user's id, looked up once and kept.
@@ -202,7 +210,7 @@ impl Client {
             return Ok(id);
         }
         let me: Page<User> = self.get_json("/users")?;
-        let id = me.data.first().map(|u| u.id.clone()).filter(|s| !s.is_empty()).ok_or("Twitch did not say who is signed in")?;
+        let id = me.data.first().map(|u| u.id.clone()).filter(|s| !s.is_empty()).ok_or("Twitch did not say who is signed in. It tries again on the next refresh.")?;
         host::kv_set(USER_KEY, id.as_bytes());
         Ok(id)
     }
@@ -217,8 +225,14 @@ fn post_form(url: &str, form: &[(&str, &str)]) -> Result<(u16, String), String> 
         body: Some(body.join("&")),
         timeout_ms: 0,
     };
-    let r = host::fetch(&req)?;
+    let r = sdk::fetch_online("Twitch", &req)?;
     Ok((r.status, r.body))
+}
+
+/// The error for a sign-in answer that cannot be read; the cause goes to the log.
+fn unreadable_sign_in(e: serde_json::Error) -> String {
+    sdk::warn!("unexpected sign-in answer: {e}");
+    sdk::unreadable("Twitch", "twitch.tv")
 }
 
 /// The token once the sign-in has gone through, so the refresh goes on with it, or else the
@@ -229,7 +243,7 @@ fn device_step(client_id: &str, now_ms: i64) -> Result<Token, String> {
     if let Some(d) = pending {
         let (status, body) = post_form(&format!("{ID}/token"), &[("client_id", client_id), ("scopes", SCOPES), ("device_code", &d.device_code), ("grant_type", "urn:ietf:params:oauth:grant-type:device_code")])?;
         if (200..300).contains(&status) {
-            let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| format!("unexpected sign-in answer: {e}"))?;
+            let t: TokenAnswer = serde_json::from_str(&body).map_err(unreadable_sign_in)?;
             host::kv_delete(DEVICE_KEY);
             return Ok(save_token(&t, now_ms));
         }
@@ -245,13 +259,13 @@ fn device_step(client_id: &str, now_ms: i64) -> Result<Token, String> {
     let (status, body) = post_form(&format!("{ID}/device"), &[("client_id", client_id), ("scopes", SCOPES)])?;
     if !(200..300).contains(&status) {
         let why = serde_json::from_str::<Failure>(&body).map(|f| f.message).unwrap_or_default();
-        return Err(if status == 400 && why.contains("client") {
-            "Twitch does not know this Client ID. Check it against your application at dev.twitch.tv/console.".into()
-        } else {
-            format!("Twitch answered HTTP {status} when asked for a sign-in code{}", if why.is_empty() { String::new() } else { format!(": {why}") })
-        });
+        if status == 400 && why.contains("client") {
+            return Err("Twitch does not know this Client ID. Check it against your application at dev.twitch.tv/console.".into());
+        }
+        sdk::warn!("HTTP {status} when asked for a sign-in code: {why}");
+        return Err(sdk::online_error("Twitch", status));
     }
-    let a: DeviceAnswer = serde_json::from_str(&body).map_err(|e| format!("unexpected sign-in answer: {e}"))?;
+    let a: DeviceAnswer = serde_json::from_str(&body).map_err(unreadable_sign_in)?;
     let d = Device { device_code: a.device_code, user_code: a.user_code, verification_uri: a.verification_uri, expires_ms: now_ms + a.expires_in * 1000 };
     host::kv_set(DEVICE_KEY, serde_json::to_string(&d).unwrap_or_default().as_bytes());
     Err(instruction(&d))
@@ -474,6 +488,6 @@ mod tests {
         let token = |expires_ms| Token { access: "old".into(), refresh: "r".into(), expires_ms };
         assert!(matches!(after_renewal(token(10), Err(RenewError::Refused(400)), 0), Renewed::SignInAgain));
         assert!(matches!(after_renewal(token(10), Err(RenewError::Failed("HTTP 503".into())), 0), Renewed::Use(t) if t.access == "old"));
-        assert!(matches!(after_renewal(token(10), Err(RenewError::Failed("timed out".into())), 20), Renewed::TryLater(_)));
+        assert!(matches!(after_renewal(token(10), Err(RenewError::Failed("timed out".into())), 20), Renewed::TryLater(e) if e == "Could not renew the Twitch sign-in. It tries again on the next refresh."));
     }
 }
