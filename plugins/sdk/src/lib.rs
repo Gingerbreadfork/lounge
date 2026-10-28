@@ -415,6 +415,66 @@ pub fn redact(text: &str) -> String {
     out
 }
 
+/// The server in `url` as an error on the TV names it: host, port and path, without the scheme,
+/// password or query.
+pub fn address(url: &str) -> String {
+    let url = redact_url(url);
+    url.split_once("://").map_or(url.as_str(), |(_, rest)| rest).trim_end_matches('/').to_string()
+}
+
+/// The error for a server the user named that could not be reached.
+pub fn didnt_answer(service: &str, url: &str) -> String {
+    format!("{service} didn't answer at {}. Check the server, then try again.", address(url))
+}
+
+/// The error for a server the user named that answered with HTTP `status`.
+pub fn answered_error(service: &str, url: &str, status: u16) -> String {
+    format!("{service} at {} answered with error {status}. Check the server, then try again.", address(url))
+}
+
+/// The error for an address where something other than `service` answered.
+pub fn wrong_server(service: &str, url: &str) -> String {
+    let a = if service.starts_with(['A', 'E', 'I', 'O', 'U']) { "an" } else { "a" };
+    format!("{} didn't answer like {a} {service} server. Check the server address in the plugin's settings.", address(url))
+}
+
+/// The error for an answer from `service` at `url` that the plugin cannot read.
+pub fn unreadable(service: &str, url: &str) -> String {
+    format!("{service} at {} sent a reply this plugin can't read.", address(url))
+}
+
+/// The error for an online service that could not be reached.
+pub fn offline(service: &str) -> String {
+    format!("{service} didn't answer. Check the TV's internet connection, then try again.")
+}
+
+/// The error for an online service that answered with HTTP `status`.
+pub fn online_error(service: &str, status: u16) -> String {
+    format!("{service} answered with error {status}. Try again later.")
+}
+
+/// [`host::fetch`] from the `service` at `server`. A server that cannot be reached gives
+/// [`didnt_answer`] and the cause goes to the log; [`host::TOO_LARGE`] and a used-up fetch
+/// budget come back unchanged, so callers can still tell them apart.
+pub fn fetch_from(service: &str, server: &str, request: &HttpRequest) -> Result<HttpResponse, String> {
+    fetch_or(request, || didnt_answer(service, server))
+}
+
+/// [`fetch_from`] for an online service, which gives [`offline`] when it cannot be reached.
+pub fn fetch_online(service: &str, request: &HttpRequest) -> Result<HttpResponse, String> {
+    fetch_or(request, || offline(service))
+}
+
+fn fetch_or(request: &HttpRequest, unreachable: impl FnOnce() -> String) -> Result<HttpResponse, String> {
+    host::fetch(request).map_err(|e| {
+        if e == host::TOO_LARGE || e.contains("budget") {
+            return e;
+        }
+        warn!("{e}");
+        unreachable()
+    })
+}
+
 /// A response's body as bytes. A base64 body is decoded where it lies, so a large one is held once.
 pub fn body_bytes(response: HttpResponse) -> Vec<u8> {
     match response.body_base64 {
@@ -737,6 +797,25 @@ mod helper_tests {
             "request to http://x.tv/live?… failed, then https://y.tv/z?… timed out"
         );
         assert_eq!(redact("host not found"), "host not found");
+    }
+
+    #[test]
+    fn errors_name_the_service_and_what_to_check() {
+        assert_eq!(address("https://user:pw@jf.home/jellyfin/"), "jf.home/jellyfin");
+        assert_eq!(address("http://192.168.0.20:8096?api_key=k"), "192.168.0.20:8096?…");
+        assert_eq!(didnt_answer("Jellyfin", "http://192.168.0.20:8096"), "Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.");
+        assert_eq!(answered_error("Jellyfin", "http://192.168.0.20:8096/", 503), "Jellyfin at 192.168.0.20:8096 answered with error 503. Check the server, then try again.");
+        assert_eq!(wrong_server("Jellyfin", "http://nas:8096"), "nas:8096 didn't answer like a Jellyfin server. Check the server address in the plugin's settings.");
+        assert_eq!(wrong_server("Emby", "http://nas:8096"), "nas:8096 didn't answer like an Emby server. Check the server address in the plugin's settings.");
+        assert_eq!(unreadable("Plex", "http://nas:32400"), "Plex at nas:32400 sent a reply this plugin can't read.");
+        assert_eq!(offline("Trakt"), "Trakt didn't answer. Check the TV's internet connection, then try again.");
+        assert_eq!(online_error("Twitch", 502), "Twitch answered with error 502. Try again later.");
+        // Off the TV there is no host, so every fetch fails as an unreachable server would.
+        assert_eq!(
+            fetch_from("Emby", "http://192.168.0.20:8096", &HttpRequest::get("http://192.168.0.20:8096/emby/Users/u")).err().as_deref(),
+            Some("Emby didn't answer at 192.168.0.20:8096. Check the server, then try again.")
+        );
+        assert_eq!(fetch_online("Trakt", &HttpRequest::get("https://api.trakt.tv/sync/playback")).err().as_deref(), Some(offline("Trakt").as_str()));
     }
 
     #[test]

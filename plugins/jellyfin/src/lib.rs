@@ -217,13 +217,13 @@ impl Session {
         let response = fetch(&server, &req)?;
         match response.status {
             401 => return Err("Jellyfin rejected the username or password. Check them in the plugin's settings.".into()),
-            404 => return Err(not_jellyfin(&server)),
-            _ if !response.ok() => return Err(http_error(&server, response.status)),
+            404 => return Err(sdk::wrong_server("Jellyfin", &server)),
+            _ if !response.ok() => return Err(sdk::answered_error("Jellyfin", &server, response.status)),
             _ => {}
         }
         let auth: AuthResponse = serde_json::from_str(&response.body).map_err(|e| {
             sdk::warn!("unexpected sign-in response: {e}");
-            not_jellyfin(&server)
+            sdk::wrong_server("Jellyfin", &server)
         })?;
         host::kv_set("token", auth.access_token.as_bytes());
         host::kv_set("user_id", auth.user.id.as_bytes());
@@ -241,11 +241,11 @@ impl Session {
         let r = fetch(&self.server, &self.request(path))?;
         if !r.ok() {
             sdk::warn!("HTTP {} for {path}", r.status);
-            return Err(http_error(&self.server, r.status));
+            return Err(sdk::answered_error("Jellyfin", &self.server, r.status));
         }
         serde_json::from_str(&r.body).map_err(|e| {
             sdk::warn!("unexpected response for {path}: {e}");
-            format!("Jellyfin at {} sent a reply this plugin can't read.", address(&self.server))
+            sdk::unreadable("Jellyfin", &self.server)
         })
     }
 
@@ -329,28 +329,12 @@ impl Session {
     }
 }
 
-/// Fetches `req`, turning a server that cannot be reached into a sentence for the TV. The cause
-/// goes to the log.
+/// Fetches `req`, turning any failure into a sentence for the TV. The cause goes to the log.
 fn fetch(server: &str, req: &HttpRequest) -> Result<HttpResponse, String> {
     host::fetch(req).map_err(|e| {
         sdk::warn!("{e}");
-        format!("Jellyfin didn't answer at {}. Check the server, then try again.", address(server))
+        sdk::didnt_answer("Jellyfin", server)
     })
-}
-
-fn http_error(server: &str, status: u16) -> String {
-    format!("Jellyfin at {} answered with error {status}. Check the server, then try again.", address(server))
-}
-
-/// Something answered at the address, but not Jellyfin's sign-in.
-fn not_jellyfin(server: &str) -> String {
-    format!("{} didn't answer like a Jellyfin server. Check the server address in the plugin's settings.", address(server))
-}
-
-/// The server as the TV names it: host and port, without the scheme.
-fn address(server: &str) -> String {
-    let url = sdk::redact_url(server);
-    url.split_once("://").map_or(url.as_str(), |(_, rest)| rest).trim_end_matches('/').to_string()
 }
 
 /// Opens the item's page in the Jellyfin app, whose start screen takes an item id the way the
@@ -516,11 +500,6 @@ mod tests {
 
     #[test]
     fn errors_name_the_server_and_what_to_check() {
-        assert_eq!(address("https://user:pw@jf.home/jellyfin/"), "jf.home/jellyfin");
-        assert_eq!(
-            http_error("http://192.168.0.20:8096", 503),
-            "Jellyfin at 192.168.0.20:8096 answered with error 503. Check the server, then try again."
-        );
         // Off the TV there is no host, so every fetch fails as an unreachable server would.
         assert_eq!(
             fetch("http://192.168.0.20:8096", &HttpRequest::get("http://192.168.0.20:8096/Users/u")).err().as_deref(),

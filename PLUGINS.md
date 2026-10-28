@@ -456,7 +456,9 @@ one definition the host and the SDK share.
 - `lgp-tool run --artwork` shows the items you expect and no pictures the TV would not show,
   and the log says what happened in a sentence a user could read on the TV.
 - A refresh that fails returns an error naming the cause and the fix ("Jellyfin didn't answer
-  at 192.168.0.20. Check the server, then try again."), not a stack trace.
+  at 192.168.0.20. Check the server, then try again."), not a stack trace. `sdk::fetch_from`,
+  `fetch_online`, `didnt_answer`, `answered_error`, `wrong_server`, `unreadable`, `offline` and
+  `online_error` word the usual failures; log the raw cause with `sdk::warn!`.
 - Items keep stable `id`s between refreshes, so pins and hidden tiles survive.
 - A screensaver looks right in every theme, Blackout included, and its log line shows it holding
   a third or a quarter of the resolution on the slowest TV you have.
