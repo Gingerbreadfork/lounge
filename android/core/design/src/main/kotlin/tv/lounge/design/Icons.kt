@@ -70,11 +70,28 @@ object LoungeIcons {
 
     val Controller: ImageVector by lazy {
         icon("controller") {
-            stroke { moveTo(8f, 8f); lineTo(20f, 8f); arcTo(6f, 6f, 0f, false, true, 26f, 14f); lineTo(26f, 16f); arcTo(4f, 4f, 0f, false, true, 19f, 18.6f); lineTo(17f, 17f); lineTo(11f, 17f); lineTo(9f, 18.6f); arcTo(4f, 4f, 0f, false, true, 2f, 16f); lineTo(2f, 14f); arcTo(6f, 6f, 0f, false, true, 8f, 8f); close() }
-            stroke { moveTo(9f, 12f); lineTo(9f, 16f) }
-            stroke { moveTo(7f, 14f); lineTo(11f, 14f) }
-            fill { moveTo(19f, 11.8f); arcTo(1.2f, 1.2f, 0f, true, true, 19f, 14.2f); arcTo(1.2f, 1.2f, 0f, true, true, 19f, 11.8f) }
-            fill { moveTo(22f, 13.8f); arcTo(1.2f, 1.2f, 0f, true, true, 22f, 16.2f); arcTo(1.2f, 1.2f, 0f, true, true, 22f, 13.8f) }
+            // A pad with two grips, so it still reads as one at the size of a row badge.
+            stroke {
+                moveTo(20.2f, 6f); lineTo(7.8f, 6f)
+                arcTo(4.6f, 4.6f, 0f, false, false, 3.2f, 10.2f)
+                lineTo(2.4f, 18.6f)
+                arcTo(3.4f, 3.4f, 0f, false, false, 5.8f, 22f)
+                curveTo(7f, 22f, 7.6f, 21.4f, 8.2f, 20.8f)
+                lineTo(9.8f, 19.2f)
+                arcTo(2.3f, 2.3f, 0f, false, true, 11.4f, 18.6f)
+                lineTo(16.6f, 18.6f)
+                arcTo(2.3f, 2.3f, 0f, false, true, 18.2f, 19.2f)
+                lineTo(19.8f, 20.8f)
+                curveTo(20.4f, 21.4f, 21f, 22f, 22.2f, 22f)
+                arcTo(3.4f, 3.4f, 0f, false, false, 25.6f, 18.6f)
+                lineTo(24.8f, 10.2f)
+                arcTo(4.6f, 4.6f, 0f, false, false, 20.2f, 6f)
+                close()
+            }
+            stroke { moveTo(9.2f, 10.4f); lineTo(9.2f, 15.2f) }
+            stroke { moveTo(6.8f, 12.8f); lineTo(11.6f, 12.8f) }
+            fill { moveTo(17.6f, 12.9f); arcTo(1.3f, 1.3f, 0f, true, true, 17.6f, 15.5f); arcTo(1.3f, 1.3f, 0f, true, true, 17.6f, 12.9f) }
+            fill { moveTo(20.8f, 10.3f); arcTo(1.3f, 1.3f, 0f, true, true, 20.8f, 12.9f); arcTo(1.3f, 1.3f, 0f, true, true, 20.8f, 10.3f) }
         }
     }
 
