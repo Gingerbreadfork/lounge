@@ -46,7 +46,8 @@ impl sdk::Plugin for Tvheadend {
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let s = Server::from_settings()?;
-        let mut channels = s.channels()?;
+        let tag_uuid = s.tag_uuid()?;
+        let mut channels = s.channels(tag_uuid.as_deref())?;
         if channels.is_empty() {
             return Err("Tvheadend has no enabled channels. Map some services to channels first.".into());
         }
@@ -69,7 +70,7 @@ impl sdk::Plugin for Tvheadend {
         let window_end = ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000;
         let mut schedule = sdk::ScheduleBudget::new(sdk::MAX_ITEMS - items.len());
         // The tag narrows the guide on the server, so its pages reach further ahead.
-        let tag = s.tag.as_deref().map(|t| format!("&channelTag={}", url_encode(t))).unwrap_or_default();
+        let tag = tag_uuid.as_deref().map(|t| format!("&channelTag={}", url_encode(t))).unwrap_or_default();
         'pages: for page in 0..MAX_PAGES {
             let grid: Grid<Event> = match s.get_json(&format!("/api/epg/events/grid?start={}&limit={PAGE}&sort=start&dir=ASC{tag}", page * PAGE)) {
                 Ok(grid) => {
@@ -107,7 +108,7 @@ impl sdk::Plugin for Tvheadend {
 
     fn search(query: &str, limit: u32) -> Result<Vec<Item>, String> {
         let s = Server::from_settings()?;
-        let tag = s.tag.as_deref().map(|t| format!("&channelTag={}", url_encode(t))).unwrap_or_default();
+        let tag = s.tag_uuid()?.map(|t| format!("&channelTag={}", url_encode(&t))).unwrap_or_default();
         let grid: Grid<Event> = s.get_json(&format!("/api/epg/events/grid?title={}&limit=200&sort=start&dir=ASC{tag}", url_encode(query)))?;
         let now = host::now_ms();
         Ok(first_airings(grid.entries, limit.clamp(1, 40) as usize).iter().map(|e| s.search_item(e, now)).collect())
@@ -439,17 +440,20 @@ impl Server {
         "Tvheadend rejected the username or password. Check them in the plugin's settings.".into()
     }
 
-    fn channels(&self) -> Result<Vec<Channel>, String> {
-        let grid: Grid<Channel> = self.get_json("/api/channel/grid?limit=2000&sort=number&dir=asc")?;
-        let mut tag_uuid = None;
-        if let Some(name) = &self.tag {
-            let tags: Grid<Tag> = self.get_json("/api/channeltag/grid?limit=500")?;
-            tag_uuid = tags.entries.into_iter().find(|t| t.name.eq_ignore_ascii_case(name)).map(|t| t.uuid);
-            if tag_uuid.is_none() {
-                return Err(format!("Tvheadend has no channel tag called \"{name}\". Check the tag's name in the plugin's settings."));
-            }
+    /// The id of the channel tag the settings name, matched in any case; the server's own
+    /// filters take an id or the exact name.
+    fn tag_uuid(&self) -> Result<Option<String>, String> {
+        let Some(name) = &self.tag else { return Ok(None) };
+        let tags: Grid<Tag> = self.get_json("/api/channeltag/grid?limit=500")?;
+        match tags.entries.into_iter().find(|t| t.name.eq_ignore_ascii_case(name)) {
+            Some(t) => Ok(Some(t.uuid)),
+            None => Err(format!("Tvheadend has no channel tag called \"{name}\". Check the tag's name in the plugin's settings.")),
         }
-        Ok(grid.entries.into_iter().filter(|c| c.enabled != Some(false) && !c.name.is_empty()).filter(|c| tag_uuid.as_ref().map(|t| c.tags.contains(t)).unwrap_or(true)).collect())
+    }
+
+    fn channels(&self, tag_uuid: Option<&str>) -> Result<Vec<Channel>, String> {
+        let grid: Grid<Channel> = self.get_json("/api/channel/grid?limit=2000&sort=number&dir=asc")?;
+        Ok(grid.entries.into_iter().filter(|c| c.enabled != Some(false) && !c.name.is_empty()).filter(|c| tag_uuid.is_none_or(|t| c.tags.iter().any(|x| x == t))).collect())
     }
 
     /// An address the TV can fetch on its own, with the token on the end.
