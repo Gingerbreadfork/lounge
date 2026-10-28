@@ -31,6 +31,8 @@ class UiSounds(context: Context) {
     /** True while a d-pad key is auto-repeating; ticks are quieter and no more than one per 90 ms. */
     @Volatile var repeating: Boolean = false
     private var lastTickAt = 0L
+    private var musicActive = false
+    private var musicCheckedAt = -MUSIC_CHECK_MS
 
     /** Focus moved. A row change is pitched a little lower, a quiet spatial cue; pitch jitters ±3 % so held keys never machine-gun. */
     fun tick(rowChange: Boolean = false) {
@@ -45,13 +47,24 @@ class UiSounds(context: Context) {
     fun close() = play(close, 0.9f)
 
     private fun play(id: Int, volume: Float, rate: Float = 1f) {
-        if (!enabled || audio.isMusicActive) return
+        if (!enabled || musicActive()) return
         pool.play(id, volume, volume, 1, 0, rate)
+    }
+
+    /** Whether music is playing, asked again at most every [MUSIC_CHECK_MS]: each ask is a binder call. */
+    private fun musicActive(): Boolean {
+        val now = SystemClock.uptimeMillis()
+        if (now - musicCheckedAt >= MUSIC_CHECK_MS) {
+            musicActive = audio.isMusicActive
+            musicCheckedAt = now
+        }
+        return musicActive
     }
 
     fun release() = pool.release()
 
     private companion object {
         const val TICK_GAP_MS = 90L
+        const val MUSIC_CHECK_MS = 500L
     }
 }
