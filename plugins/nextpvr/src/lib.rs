@@ -280,12 +280,13 @@ impl Server {
                 host::kv_set(GUIDE_MOVING_KEY, (from + MOVE_DELETES).to_string().as_bytes());
             }
         }
+        let mut cache = GuideCache::load();
         let cursor = host::kv_get_string(CURSOR_KEY).and_then(|c| c.parse::<usize>().ok()).unwrap_or(0) % channels.len().max(1);
-        let fresh: Vec<usize> = (0..channels.len().min(LISTING_FETCHES)).map(|i| (cursor + i) % channels.len()).collect();
-        host::kv_set(CURSOR_KEY, ((cursor + fresh.len()) % channels.len()).to_string().as_bytes());
+        let reach: Vec<i64> = channels.iter().map(|c| cache.get(c.channel_id).iter().map(|l| l.end).max().unwrap_or(0)).collect();
+        let fresh = stalest(&reach, cursor, LISTING_FETCHES);
+        host::kv_set(CURSOR_KEY, ((cursor + fresh.len()) % channels.len().max(1)).to_string().as_bytes());
         let start_s = (now_ms - 3_600_000) / 1000 / 300 * 300;
         let end_s = window_end / 1000 / 300 * 300;
-        let mut cache = GuideCache::load();
         for &i in &fresh {
             let c = &channels[i];
             match self.call::<ListingList>("channel.listings", &format!("&channel_id={}&start={start_s}&end={end_s}", c.channel_id)) {
@@ -503,6 +504,16 @@ fn first_sentence(s: &str) -> String {
     s[..cut].trim().to_string()
 }
 
+/// The `n` channels whose kept guide runs out soonest, by how far each reaches; equals go in turn
+/// from `cursor`, so a guide that is fresh everywhere is still refreshed all the way round.
+fn stalest(reach: &[i64], cursor: usize, n: usize) -> Vec<usize> {
+    let len = reach.len();
+    let mut order: Vec<usize> = (0..len).collect();
+    order.sort_by_key(|&i| (reach[i], (i + len - cursor % len.max(1)) % len.max(1)));
+    order.truncate(n);
+    order
+}
+
 /// The channels whose old guide keys this refresh removes, and whether that finishes the job.
 fn move_span(from: usize, channels: usize) -> (std::ops::Range<usize>, bool) {
     let start = from.min(channels);
@@ -521,6 +532,13 @@ mod tests {
         };
         let kept = keep_newest(vec![rec(5, 0), rec(4, 0), rec(3, 0), rec(2, 600), rec(1, 0)], 2);
         assert_eq!(kept.iter().map(|r| r.id).collect::<Vec<_>>(), [5, 4, 2]);
+    }
+
+    #[test]
+    fn the_guide_that_runs_out_first_is_fetched_first() {
+        assert_eq!(stalest(&[10, 5, 5, 20, 0], 2, 2), [4, 2]);
+        assert_eq!(stalest(&[7, 7, 7, 7], 3, 3), [3, 0, 1]);
+        assert!(stalest(&[], 0, 4).is_empty());
     }
 
     #[test]
