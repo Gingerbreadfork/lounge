@@ -3,7 +3,7 @@
 //! favourites into rows of their own, and searches the library. Items open on their page in the
 //! Jellyfin Android TV app.
 
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -193,7 +193,7 @@ impl Session {
             && let (Some(token), Some(user_id)) = (host::kv_get_string("token"), host::kv_get_string("user_id"))
         {
             let s = Session { server: server.clone(), token, user_id, device_id: device_id.clone() };
-            let probe = host::fetch(&s.request(&format!("/Users/{}", s.user_id)))?;
+            let probe = fetch(&server, &s.request(&format!("/Users/{}", s.user_id)))?;
             if probe.ok() {
                 return Ok(s);
             }
@@ -214,14 +214,17 @@ impl Session {
             body: Some(body),
             timeout_ms: 0,
         };
-        let response = host::fetch(&req)?;
-        if response.status == 401 {
-            return Err("Jellyfin rejected the username or password".into());
+        let response = fetch(&server, &req)?;
+        match response.status {
+            401 => return Err("Jellyfin rejected the username or password. Check them in the plugin's settings.".into()),
+            404 => return Err(not_jellyfin(&server)),
+            _ if !response.ok() => return Err(http_error(&server, response.status)),
+            _ => {}
         }
-        if !response.ok() {
-            return Err(format!("Jellyfin answered HTTP {}", response.status));
-        }
-        let auth: AuthResponse = serde_json::from_str(&response.body).map_err(|e| format!("unexpected sign-in response: {e}"))?;
+        let auth: AuthResponse = serde_json::from_str(&response.body).map_err(|e| {
+            sdk::warn!("unexpected sign-in response: {e}");
+            not_jellyfin(&server)
+        })?;
         host::kv_set("token", auth.access_token.as_bytes());
         host::kv_set("user_id", auth.user.id.as_bytes());
         host::kv_set("session_for", owner.as_bytes());
@@ -235,11 +238,15 @@ impl Session {
     }
 
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, String> {
-        let r = host::fetch(&self.request(path))?;
+        let r = fetch(&self.server, &self.request(path))?;
         if !r.ok() {
-            return Err(format!("HTTP {} for {path}", r.status));
+            sdk::warn!("HTTP {} for {path}", r.status);
+            return Err(http_error(&self.server, r.status));
         }
-        serde_json::from_str(&r.body).map_err(|e| format!("unexpected response for {path}: {e}"))
+        serde_json::from_str(&r.body).map_err(|e| {
+            sdk::warn!("unexpected response for {path}: {e}");
+            format!("Jellyfin at {} sent a reply this plugin can't read.", address(&self.server))
+        })
     }
 
     /// Item pictures need no sign-in, so the token stays out of every picture's address.
@@ -320,6 +327,30 @@ impl Session {
         item.weight = weight;
         item
     }
+}
+
+/// Fetches `req`, turning a server that cannot be reached into a sentence for the TV. The cause
+/// goes to the log.
+fn fetch(server: &str, req: &HttpRequest) -> Result<HttpResponse, String> {
+    host::fetch(req).map_err(|e| {
+        sdk::warn!("{e}");
+        format!("Jellyfin didn't answer at {}. Check the server, then try again.", address(server))
+    })
+}
+
+fn http_error(server: &str, status: u16) -> String {
+    format!("Jellyfin at {} answered with error {status}. Check the server, then try again.", address(server))
+}
+
+/// Something answered at the address, but not Jellyfin's sign-in.
+fn not_jellyfin(server: &str) -> String {
+    format!("{} didn't answer like a Jellyfin server. Check the server address in the plugin's settings.", address(server))
+}
+
+/// The server as the TV names it: host and port, without the scheme.
+fn address(server: &str) -> String {
+    let url = sdk::redact_url(server);
+    url.split_once("://").map_or(url.as_str(), |(_, rest)| rest).trim_end_matches('/').to_string()
 }
 
 /// Opens the item's page in the Jellyfin app, whose start screen takes an item id the way the
@@ -481,5 +512,19 @@ mod tests {
         let req = s.request("/Users/u");
         assert_eq!(req.headers.get("Authorization").map(String::as_str), Some(format!("{}, Token=\"secret\"", auth_header("tv-1")).as_str()));
         assert!(!req.headers.contains_key("X-Emby-Authorization"));
+    }
+
+    #[test]
+    fn errors_name_the_server_and_what_to_check() {
+        assert_eq!(address("https://user:pw@jf.home/jellyfin/"), "jf.home/jellyfin");
+        assert_eq!(
+            http_error("http://192.168.0.20:8096", 503),
+            "Jellyfin at 192.168.0.20:8096 answered with error 503. Check the server, then try again."
+        );
+        // Off the TV there is no host, so every fetch fails as an unreachable server would.
+        assert_eq!(
+            fetch("http://192.168.0.20:8096", &HttpRequest::get("http://192.168.0.20:8096/Users/u")).err().as_deref(),
+            Some("Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.")
+        );
     }
 }
