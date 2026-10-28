@@ -56,7 +56,6 @@ import tv.lounge.design.LoungeTheme
 import tv.lounge.design.rememberIdleLevel
 
 private const val TAG = "Lounge"
-private const val FRAME_MS = 33L
 private const val WINDOW = 45
 private const val SETTLE_MS = 2_500L
 /**
@@ -64,11 +63,12 @@ private const val SETTLE_MS = 2_500L
  * step down taken then would be remembered for good.
  */
 private const val WARM_MS = 15_000L
-private const val SLOW_MS = 40f
+/** What a frame may cost, scene and finish together, before the next step is taken. */
+private const val SLOW_MS = 24f
 /** Frames this slow, three in a row, mean no step down will save the scene, so it ends at once. */
 private const val HOPELESS_MS = 500f
-private const val START_DIVISOR = 2
-private const val MAX_DIVISOR = 3
+/** The steps a scene takes as it proves too heavy: a fraction of the screen and the interval between frames, the rate dropping before the picture shrinks. */
+private val LADDER = listOf(2 to 33L, 2 to 50L, 3 to 33L, 3 to 50L)
 private const val RENDERER = 4
 
 // The room's light over a live scene, drawn at the screen's own size over the scaled-up scene:
@@ -203,7 +203,9 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
     private var loop: Job? = null
     private var viewWidth = 0
     private var viewHeight = 0
-    private var divisor = runCatching { memory.getInt(memoryKey, START_DIVISOR) }.getOrDefault(START_DIVISOR).coerceIn(START_DIVISOR, MAX_DIVISOR)
+    private var step = runCatching { memory.getInt(memoryKey, 0) }.getOrDefault(0).coerceIn(0, LADDER.lastIndex)
+    private val divisor: Int get() = LADDER[step].first
+    private val frameMs: Long get() = LADDER[step].second
     private var program: Program? = null
     private val finish = RuntimeShader(LIVE_FINISH_SKSL)
     private val paint = Paint()
@@ -313,22 +315,22 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
                     windows++
                     val median = frames.sorted()[WINDOW / 2]
                     if (!reported || windows % 60 == 0) {
-                        Log.i(TAG, "backdrop: ${style.id} at 1/$divisor, $median ms a frame")
+                        Log.i(TAG, "backdrop: ${style.id} at 1/$divisor, ${1000L / frameMs} fps, $median ms a frame")
                         reported = true
                     }
-                    // A frame that waits for a buffer is a GPU that has fallen behind.
+                    // The scene is waited for, so a frame's time is what the GPU spent on it.
                     if (median > SLOW_MS) {
-                        if (divisor >= MAX_DIVISOR) {
+                        if (step >= LADDER.lastIndex) {
                             giveUp("it is too heavy for this TV")
                             return@launch
                         }
-                        divisor++
-                        memory.edit().putInt(memoryKey, divisor).apply()
+                        step++
+                        memory.edit().putInt(memoryKey, step).apply()
                         settleUntil = System.currentTimeMillis() + SETTLE_MS
                         reported = false
                     }
                 }
-                delay((FRAME_MS - took.toLong()).coerceIn(1L, FRAME_MS))
+                delay((frameMs - took.toLong()).coerceIn(1L, frameMs))
             }
         }
     }

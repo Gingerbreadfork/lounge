@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,9 +48,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val TAG = "Lounge"
-private const val FRAME_NS = 30_000_000L
 private const val WINDOW = 45
-private const val SLOW_MS = 45f
+/** A frame gap this far past the step's interval means the TV cannot hold the rate. */
+private const val SLOW_FACTOR = 1.35f
 private const val BACKED_UP_MS = 8f
 private const val SETTLE_NS = 2_500_000_000L
 /** Frames this slow, three in a row, mean no step down will save the scene, so it ends at once. */
@@ -58,10 +59,25 @@ private const val RENDERER = 4
 
 /**
  * How a scene is allowed to cost: where it starts, how far it may step down before it is given
- * up on, and the GPU time a frame may take. [memoryPrefix] keeps the screensaver's and the home's
- * memories of a scene apart.
+ * up on, and the GPU time a frame may take at 30 frames a second. [memoryPrefix] keeps the
+ * screensaver's and the home's memories of a scene apart.
  */
-internal class SceneQuality(val memoryPrefix: String, val startDivisor: Float, val maxDivisor: Float, val gpuBudgetMs: Float, val keepResolution: Boolean)
+internal class SceneQuality(val memoryPrefix: String, val startDivisor: Float, val maxDivisor: Float, val gpuBudgetMs: Float, val keepResolution: Boolean) {
+    /** The steps a scene takes as it proves too heavy: the frame rate drops before the picture shrinks. */
+    val ladder: List<SceneStep> = buildList {
+        var d = startDivisor
+        while (d <= maxDivisor) {
+            add(SceneStep(d, 33L))
+            add(SceneStep(d, 50L))
+            d += 1f
+        }
+    }
+}
+
+/** A fraction of the screen to draw at and the interval between frames. */
+internal class SceneStep(val divisor: Float, val frameMs: Long) {
+    val fps: Int get() = (1000L / frameMs).toInt()
+}
 
 /** A program compiled and checked against everything that will be set on it. */
 @RequiresApi(33)
@@ -160,9 +176,8 @@ internal fun SceneSurface(
     val hour = remember { mutableFloatStateOf(localHour()) }
     // Where this program last held its frame rate on this TV, so it starts there; a new program
     // or a new renderer starts afresh.
-    val start = quality.startDivisor
     val memoryKey = remember(style) { "$RENDERER:${quality.memoryPrefix}:${style.id}:${style.source.hashCode()}" }
-    val divisor = remember(memoryKey) { mutableFloatStateOf(memory.getFloat(memoryKey, start).coerceIn(start, quality.maxDivisor)) }
+    val step = remember(memoryKey) { mutableIntStateOf(memory.getInt(memoryKey, 0).coerceIn(0, quality.ladder.lastIndex)) }
     val gpu = remember { GpuTimes() }
     val view = LocalView.current
     DisposableEffect(view) {
@@ -206,8 +221,11 @@ internal fun SceneSurface(
                 n = 0
                 gpu.clear()
             }
+            val current = quality.ladder[step.intValue]
+            // Half a vsync of slack, so three vsyncs count as 50 ms rather than waiting for a fourth.
+            val frameNs = current.frameMs * 1_000_000L - 8_000_000L
             withFrameNanos { now ->
-                if (now - last >= FRAME_NS) {
+                if (now - last >= frameNs) {
                     if (now > settle) {
                         lateness[n] = (System.nanoTime() - now) / 1_000_000f
                         gaps[n++] = (now - last) / 1_000_000f
@@ -228,16 +246,18 @@ internal fun SceneSurface(
             val late = lateness.sorted()[WINDOW / 2]
             val gpuMs = gpu.median()
             if (windows == reportAt || windows % 60 == 0) {
-                Log.i(TAG, "scene: ${quality.memoryPrefix} ${style.id} at 1/${divisor.floatValue.toInt()}, $median ms a frame, $late ms late, GPU ${gpuMs ?: "unknown"} ms")
+                Log.i(TAG, "scene: ${quality.memoryPrefix} ${style.id} at 1/${current.divisor.toInt()}, ${current.fps} fps, $median ms a frame, $late ms late, GPU ${gpuMs ?: "unknown"} ms")
             }
-            // Frames starting late after vsync mean the GPU is full; the GPU budget keeps it well short of that.
-            if (median > SLOW_MS || late > BACKED_UP_MS || (gpuMs != null && gpuMs > quality.gpuBudgetMs)) {
-                if (divisor.floatValue >= quality.maxDivisor) {
+            // Frames starting late after vsync mean the GPU is full; the GPU budget, scaled to the
+            // step's interval, keeps it well short of that.
+            val budget = quality.gpuBudgetMs * current.frameMs / 33f
+            if (median > current.frameMs * SLOW_FACTOR || late > BACKED_UP_MS || (gpuMs != null && gpuMs > budget)) {
+                if (step.intValue >= quality.ladder.lastIndex) {
                     onUnusable("it is too heavy for this TV")
                     return@LaunchedEffect
                 }
-                divisor.floatValue += 1f
-                if (quality.keepResolution) memory.edit().putFloat(memoryKey, divisor.floatValue).apply()
+                step.intValue++
+                if (quality.keepResolution) memory.edit().putInt(memoryKey, step.intValue).apply()
                 gpu.clear()
                 settle = last + SETTLE_NS
                 reportAt = windows + 1
@@ -269,15 +289,16 @@ internal fun SceneSurface(
             Modifier
                 .fillMaxSize()
                 .layout { measurable, constraints ->
-                    val d = divisor.floatValue
+                    val d = quality.ladder[step.intValue].divisor
                     val placeable = measurable.measure(
                         Constraints.fixed(ceil(constraints.maxWidth / d).toInt(), ceil(constraints.maxHeight / d).toInt()),
                     )
                     layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
                 }
                 .graphicsLayer {
-                    scaleX = divisor.floatValue
-                    scaleY = divisor.floatValue
+                    val d = quality.ladder[step.intValue].divisor
+                    scaleX = d
+                    scaleY = d
                     transformOrigin = TransformOrigin(0f, 0f)
                     compositingStrategy = CompositingStrategy.Offscreen
                 },
