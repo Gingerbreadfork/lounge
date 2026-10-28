@@ -60,6 +60,7 @@ import tv.lounge.design.Swap
 import tv.lounge.design.argb
 import tv.lounge.design.focusRing
 import tv.lounge.design.lightGlow
+import tv.lounge.design.sounds
 import kotlin.math.sin
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -141,6 +142,7 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
+    val sounds = LoungeTheme.sounds
     var focused by remember { mutableStateOf(false) }
     val scale = animateFloatAsState(if (focused) 1.04f else 1f, if (focused) motion.snap() else motion.settle(), label = "topBtnScale")
     val lift = animateFloatAsState(if (focused) 1f else 0f, if (focused) motion.snap() else motion.settle(), label = "topBtnLift")
@@ -157,6 +159,7 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
             .clip(RoundedCornerShape(24.dp))
             .focusRing(colors, { focused }, 24.dp)
             .onFocusChanged {
+                if (it.isFocused && !focused) sounds?.tick()
                 focused = it.isFocused
                 if (it.isFocused) focus.last = requester
             }
@@ -183,6 +186,7 @@ private fun NowPlayingChip(np: NowPlaying, idle: Boolean, onClick: () -> Unit, f
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
+    val sounds = LoungeTheme.sounds
     var focused by remember { mutableStateOf(false) }
     val light = LoungeTheme.colors.light(np.lightArgb)
     val playing = np.status == PlaybackStatus.PLAYING
@@ -209,6 +213,7 @@ private fun NowPlayingChip(np: NowPlaying, idle: Boolean, onClick: () -> Unit, f
             .clip(RoundedCornerShape(24.dp))
             .focusRing(colors, { focused }, 24.dp)
             .onFocusChanged {
+                if (it.isFocused && !focused) sounds?.tick()
                 focused = it.isFocused
                 if (it.isFocused) focus.last = focus.nowPlaying
             }

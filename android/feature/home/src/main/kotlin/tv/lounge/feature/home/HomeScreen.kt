@@ -451,7 +451,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 idle = state.idle,
                 focus = state.topBar,
                 downFocus = { state.stripFocus() },
-                onFocused = { state.region = FocusRegion.TopBar; light.clear(); uiSounds?.tick() },
+                onFocused = { state.region = FocusRegion.TopBar; light.clear() },
                 onSearch = { uiSounds?.open(); openOverlay(Overlay.Search) },
                 onTvControls = { uiSounds?.open(); openOverlay(Overlay.TvControls) },
                 onGuide = { uiSounds?.open(); openOverlay(Overlay.Guide) },
