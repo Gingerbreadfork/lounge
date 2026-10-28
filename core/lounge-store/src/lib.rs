@@ -546,7 +546,9 @@ impl Store {
             .optional()?)
     }
 
-    pub fn plugin_kv_set(&self, plugin: &str, key: &str, value: &[u8], max_keys: usize) -> Result<()> {
+    /// Stores `value` under `key`. Returns false, storing nothing, when `key` is new and the
+    /// plugin already has `max_keys` keys.
+    pub fn plugin_kv_set(&self, plugin: &str, key: &str, value: &[u8], max_keys: usize) -> Result<bool> {
         let count: i64 = self.conn.query_row("SELECT COUNT(*) FROM plugin_kv WHERE plugin = ?1", params![plugin], |r| r.get(0))?;
         let exists: bool = self
             .conn
@@ -554,13 +556,13 @@ impl Store {
             .optional()?
             .is_some();
         if !exists && count as usize >= max_keys {
-            return Ok(());
+            return Ok(false);
         }
         self.conn.execute(
             "INSERT INTO plugin_kv(plugin, key, value) VALUES (?1, ?2, ?3) ON CONFLICT(plugin, key) DO UPDATE SET value = excluded.value",
             params![plugin, key, value],
         )?;
-        Ok(())
+        Ok(true)
     }
 
     pub fn plugin_kv_delete(&self, plugin: &str, key: &str) -> Result<()> {
@@ -779,6 +781,19 @@ mod tests {
         s.plugin_remove("tv.lounge.iptv").unwrap();
         assert!(s.plugins().unwrap().is_empty());
         assert!(s.plugin_kv_get("tv.lounge.iptv", "token").unwrap().is_none());
+    }
+
+    #[test]
+    fn a_full_plugin_store_refuses_a_new_key() {
+        let s = Store::open_in_memory().unwrap();
+        for i in 0..256 {
+            assert!(s.plugin_kv_set("p", &format!("k{i}"), b"v", 256).unwrap());
+        }
+        assert!(!s.plugin_kv_set("p", "k256", b"v", 256).unwrap());
+        assert!(s.plugin_kv_get("p", "k256").unwrap().is_none());
+        assert!(s.plugin_kv_set("p", "k0", b"changed", 256).unwrap());
+        assert_eq!(s.plugin_kv_get("p", "k0").unwrap(), Some(b"changed".to_vec()));
+        assert!(s.plugin_kv_set("other", "k256", b"v", 256).unwrap());
     }
 
     #[test]

@@ -13,7 +13,9 @@ use wasmi::{Caller, Config, Engine, Extern, Linker, Memory, Module, Store, Store
 /// What the host provides to plugins. Implemented by the core (storage) and by the test tool.
 pub trait Services: Send + Sync {
     fn kv_get(&self, plugin: &str, key: &str) -> Option<Vec<u8>>;
-    fn kv_set(&self, plugin: &str, key: &str, value: &[u8]);
+    /// Stores `value` under `key`. Returns false, storing nothing, when `key` is new and the
+    /// plugin already has `max_keys` keys.
+    fn kv_set(&self, plugin: &str, key: &str, value: &[u8], max_keys: usize) -> bool;
     fn kv_delete(&self, plugin: &str, key: &str);
     fn secret(&self, plugin: &str, key: &str) -> Option<String>;
     fn setting(&self, plugin: &str, key: &str) -> Option<String>;
@@ -29,7 +31,9 @@ impl Services for Silent {
     fn kv_get(&self, _: &str, _: &str) -> Option<Vec<u8>> {
         None
     }
-    fn kv_set(&self, _: &str, _: &str, _: &[u8]) {}
+    fn kv_set(&self, _: &str, _: &str, _: &[u8], _: usize) -> bool {
+        true
+    }
     fn kv_delete(&self, _: &str, _: &str) {}
     fn secret(&self, _: &str, _: &str) -> Option<String> {
         None
@@ -130,7 +134,10 @@ struct State {
     services: Arc<dyn Services>,
     limits: StoreLimits,
     kv_value_bytes: usize,
+    kv_keys: usize,
     kv_writes_left: u32,
+    /// Set once a write finds the store full, so the log says so once per call.
+    kv_full: bool,
     host_call_fuel: u64,
     log_lines: u32,
     fetches_left: u32,
@@ -237,7 +244,9 @@ impl Host {
                 .instances(1)
                 .build(),
             kv_value_bytes: self.limits.kv_value_bytes,
+            kv_keys: self.limits.kv_keys,
             kv_writes_left: self.limits.kv_writes,
+            kv_full: false,
             host_call_fuel: self.limits.host_call_fuel,
             log_lines: 0,
             fetches_left: self.limits.max_fetches,
@@ -552,7 +561,11 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
             }
             st.kv_writes_left -= 1;
             let value = read_guest(&caller, vp, vl)?;
-            caller.data().services.kv_set(&caller.data().plugin, &key, &value);
+            let st = caller.data_mut();
+            if !st.services.kv_set(&st.plugin, &key, &value, st.kv_keys) && !st.kv_full {
+                st.kv_full = true;
+                st.services.log(&st.plugin, api::LOG_WARN, &format!("store is full: {} keys", st.kv_keys));
+            }
             Ok(())
         })
         .map_err(err)?;
@@ -692,8 +705,13 @@ mod tests {
         fn kv_get(&self, _p: &str, key: &str) -> Option<Vec<u8>> {
             self.kv.lock().get(key).cloned()
         }
-        fn kv_set(&self, _p: &str, key: &str, value: &[u8]) {
-            self.kv.lock().insert(key.to_string(), value.to_vec());
+        fn kv_set(&self, _p: &str, key: &str, value: &[u8], max_keys: usize) -> bool {
+            let mut kv = self.kv.lock();
+            if !kv.contains_key(key) && kv.len() >= max_keys {
+                return false;
+            }
+            kv.insert(key.to_string(), value.to_vec());
+            true
         }
         fn kv_delete(&self, _p: &str, key: &str) {
             self.kv.lock().remove(key);
@@ -850,7 +868,7 @@ mod tests {
         struct Large;
         impl Services for Large {
             fn kv_get(&self, _: &str, _: &str) -> Option<Vec<u8>> { None }
-            fn kv_set(&self, _: &str, _: &str, _: &[u8]) {}
+            fn kv_set(&self, _: &str, _: &str, _: &[u8], _: usize) -> bool { true }
             fn kv_delete(&self, _: &str, _: &str) {}
             fn secret(&self, _: &str, _: &str) -> Option<String> { None }
             fn setting(&self, _: &str, _: &str) -> Option<String> { None }
@@ -951,7 +969,7 @@ mod tests {
         struct Both;
         impl Services for Both {
             fn kv_get(&self, _: &str, _: &str) -> Option<Vec<u8>> { None }
-            fn kv_set(&self, _: &str, _: &str, _: &[u8]) {}
+            fn kv_set(&self, _: &str, _: &str, _: &[u8], _: usize) -> bool { true }
             fn kv_delete(&self, _: &str, _: &str) {}
             fn secret(&self, _: &str, _: &str) -> Option<String> { Some("hunter2".into()) }
             fn setting(&self, _: &str, _: &str) -> Option<String> { Some("hunter2".into()) }
@@ -963,6 +981,24 @@ mod tests {
         let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
         // Both checks passed: the module got as far as returning nothing.
         assert!(err.to_string().contains("returned nothing"), "{err}");
+    }
+
+    #[test]
+    fn a_full_store_is_logged_once_and_the_call_goes_on() {
+        let (host, services) = host();
+        let h = Host::new(host.services.clone(), Limits { kv_keys: 1, ..Limits::default() });
+        let set = |key: u32| format!("(call $kv_set (i32.const {key}) (i32.const 1) (i32.const 8192) (i32.const 3))");
+        let wasm = module(
+            r#"(import "lounge" "kv_set" (func $kv_set (param i32 i32 i32 i32)))"#,
+            r#"(data (i32.const 8192) "abc")"#,
+            "(i32.const 8)",
+            &format!("{} {} {} (i64.const 0)", set(8192), set(8193), set(8194)),
+        );
+        let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
+        let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert!(err.to_string().contains("returned nothing"), "{err}");
+        assert_eq!(services.kv.lock().keys().collect::<Vec<_>>(), ["a"]);
+        assert_eq!(services.logs.lock().as_slice(), ["store is full: 1 keys"]);
     }
 
     #[test]

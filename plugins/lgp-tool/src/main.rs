@@ -396,8 +396,13 @@ impl Services for RunServices {
     fn kv_get(&self, _p: &str, key: &str) -> Option<Vec<u8>> {
         self.kv.lock().get(key).cloned()
     }
-    fn kv_set(&self, _p: &str, key: &str, value: &[u8]) {
-        self.kv.lock().insert(key.to_string(), value.to_vec());
+    fn kv_set(&self, _p: &str, key: &str, value: &[u8], max_keys: usize) -> bool {
+        let mut kv = self.kv.lock();
+        if !kv.contains_key(key) && kv.len() >= max_keys {
+            return false;
+        }
+        kv.insert(key.to_string(), value.to_vec());
+        true
     }
     fn kv_delete(&self, _p: &str, key: &str) {
         self.kv.lock().remove(key);
@@ -506,6 +511,18 @@ mod tests {
         let missing = fixture(&d, &elsewhere).map(|_| ()).unwrap_err();
         assert!(missing.contains("no fixture for post http://a/none") && missing.contains("or for any request to this URL"));
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn the_store_holds_no_more_keys_than_the_tv_s() {
+        let services = RunServices::default();
+        let max = Limits::default().kv_keys;
+        for i in 0..max {
+            assert!(services.kv_set("p", &format!("k{i}"), b"v", max));
+        }
+        assert!(!services.kv_set("p", &format!("k{max}"), b"v", max));
+        assert!(services.kv_set("p", "k0", b"changed", max));
+        assert_eq!(services.kv.lock().len(), max);
     }
 
     #[test]

@@ -130,8 +130,8 @@ impl Services for CoreServices {
     fn kv_get(&self, plugin: &str, key: &str) -> Option<Vec<u8>> {
         self.with_store(|s| s.plugin_kv_get(plugin, key).ok().flatten()).flatten()
     }
-    fn kv_set(&self, plugin: &str, key: &str, value: &[u8]) {
-        self.with_store(|s| s.plugin_kv_set(plugin, key, value, Limits::default().kv_keys).ok());
+    fn kv_set(&self, plugin: &str, key: &str, value: &[u8], max_keys: usize) -> bool {
+        !matches!(self.with_store(|s| s.plugin_kv_set(plugin, key, value, max_keys)), Some(Ok(false)))
     }
     fn kv_delete(&self, plugin: &str, key: &str) {
         self.with_store(|s| s.plugin_kv_delete(plugin, key).ok());
