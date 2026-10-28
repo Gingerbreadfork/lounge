@@ -51,7 +51,7 @@ data class Release(
         .joinToString("\n")
 
     companion object {
-        /** The release from GitHub's `releases/latest` answer, or null when it has no APK. */
+        /** The release from GitHub's `releases/latest` answer, or null when it has no APK or names an address that is not https. */
         fun parse(json: String, apkPrefix: String = "Lounge-"): Release? {
             val o = JSONObject(json)
             if (o.optBoolean("draft") || o.optBoolean("prerelease")) return null
@@ -70,18 +70,23 @@ data class Release(
             }
             val asset = apk ?: return null
             val digest = asset.optString("digest").takeIf { it.startsWith("sha256:") }?.removePrefix("sha256:")?.lowercase()
+            val apkUrl = asset.getString("browser_download_url")
+            val sumsUrl = sums?.optString("browser_download_url")?.takeIf { it.isNotEmpty() }
+            if (!isHttps(apkUrl) || (sumsUrl != null && !isHttps(sumsUrl))) return null
             return Release(
                 version = version,
                 tag = tag,
                 apkName = asset.getString("name"),
-                apkUrl = asset.getString("browser_download_url"),
+                apkUrl = apkUrl,
                 apkSize = asset.optLong("size"),
                 sha256 = digest,
-                sumsUrl = sums?.optString("browser_download_url")?.takeIf { it.isNotEmpty() },
+                sumsUrl = sumsUrl,
                 notes = o.optString("body"),
                 pageUrl = o.optString("html_url"),
             )
         }
+
+        private fun isHttps(url: String): Boolean = url.startsWith("https://", ignoreCase = true)
 
         /** The hash listed for [fileName] in a `sha256sum` style file. */
         fun hashFromSums(text: String, fileName: String): String? = text

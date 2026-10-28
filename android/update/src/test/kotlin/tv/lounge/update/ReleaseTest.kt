@@ -88,6 +88,16 @@ class ReleaseTest {
     }
 
     @Test
+    fun aReleaseNamingAPlainAddressIsRefused() {
+        val apk = "https://github.com/x/lounge/releases/download/v0.1.2/Lounge-0.1.2.apk"
+        val sums = "https://github.com/x/lounge/releases/download/v0.1.2/SHA256SUMS"
+        assertNull(Release.parse(LATEST.replace(apk, apk.replace("https://", "http://"))))
+        assertNull(Release.parse(LATEST.replace(sums, sums.replace("https://", "http://"))))
+        assertNull(Release.parse(LATEST.replace(apk, "file:///sdcard/Lounge-0.1.2.apk")))
+        assertNull(Release.parse(LATEST.replace(apk, "")))
+    }
+
+    @Test
     fun sumsFilesAreRead() {
         val sums = "cafe  Lounge-0.1.2.apk\nbeef *SHA256SUMS\n"
         assertEquals("cafe", Release.hashFromSums(sums, "Lounge-0.1.2.apk"))
