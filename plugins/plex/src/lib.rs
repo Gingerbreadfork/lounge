@@ -40,9 +40,9 @@ impl sdk::Plugin for Plex {
         let server = Server::connect()?;
         let mut items = Vec::new();
         let on_deck: Container = server.get_json("/library/onDeck")?;
-        for m in on_deck.media_container.metadata {
-            items.push(server.resume_item(&m));
-        }
+        let mut deck: Vec<Item> = on_deck.media_container.metadata.iter().map(|m| server.resume_item(m)).collect();
+        date_in_order(&mut deck);
+        items.extend(deck);
         // Asked of each movie and TV library, so music and photos never take the row's places.
         let wanted = libraries_setting();
         let sections: Container = server.get_json("/library/sections")?;
@@ -90,6 +90,24 @@ impl sdk::Plugin for Plex {
 }
 
 sdk::export_plugin!(Plex);
+
+/// On Deck comes most recent first, but a show's next episode, not yet started, has no time of
+/// its own. Each takes a millisecond less than the one above it, so it keeps its place instead of
+/// jumping to the front of Continue watching the first time Lounge sees it.
+fn date_in_order(deck: &mut [Item]) {
+    let first = deck.iter().position(|i| i.last_used_ms.is_some());
+    let Some(first) = first else { return };
+    let mut above = deck[first].last_used_ms.map(|t| t + first as i64 + 1);
+    for item in deck.iter_mut() {
+        match item.last_used_ms {
+            Some(t) => above = Some(t),
+            None => {
+                above = above.map(|t| t - 1);
+                item.last_used_ms = above;
+            }
+        }
+    }
+}
 
 /// Items in the Recently added row.
 const RECENT: usize = 40;
@@ -360,6 +378,16 @@ mod tests {
         assert_eq!(keys(&[]), vec!["1", "3"]);
         assert_eq!(keys(&["tv shows"]), vec!["3"]);
         assert!(keys(&["Music"]).is_empty());
+    }
+
+    #[test]
+    fn undated_next_episodes_keep_their_place_on_deck() {
+        let mut deck: Vec<Item> = [None, Some(900), None, None, Some(500), None].into_iter().map(|t| Item { last_used_ms: t, ..Default::default() }).collect();
+        date_in_order(&mut deck);
+        assert_eq!(deck.iter().map(|i| i.last_used_ms).collect::<Vec<_>>(), [Some(901), Some(900), Some(899), Some(898), Some(500), Some(499)]);
+        let mut none = vec![Item::default()];
+        date_in_order(&mut none);
+        assert_eq!(none[0].last_used_ms, None);
     }
 
     #[test]
