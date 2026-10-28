@@ -224,14 +224,17 @@ impl Server {
         let base = host::server_setting("server", "Server address")?;
         let token = host::secret("token").filter(|t| !t.trim().is_empty()).ok_or_else(|| "The Plex token is missing: paste it in the plugin's settings".to_string())?;
         let probe = Server { base, token, machine: String::new(), name: "Plex".into() };
-        let r = host::fetch(&probe.request("/"))?;
-        if r.status == 401 {
-            return Err("Plex rejected the token. Copy a fresh X-Plex-Token from Plex Web.".into());
+        let r = sdk::fetch_from("Plex", &probe.base, &probe.request("/"))?;
+        match r.status {
+            401 => return Err("Plex rejected the token. Copy a fresh X-Plex-Token from Plex Web.".into()),
+            404 => return Err(sdk::wrong_server("Plex", &probe.base)),
+            _ if !r.ok() => return Err(sdk::answered_error("Plex", &probe.base, r.status)),
+            _ => {}
         }
-        if !r.ok() {
-            return Err(format!("Plex answered HTTP {} at {}", r.status, sdk::redact_url(&probe.base)));
-        }
-        let (machine, name) = identity(&r.body)?;
+        let (machine, name) = identity(&r.body).map_err(|e| {
+            sdk::warn!("{e}");
+            sdk::wrong_server("Plex", &probe.base)
+        })?;
         Ok(Server { machine, name, ..probe })
     }
 
@@ -244,11 +247,15 @@ impl Server {
     }
 
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, String> {
-        let r = host::fetch(&self.request(path))?;
+        let r = sdk::fetch_from("Plex", &self.base, &self.request(path))?;
         if !r.ok() {
-            return Err(format!("HTTP {} for {path}", r.status));
+            sdk::warn!("HTTP {} for {path}", r.status);
+            return Err(sdk::answered_error("Plex", &self.base, r.status));
         }
-        serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer for {path}: {e}"))
+        serde_json::from_str(&r.body).map_err(|e| {
+            sdk::warn!("unexpected answer for {path}: {e}");
+            sdk::unreadable("Plex", &self.base)
+        })
     }
 
     /// A picture through the server's resizer, so a 4000 px poster arrives at TV size.
