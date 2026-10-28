@@ -425,6 +425,8 @@ pub struct Guide<'a> {
     /// Guide channel ids that match no tvg-id exactly, matched to a bucket by its id in another
     /// case or by display name.
     aliases: FastMap<String, usize>,
+    /// Programme channel ids found to match no playlist channel.
+    unmatched: FastSet<String>,
     /// Indices into `channels` for each bucket; several when a tvg-id repeats.
     buckets: Vec<Vec<usize>>,
     programmes: Vec<Vec<Programme>>,
@@ -472,7 +474,7 @@ impl<'a> Guide<'a> {
             }
         }
         let programmes = vec![Vec::new(); buckets.len()];
-        Guide { channels, by_id, by_folded_id, by_name, aliases: FastMap::default(), buckets, programmes, stored: 0, keep: usize::MAX, deadline_ms: i64::MAX, window, budget, seen: 0, matched: 0 }
+        Guide { channels, by_id, by_folded_id, by_name, aliases: FastMap::default(), unmatched: FastSet::default(), buckets, programmes, stored: 0, keep: usize::MAX, deadline_ms: i64::MAX, window, budget, seen: 0, matched: 0 }
     }
 
     fn alias(&mut self, guide_id: &str, display_name: &str) {
@@ -482,6 +484,21 @@ impl<'a> Guide<'a> {
         if let Some(&bucket) = self.by_folded_id.get(&guide_id.to_lowercase()).or_else(|| self.by_name.get(&normalise(display_name))) {
             self.aliases.entry(guide_id.to_string()).or_insert(bucket);
         }
+    }
+
+    /// The bucket whose guide id is `guide_id` in another case, for a guide with no `<channel>`
+    /// element to alias it. The answer is kept, so each id is folded once.
+    fn fold(&mut self, guide_id: &str) -> Option<usize> {
+        if self.unmatched.contains(guide_id) {
+            return None;
+        }
+        let bucket = self.by_folded_id.get(&guide_id.to_lowercase()).copied();
+        if let Some(b) = bucket {
+            self.aliases.insert(guide_id.to_string(), b);
+        } else {
+            self.unmatched.insert(guide_id.to_string());
+        }
+        bucket
     }
 
     /// The programme a `<programme …>` start tag opens, when it belongs to a playlist channel
@@ -499,7 +516,10 @@ impl<'a> Guide<'a> {
             }
         }
         let channel = channel?;
-        let bucket = *self.by_id.get(&*channel).or_else(|| self.aliases.get(&*channel))?;
+        let bucket = match self.by_id.get(&*channel).or_else(|| self.aliases.get(&*channel)) {
+            Some(&bucket) => bucket,
+            None => self.fold(&channel)?,
+        };
         self.matched += 1;
         // XMLTV's stop is optional; such a programme is closed off once the next one is known.
         let (start_ms, end_ms) = (start?, stop.unwrap_or(OPEN_END));
@@ -912,6 +932,7 @@ impl std::hash::Hasher for Fnv {
 }
 
 type FastMap<K, V> = HashMap<K, V, BuildHasherDefault<Fnv>>;
+type FastSet<K> = HashSet<K, BuildHasherDefault<Fnv>>;
 
 fn clean(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
@@ -1216,6 +1237,23 @@ http://s/n2
         read_guide(xml.as_bytes(), &mut guide, MAX_GUIDE_BYTES).unwrap();
         let titles: Vec<String> = guide.into_items().into_iter().map(|i| i.title).collect();
         assert_eq!(titles, ["News", "Quiz"]);
+    }
+
+    #[test]
+    fn a_guide_without_channel_elements_finds_an_id_in_another_case() {
+        let channels = [channel("ITV1.uk", "ITV"), channel("bbc1.uk", "BBC One")];
+        let xml = r#"<tv><programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="itv1.uk"><title>Quiz</title></programme>
+<programme start="20261019003000 +0000" stop="20261019010000 +0000" channel="itv1.uk"><title>Quiz again</title></programme>
+<programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="BBC1.UK"><title>News</title></programme>
+<programme start="20261019000000 +0000" stop="20261019003000 +0000" channel="Other.uk"><title>Elsewhere</title></programme>
+<programme start="20261019003000 +0000" stop="20261019010000 +0000" channel="Other.uk"><title>Elsewhere again</title></programme></tv>"#;
+        let mut guide = Guide::new(&channels, (at("20261018230000"), at("20261019060000")), 100);
+        read_guide(xml.as_bytes(), &mut guide, MAX_GUIDE_BYTES).unwrap();
+        assert_eq!((guide.seen, guide.matched), (5, 3));
+        let mut found: Vec<(String, String)> = guide.into_items().into_iter().map(|i| (i.channel_id.unwrap(), i.title)).collect();
+        found.sort();
+        let want = [("ITV1.uk", "Quiz"), ("ITV1.uk", "Quiz again"), ("bbc1.uk", "News")];
+        assert_eq!(found, want.map(|(c, t)| (c.to_string(), t.to_string())));
     }
 
     #[test]
