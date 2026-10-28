@@ -424,20 +424,18 @@ fn enter(caller: &mut Caller<'_, State>, bytes: usize) -> std::result::Result<()
     charge(caller, cost)
 }
 
-/// Takes `cost` fuel from the call, drawing on fuel not yet handed out when the current slice is
-/// short, so a large host call costs the same whichever slice it lands in.
+/// Takes `cost` fuel from the call and refills its slice from fuel not yet handed out, so a large
+/// host call costs the same whichever slice it lands in. A host call's `lg_alloc` cannot be paused
+/// for more fuel, so it starts on a full slice.
 fn charge(caller: &mut Caller<'_, State>, cost: u64) -> std::result::Result<(), wasmi::Error> {
     let fuel = caller.get_fuel()?;
-    if fuel >= cost {
-        return caller.set_fuel(fuel - cost);
-    }
     let st = caller.data_mut();
-    let need = cost - fuel;
-    if st.fuel_reserve < need {
+    let Some(left) = (fuel + st.fuel_reserve).checked_sub(cost) else {
         return Err(wasmi::Error::from(wasmi::TrapCode::OutOfFuel));
-    }
-    st.fuel_reserve -= need;
-    caller.set_fuel(0)
+    };
+    let slice = left.min(FUEL_SLICE);
+    st.fuel_reserve = left - slice;
+    caller.set_fuel(slice)
 }
 
 fn read_guest(caller: &Caller<'_, State>, ptr: i32, len: i32) -> std::result::Result<Vec<u8>, wasmi::Error> {
@@ -844,6 +842,34 @@ mod tests {
         );
         let plugin = host.load("x", Manifest::default(), &wasm).unwrap();
         let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert!(matches!(&err, PluginError::Failed(msg) if msg.contains("returned nothing")), "{err}");
+    }
+
+    #[test]
+    fn an_answer_costing_more_than_a_slice_of_fuel_is_handed_back() {
+        struct Large;
+        impl Services for Large {
+            fn kv_get(&self, _: &str, _: &str) -> Option<Vec<u8>> { None }
+            fn kv_set(&self, _: &str, _: &str, _: &[u8]) {}
+            fn kv_delete(&self, _: &str, _: &str) {}
+            fn secret(&self, _: &str, _: &str) -> Option<String> { None }
+            fn setting(&self, _: &str, _: &str) -> Option<String> { None }
+            fn log(&self, _: &str, _: i32, _: &str) {}
+            fn fetch(&self, _: &str, _: &HttpRequest) -> std::result::Result<HttpResponse, String> {
+                Ok(HttpResponse { status: 200, headers: Default::default(), body: "x".repeat(12 << 20), body_base64: None })
+            }
+        }
+        let wasm = module(
+            r#"(import "lounge" "fetch" (func $fetch (param i32 i32) (result i64)))"#,
+            &format!(r#"(data (i32.const 1200) "{}")"#, REQUEST_JSON.replace('"', "\\\"")),
+            // Each allocation gets pages of its own at the end of memory.
+            "(i32.shl (memory.grow (i32.add (i32.shr_u (local.get $len) (i32.const 16)) (i32.const 1))) (i32.const 16))",
+            &format!("(if (i64.eq (call $fetch (i32.const 1200) (i32.const {})) (i64.const 0)) (then unreachable)) (i64.const 0)", REQUEST_JSON.len()),
+        );
+        let h = Host::new(Arc::new(Large), Limits::default());
+        let manifest = Manifest { fetch_hosts: vec!["*".into()], ..Default::default() };
+        let plugin = h.load("x", manifest, &wasm).unwrap();
+        let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
         assert!(matches!(&err, PluginError::Failed(msg) if msg.contains("returned nothing")), "{err}");
     }
 
