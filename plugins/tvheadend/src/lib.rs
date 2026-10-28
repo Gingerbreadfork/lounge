@@ -399,30 +399,39 @@ impl Server {
 
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, String> {
         let url = format!("{}{}", self.base, path);
-        let mut r = host::fetch(&self.request(&url))?;
+        let mut r = sdk::fetch_from("Tvheadend", &self.base, &self.request(&url))?;
         if r.status == 401 && self.login.is_some() {
             let asked = read_challenge(r.headers.get("www-authenticate").map(String::as_str).unwrap_or(""))?;
             if asked.is_some() {
                 *self.auth.borrow_mut() = asked;
-                r = host::fetch(&self.request(&url))?;
+                r = sdk::fetch_from("Tvheadend", &self.base, &self.request(&url))?;
             }
         }
+        let path = path.split('?').next().unwrap_or(path);
         match r.status {
             401 => return Err(self.rejected()),
-            403 => return Err("Tvheadend refused this user (HTTP 403). Check its access entry allows the web interface.".into()),
-            s if !(200..300).contains(&s) => return Err(format!("Tvheadend answered HTTP {s} for {}", path.split('?').next().unwrap_or(path))),
+            403 => return Err("Tvheadend refused this user. Check that its access entry allows the web interface.".into()),
+            s if !(200..300).contains(&s) => {
+                sdk::warn!("HTTP {s} for {path}");
+                return Err(sdk::answered_error("Tvheadend", &self.base, s));
+            }
             _ => {}
         }
-        serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer for {}: {e}", path.split('?').next().unwrap_or(path)))
+        serde_json::from_str(&r.body).map_err(|e| {
+            sdk::warn!("unexpected answer for {path}: {e}");
+            sdk::unreadable("Tvheadend", &self.base)
+        })
     }
 
     fn rejected(&self) -> String {
-        match (&self.login, &*self.auth.borrow()) {
-            (None, _) => "Tvheadend wants a username and password: enter them in the plugin's settings".into(),
-            (Some(_), Some(Auth::Digest(_))) => "Tvheadend rejected the username or password (tried HTTP Digest)".into(),
-            (Some(_), Some(Auth::Basic)) => "Tvheadend rejected the username or password (tried HTTP Basic)".into(),
-            (Some(_), None) => "Tvheadend refused the request without saying how to sign in".into(),
-        }
+        let tried = match (&self.login, &*self.auth.borrow()) {
+            (None, _) => return "Tvheadend wants a username and password: enter them in the plugin's settings".into(),
+            (Some(_), None) => return "Tvheadend refused the request without saying how to sign in. In Tvheadend's general settings, check the authentication type.".into(),
+            (Some(_), Some(Auth::Digest(_))) => "Digest",
+            (Some(_), Some(Auth::Basic)) => "Basic",
+        };
+        sdk::warn!("sign-in with HTTP {tried} was refused");
+        "Tvheadend rejected the username or password. Check them in the plugin's settings.".into()
     }
 
     fn channels(&self) -> Result<Vec<Channel>, String> {
@@ -432,7 +441,7 @@ impl Server {
             let tags: Grid<Tag> = self.get_json("/api/channeltag/grid?limit=500")?;
             tag_uuid = tags.entries.into_iter().find(|t| t.name.eq_ignore_ascii_case(name)).map(|t| t.uuid);
             if tag_uuid.is_none() {
-                return Err(format!("Tvheadend has no channel tag called \"{name}\""));
+                return Err(format!("Tvheadend has no channel tag called \"{name}\". Check the tag's name in the plugin's settings."));
             }
         }
         Ok(grid.entries.into_iter().filter(|c| c.enabled != Some(false) && !c.name.is_empty()).filter(|c| tag_uuid.as_ref().map(|t| c.tags.contains(t)).unwrap_or(true)).collect())
@@ -705,9 +714,9 @@ mod tests {
         let second = s.request("http://tvh:9981/api/x").headers["Authorization"].clone();
         assert!(first.contains(r#"uri="/tvh/api/epg/events/grid?start=0&limit=1000""#) && first.contains("nc=00000001"), "{first}");
         assert!(second.contains("nc=00000002"));
-        assert_eq!(s.rejected(), "Tvheadend rejected the username or password (tried HTTP Digest)");
-        *s.auth.borrow_mut() = Some(Auth::Basic);
-        assert_eq!(s.rejected(), "Tvheadend rejected the username or password (tried HTTP Basic)");
+        assert_eq!(s.rejected(), "Tvheadend rejected the username or password. Check them in the plugin's settings.");
+        *s.auth.borrow_mut() = None;
+        assert_eq!(s.rejected(), "Tvheadend refused the request without saying how to sign in. In Tvheadend's general settings, check the authentication type.");
         assert_eq!(request_target("http://host"), "/");
     }
 
