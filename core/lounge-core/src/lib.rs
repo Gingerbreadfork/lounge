@@ -626,6 +626,8 @@ pub(crate) struct State {
     pub plugins: Vec<plugins::PluginEntry>,
     /// How often each app was opened in each local hour, for honest "usually" explanations.
     pub habits: std::collections::HashMap<String, [u32; 24]>,
+    /// Packages whose media session was playing at the last session ingest.
+    pub playing: std::collections::HashSet<String>,
     /// Ingests whose pictures are still being prepared, a few at a time.
     pub pending_art: worker::PendingArt,
     /// The latest TvProvider records, for preparing pictures later.
@@ -689,6 +691,7 @@ impl Core {
                 loaded: false,
                 plugins: plugin_entries,
                 habits,
+                playing: Default::default(),
                 pending_art: Default::default(),
                 last_programs: Vec::new(),
             }),

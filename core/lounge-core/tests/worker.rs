@@ -304,3 +304,23 @@ fn a_restart_publishes_a_fresh_home_before_any_ingest() {
     wait_for("a fresh home", || latest.0.lock().as_ref().is_some_and(|s| s.revision > stored));
     assert!(latest.0.lock().as_ref().unwrap().now_playing.is_none());
 }
+
+#[test]
+fn a_film_that_plays_on_is_one_sitting() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = Core::open(config(dir.path()), Arc::new(Quiet)).unwrap();
+    let latest = Arc::new(Latest::default());
+    core.add_listener(latest.clone());
+    // The shell reports the session again at each change while it plays.
+    let now = now_ms();
+    for minutes in [30, 15, 0] {
+        core.ingest_sessions(vec![playing("film.app", now - minutes * 60_000)]);
+    }
+    wait_for("the last report", || latest.0.lock().as_ref().is_some_and(|s| s.now_playing.as_ref().is_some_and(|np| np.updated_ms == now)));
+
+    let db = rusqlite::Connection::open(dir.path().join("data").join("lounge.db")).unwrap();
+    let sittings: i64 = db.query_row("SELECT SUM(count) FROM usage_hours WHERE package = 'film.app'", [], |r| r.get(0)).unwrap();
+    assert_eq!(sittings, 1);
+    let last_used: i64 = db.query_row("SELECT last_used_ms FROM app_usage WHERE package = 'film.app'", [], |r| r.get(0)).unwrap();
+    assert_eq!(last_used, now);
+}

@@ -1061,9 +1061,14 @@ fn ingest_sessions(inner: &Inner, sessions: Vec<SessionRecord>) -> Result<(), lo
 
     let offset = inner.utc_offset_minutes.load(Ordering::Relaxed);
     let mut state = inner.state.lock();
+    // The shell reports a session at every change while it plays, so only playback that starts
+    // counts as a sitting; playback that carries on just moves the app's last use.
+    let (started, going_on): (Vec<_>, Vec<_>) = playing.into_iter().partition(|(pkg, _)| !state.playing.contains(pkg));
+    state.playing = started.iter().chain(&going_on).map(|(pkg, _)| pkg.clone()).collect();
     if !items.is_empty() {
         stored("sessions", state.store.upsert_items(&items, now));
-        record_usage(&mut state, &playing, offset);
+        record_usage(&mut state, &started, offset);
+        extend_usage(&mut state, &going_on);
         for it in items {
             state.graph.upsert(it);
         }
@@ -1116,6 +1121,19 @@ fn record_usage(state: &mut State, usage: &[(String, i64)], utc_offset_minutes: 
     }
     for (pkg, hour) in counted {
         state.habits.entry(pkg).or_insert([0; 24])[hour as usize % 24] += 1;
+    }
+}
+
+/// Move apps' last use on without counting a new sitting.
+fn extend_usage(state: &mut State, usage: &[(String, i64)]) {
+    if usage.is_empty() {
+        return;
+    }
+    if let Err(e) = state.store.touch_usage(usage) {
+        tracing::error!("could not store app usage: {e}");
+    }
+    for (pkg, ms) in usage {
+        state.graph.set_usage(pkg, *ms);
     }
 }
 

@@ -109,6 +109,9 @@ CREATE TABLE IF NOT EXISTS usage_hours (
 
 const SCHEMA_VERSION: i64 = 5;
 
+const UPSERT_USAGE: &str = "INSERT INTO app_usage(package, last_used_ms) VALUES (?1, ?2)
+     ON CONFLICT(package) DO UPDATE SET last_used_ms = MAX(last_used_ms, excluded.last_used_ms)";
+
 pub struct Store {
     conn: Connection,
     path: PathBuf,
@@ -380,10 +383,7 @@ impl Store {
         let mut counted = Vec::new();
         {
             let mut prev = tx.prepare("SELECT last_used_ms FROM app_usage WHERE package = ?1")?;
-            let mut stmt = tx.prepare(
-                "INSERT INTO app_usage(package, last_used_ms) VALUES (?1, ?2)
-                 ON CONFLICT(package) DO UPDATE SET last_used_ms = MAX(last_used_ms, excluded.last_used_ms)",
-            )?;
+            let mut stmt = tx.prepare(UPSERT_USAGE)?;
             let mut habit = tx.prepare(
                 "INSERT INTO usage_hours(package, hour, count) VALUES (?1, ?2, 1)
                  ON CONFLICT(package, hour) DO UPDATE SET count = count + 1",
@@ -401,6 +401,20 @@ impl Store {
         }
         tx.commit()?;
         Ok(counted)
+    }
+
+    /// Record when apps were last used without counting towards their habits, for a use that
+    /// carries on one already counted.
+    pub fn touch_usage(&mut self, usage: &[(String, i64)]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare(UPSERT_USAGE)?;
+            for (pkg, ms) in usage {
+                stmt.execute(params![pkg, ms])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     /// How many times each app was opened in each local hour.
