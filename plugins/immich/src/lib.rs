@@ -81,9 +81,9 @@ impl sdk::Plugin for Immich {
 const TOO_BIG: &str = "The album is too big to read: Immich answered with more than the 8 MB a plugin may read at once. Turn off Show metadata on the shared link, or share a smaller album.";
 
 /// GET from Immich, turning its refusals into advice.
-fn get(url: &str) -> Result<String, String> {
-    let (status, body) = send(&HttpRequest::get(url).header("Accept", "application/json"))?;
-    answer(status, body)
+fn get(base: &str, url: &str) -> Result<String, String> {
+    let (status, body) = send(base, &HttpRequest::get(url).header("Accept", "application/json"))?;
+    answer(base, status, body)
 }
 
 /// The shared link and its album. From 2.6 a link with a password is signed in to first; older
@@ -96,32 +96,38 @@ fn shared_link(base: &str, name: &str, password: Option<&str>) -> Result<SharedL
                 .header("Accept", "application/json");
             login.method = "POST".into();
             login.body = Some(serde_json::json!({ "password": p }).to_string());
-            match send(&login)? {
-                (404, _) => get(&format!("{base}/api/shared-links/me?{}", query(name, Some(p))))?,
-                (status, body) => answer(status, body)?,
+            match send(base, &login)? {
+                (404, _) => get(base, &format!("{base}/api/shared-links/me?{}", query(name, Some(p))))?,
+                (status, body) => answer(base, status, body)?,
             }
         }
-        None => get(&format!("{base}/api/shared-links/me?{}", query(name, None)))?,
+        None => get(base, &format!("{base}/api/shared-links/me?{}", query(name, None)))?,
     };
-    serde_json::from_str(&body).map_err(|e| format!("unexpected answer from Immich: {e}"))
+    serde_json::from_str(&body).map_err(|e| unreadable(base, "shared link", e))
 }
 
-/// Sends `req` and reads the whole answer, whatever its status.
-fn send(req: &HttpRequest) -> Result<(u16, String), String> {
-    match host::fetch(req) {
+/// Sends `req` to the Immich at `base` and reads the whole answer, whatever its status.
+fn send(base: &str, req: &HttpRequest) -> Result<(u16, String), String> {
+    match sdk::fetch_from("Immich", base, req) {
         Err(e) if e == host::TOO_LARGE => Err(TOO_BIG.into()),
         Err(e) => Err(e),
         Ok(r) => Ok((r.status, r.body)),
     }
 }
 
-fn answer(status: u16, body: String) -> Result<String, String> {
+fn answer(base: &str, status: u16, body: String) -> Result<String, String> {
     match status {
         401 => Err(refusal(&body)),
         404 => Err("Immich does not know this link any more. Create a new shared link for the album.".into()),
-        s if !(200..300).contains(&s) => Err(format!("Immich answered HTTP {s}")),
+        s if !(200..300).contains(&s) => Err(sdk::answered_error("Immich", base, s)),
         _ => Ok(body),
     }
+}
+
+/// The error for an answer about `what` that cannot be read; the cause goes to the log.
+fn unreadable(base: &str, what: &str, e: impl std::fmt::Display) -> String {
+    sdk::warn!("unexpected {what} from Immich: {e}");
+    sdk::unreadable("Immich", base)
 }
 
 /// Advice for a 401, whose message says whether the key or the password was wrong.
@@ -141,8 +147,8 @@ fn refusal(body: &str) -> String {
 /// The newest `max` pictures of an album, read a month at a time from Immich's timeline,
 /// newest month first.
 fn timeline(base: &str, album_id: &str, auth: &str, max: usize) -> Result<Vec<Picture>, String> {
-    let mut months: Vec<Month> = serde_json::from_str(&get(&format!("{base}/api/timeline/buckets?albumId={album_id}&order=desc&size=MONTH&{auth}"))?)
-        .map_err(|e| format!("unexpected album timeline from Immich: {e}"))?;
+    let mut months: Vec<Month> = serde_json::from_str(&get(base, &format!("{base}/api/timeline/buckets?albumId={album_id}&order=desc&size=MONTH&{auth}"))?)
+        .map_err(|e| unreadable(base, "album timeline", e))?;
     months.sort_by(|a, b| b.time_bucket.cmp(&a.time_bucket));
     let mut out = Vec::new();
     for month in months.iter().take(MAX_MONTHS) {
@@ -150,8 +156,8 @@ fn timeline(base: &str, album_id: &str, auth: &str, max: usize) -> Result<Vec<Pi
             break;
         }
         let bucket = if month.time_bucket.contains('T') { month.time_bucket.clone() } else { format!("{}T00:00:00.000Z", month.time_bucket) };
-        let body = get(&format!("{base}/api/timeline/bucket?albumId={album_id}&timeBucket={}&order=desc&size=MONTH&{auth}", url_encode(&bucket)))?;
-        out.extend(month_pictures(&body)?);
+        let body = get(base, &format!("{base}/api/timeline/bucket?albumId={album_id}&timeBucket={}&order=desc&size=MONTH&{auth}", url_encode(&bucket)))?;
+        out.extend(month_pictures(&body).map_err(|e| unreadable(base, "album month", e))?);
     }
     Ok(out)
 }
@@ -171,7 +177,7 @@ pub fn month_pictures(json: &str) -> Result<Vec<Picture>, String> {
             })
             .collect());
     }
-    let assets: Images = serde_json::from_str(json).map_err(|e| format!("unexpected album month from Immich: {e}"))?;
+    let assets: Images = serde_json::from_str(json).map_err(|e| e.to_string())?;
     Ok(assets.0)
 }
 
@@ -430,6 +436,7 @@ mod tests {
         assert!(refusal(r#"{"message":"Password required","statusCode":401}"#).starts_with("This link has a password"));
         assert!(refusal(r#"{"message":"Invalid share key","statusCode":401}"#).starts_with("Immich does not know this link"));
         assert!(refusal("<html>").starts_with("Immich refused the link"));
+        assert_eq!(answer("https://photos.example.com", 502, String::new()).unwrap_err(), "Immich at photos.example.com answered with error 502. Check the server, then try again.");
     }
 
     #[test]
