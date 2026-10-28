@@ -7,6 +7,9 @@ use std::collections::HashSet;
 
 /// Most months of an album read through the timeline in one refresh.
 const MAX_MONTHS: usize = 24;
+/// A photo narrower than this, width over height, would lose too much filling the screen, so it
+/// is hung whole instead.
+const FRAME_BELOW: f64 = 1.25;
 
 pub struct Immich;
 
@@ -67,6 +70,7 @@ impl sdk::Plugin for Immich {
                 subtitle: p.taken_ms.map(|t| month_year(t + p.local_offset_ms)),
                 added_ms: p.taken_ms,
                 thumbnail: Some(format!("{base}/api/assets/{}/thumbnail?size=preview&{auth}", p.id)),
+                framed: p.framed,
                 weight: (count - i) as i32,
                 ..Default::default()
             })
@@ -115,7 +119,12 @@ pub fn month_pictures(json: &str) -> Result<Vec<Picture>, String> {
         let offset = |i: usize| c.local_offset_hours.get(i).copied().flatten().map_or(0, |h| (h * 3_600_000.0) as i64);
         return Ok((0..c.id.len())
             .filter(|&i| c.is_image.get(i).copied().unwrap_or(false))
-            .map(|i| Picture { id: c.id[i].clone(), taken_ms: c.file_created_at.get(i).and_then(|t| t.as_deref()).and_then(sdk::parse_iso8601), local_offset_ms: offset(i) })
+            .map(|i| Picture {
+                id: c.id[i].clone(),
+                taken_ms: c.file_created_at.get(i).and_then(|t| t.as_deref()).and_then(sdk::parse_iso8601),
+                local_offset_ms: offset(i),
+                framed: c.ratio.get(i).is_some_and(|&r| r > 0.0 && r < FRAME_BELOW),
+            })
             .collect());
     }
     let assets: Images = serde_json::from_str(json).map_err(|e| format!("unexpected album month from Immich: {e}"))?;
@@ -167,15 +176,19 @@ struct Columns {
     file_created_at: Vec<Option<String>>,
     #[serde(rename = "localOffsetHours", default)]
     local_offset_hours: Vec<Option<f64>>,
+    /// Width over height, as the picture is shown.
+    #[serde(default)]
+    ratio: Vec<f64>,
 }
 
 /// A picture to show: its id and when it was taken, in UTC, with the offset to local time
-/// where Immich knows it.
+/// where Immich knows it, and whether it is hung whole rather than filling the screen.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Picture {
     pub id: String,
     pub taken_ms: Option<i64>,
     pub local_offset_ms: i64,
+    pub framed: bool,
 }
 
 /// A list of assets kept as pictures: videos are dropped and each asset is cut down to what a
@@ -195,8 +208,8 @@ impl<'de> Deserialize<'de> for Images {
                 let mut out = Vec::new();
                 while let Some(a) = seq.next_element::<Asset>()? {
                     if a.kind == "IMAGE" {
-                        let taken_ms = a.taken_ms();
-                        out.push(Picture { id: a.id, taken_ms, local_offset_ms: 0 });
+                        let (taken_ms, framed) = (a.taken_ms(), a.framed());
+                        out.push(Picture { id: a.id, taken_ms, local_offset_ms: 0, framed });
                     }
                 }
                 Ok(Images(out))
@@ -222,11 +235,25 @@ pub struct Asset {
 pub struct Exif {
     #[serde(rename = "dateTimeOriginal")]
     pub date_time_original: Option<String>,
+    #[serde(rename = "exifImageWidth")]
+    pub width: Option<f64>,
+    #[serde(rename = "exifImageHeight")]
+    pub height: Option<f64>,
+    /// The EXIF orientation, as text or a number; 5 to 8 turn the picture on its side.
+    pub orientation: Option<serde_json::Value>,
 }
 
 impl Asset {
     fn taken_ms(&self) -> Option<i64> {
         self.exif.as_ref().and_then(|e| e.date_time_original.as_deref()).or(self.file_created_at.as_deref()).and_then(sdk::parse_iso8601)
+    }
+
+    fn framed(&self) -> bool {
+        let Some(e) = &self.exif else { return false };
+        let (Some(w), Some(h)) = (e.width, e.height) else { return false };
+        let turned = e.orientation.as_ref().and_then(|o| o.as_i64().or_else(|| o.as_str()?.trim().parse().ok())).is_some_and(|o| (5..=8).contains(&o));
+        let ratio = if turned { h / w } else { w / h };
+        ratio > 0.0 && ratio < FRAME_BELOW
     }
 }
 
@@ -321,17 +348,22 @@ mod tests {
             "duration": [null, "0:00:05.000", null], "projectionType": [null, null, null], "livePhotoVideoId": [null, null, null]}"#;
         let pictures = month_pictures(columns).unwrap();
         assert_eq!(pictures.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["p1", "p2"]);
+        assert_eq!(pictures.iter().map(|p| p.framed).collect::<Vec<_>>(), [false, true]);
         assert_eq!(month_year(pictures[0].taken_ms.unwrap() + pictures[0].local_offset_ms), "November 2025");
         assert_eq!(pictures[1].taken_ms, None);
         let assets = r#"[{"id": "a1", "type": "IMAGE", "fileCreatedAt": "2024-02-29T12:00:00.000Z"}, {"id": "v", "type": "VIDEO"}]"#;
-        assert_eq!(month_pictures(assets).unwrap(), [Picture { id: "a1".into(), taken_ms: sdk::parse_iso8601("2024-02-29T12:00:00.000Z"), local_offset_ms: 0 }]);
+        assert_eq!(month_pictures(assets).unwrap(), [Picture { id: "a1".into(), taken_ms: sdk::parse_iso8601("2024-02-29T12:00:00.000Z"), local_offset_ms: 0, framed: false }]);
+        let turned = r#"[{"id": "t", "type": "IMAGE", "exifInfo": {"exifImageWidth": 4000, "exifImageHeight": 3000, "orientation": "6"}},
+            {"id": "w", "type": "IMAGE", "exifInfo": {"exifImageWidth": 4000, "exifImageHeight": 3000, "orientation": "1"}},
+            {"id": "n", "type": "IMAGE", "exifInfo": {"exifImageWidth": 4000, "exifImageHeight": 3000, "orientation": 8}}]"#;
+        assert_eq!(month_pictures(turned).unwrap().iter().map(|p| p.framed).collect::<Vec<_>>(), [true, false, true]);
         assert!(month_pictures(r#"{"message": "Forbidden"}"#).is_err());
     }
 
     #[test]
     fn the_newest_pictures_are_kept_once_each() {
-        let p = |id: &str, t: i64| Picture { id: id.into(), taken_ms: Some(t), local_offset_ms: 0 };
-        let kept = newest(vec![p("a", 1), p("b", 3), p("a", 1), p("c", 2), Picture { id: "d".into(), taken_ms: None, local_offset_ms: 0 }], 3);
+        let p = |id: &str, t: i64| Picture { id: id.into(), taken_ms: Some(t), local_offset_ms: 0, framed: false };
+        let kept = newest(vec![p("a", 1), p("b", 3), p("a", 1), p("c", 2), Picture { id: "d".into(), taken_ms: None, local_offset_ms: 0, framed: false }], 3);
         assert_eq!(kept.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["b", "c", "a"]);
     }
 
