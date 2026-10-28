@@ -163,7 +163,10 @@ fn after_renewal(current: Token, outcome: Result<Token, RenewError>, now_ms: i64
             sdk::warn!("could not renew the sign-in ({e}); using the current one");
             Renewed::Use(current)
         }
-        Err(RenewError::Failed(e)) => Renewed::TryLater(format!("Could not renew the Trakt sign-in ({e}); it tries again on the next refresh")),
+        Err(RenewError::Failed(e)) => {
+            sdk::warn!("could not renew the sign-in ({e})");
+            Renewed::TryLater("Could not renew the Trakt sign-in. It tries again on the next refresh.".into())
+        }
     }
 }
 
@@ -236,17 +239,24 @@ impl Client {
     }
 
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, String> {
-        let r = host::fetch(&self.request(path))?;
+        let r = sdk::fetch_online("Trakt", &self.request(path))?;
+        let path = path.split('?').next().unwrap_or(path);
         match r.status {
             401 => {
                 expire_token();
                 return Err("Trakt no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now.".into());
             }
-            429 => return Err("Trakt is asking for a pause (rate limit); it will try again later".into()),
-            s if !(200..300).contains(&s) => return Err(format!("Trakt answered HTTP {s} for {}", path.split('?').next().unwrap_or(path))),
+            429 => return Err("Trakt is asking for a pause between requests. It tries again on the next refresh.".into()),
+            s if !(200..300).contains(&s) => {
+                sdk::warn!("HTTP {s} for {path}");
+                return Err(sdk::online_error("Trakt", s));
+            }
             _ => {}
         }
-        serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer for {}: {e}", path.split('?').next().unwrap_or(path)))
+        serde_json::from_str(&r.body).map_err(|e| {
+            sdk::warn!("unexpected answer for {path}: {e}");
+            sdk::unreadable("Trakt", API)
+        })
     }
 }
 
@@ -258,8 +268,14 @@ fn post(path: &str, body: serde_json::Value, client_id: &str) -> Result<(u16, St
         body: Some(body.to_string()),
         timeout_ms: 0,
     };
-    let r = host::fetch(&req)?;
+    let r = sdk::fetch_online("Trakt", &req)?;
     Ok((r.status, r.body))
+}
+
+/// The error for a sign-in answer that cannot be read; the cause goes to the log.
+fn unreadable_sign_in(e: serde_json::Error) -> String {
+    sdk::warn!("unexpected sign-in answer: {e}");
+    sdk::unreadable("Trakt", API)
 }
 
 /// The token once the sign-in has gone through, so the refresh goes on with it, or else the
@@ -271,7 +287,7 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, Stri
         let (status, body) = post("/oauth/device/token", serde_json::json!({ "code": d.device_code, "client_id": client_id, "client_secret": secret }), client_id)?;
         match status {
             200 => {
-                let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| format!("unexpected sign-in answer: {e}"))?;
+                let t: TokenAnswer = serde_json::from_str(&body).map_err(unreadable_sign_in)?;
                 host::kv_delete(DEVICE_KEY);
                 return Ok(save_token(&t, now_ms));
             }
@@ -288,9 +304,10 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, Stri
         return Err("Trakt does not know this Client ID. Check it against your app at trakt.tv/oauth/applications.".into());
     }
     if !(200..300).contains(&status) {
-        return Err(format!("Trakt answered HTTP {status} when asked for a sign-in code"));
+        sdk::warn!("HTTP {status} when asked for a sign-in code");
+        return Err(sdk::online_error("Trakt", status));
     }
-    let a: DeviceAnswer = serde_json::from_str(&body).map_err(|e| format!("unexpected sign-in answer: {e}"))?;
+    let a: DeviceAnswer = serde_json::from_str(&body).map_err(unreadable_sign_in)?;
     let d = Device { device_code: a.device_code, user_code: a.user_code, verification_url: a.verification_url, expires_ms: now_ms + a.expires_in * 1000 };
     host::kv_set(DEVICE_KEY, serde_json::to_string(&d).unwrap_or_default().as_bytes());
     Err(instruction(&d))
@@ -636,7 +653,7 @@ mod tests {
     fn only_a_refused_renewal_asks_for_a_new_sign_in() {
         assert!(matches!(after_renewal(token(10, 10), Err(RenewError::Refused(401)), 0), Renewed::SignInAgain));
         assert!(matches!(after_renewal(token(10, 10), Err(RenewError::Failed("HTTP 503".into())), 0), Renewed::Use(t) if t.access == "old"));
-        assert!(matches!(after_renewal(token(10, 10), Err(RenewError::Failed("timed out".into())), 20), Renewed::TryLater(_)));
+        assert!(matches!(after_renewal(token(10, 10), Err(RenewError::Failed("timed out".into())), 20), Renewed::TryLater(e) if e == "Could not renew the Trakt sign-in. It tries again on the next refresh."));
         assert!(matches!(after_renewal(token(10, 10), Ok(token(99, 99)), 0), Renewed::Use(t) if t.expires_ms == 99));
     }
 }
