@@ -14,6 +14,7 @@ android {
 
 dependencies {
     implementation(project(":core:bindings"))
+    implementation(project(":core:platform"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
 }

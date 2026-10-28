@@ -20,8 +20,8 @@ import java.security.MessageDigest
 /**
  * Copies artwork from http(s), content and android.resource URIs into a cache directory so the
  * artwork pipeline reads plain files. A URI is fetched once and refreshed after [maxAgeMs];
- * failures are remembered for an hour. The URIs come from other apps' rows and are read as Lounge,
- * so file URIs and the providers [isOwnAuthority] names as Lounge's are refused.
+ * failures are remembered for an hour. The URIs come from other apps' rows and media sessions and
+ * are read as Lounge, so file URIs and the providers [isOwnAuthority] names as Lounge's are refused.
  */
 class ArtworkFetcher(
     private val resolver: ContentResolver,

@@ -13,23 +13,30 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.callbackFlow
 import tv.lounge.core.PlaybackStatus
 import tv.lounge.core.SessionRecord
+import tv.lounge.platform.ArtworkFetcher
 import java.io.File
 import java.io.FileOutputStream
 
 /**
  * Observes active media sessions once notification access is granted: what is playing, where it is
- * up to, which transport commands work. Album art goes to a cache file for the artwork pipeline.
+ * up to, which transport commands work. Album art goes to a cache file for the artwork pipeline,
+ * whether the session hands over a picture or only names one.
  */
 class MediaSessionsCollector(private val context: Context) {
     private val manager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
     private val component = ComponentName(context, NowPlayingListener::class.java)
     private val artDir = File(context.cacheDir, "sessions").apply { mkdirs() }
+    private val artwork = ArtworkFetcher(context, File(context.cacheDir, "sessionart"), maxAgeMs = 86_400_000L)
+    /** The file for each art URI fetched so far, and the URIs still being fetched. */
+    private val fetchedArt = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val fetchingArt = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val pm: PackageManager = context.packageManager
     private val main = Handler(Looper.getMainLooper())
 
@@ -51,7 +58,9 @@ class MediaSessionsCollector(private val context: Context) {
         // Album art is encoded to disk here; that and the metadata reads leave the main thread.
         fun publish() {
             val current = controllers
-            launch(Dispatchers.IO) { trySend(current.mapNotNull { record(it) }) }
+            launch(Dispatchers.IO) {
+                trySend(current.mapNotNull { c -> record(c) { uri -> uriArt(uri, this@callbackFlow) { publish() } } })
+            }
         }
         fun attach(list: List<MediaController>) {
             callbacks.forEach { (c, cb) -> c.unregisterCallback(cb) }
@@ -102,7 +111,7 @@ class MediaSessionsCollector(private val context: Context) {
         return true
     }
 
-    private fun record(c: MediaController): SessionRecord? {
+    private fun record(c: MediaController, uriArt: (String) -> String?): SessionRecord? {
         val md = c.metadata
         val ps = c.playbackState
         val title = md?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)?.takeIf { it.isNotBlank() }
@@ -139,7 +148,7 @@ class MediaSessionsCollector(private val context: Context) {
             appLabel = appLabel(c.packageName),
             title = title,
             subtitle = subtitle,
-            artPath = art(c.packageName, title, md),
+            artPath = art(c.packageName, title, md, uriArt),
             durationMs = md?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0 },
             positionMs = position,
             status = status,
@@ -151,12 +160,14 @@ class MediaSessionsCollector(private val context: Context) {
         )
     }
 
-    private fun art(pkg: String, title: String?, md: MediaMetadata?): String? {
+    private fun art(pkg: String, title: String?, md: MediaMetadata?, uriArt: (String) -> String?): String? {
         md ?: return null
         val bitmap: Bitmap = md.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-            ?: return md.getString(MediaMetadata.METADATA_KEY_ART_URI)?.takeIf { it.startsWith("http") || it.startsWith("content") }
+            ?: return listOf(MediaMetadata.METADATA_KEY_ART_URI, MediaMetadata.METADATA_KEY_ALBUM_ART_URI, MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
+                .firstNotNullOfOrNull { key -> md.getString(key)?.takeIf { it.isNotBlank() } }
+                ?.let(uriArt)
         // Keyed on what the metadata says, not the bitmap object: every fetch is a fresh copy.
         val described = listOf(
             title,
@@ -181,6 +192,27 @@ class MediaSessionsCollector(private val context: Context) {
             }
         }
         return file.takeIf { it.exists() }?.absolutePath
+    }
+
+    /**
+     * The cached file for art named by [uri], or null until it has been fetched. The first ask starts
+     * the fetch in [scope], and [onFetched] runs once the file is there.
+     */
+    private fun uriArt(uri: String, scope: CoroutineScope, onFetched: () -> Unit): String? {
+        fetchedArt[uri]?.let { path -> if (File(path).exists()) return path }
+        if (fetchingArt.add(uri)) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val path = artwork.fetch(uri) ?: return@launch
+                    fetchedArt[uri] = path
+                    artwork.prune(fetchedArt.values)
+                    onFetched()
+                } finally {
+                    fetchingArt.remove(uri)
+                }
+            }
+        }
+        return null
     }
 
     private fun appLabel(pkg: String): String =
