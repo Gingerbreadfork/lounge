@@ -55,21 +55,23 @@ impl sdk::Plugin for YouTube {
         let mut videos = Vec::new();
         let mut failures = Vec::new();
         for source in sources.iter().take(MAX_FEEDS) {
-            match host::get_text(&source.feed_url()) {
+            match feed(source) {
                 Ok(xml) => {
                     let mut parsed = parse_feed(&xml);
                     parsed.retain(|v| v.published_ms >= since && (shorts || !v.short));
                     parsed.truncate(per_source);
                     videos.extend(parsed);
                 }
-                Err(e) => failures.push(format!("{}: {e}", source.label())),
+                Err(e) => failures.push((source.label(), e)),
             }
         }
-        if videos.is_empty() && !failures.is_empty() {
-            return Err(format!("Could not read any feed. {}", failures.join("; ")));
+        for (label, e) in &failures {
+            sdk::warn!("{label}: {e}");
         }
-        for f in &failures {
-            sdk::warn!("{f}");
+        if videos.is_empty()
+            && let Some((_, e)) = failures.into_iter().next()
+        {
+            return Err(e);
         }
         videos.sort_by_key(|v| std::cmp::Reverse(v.published_ms));
         let mut seen = std::collections::HashSet::new();
@@ -98,6 +100,16 @@ impl sdk::Plugin for YouTube {
 }
 
 sdk::export_plugin!(YouTube);
+
+/// A source's feed, or what went wrong reading it as a sentence for the TV.
+fn feed(source: &Source) -> Result<String, String> {
+    let r = sdk::fetch_online("YouTube", &HttpRequest::get(source.feed_url()))?;
+    match r.status {
+        404 => Err(format!("YouTube has no {}. Check the channels in the plugin's settings.", source.label())),
+        s if !(200..300).contains(&s) => Err(sdk::online_error("YouTube", s)),
+        _ => Ok(if r.body_base64.is_some() { String::from_utf8_lossy(&sdk::body_bytes(r)).into_owned() } else { r.body }),
+    }
+}
 
 /// The 1280×720 picture when YouTube has one, else the 480×360 one every video has.
 fn thumbnail(id: &str, hd: bool) -> String {
@@ -178,7 +190,7 @@ pub fn parse_sources(raw: &str) -> Result<Vec<Source>, String> {
         } else if piece.contains('@') {
             return Err(format!("\"{piece}\" is a handle; use the channel's id (starts with UC) instead"));
         } else {
-            return Err(format!("\"{piece}\" is not a channel or playlist id or link"));
+            return Err(format!("\"{piece}\" is not a channel or playlist id or link. Check the channels in the plugin's settings."));
         }
     }
     out.dedup();
@@ -332,7 +344,7 @@ mod tests {
         let s = parse_sources("UCBJycsmduvYEL83R_U4JriQ, https://www.youtube.com/channel/UCBJycsmduvYEL83R_U4JriQ/videos\nhttps://www.youtube.com/playlist?list=PLx1234567890abc\nPLx1234567890abc").unwrap();
         assert_eq!(s, vec![Source::Channel("UCBJycsmduvYEL83R_U4JriQ".into()), Source::Playlist("PLx1234567890abc".into())]);
         assert!(parse_sources("https://www.youtube.com/@mkbhd").unwrap_err().contains("handle"));
-        assert!(parse_sources("not a thing").is_err());
+        assert_eq!(parse_sources("not a thing").unwrap_err(), "\"not a thing\" is not a channel or playlist id or link. Check the channels in the plugin's settings.");
     }
 
     #[test]
