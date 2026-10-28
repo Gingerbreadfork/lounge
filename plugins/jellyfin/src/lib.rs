@@ -1,6 +1,7 @@
 //! Jellyfin plugin: signs in with the user's credentials, publishes resume points and the next
-//! episode of each show into Continue watching and the newest library additions into a "Recently
-//! added" row, and searches the library. Items open on their page in the Jellyfin Android TV app.
+//! episode of each show into Continue watching, the newest library additions and the user's
+//! favourites into rows of their own, and searches the library. Items open on their page in the
+//! Jellyfin Android TV app.
 
 use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
 use serde::Deserialize;
@@ -32,12 +33,15 @@ impl sdk::Plugin for Jellyfin {
             id: "tv.lounge.jellyfin".into(),
             name: "Jellyfin".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue watching and recently added from your Jellyfin server.".into(),
+            description: "Continue watching, recently added and favourites from your Jellyfin server.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
-            rows: vec![RowSpec { id: "recent".into(), title: "Recently added on Jellyfin".into(), style: RowStyle::Poster }],
+            rows: vec![
+                RowSpec { id: "recent".into(), title: "Recently added on Jellyfin".into(), style: RowStyle::Poster },
+                RowSpec { id: "favourites".into(), title: "Favourites on Jellyfin".into(), style: RowStyle::Poster },
+            ],
             settings: vec![
                 SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8096".into()), default: None },
                 SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: true, help: None, default: None },
@@ -77,6 +81,14 @@ impl sdk::Plugin for Jellyfin {
         ))?;
         for it in latest {
             items.push(session.latest_item(&it));
+        }
+        let favourites: ItemsResponse = session.get_json(&format!(
+            "/Users/{}/Items?Recursive=true&IsFavorite=true&IncludeItemTypes=Movie,Series&SortBy=SortName&Limit=60&Fields=Overview,DateCreated&EnableImageTypes=Primary,Backdrop",
+            session.user_id
+        ))?;
+        let count = favourites.items.len() as i32;
+        for (i, it) in favourites.items.iter().enumerate() {
+            items.push(session.favourite_item(it, count - i as i32));
         }
         sdk::dedup_ids(&mut items);
         sdk::info!("{} items from {}", items.len(), sdk::redact_url(&session.server));
@@ -297,6 +309,16 @@ impl Session {
             ..Default::default()
         }
     }
+
+    /// A favourite movie or show; `weight` keeps the row in the server's alphabetical order.
+    fn favourite_item(&self, it: &MediaItem, weight: i32) -> Item {
+        let mut item = self.latest_item(it);
+        item.id = format!("fav:{}", it.id);
+        item.row = Some("favourites".into());
+        item.is_new = false;
+        item.weight = weight;
+        item
+    }
 }
 
 /// Opens the item's page in the Jellyfin app, whose start screen takes an item id the way the
@@ -433,6 +455,23 @@ mod tests {
         assert_eq!(finished.at(Some("sb")), parse_iso8601("2026-10-18T00:00:00Z"));
         assert_eq!(finished.at(Some("older")), parse_iso8601("2026-10-10T00:00:00Z"));
         assert_eq!(Finished::from_plays(&[]).at(Some("sa")), None);
+    }
+
+    #[test]
+    fn favourites_go_in_their_own_row_without_the_new_badge() {
+        let s = Session { server: "http://jf:8096".into(), token: "t".into(), user_id: "u".into(), device_id: "tv-1".into() };
+        let it: MediaItem = serde_json::from_str(
+            r#"{"Id":"m1","Name":"Static Bloom","Type":"Movie","ProductionYear":2021,"DateCreated":"2024-03-01T00:00:00Z","ImageTags":{"Primary":"x"}}"#,
+        )
+        .unwrap();
+        let item = s.favourite_item(&it, 7);
+        assert_eq!(item.id, "fav:m1");
+        assert_eq!(item.row.as_deref(), Some("favourites"));
+        assert!(!item.is_new);
+        assert_eq!(item.weight, 7);
+        assert_eq!(item.added_ms, parse_iso8601("2024-03-01T00:00:00Z"));
+        assert_eq!(item.subtitle.as_deref(), Some("2021"));
+        assert!(<Jellyfin as sdk::Plugin>::manifest().rows.iter().any(|r| r.id == "favourites"));
     }
 
     #[test]

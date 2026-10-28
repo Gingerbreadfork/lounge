@@ -3,7 +3,7 @@ name = "lounge-plugin-jellyfin"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Jellyfin: continue watching and recently added, opened in the Jellyfin TV app"
+description = "Jellyfin: continue watching, recently added and favourites, opened in the Jellyfin TV app"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
