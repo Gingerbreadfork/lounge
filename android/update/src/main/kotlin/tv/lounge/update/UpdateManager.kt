@@ -526,6 +526,8 @@ class UpdateManager(
         try {
             if (conn.responseCode != 200) throw IllegalStateException("The download answered HTTP ${conn.responseCode}")
             val total = conn.contentLengthLong.takeIf { it > 0 } ?: release.apkSize
+            // A body that never ends must not fill the storage.
+            val limit = 2 * release.apkSize
             val digest = MessageDigest.getInstance("SHA-256")
             conn.inputStream.use { input ->
                 partial.outputStream().use { out ->
@@ -535,6 +537,7 @@ class UpdateManager(
                     while (true) {
                         val n = input.read(buf)
                         if (n < 0) break
+                        if (done + n > limit) throw IllegalStateException("The download is larger than its release says")
                         out.write(buf, 0, n)
                         digest.update(buf, 0, n)
                         done += n
