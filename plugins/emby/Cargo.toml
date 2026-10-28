@@ -3,7 +3,7 @@ name = "lounge-plugin-emby"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Emby: continue watching and recently added, opened in the Emby TV app"
+description = "Emby: continue watching, recently added and favourites, opened in the Emby TV app"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

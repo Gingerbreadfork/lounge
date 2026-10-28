@@ -1,6 +1,6 @@
 //! Emby plugin: signs in with the user's credentials, publishes resume points and the next
-//! episode of each show into Continue watching and the newest library additions into a "Recently
-//! added" row, and searches the library. Items open in the Emby for Android TV app. Emby and Jellyfin share one API, so this
+//! episode of each show into Continue watching, the newest library additions and the user's
+//! favourites into rows of their own, and searches the library. Items open in the Emby for Android TV app. Emby and Jellyfin share one API, so this
 //! is the Jellyfin plugin with Emby's names, app and paths.
 
 use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
@@ -32,12 +32,15 @@ impl sdk::Plugin for Emby {
             id: "tv.lounge.emby".into(),
             name: "Emby".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue watching and recently added from your Emby server.".into(),
+            description: "Continue watching, recently added and favourites from your Emby server.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
-            rows: vec![RowSpec { id: "recent".into(), title: "Recently added on Emby".into(), style: RowStyle::Poster }],
+            rows: vec![
+                RowSpec { id: "recent".into(), title: "Recently added on Emby".into(), style: RowStyle::Poster },
+                RowSpec { id: "favourites".into(), title: "Favourites on Emby".into(), style: RowStyle::Poster },
+            ],
             settings: vec![
                 SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8096".into()), default: None },
                 SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: true, help: None, default: None },
@@ -79,6 +82,14 @@ impl sdk::Plugin for Emby {
             let mut item = session.latest_item(&it);
             item.is_new = sdk::new_this_week(item.added_ms, ctx.now_ms);
             items.push(item);
+        }
+        let favourites: ItemsResponse = session.get_json(&format!(
+            "/Users/{}/Items?Recursive=true&IsFavorite=true&IncludeItemTypes=Movie,Series&SortBy=SortName&Limit=60&Fields=Overview,DateCreated&EnableImageTypes=Primary,Backdrop",
+            session.user_id
+        ))?;
+        let count = favourites.items.len() as i32;
+        for (i, it) in favourites.items.iter().enumerate() {
+            items.push(session.favourite_item(it, count - i as i32));
         }
         sdk::dedup_ids(&mut items);
         sdk::info!("{} items from {}", items.len(), sdk::redact_url(&session.server));
@@ -288,6 +299,15 @@ impl Session {
         }
     }
 
+    /// A favourite movie or show; `weight` keeps the row in the server's alphabetical order.
+    fn favourite_item(&self, it: &MediaItem, weight: i32) -> Item {
+        let mut item = self.latest_item(it);
+        item.id = format!("fav:{}", it.id);
+        item.row = Some("favourites".into());
+        item.weight = weight;
+        item
+    }
+
     /// The next episode of a show, dated by the last time an episode of its series was finished.
     fn next_up_item(&self, it: &MediaItem, finished: &Finished) -> Item {
         let mut item = self.resume_item(it);
@@ -364,6 +384,15 @@ impl Finished {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn favourites_go_in_their_own_row() {
+        let s = Session { server: "http://emby:8096".into(), token: "t".into(), user_id: "u".into(), device_id: "tv-1".into() };
+        let it: MediaItem = serde_json::from_str(r#"{"Id":"m1","Name":"Static Bloom","Type":"Movie","ProductionYear":2021,"DateCreated":"2024-03-01T00:00:00Z"}"#).unwrap();
+        let item = s.favourite_item(&it, 7);
+        assert_eq!((item.id.as_str(), item.row.as_deref(), item.weight, item.is_new), ("fav:m1", Some("favourites"), 7, false));
+        assert!(<Emby as sdk::Plugin>::manifest().rows.iter().any(|r| r.id == "favourites"));
+    }
 
     #[test]
     fn next_episodes_take_the_time_their_series_was_last_finished() {
