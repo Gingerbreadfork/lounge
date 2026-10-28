@@ -175,6 +175,8 @@ impl Source {
 pub fn parse_sources(raw: &str) -> Result<Vec<Source>, String> {
     let mut out = Vec::new();
     for piece in raw.split(['\n', ',', ';']).map(str::trim).filter(|s| !s.is_empty()) {
+        // A bare id pasted from a share link can carry "?si=…" after it.
+        let token = id_token(piece);
         if let Some(id) = find_param(piece, "list=") {
             out.push(Source::Playlist(id));
         } else if let Some(id) = find_param(piece, "channel_id=") {
@@ -183,10 +185,10 @@ pub fn parse_sources(raw: &str) -> Result<Vec<Source>, String> {
             out.push(Source::Channel(id_token(rest)));
         } else if let Some(rest) = piece.split("/playlist/").nth(1) {
             out.push(Source::Playlist(id_token(rest)));
-        } else if piece.starts_with("UC") && piece.len() == 24 {
-            out.push(Source::Channel(piece.to_string()));
-        } else if (piece.starts_with("PL") || piece.starts_with("UU") || piece.starts_with("OL") || piece.starts_with("FL") || piece.starts_with("RD")) && piece.len() >= 13 && !piece.contains('/') {
-            out.push(Source::Playlist(piece.to_string()));
+        } else if token.starts_with("UC") && token.len() == 24 && !piece.contains('/') {
+            out.push(Source::Channel(token));
+        } else if ["PL", "UU", "OL", "FL", "RD"].iter().any(|p| token.starts_with(p)) && token.len() >= 13 && !piece.contains('/') {
+            out.push(Source::Playlist(token));
         } else if piece.contains('@') {
             return Err(format!("\"{piece}\" is a handle; use the channel's id (starts with UC) instead"));
         } else {
@@ -344,6 +346,7 @@ mod tests {
         let s = parse_sources("UCBJycsmduvYEL83R_U4JriQ, https://www.youtube.com/channel/UCBJycsmduvYEL83R_U4JriQ/videos\nhttps://www.youtube.com/playlist?list=PLx1234567890abc\nPLx1234567890abc").unwrap();
         assert_eq!(s, vec![Source::Channel("UCBJycsmduvYEL83R_U4JriQ".into()), Source::Playlist("PLx1234567890abc".into())]);
         assert!(parse_sources("https://www.youtube.com/@mkbhd").unwrap_err().contains("handle"));
+        assert_eq!(parse_sources("PLx1234567890abc?si=Zx9").unwrap(), vec![Source::Playlist("PLx1234567890abc".into())]);
         assert_eq!(parse_sources("not a thing").unwrap_err(), "\"not a thing\" is not a channel or playlist id or link. Check the channels in the plugin's settings.");
     }
 
