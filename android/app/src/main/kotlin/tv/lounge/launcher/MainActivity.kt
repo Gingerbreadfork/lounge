@@ -10,9 +10,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import tv.lounge.collector.inputs.InputsCollector
 import tv.lounge.collector.media.MediaSessionsCollector
 import tv.lounge.collector.tvprovider.TvProviderCollector
@@ -55,7 +61,7 @@ import tv.lounge.platform.Prefs
 import java.util.TimeZone
 import javax.inject.Inject
 
-@OptIn(FlowPreview::class)
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -72,10 +78,7 @@ class MainActivity : ComponentActivity() {
     private var uiSounds: UiSounds? = null
     private val soundsState = mutableStateOf<UiSounds?>(null)
 
-    private val tvListingsRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        pushPermissions()
-        if (granted) collectTvNow()
-    }
+    private val tvListingsRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) { pushPermissions() }
 
     override fun onDestroy() {
         uiSounds?.release()
@@ -208,14 +211,32 @@ class MainActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch {
+            var before: Permissions? = null
+            permissions.filterNotNull().collect { now ->
+                core.setPermissions(now)
+                // An access granted while Lounge runs fills its part of the home at once.
+                if (before?.tvListings == false && now.tvListings) collectTvNow()
+                if (before?.usage == false && now.usage) collectAppsNow()
+                before = now
+            }
+        }
+        lifecycleScope.launch {
+            power.accessGranted.collect { pushPermissions() }
+        }
+        // Each watcher registers only while its access is granted, so it starts again when that access changes.
+        lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 // Players report position and buffering constantly; the home only needs real changes.
-                media.sessions().conflate().debounce(500).collect { guarded("now playing") { core.ingestSessions(it) } }
+                permissions.filterNotNull().map { it.notifications }.distinctUntilChanged()
+                    .flatMapLatest { media.sessions() }
+                    .conflate().debounce(500).collect { guarded("now playing") { core.ingestSessions(it) } }
             }
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                tvProvider.changes().debounce(1500).collect { collectTvNow() }
+                permissions.filterNotNull().map { it.tvListings }.distinctUntilChanged()
+                    .flatMapLatest { tvProvider.changes() }
+                    .debounce(1500).collect { collectTvNow() }
             }
         }
     }
@@ -341,8 +362,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Lounge's optional accesses as last read, null until the first read. The core and the watchers follow it. */
+    private val permissions = MutableStateFlow<Permissions?>(null)
+
     private fun pushPermissions() {
-        core.setPermissions(Permissions(tvListings = tvProvider.hasPermission(), notifications = media.isEnabled(), usage = apps.hasUsageAccess()))
+        permissions.value = Permissions(tvListings = tvProvider.hasPermission(), notifications = media.isEnabled(), usage = apps.hasUsageAccess())
     }
 
     private var lastTvCollectMs = 0L

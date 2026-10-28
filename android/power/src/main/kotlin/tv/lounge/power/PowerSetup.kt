@@ -8,8 +8,12 @@ import android.provider.Settings
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
@@ -50,9 +54,12 @@ class PowerSetup(private val context: Context) {
     private val giveUpAt = AtomicLong(Long.MAX_VALUE)
     private val _status = MutableStateFlow<PowerStatus>(PowerStatus.Unavailable("Not checked yet"))
     private val _log = MutableStateFlow<List<PowerLogEntry>>(emptyList())
+    private val _accessGranted = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     val status: StateFlow<PowerStatus> = _status.asStateFlow()
     val log: StateFlow<List<PowerLogEntry>> = _log.asStateFlow()
+    /** Emits after one of Lounge's own accesses has been granted, so the app can read them again. */
+    val accessGranted: SharedFlow<Unit> = _accessGranted.asSharedFlow()
     val packageName: String get() = context.packageName
     val hasKey: Boolean get() = keys.exists
 
@@ -137,6 +144,7 @@ class PowerSetup(private val context: Context) {
         return try {
             val r = backend.run(action.command, action.timeoutMs)
             record(PowerLogEntry(System.currentTimeMillis(), action.title, action.command, r, null))
+            if (r.ok && (action == tvListings || action == notificationAccess || action == usageAccess)) _accessGranted.tryEmit(Unit)
             r
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
