@@ -69,7 +69,7 @@ private const val SLOW_MS = 24f
 private const val HOPELESS_MS = 500f
 /** The steps a scene takes as it proves too heavy: a fraction of the screen and the interval between frames, the rate dropping before the picture shrinks. */
 private val LADDER = listOf(2 to 33L, 2 to 50L, 3 to 33L, 3 to 50L)
-private const val RENDERER = 4
+private const val RENDERER = 5
 
 // The room's light over a live scene, drawn at the screen's own size over the scaled-up scene:
 // the scene dimmed and held under a ceiling so the tiles stay the brightest things in the room,
@@ -287,6 +287,7 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
             var pausedAt = 0L
             var reported = false
             var hopeless = 0
+            var slow = 0
             while (true) {
                 if (paused) {
                     if (pausedAt == 0L) pausedAt = System.nanoTime()
@@ -318,13 +319,16 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
                         Log.i(TAG, "backdrop: ${style.id} at 1/$divisor, ${1000L / frameMs} fps, $median ms a frame")
                         reported = true
                     }
-                    // The scene is waited for, so a frame's time is what the GPU spent on it.
-                    if (median > SLOW_MS) {
+                    // The scene is waited for, so a frame's time is what the GPU spent on it. One
+                    // slow window can be the home loading its rows; two in a row is the TV.
+                    slow = if (median > SLOW_MS) slow + 1 else 0
+                    if (slow >= 2) {
                         if (step >= LADDER.lastIndex) {
                             giveUp("it is too heavy for this TV")
                             return@launch
                         }
                         step++
+                        slow = 0
                         memory.edit().putInt(memoryKey, step).apply()
                         settleUntil = System.currentTimeMillis() + SETTLE_MS
                         reported = false
