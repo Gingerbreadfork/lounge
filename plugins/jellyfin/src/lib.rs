@@ -1,9 +1,10 @@
-//! Jellyfin plugin: signs in with the user's credentials, publishes resume points into Continue
-//! watching and the newest library additions into a "Recently added" row, and searches the
-//! library. Items open on their page in the Jellyfin Android TV app.
+//! Jellyfin plugin: signs in with the user's credentials, publishes resume points and the next
+//! episode of each show into Continue watching and the newest library additions into a "Recently
+//! added" row, and searches the library. Items open on their page in the Jellyfin Android TV app.
 
 use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 pub struct Jellyfin;
 
@@ -55,6 +56,20 @@ impl sdk::Plugin for Jellyfin {
         ))?;
         for it in resume.items {
             items.push(session.resume_item(&it));
+        }
+        let next_up: ItemsResponse = session.get_json(&format!(
+            "/Shows/NextUp?UserId={}&Limit=24&EnableResumable=false&EnableImageTypes=Primary,Backdrop,Thumb",
+            session.user_id
+        ))?;
+        if !next_up.items.is_empty() {
+            let played: ItemsResponse = session.get_json(&format!(
+                "/Users/{}/Items?Recursive=true&IncludeItemTypes=Episode&IsPlayed=true&SortBy=DatePlayed&SortOrder=Descending&Limit=200&EnableImages=false",
+                session.user_id
+            ))?;
+            let finished = Finished::from_plays(&played.items);
+            for it in next_up.items {
+                items.push(session.next_up_item(&it, &finished));
+            }
         }
         let latest: Vec<MediaItem> = session.get_json(&format!(
             "/Users/{}/Items/Latest?Limit=20&IncludeItemTypes=Movie,Series&Fields=Overview,DateCreated&EnableImageTypes=Primary,Backdrop",
@@ -134,7 +149,7 @@ pub struct MediaItem {
     #[serde(rename = "BackdropImageTags", default)]
     pub backdrop_tags: Vec<String>,
     #[serde(rename = "ImageTags", default)]
-    pub image_tags: std::collections::HashMap<String, String>,
+    pub image_tags: HashMap<String, String>,
     #[serde(rename = "DateCreated")]
     pub date_created: Option<String>,
     #[serde(rename = "ProductionYear")]
@@ -222,7 +237,7 @@ impl Session {
         let title = if is_episode { it.series_name.clone().unwrap_or_else(|| it.name.clone()) } else { it.name.clone() };
         let subtitle = if is_episode { Some(it.name.clone()) } else { it.overview.as_ref().map(|o| first_sentence(o)) };
         let duration_ms = it.runtime_ticks.map(|t| t / 10_000);
-        let position_ms = it.user_data.as_ref().and_then(|u| u.position_ticks).map(|t| t / 10_000);
+        let position_ms = it.user_data.as_ref().and_then(|u| u.position_ticks).map(|t| t / 10_000).filter(|&p| p > 0);
         let progress = match (position_ms, duration_ms) {
             (Some(p), Some(d)) if d > 0 => Some((p as f32 / d as f32).clamp(0.0, 1.0)),
             _ => None,
@@ -256,6 +271,14 @@ impl Session {
         }
     }
 
+    /// The next episode of a show, dated by the last time an episode of its series was finished.
+    fn next_up_item(&self, it: &MediaItem, finished: &Finished) -> Item {
+        let mut item = self.resume_item(it);
+        item.id = format!("next:{}", it.id);
+        item.last_used_ms = finished.at(it.series_id.as_deref());
+        item
+    }
+
     fn latest_item(&self, it: &MediaItem) -> Item {
         let is_episode = it.kind == "Episode";
         Item {
@@ -287,6 +310,34 @@ fn open(item: &MediaItem) -> Action {
         fallback_launch: Some(APP_PACKAGE.into()),
         title: Some(item.name.clone()),
         ..Default::default()
+    }
+}
+
+/// When an episode of each series was last finished, from the most recent plays.
+struct Finished {
+    by_series: HashMap<String, i64>,
+    /// The oldest of those plays: a series missing from them was last watched before it.
+    oldest: Option<i64>,
+}
+
+impl Finished {
+    fn from_plays(played: &[MediaItem]) -> Finished {
+        let mut by_series = HashMap::new();
+        let mut oldest: Option<i64> = None;
+        for it in played {
+            let Some(at) = it.user_data.as_ref().and_then(|u| u.last_played.as_deref()).and_then(parse_iso8601) else {
+                continue;
+            };
+            if let Some(series) = &it.series_id {
+                by_series.entry(series.clone()).and_modify(|t: &mut i64| *t = (*t).max(at)).or_insert(at);
+            }
+            oldest = Some(oldest.map_or(at, |o| o.min(at)));
+        }
+        Finished { by_series, oldest }
+    }
+
+    fn at(&self, series_id: Option<&str>) -> Option<i64> {
+        series_id.and_then(|s| self.by_series.get(s).copied()).or(self.oldest)
     }
 }
 
@@ -354,6 +405,34 @@ mod tests {
         let it = MediaItem { id: "e1;component=x/.Y;end".into(), ..Default::default() };
         let view = open(&it).view.unwrap();
         assert!(view.ends_with(";S.ItemId=e1%3Bcomponent%3Dx%2F.Y%3Bend;end"), "{view}");
+    }
+
+    #[test]
+    fn next_episodes_take_the_time_their_series_was_last_finished() {
+        let s = Session { server: "http://jf:8096".into(), token: "t".into(), user_id: "u".into(), device_id: "tv-1".into() };
+        let played: Vec<MediaItem> = serde_json::from_str(
+            r#"[{"Id":"a2","SeriesId":"sa","UserData":{"Played":true,"LastPlayedDate":"2026-10-20T00:00:00Z"}},
+                {"Id":"b1","SeriesId":"sb","UserData":{"Played":true,"LastPlayedDate":"2026-10-18T00:00:00Z"}},
+                {"Id":"a1","SeriesId":"sa","UserData":{"Played":true,"LastPlayedDate":"2026-10-10T00:00:00Z"}},
+                {"Id":"m1","UserData":{"Played":true}}]"#,
+        )
+        .unwrap();
+        let finished = Finished::from_plays(&played);
+        let next: MediaItem = serde_json::from_str(
+            r#"{"Id":"a3","Name":"Three","Type":"Episode","SeriesName":"Show A","SeriesId":"sa","ParentIndexNumber":1,"IndexNumber":3,"RunTimeTicks":18000000000,
+                 "UserData":{"PlaybackPositionTicks":0,"Played":false}}"#,
+        )
+        .unwrap();
+        let item = s.next_up_item(&next, &finished);
+        assert_eq!(item.id, "next:a3");
+        assert_eq!(item.kind, ItemKind::Resume);
+        assert_eq!(item.title, "Show A");
+        assert_eq!(item.progress, None);
+        assert_eq!(item.position_ms, None);
+        assert_eq!(item.last_used_ms, parse_iso8601("2026-10-20T00:00:00Z"));
+        assert_eq!(finished.at(Some("sb")), parse_iso8601("2026-10-18T00:00:00Z"));
+        assert_eq!(finished.at(Some("older")), parse_iso8601("2026-10-10T00:00:00Z"));
+        assert_eq!(Finished::from_plays(&[]).at(Some("sa")), None);
     }
 
     #[test]
