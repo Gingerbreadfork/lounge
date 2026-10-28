@@ -616,26 +616,7 @@ pub(crate) fn spawn(
                     crate::guarded("a plugin call", || answer(&inner, other));
                 }
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                    if !inner.screen_on.load(Ordering::Relaxed) {
-                        continue;
-                    }
-                    let due: Vec<String> = {
-                        let state = inner.state.lock();
-                        let rows = state.store.plugins().unwrap_or_default();
-                        let now = now_ms();
-                        state
-                            .plugins
-                            .iter()
-                            .filter(|p| p.enabled)
-                            .filter(|p| {
-                                let row = rows.iter().find(|r| r.id == p.id);
-                                let last = row.and_then(|r| r.last_refresh_ms);
-                                refresh_due(last, row.is_some_and(|r| r.last_error.is_some()), p.manifest.refresh_minutes_or_default(), now)
-                            })
-                            .map(|p| p.id.clone())
-                            .collect()
-                    };
-                    for id in due {
+                    for id in due(&inner) {
                         crate::guarded("a plugin refresh", || run_refresh(&inner, &id));
                     }
                 }
@@ -688,6 +669,35 @@ fn refresh_due(last_ms: Option<i64>, failed: bool, interval_minutes: u32, now: i
         every = every.min(RETRY_AFTER_FAILURE_MS);
     }
     now - last >= every
+}
+
+/// The enabled plugins whose refresh is due, or none while the screen is off.
+fn due(inner: &Inner) -> Vec<String> {
+    if !inner.screen_on.load(Ordering::Relaxed) {
+        return Vec::new();
+    }
+    let state = inner.state.lock();
+    let rows = state.store.plugins().unwrap_or_default();
+    let now = now_ms();
+    state
+        .plugins
+        .iter()
+        .filter(|p| p.enabled)
+        .filter(|p| {
+            let row = rows.iter().find(|r| r.id == p.id);
+            let last = row.and_then(|r| r.last_refresh_ms);
+            refresh_due(last, row.is_some_and(|r| r.last_error.is_some()), p.manifest.refresh_minutes_or_default(), now)
+        })
+        .map(|p| p.id.clone())
+        .collect()
+}
+
+/// Queue a refresh for each plugin that fell due while Lounge was closed, rather than leave it
+/// for the first check a minute after opening.
+pub(crate) fn refresh_due_soon(inner: &Inner) {
+    for id in due(inner) {
+        inner.plugins.refresh_soon(&id);
+    }
 }
 
 fn run_refresh(inner: &Arc<Inner>, id: &str) {

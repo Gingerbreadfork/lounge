@@ -227,6 +227,33 @@ fn live_now_carries_a_row_of_tiles_and_the_guide_the_rest() {
 }
 
 #[test]
+fn a_plugin_that_fell_due_while_closed_refreshes_on_opening() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = CoreConfig {
+        data_dir: dir.path().join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::A,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    let core = Core::open(config.clone(), Arc::new(Recorder::default())).unwrap();
+    let manifest = format!(r#"{{"id":"{ID}","name":"Test DVR","version":"1","kinds":["epg"],"fetch_hosts":[]}}"#);
+    core.install_plugin(signed(dir.path(), &manifest, &module(&manifest, "[]", "[]")).to_string_lossy().into_owned(), false).unwrap();
+    core.set_plugin_enabled(ID.into(), true);
+    wait_for("the first refresh", || core.plugins()[0].last_refresh_ms.is_some());
+    drop(core);
+
+    let db = rusqlite::Connection::open(dir.path().join("data").join("lounge.db")).unwrap();
+    db.execute("UPDATE plugins SET last_refresh_ms = 1", []).unwrap();
+    drop(db);
+    let core = Core::open(config, Arc::new(Recorder::default())).unwrap();
+    wait_for("a refresh on opening", || core.plugins()[0].last_refresh_ms.is_some_and(|ms| ms > 1));
+}
+
+#[test]
 fn an_update_never_rolls_back_and_is_turned_off_when_it_asks_for_more() {
     let dir = tempfile::tempdir().unwrap();
     let config = CoreConfig {

@@ -1,7 +1,10 @@
 //! The worker outlives a job that panics: a listener that panics on one snapshot gets the next.
 
-use lounge_core::{AppRecord, Core, CoreConfig, DeviceTier, HomeSnapshot, LayoutCommand, Platform, PlatformError, SnapshotListener};
+use lounge_core::{
+    AppRecord, Core, CoreConfig, DeviceTier, HomeSnapshot, LayoutCommand, Platform, PlatformError, PlaybackStatus, SessionRecord, SnapshotListener,
+};
 use parking_lot::Mutex;
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -241,4 +244,63 @@ fn pictures_left_for_later_passes_end_as_a_full_ingest_would() {
     settle(&core, revision);
     assert_eq!(core.snapshot().rows, passes.rows);
     assert_eq!(core.snapshot().stage, passes.stage);
+}
+
+fn config(dir: &Path) -> CoreConfig {
+    CoreConfig {
+        data_dir: dir.join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::B,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    }
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
+}
+
+fn playing(package: &str, updated_ms: i64) -> SessionRecord {
+    SessionRecord {
+        package: package.into(),
+        app_label: package.into(),
+        title: Some("A long film".into()),
+        subtitle: None,
+        art_path: None,
+        duration_ms: Some(7_200_000),
+        position_ms: Some(60_000),
+        status: PlaybackStatus::Playing,
+        can_pause: true,
+        can_play: true,
+        can_skip_next: false,
+        can_skip_previous: false,
+        updated_ms,
+    }
+}
+
+fn stored_revision(dir: &Path) -> i64 {
+    let db = rusqlite::Connection::open(dir.join("data").join("lounge.db")).unwrap();
+    db.query_row("SELECT revision FROM snapshot WHERE id = 1", [], |r| r.get(0)).unwrap()
+}
+
+#[test]
+fn a_restart_publishes_a_fresh_home_before_any_ingest() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = Core::open(config(dir.path()), Arc::new(Quiet)).unwrap();
+    let latest = Arc::new(Latest::default());
+    core.add_listener(latest.clone());
+    core.ingest_sessions(vec![playing("film.app", now_ms())]);
+    wait_for("now playing", || latest.0.lock().as_ref().is_some_and(|s| s.now_playing.is_some()));
+    drop(core);
+
+    // The stored home still says the film is playing; nothing has said otherwise since.
+    let stored = stored_revision(dir.path()) as u64;
+    let core = Core::open(config(dir.path()), Arc::new(Quiet)).unwrap();
+    let latest = Arc::new(Latest::default());
+    core.add_listener(latest.clone());
+    wait_for("a fresh home", || latest.0.lock().as_ref().is_some_and(|s| s.revision > stored));
+    assert!(latest.0.lock().as_ref().unwrap().now_playing.is_none());
 }

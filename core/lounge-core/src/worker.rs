@@ -109,6 +109,9 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                                 tracing::error!("load graph failed: {e}");
                             }
                             mark_loaded(&inner);
+                            // The stored snapshot's times and now playing are as old as the last run.
+                            dirty = true;
+                            crate::plugins::refresh_due_soon(&inner);
                         }
                         Job::IngestApps(apps) => {
                             if let Err(e) = ingest_apps(&inner, apps) {
