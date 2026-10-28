@@ -49,7 +49,7 @@ impl sdk::Plugin for YouTube {
             return Err("No channels yet: add a channel link or id in the plugin's settings".into());
         }
         let per_source = number_setting("per_source", 4).clamp(1, 15) as usize;
-        let days = number_setting("days", 30).max(0);
+        let days = number_setting("days", 30).clamp(0, 3_650);
         let since = if days == 0 { 0 } else { ctx.now_ms - days * 86_400_000 };
         let shorts = host::setting("shorts").is_some_and(|v| v == "true");
         let mut videos = Vec::new();
