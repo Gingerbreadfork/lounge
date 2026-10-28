@@ -10,6 +10,8 @@ pub struct Trakt;
 const API: &str = "https://api.trakt.tv";
 const TOKEN_KEY: &str = "token";
 const DEVICE_KEY: &str = "device";
+const SIGNED_OUT: &str = "Trakt no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now.";
+const PAUSE: &str = "Trakt is asking for a pause between requests. It tries again on the next refresh.";
 /// Most shows in Up next.
 const UP_NEXT_SHOWS: usize = 12;
 /// Shows looked at to fill Up next, so ones already caught up on do not leave it short; well
@@ -87,7 +89,8 @@ impl sdk::Plugin for Trakt {
                 }
                 let progress: Progress = match client.get_json(&format!("/shows/{}/progress/watched?hidden=false&specials=false&count_specials=false", w.show.ids.trakt)) {
                     Ok(p) => p,
-                    Err(e) if e.contains("budget") => break,
+                    // Every request after one of these fails the same way.
+                    Err(e) if e.contains("budget") || e == SIGNED_OUT || e == PAUSE => break,
                     Err(e) => {
                         sdk::warn!("{}: {e}", w.show.title);
                         continue;
@@ -103,8 +106,20 @@ impl sdk::Plugin for Trakt {
 
         let mut listed = 0;
         if host::setting("watchlist").map(|v| v != "false").unwrap_or(true) {
-            let mut entries: Vec<Listed> = client.get_json("/sync/watchlist/movies/added?extended=full,images")?;
-            entries.extend(client.get_json::<Vec<Listed>>("/sync/watchlist/shows/added?extended=full,images")?);
+            let watchlist = || -> Result<Vec<Listed>, String> {
+                let mut entries: Vec<Listed> = client.get_json("/sync/watchlist/movies/added?extended=full,images")?;
+                entries.extend(client.get_json::<Vec<Listed>>("/sync/watchlist/shows/added?extended=full,images")?);
+                Ok(entries)
+            };
+            let mut entries = match watchlist() {
+                Ok(entries) => entries,
+                // What is already gathered is worth more than a watchlist that did not come.
+                Err(e) if !items.is_empty() => {
+                    sdk::warn!("watchlist: {e}");
+                    Vec::new()
+                }
+                Err(e) => return Err(e),
+            };
             entries.sort_by_key(|l| std::cmp::Reverse(l.listed_at.as_deref().and_then(parse_iso8601).unwrap_or(0)));
             for (i, l) in entries.iter().take(WATCHLIST_ITEMS).enumerate() {
                 if let Some(item) = watchlist_item(l, now, (WATCHLIST_ITEMS - i) as i32, &open) {
@@ -250,9 +265,9 @@ impl Client {
         match r.status {
             401 => {
                 expire_token();
-                return Err("Trakt no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now.".into());
+                return Err(SIGNED_OUT.into());
             }
-            429 => return Err("Trakt is asking for a pause between requests. It tries again on the next refresh.".into()),
+            429 => return Err(PAUSE.into()),
             s if !(200..300).contains(&s) => {
                 sdk::warn!("HTTP {s} for {path}");
                 return Err(sdk::online_error("Trakt", s));
