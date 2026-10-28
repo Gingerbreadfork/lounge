@@ -25,6 +25,18 @@ impl StoreError {
                 if matches!(e.code, rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase)
         )
     }
+
+    /// The disk is full or would not read or write, which a full disk most often causes. The file
+    /// may well be sound, so setting it aside would not help.
+    pub fn is_disk_full(&self) -> bool {
+        match self {
+            StoreError::Db(rusqlite::Error::SqliteFailure(e, _)) => {
+                matches!(e.code, rusqlite::ErrorCode::DiskFull | rusqlite::ErrorCode::SystemIoFailure)
+            }
+            StoreError::Io(e) => e.kind() == std::io::ErrorKind::StorageFull,
+            _ => false,
+        }
+    }
 }
 
 /// An item already serialised for the `items` table.
@@ -669,6 +681,17 @@ mod tests {
         assert!(!path.exists());
         let s = Store::open(&path).unwrap();
         assert_eq!(s.load_layout().unwrap(), Layout::default());
+    }
+
+    #[test]
+    fn a_full_disk_is_not_a_corrupt_database() {
+        let s = Store::open_in_memory().unwrap();
+        let pages: i64 = s.conn.query_row("PRAGMA page_count", [], |r| r.get(0)).unwrap();
+        s.conn.execute_batch(&format!("PRAGMA max_page_count = {pages}")).unwrap();
+        let err = s.save_snapshot(1, &"x".repeat(100_000)).unwrap_err();
+        assert!(err.is_disk_full() && !err.is_corrupt(), "{err}");
+        assert!(StoreError::Io(std::io::ErrorKind::StorageFull.into()).is_disk_full());
+        assert!(!StoreError::Io(std::io::ErrorKind::PermissionDenied.into()).is_disk_full());
     }
 
     #[test]

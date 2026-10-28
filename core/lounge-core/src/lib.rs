@@ -515,10 +515,16 @@ pub enum CoreError {
     Plugin { detail: String },
     #[error("companion: {detail}")]
     Companion { detail: String },
+    /// The disk is full or would not read or write. The database may be sound, so it is kept.
+    #[error("storage: the disk is full or would not read or write")]
+    DiskFull,
 }
 
 impl From<lounge_store::StoreError> for CoreError {
     fn from(e: lounge_store::StoreError) -> Self {
+        if e.is_disk_full() {
+            return CoreError::DiskFull;
+        }
         CoreError::Storage {
             detail: e.to_string(),
         }
@@ -647,7 +653,8 @@ impl Core {
     pub fn open(config: CoreConfig, platform: Arc<dyn Platform>) -> Result<Arc<Self>, CoreError> {
         init_logging();
         let db_path = PathBuf::from(&config.data_dir).join(DB_FILE);
-        let Opened { store, layout, persisted, plugins: plugin_rows, habits } = open_store(&db_path)?;
+        let Opened { store, layout, persisted, plugins: plugin_rows, habits } =
+            open_store(&db_path).inspect_err(|e| tracing::error!("could not open the database: {e}"))?;
         // Only the persisted snapshot is needed for the first frame; the graph itself is loaded
         // by the worker as its first job, so opening the core costs one small read.
         let graph = Graph::new(layout);
@@ -1088,6 +1095,18 @@ mod tests {
         assert!(opened.persisted.is_none());
         assert!(opened.plugins.is_empty());
         assert!(dir.path().join("lounge.db.broken").exists());
+    }
+
+    #[test]
+    fn a_full_disk_asks_for_space_rather_than_a_fresh_start() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE t(x); PRAGMA max_page_count = 2;").unwrap();
+        let full = db.execute("INSERT INTO t VALUES (?1)", ["x".repeat(100_000)]).unwrap_err();
+        assert!(matches!(CoreError::from(StoreError::Db(full)), CoreError::DiskFull));
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(DB_FILE), vec![0x5a; 8192]).unwrap();
+        assert!(matches!(CoreError::from(Store::open(&dir.path().join(DB_FILE)).err().unwrap()), CoreError::Storage { .. }));
     }
 
     #[test]

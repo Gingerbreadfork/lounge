@@ -276,7 +276,7 @@ class MainActivity : ComponentActivity() {
                 val error = problem.value
                 RecoveryScreen(
                     reason = when {
-                        filesDir.usableSpace < LOW_STORAGE_BYTES -> RecoveryReason.StorageFull
+                        filesDir.usableSpace < LOW_STORAGE_BYTES || error is CoreException.DiskFull -> RecoveryReason.StorageFull
                         error is CoreException.Storage -> RecoveryReason.Storage
                         else -> RecoveryReason.Other
                     },

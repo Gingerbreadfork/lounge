@@ -12,6 +12,7 @@ val Throwable.reason: String
         is CoreException.Plugin -> detail
         is CoreException.Companion -> detail
         is CoreException.UnknownAction -> "Lounge doesn't know how to do $action"
+        is CoreException.DiskFull -> "The TV's storage is full, or would not read or write"
         is PlatformException.Failed -> detail
         else -> message ?: javaClass.simpleName
     }
