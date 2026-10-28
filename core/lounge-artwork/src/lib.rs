@@ -2,7 +2,8 @@
 //! exact sizes the UI draws, write PNGs to the disk cache, and extract a palette.
 
 use fast_image_resize::{images::Image, images::ImageRef, FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
-use image::{ImageFormat, RgbaImage};
+use image::metadata::Orientation;
+use image::{ImageDecoder, ImageFormat, RgbaImage};
 use lounge_graph::Palette;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -274,6 +275,7 @@ fn writing(e: image::ImageError) -> ArtworkError {
 
 /// Decode with hard limits: a 4 MB file that unpacks to a 500 MB bitmap is refused before
 /// anything is allocated. JPEGs decode straight to RGBA, so no second full-size copy is made.
+/// The picture comes back turned the way its EXIF orientation says.
 fn decode(bytes: &[u8]) -> Result<RgbaImage> {
     let too_big = |w: u64, h: u64| w > MAX_SOURCE_SIDE as u64 || h > MAX_SOURCE_SIDE as u64 || w * h > MAX_SOURCE_PIXELS;
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
@@ -288,10 +290,15 @@ fn decode(bytes: &[u8]) -> Result<RgbaImage> {
         if too_big(w as u64, h as u64) {
             return Err(ArtworkError::Resize(format!("{w}×{h} is too large a picture")));
         }
+        let orientation = decoder.exif().and_then(|exif| Orientation::from_exif_chunk(exif)).unwrap_or(Orientation::NoTransforms);
         let pixels = decoder.decode().map_err(|e| ArtworkError::Resize(format!("jpeg: {e:?}")))?;
-        return RgbaImage::from_raw(w as u32, h as u32, pixels).ok_or_else(|| ArtworkError::Resize("jpeg buffer size mismatch".into()));
+        let img = RgbaImage::from_raw(w as u32, h as u32, pixels).ok_or_else(|| ArtworkError::Resize("jpeg buffer size mismatch".into()))?;
+        return Ok(oriented(img, orientation));
     }
-    let (w, h) = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?.into_dimensions()?;
+    let mut probe = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?.into_decoder()?;
+    let (w, h) = probe.dimensions();
+    let orientation = probe.orientation().unwrap_or(Orientation::NoTransforms);
+    drop(probe);
     if too_big(w as u64, h as u64) {
         return Err(ArtworkError::Resize(format!("{w}×{h} is too large a picture")));
     }
@@ -313,7 +320,13 @@ fn decode(bytes: &[u8]) -> Result<RgbaImage> {
             other => ArtworkError::Image(other),
         })?
         .into_rgba8();
-    Ok(decoded)
+    Ok(oriented(decoded, orientation))
+}
+
+fn oriented(img: RgbaImage, orientation: Orientation) -> RgbaImage {
+    let mut img = image::DynamicImage::ImageRgba8(img);
+    img.apply_orientation(orientation);
+    img.into_rgba8()
 }
 
 /// The 16:9 cover crop of a `sw`×`sh` source: (left, top, width, height).
@@ -746,6 +759,47 @@ mod tests {
         let out = image::open(&p.path).unwrap().to_rgba8();
         let left = out.get_pixel(20, 100);
         assert!(left[0] > 200 && left[2] < 100, "left {left:?}");
+    }
+
+    /// A minimal big-endian EXIF block holding only an orientation.
+    fn exif_orientation(value: u8) -> Vec<u8> {
+        vec![b'M', b'M', 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, value, 0, 0, 0, 0, 0, 0]
+    }
+
+    /// Orange on the left, dark on the right, saved with EXIF orientation 6: shown turned a
+    /// quarter clockwise, so the orange should end up on top.
+    fn sideways<E: image::ImageEncoder>(path: &Path, encoder: impl FnOnce(std::fs::File) -> E) {
+        let img = image::DynamicImage::ImageRgba8(synthetic(64, 32)).to_rgb8();
+        let mut encoder = encoder(std::fs::File::create(path).unwrap());
+        encoder.set_exif_metadata(exif_orientation(6)).unwrap();
+        encoder.write_image(img.as_raw(), 64, 32, image::ExtendedColorType::Rgb8).unwrap();
+    }
+
+    fn assert_stood_up(src: &Path, dir: &Path) {
+        let p = prepare(src, &dir.join("art"), Style::WallpaperFit).unwrap();
+        assert_eq!((p.src_width, p.src_height), (32, 64));
+        assert_eq!((p.width, p.height), (32, 64));
+        let out = image::open(&p.path).unwrap().to_rgba8();
+        assert_eq!(out.dimensions(), (32, 64));
+        let (top, bottom) = (out.get_pixel(16, 8), out.get_pixel(16, 56));
+        assert!(top[0] > 200 && top[2] < 100, "top {top:?}");
+        assert!(bottom[0] < 60, "bottom {bottom:?}");
+    }
+
+    #[test]
+    fn a_sideways_jpeg_is_stood_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("portrait.jpg");
+        sideways(&src, |f| image::codecs::jpeg::JpegEncoder::new_with_quality(f, 95));
+        assert_stood_up(&src, dir.path());
+    }
+
+    #[test]
+    fn a_sideways_png_is_stood_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("portrait.png");
+        sideways(&src, image::codecs::png::PngEncoder::new);
+        assert_stood_up(&src, dir.path());
     }
 
     #[test]
