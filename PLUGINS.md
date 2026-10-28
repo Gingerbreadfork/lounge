@@ -253,7 +253,7 @@ What happens when the user selects an item. The first field that is set wins, in
 
 | Field | What it does |
 |---|---|
-| `play` | A stream URL, opened in whatever video player the TV has. `title` is handed to the player. |
+| `play` | A stream URL, opened in whatever video player the TV has. `title` is handed to the player, and `start_ms` starts it part-way, for a resume point. |
 | `view` | An Android URI: a deep link such as `jellyfin://…`, a web address, or an `intent:` string. `fallback_launch` runs if nothing on the TV handles it. |
 | `launch` | A package name to open. |
 | `resolve` | A string handed back to your `resolve` at selection time, which returns one of the actions here. Use it when the stream URL is only known at the moment of playing, or when the plugin does the work itself, such as telling a player on the network to start: then return an empty action, and nothing more is opened. |

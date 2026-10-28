@@ -43,8 +43,8 @@ impl Platform for Recorder {
     fn request_permission(&self, n: String) -> Result<(), PlatformError> {
         self.note(format!("permission {n}"))
     }
-    fn play_stream(&self, url: String, title: String) -> Result<(), PlatformError> {
-        self.note(format!("play {url} {title}"))
+    fn play_stream(&self, url: String, title: String, start_ms: Option<i64>) -> Result<(), PlatformError> {
+        self.note(format!("play {url} {title}{}", start_ms.map(|s| format!(" from {s}")).unwrap_or_default()))
     }
     fn send_key(&self, k: String) -> Result<(), PlatformError> {
         self.note(format!("key {k}"))
@@ -114,7 +114,7 @@ fn bundle(dir: &std::path::Path) -> std::path::PathBuf {
         t + 3_000_000,
         t + 9_000_000
     );
-    let found = r#"[{"id":"s1","kind":"schedule","title":"News","channel_id":"1"},{"id":"m1","title":"A film","action":{"play":"http://dvr/m1"}}]"#;
+    let found = r#"[{"id":"s1","kind":"schedule","title":"News","channel_id":"1"},{"id":"m1","title":"A film","action":{"play":"http://dvr/m1","start_ms":600000}}]"#;
     signed(dir, &manifest, &module(&manifest, &items, found))
 }
 
@@ -179,7 +179,7 @@ fn a_dvr_plugin_fills_the_guide_and_answers_search() {
     let tiles: Vec<&str> = rows[0].tiles.iter().map(|t| t.title.as_str()).collect();
     assert_eq!(tiles, vec!["News", "A film"]);
     core.perform(rows[0].tiles[1].action.clone()).unwrap();
-    assert_eq!(platform.calls.lock().last().map(String::as_str), Some("play http://dvr/m1 A film"));
+    assert_eq!(platform.calls.lock().last().map(String::as_str), Some("play http://dvr/m1 A film from 600000"));
     core.perform(rows[0].tiles[0].action.clone()).unwrap();
     assert_eq!(platform.calls.lock().last().map(String::as_str), Some("play http://tuner/1 One"));
     assert!(core.search_plugins("x".into()).is_empty());

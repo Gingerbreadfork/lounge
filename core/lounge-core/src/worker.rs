@@ -801,7 +801,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
 pub(crate) fn plugin_link(plugin: &str, p: &lounge_plugin_api::Item) -> Option<DeepLink> {
     let a = &p.action;
     Some(if let Some(url) = &a.play {
-        DeepLink::Play { url: url.clone(), title: a.title.clone().unwrap_or_else(|| p.title.clone()) }
+        DeepLink::Play { url: url.clone(), title: a.title.clone().unwrap_or_else(|| p.title.clone()), start_ms: a.start_ms }
     } else if let (Some(uri), Some(pkg)) = (&a.view, &a.fallback_launch) {
         DeepLink::ViewOrLaunch { uri: uri.clone(), package: pkg.clone() }
     } else if let Some(uri) = &a.view {

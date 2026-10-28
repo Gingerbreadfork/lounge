@@ -29,8 +29,13 @@ pub enum DeepLink {
     ViewUri(String),
     /// Open a URI; if nothing handles it, launch the package instead.
     ViewOrLaunch { uri: String, package: String },
-    /// A stream URL for whatever video player the device has.
-    Play { url: String, title: String },
+    /// A stream URL for whatever video player the device has, from `start_ms` for a resume point.
+    Play {
+        url: String,
+        title: String,
+        #[serde(default)]
+        start_ms: Option<i64>,
+    },
     /// Ask the plugin what to do when the item is selected.
     PluginResolve { plugin: String, action: String },
     SwitchInput(String),

@@ -213,12 +213,21 @@ class AndroidPlatform(private val context: Context) : Platform {
         if (!_commands.tryEmit(UiCommand.RequestPermission(name))) throw PlatformException.Failed("busy")
     }
 
-    override fun playStream(url: String, title: String) {
+    override fun playStream(url: String, title: String, startMs: Long?) {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(url), "video/*")
             putExtra(Intent.EXTRA_TITLE, title)
             putExtra("title", title)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (startMs != null && startMs > 0) {
+            // Players take the start as "position": MX Player and Just Player read an int, VLC a long.
+            val player = runCatching { context.packageManager.resolveActivity(intent, 0)?.activityInfo?.packageName }.getOrNull().orEmpty()
+            if (player.startsWith("com.mxtech.videoplayer") || player == "com.brouken.player") {
+                intent.putExtra("position", startMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+            } else {
+                intent.putExtra("position", startMs)
+            }
         }
         try {
             context.startActivity(intent)

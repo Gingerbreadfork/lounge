@@ -472,6 +472,9 @@ pub struct Action {
     /// Title handed to the player.
     #[serde(default)]
     pub title: Option<String>,
+    /// Where `play` starts, in milliseconds into the stream, for a resume point.
+    #[serde(default)]
+    pub start_ms: Option<i64>,
 }
 
 impl Action {
