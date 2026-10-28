@@ -263,7 +263,7 @@ fn routes(app: Shared) -> Router {
         .merge(paired)
         .fallback(get(static_file))
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
-        .layer(middleware::from_fn(known_host))
+        .layer(middleware::from_fn(local_only))
         .with_state(app)
 }
 
@@ -319,14 +319,26 @@ async fn require_token(State(app): State<Shared>, mut req: Request, next: Next) 
     next.run(req).await
 }
 
-/// Answer only to names a person would type or scan for a device on their own network, so a web
-/// page cannot rebind its own domain to the TV and talk to it.
-async fn known_host(req: Request, next: Next) -> Response {
+/// Answer only to devices on the TV's own network, and only to names a person would type or scan
+/// for a device there, so a web page cannot rebind its own domain to the TV and talk to it.
+async fn local_only(req: Request, next: Next) -> Response {
+    let peer = req.extensions().get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip());
+    if !peer.is_some_and(local_peer) {
+        return (StatusCode::FORBIDDEN, "not on this network").into_response();
+    }
     let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("");
     if !local_name(host) {
         return (StatusCode::MISDIRECTED_REQUEST, "unknown host").into_response();
     }
     next.run(req).await
+}
+
+/// Loopback, private, link-local or unique local: the TV itself or a device on its network.
+fn local_peer(ip: IpAddr) -> bool {
+    match ip.to_canonical() {
+        IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+        IpAddr::V6(v6) => v6.is_loopback() || v6.is_unique_local() || v6.is_unicast_link_local(),
+    }
 }
 
 fn local_name(host_header: &str) -> bool {
@@ -675,6 +687,29 @@ mod tests {
         for no in ["attacker.example", "evil.com:8787", "", "rebind.attacker.example:8787"] {
             assert!(!local_name(no), "{no}");
         }
+    }
+
+    #[test]
+    fn only_devices_on_the_home_network_are_answered() {
+        for ok in ["192.168.0.20", "10.1.2.3", "172.16.5.4", "169.254.3.4", "127.0.0.1", "::1", "fe80::1", "fd12:3456::1", "::ffff:192.168.1.9"] {
+            assert!(local_peer(ok.parse().unwrap()), "{ok}");
+        }
+        for no in ["8.8.8.8", "172.32.0.1", "100.64.0.1", "203.0.113.7", "2001:db8::1", "::ffff:8.8.8.8"] {
+            assert!(!local_peer(no.parse().unwrap()), "{no}");
+        }
+
+        let router = Router::new().route("/", get(|| async { "ok" })).layer(middleware::from_fn(local_only));
+        let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        let status = |peer: Option<&str>| {
+            let mut req = Request::builder().uri("/").header(header::HOST, "tv.local").body(axum::body::Body::empty()).unwrap();
+            if let Some(peer) = peer {
+                req.extensions_mut().insert(ConnectInfo(SocketAddr::new(peer.parse().unwrap(), 50_000)));
+            }
+            runtime.block_on(router.clone().oneshot(req)).unwrap().status()
+        };
+        assert_eq!(status(Some("192.168.1.9")), StatusCode::OK);
+        assert_eq!(status(Some("203.0.113.7")), StatusCode::FORBIDDEN);
+        assert_eq!(status(None), StatusCode::FORBIDDEN);
     }
 
     #[test]
