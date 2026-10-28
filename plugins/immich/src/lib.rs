@@ -47,7 +47,7 @@ impl sdk::Plugin for Immich {
         let password = host::secret("password").filter(|p| !p.is_empty());
         let max = host::setting("max").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(60).clamp(1, 300);
         let auth = query(&key, password.as_deref());
-        let shared: SharedLink = serde_json::from_str(&get(&format!("{base}/api/shared-links/me?{auth}"))?).map_err(|e| format!("unexpected answer from Immich: {e}"))?;
+        let shared = shared_link(&base, &key, password.as_deref())?;
         let album = shared.album.as_ref().and_then(|a| a.album_name.clone()).unwrap_or_else(|| "Photos".into());
         // Older servers list an album's pictures with the link; newer ones serve them a month at a time.
         let (mut pictures, album_id) = match shared.album {
@@ -82,15 +82,59 @@ const TOO_BIG: &str = "The album is too big to read: Immich answered with more t
 
 /// GET from Immich, turning its refusals into advice.
 fn get(url: &str) -> Result<String, String> {
-    let r = match host::fetch(&HttpRequest::get(url).header("Accept", "application/json")) {
-        Err(e) if e == host::TOO_LARGE => return Err(TOO_BIG.into()),
-        other => other?,
+    let (status, body) = send(&HttpRequest::get(url).header("Accept", "application/json"))?;
+    answer(status, body)
+}
+
+/// The shared link and its album. From 2.6 a link with a password is signed in to first; older
+/// servers have no sign-in and take the password with the request instead.
+fn shared_link(base: &str, key: &str, password: Option<&str>) -> Result<SharedLink, String> {
+    let body = match password {
+        Some(p) => {
+            let mut login = HttpRequest::get(format!("{base}/api/shared-links/login?{}", query(key, None)))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json");
+            login.method = "POST".into();
+            login.body = Some(serde_json::json!({ "password": p }).to_string());
+            match send(&login)? {
+                (404, _) => get(&format!("{base}/api/shared-links/me?{}", query(key, Some(p))))?,
+                (status, body) => answer(status, body)?,
+            }
+        }
+        None => get(&format!("{base}/api/shared-links/me?{}", query(key, None)))?,
     };
-    match r.status {
-        401 => Err("Immich refused the link. If it has a password, enter it in the plugin's settings.".into()),
+    serde_json::from_str(&body).map_err(|e| format!("unexpected answer from Immich: {e}"))
+}
+
+/// Sends `req` and reads the whole answer, whatever its status.
+fn send(req: &HttpRequest) -> Result<(u16, String), String> {
+    match host::fetch(req) {
+        Err(e) if e == host::TOO_LARGE => Err(TOO_BIG.into()),
+        Err(e) => Err(e),
+        Ok(r) => Ok((r.status, r.body)),
+    }
+}
+
+fn answer(status: u16, body: String) -> Result<String, String> {
+    match status {
+        401 => Err(refusal(&body)),
         404 => Err("Immich does not know this link any more. Create a new shared link for the album.".into()),
         s if !(200..300).contains(&s) => Err(format!("Immich answered HTTP {s}")),
-        _ => Ok(r.body),
+        _ => Ok(body),
+    }
+}
+
+/// Advice for a 401, whose message says whether the key or the password was wrong.
+fn refusal(body: &str) -> String {
+    let message = serde_json::from_str::<serde_json::Value>(body).ok().and_then(|v| v["message"].as_str().map(str::to_lowercase)).unwrap_or_default();
+    if message.contains("invalid password") {
+        "Immich turned down the link's password. Check it in the plugin's settings.".into()
+    } else if message.contains("password") {
+        "This link has a password. Enter it in the plugin's settings.".into()
+    } else if message.contains("share key") {
+        "Immich does not know this link any more. Create a new shared link for the album.".into()
+    } else {
+        "Immich refused the link. If it has a password, enter it in the plugin's settings.".into()
     }
 }
 
@@ -372,6 +416,14 @@ mod tests {
         assert_eq!(month_year(0), "January 1970");
         assert_eq!(month_year(sdk::parse_iso8601("2024-02-29T00:00:00Z").unwrap()), "February 2024");
         assert_eq!(month_year(sdk::parse_iso8601("2026-10-19T23:59:59Z").unwrap()), "October 2026");
+    }
+
+    #[test]
+    fn refusals_say_whether_the_link_or_the_password_is_wrong() {
+        assert!(refusal(r#"{"message":"Invalid password","error":"Unauthorized","statusCode":401}"#).starts_with("Immich turned down the link's password"));
+        assert!(refusal(r#"{"message":"Password required","statusCode":401}"#).starts_with("This link has a password"));
+        assert!(refusal(r#"{"message":"Invalid share key","statusCode":401}"#).starts_with("Immich does not know this link"));
+        assert!(refusal("<html>").starts_with("Immich refused the link"));
     }
 
     #[test]
