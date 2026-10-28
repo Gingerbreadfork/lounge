@@ -93,8 +93,17 @@ export function start() {
   connect();
 }
 
-/** A phone that was already paired keeps its token when the link has expired. */
+/** A phone that is already paired ignores the link and keeps its token, so a stray link cannot
+ *  sign it out. The link is used only when the TV no longer takes that token. */
 async function pairByLink(link: string) {
+  if (app.paired) {
+    if (await stillPaired()) {
+      connect();
+      return;
+    }
+    setToken(null);
+    app.paired = false;
+  }
   try {
     const r = await api.pairLink(link);
     setToken(r.token);
@@ -105,6 +114,17 @@ async function pairByLink(link: string) {
   }
   if (app.paired) connect();
   else app.route = { page: 'pair' };
+}
+
+/** Whether the TV still takes this phone's token. Only a refusal says no; a TV that does not
+ *  answer may still know the phone. */
+async function stillPaired(): Promise<boolean> {
+  try {
+    await api.session();
+    return true;
+  } catch (e: any) {
+    return e?.status !== 401;
+  }
 }
 
 export async function connect() {
