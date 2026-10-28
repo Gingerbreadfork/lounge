@@ -33,7 +33,7 @@ impl sdk::Plugin for Iptv {
             rows: Vec::new(),
             settings: vec![
                 SettingSpec { key: "playlist_url".into(), label: "Playlist URL (M3U)".into(), kind: SettingKind::SecretUrl, required: true, help: Some("The .m3u or .m3u8 playlist your provider gave you.".into()), default: None },
-                SettingSpec { key: "epg_url".into(), label: "Guide URL (XMLTV)".into(), kind: SettingKind::SecretUrl, required: false, help: Some("Optional. Plain or .gz XMLTV; channel ids must match the playlist's tvg-id.".into()), default: None },
+                SettingSpec { key: "epg_url".into(), label: "Guide URL (XMLTV)".into(), kind: SettingKind::SecretUrl, required: false, help: Some("Optional. Plain or .gz XMLTV. Without one, the guide the playlist names is used, or an Xtream provider's own.".into()), default: None },
                 SettingSpec { key: "group".into(), label: "Only this group".into(), kind: SettingKind::Text, required: false, help: Some("Optional group-title filter, for very large playlists.".into()), default: None },
             ],
             homepage: None,
@@ -44,7 +44,8 @@ impl sdk::Plugin for Iptv {
         // Provider links often carry the account's user name and password, so both are secrets.
         let playlist_url = host::secret("playlist_url").filter(|v| !v.trim().is_empty()).ok_or("Playlist URL is not set")?;
         let group = host::setting("group");
-        let (channels, total) = parse_m3u(&playlist(&playlist_url)?, group.as_deref(), sdk::MAX_ITEMS);
+        let text = playlist(&playlist_url)?;
+        let (channels, total) = parse_m3u(&text, group.as_deref(), sdk::MAX_ITEMS);
         if channels.is_empty() {
             return Err(match group {
                 Some(g) => format!("The playlist has no channels in the group \"{g}\". Check the group's name in the plugin's settings."),
@@ -58,7 +59,9 @@ impl sdk::Plugin for Iptv {
 
         let mut items: Vec<Item> = channels.iter().map(Channel::to_item).collect();
         let budget = sdk::MAX_ITEMS - items.len();
-        match host::secret("epg_url") {
+        let epg_url = host::secret("epg_url").filter(|v| !v.trim().is_empty()).or_else(|| guide_in_header(&text)).or_else(|| xtream_guide(&playlist_url));
+        drop(text);
+        match epg_url {
             Some(_) if budget == 0 => sdk::warn!("the channels fill all {} places the TV keeps, so the guide is left out", sdk::MAX_ITEMS),
             Some(epg_url) => match guide(&epg_url, &channels, ctx, budget) {
                 Ok(schedule) => {
@@ -200,6 +203,21 @@ impl Channel {
     fn guide_id(&self) -> &str {
         self.tvg_id.as_deref().unwrap_or(&self.id)
     }
+}
+
+/// The guide a playlist names in its header, as `url-tvg` or `x-tvg-url`; the first of a list.
+fn guide_in_header(text: &str) -> Option<String> {
+    let header = text.lines().map(|l| l.trim_start_matches('\u{feff}').trim()).find(|l| !l.is_empty())?.strip_prefix("#EXTM3U")?;
+    let attrs = parse_attrs(header);
+    let urls = attrs.get("url-tvg").or_else(|| attrs.get("x-tvg-url"))?;
+    urls.split(',').map(str::trim).find(|u| u.starts_with("http://") || u.starts_with("https://")).map(str::to_string)
+}
+
+/// An Xtream provider's guide, beside its playlist with the same account.
+fn xtream_guide(playlist_url: &str) -> Option<String> {
+    let (base, query) = playlist_url.trim().split_once("/get.php?")?;
+    let param = |name: &str| query.split('&').find_map(|kv| kv.strip_prefix(name)?.strip_prefix('='));
+    Some(format!("{base}/xmltv.php?username={}&password={}", param("username")?, param("password")?))
 }
 
 /// Films and series an Xtream playlist lists beside its channels, which play as files, not live.
@@ -998,6 +1016,15 @@ http://s/3
         assert_eq!(chans[1].name, "Plain, with a comma");
         assert_eq!(chans[2].name, "Fallback name");
         assert_eq!(parse_m3u(m3u, Some("sport, uk"), 10).0.len(), 1);
+    }
+
+    #[test]
+    fn a_playlist_can_name_its_own_guide() {
+        assert_eq!(guide_in_header("#EXTM3U url-tvg=\"https://epg.example/a.xml.gz,https://epg.example/b.xml\"\n#EXTINF:-1,One\nhttp://s/1").as_deref(), Some("https://epg.example/a.xml.gz"));
+        assert_eq!(guide_in_header("\u{feff}#EXTM3U x-tvg-url=\"http://g.example/epg.xml\"").as_deref(), Some("http://g.example/epg.xml"));
+        assert_eq!(guide_in_header("#EXTM3U\n#EXTINF:-1 url-tvg=\"http://no\",One\n"), None);
+        assert_eq!(xtream_guide("http://tv.example:8080/get.php?username=u1&password=p1&type=m3u_plus&output=ts").as_deref(), Some("http://tv.example:8080/xmltv.php?username=u1&password=p1"));
+        assert_eq!(xtream_guide("http://tv.example/list.m3u"), None);
     }
 
     #[test]
