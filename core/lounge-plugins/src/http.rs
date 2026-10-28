@@ -57,7 +57,8 @@ impl Fetcher {
     }
 
     /// Perform `req` on behalf of a plugin; `allowed` decides per host, including for redirects.
-    /// The plugin's headers go only to the origin it addressed: a redirect elsewhere drops them.
+    /// The plugin's headers and body go only to the origin it addressed: a redirect elsewhere
+    /// drops them.
     /// The timeout covers the whole fetch, redirects included.
     pub fn fetch(&self, req: &HttpRequest, allowed: &dyn Fn(&str) -> bool) -> Result<HttpResponse> {
         let timeout = if req.timeout_ms == 0 { DEFAULT_TIMEOUT } else { Duration::from_millis(req.timeout_ms as u64).min(DEFAULT_TIMEOUT) };
@@ -112,6 +113,7 @@ impl Fetcher {
                 let next = resolve_relative(&url, loc);
                 if origin_of(&next) != origin_of(&url) {
                     headers.clear();
+                    body = None;
                 }
                 if status == 303 || (matches!(status, 301 | 302) && method == "POST") {
                     method = "GET".into();
@@ -594,6 +596,60 @@ mod tests {
         let req = HttpRequest::get(format!("http://127.0.0.1:{first_port}/start")).header("X-Plex-Token", "secret");
         let r = fetcher.fetch(&req, &|_| true).unwrap();
         assert_eq!(r.body, "clean");
+    }
+
+    /// Reads one request and returns its request line and body.
+    fn read_request(s: &mut std::net::TcpStream) -> (String, String) {
+        let (mut buf, mut chunk) = (Vec::new(), [0u8; 2048]);
+        let mut more = |buf: &mut Vec<u8>| {
+            let n = s.read(&mut chunk).unwrap_or(0);
+            buf.extend_from_slice(&chunk[..n]);
+            n > 0
+        };
+        let head_end = loop {
+            if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                break i + 4;
+            }
+            if !more(&mut buf) {
+                break buf.len();
+            }
+        };
+        let head = String::from_utf8_lossy(&buf[..head_end]).into_owned();
+        let length: usize = head
+            .lines()
+            .find_map(|l| l.split_once(':').filter(|(k, _)| k.eq_ignore_ascii_case("content-length")).and_then(|(_, v)| v.trim().parse().ok()))
+            .unwrap_or(0);
+        while buf.len() < head_end + length && more(&mut buf) {}
+        (head.lines().next().unwrap_or("").to_string(), String::from_utf8_lossy(&buf[head_end..]).into_owned())
+    }
+
+    #[test]
+    fn a_body_stays_with_its_origin() {
+        // Each server redirects /same to itself and /away to the other, and echoes the rest.
+        let serve = |listener: std::net::TcpListener, other: u16| {
+            std::thread::spawn(move || {
+                for mut s in listener.incoming().flatten() {
+                    let (line, body) = read_request(&mut s);
+                    let reply = match line.split(' ').nth(1).unwrap_or("") {
+                        "/same" => "HTTP/1.1 307 Temporary Redirect\r\nlocation: /echo\r\ncontent-length: 0\r\nconnection: close\r\n\r\n".to_string(),
+                        "/away" => format!("HTTP/1.1 307 Temporary Redirect\r\nlocation: http://127.0.0.1:{other}/echo\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"),
+                        _ => {
+                            let echo = format!("{} {body}", line.split(' ').next().unwrap_or(""));
+                            format!("HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{echo}", echo.len())
+                        }
+                    };
+                    let _ = std::io::Write::write_all(&mut s, reply.as_bytes());
+                }
+            });
+        };
+        let (first, second) = (std::net::TcpListener::bind("127.0.0.1:0").unwrap(), std::net::TcpListener::bind("127.0.0.1:0").unwrap());
+        let (first_port, second_port) = (first.local_addr().unwrap().port(), second.local_addr().unwrap().port());
+        serve(first, second_port);
+        serve(second, first_port);
+        let login = |path: &str| HttpRequest { method: "POST".into(), body: Some("user=me&password=secret".into()), ..HttpRequest::get(format!("http://127.0.0.1:{first_port}{path}")) };
+        let fetcher = Fetcher::new();
+        assert_eq!(fetcher.fetch(&login("/same"), &|_| true).unwrap().body, "POST user=me&password=secret");
+        assert_eq!(fetcher.fetch(&login("/away"), &|_| true).unwrap().body, "POST ");
     }
 
     #[test]
