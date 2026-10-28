@@ -14,7 +14,7 @@ struct Film {
     minutes: i64,
     poster: &'static str,
     page: &'static str,
-    /// A 16:9 still, Wikimedia's 1280 px copy, for the landscape tiles of the films left part-way.
+    /// A still for the landscape tiles of the films left part-way.
     still: Option<&'static str>,
     /// Minutes watched and hours since, for the films left part-way.
     watched: Option<(i64, i64)>,
@@ -23,14 +23,14 @@ struct Film {
 const WIKI: &str = "https://en.wikipedia.org/wiki/";
 
 const FILMS: &[Film] = &[
-    Film { id: "metropolis", title: "Metropolis", year: 1927, by: "Fritz Lang", minutes: 153, poster: "https://upload.wikimedia.org/wikipedia/en/9/97/Metropolis_%28German_three-sheet_poster%29.jpg", page: "Metropolis_(1927_film)", still: Some("https://upload.wikimedia.org/wikipedia/commons/f/f9/Metropolis_%281927%29_-_Hel.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"), watched: Some((95, 44)) },
+    Film { id: "metropolis", title: "Metropolis", year: 1927, by: "Fritz Lang", minutes: 153, poster: "https://upload.wikimedia.org/wikipedia/en/9/97/Metropolis_%28German_three-sheet_poster%29.jpg", page: "Metropolis_(1927_film)", still: Some("https://upload.wikimedia.org/wikipedia/commons/f/f9/Metropolis_%281927%29_-_Hel.jpg"), watched: Some((95, 44)) },
     Film { id: "his-girl-friday", title: "His Girl Friday", year: 1940, by: "Howard Hawks", minutes: 92, poster: "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/His_Girl_Friday_%281940_poster%29_crop.jpg/960px-His_Girl_Friday_%281940_poster%29_crop.jpg", page: "His_Girl_Friday", still: Some("https://thumb.wikimedia.org/wikipedia/commons/thumb/9/98/His-Girl-Friday-Grant-Russell.jpg/1280px-His-Girl-Friday-Grant-Russell.jpg"), watched: Some((39, 20)) },
     Film { id: "charade", title: "Charade", year: 1963, by: "Stanley Donen", minutes: 113, poster: "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fd/Charade_%281963_poster%29.jpg/960px-Charade_%281963_poster%29.jpg", page: "Charade_(1963_film)", still: Some("https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Charade_1963_Audrey_Hepburn_and_Cary_Grant.jpg/1280px-Charade_1963_Audrey_Hepburn_and_Cary_Grant.jpg"), watched: Some((73, 2)) },
     Film { id: "the-general", title: "The General", year: 1926, by: "Buster Keaton", minutes: 75, poster: "https://upload.wikimedia.org/wikipedia/commons/0/0c/The_General_%281926%29_-_Movie_Poster_2.png", page: "The_General_(1926_film)", still: Some("https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fb/Buster_Keaton_on_the_cow-catcher_in_The_General.jpg/1280px-Buster_Keaton_on_the_cow-catcher_in_The_General.jpg"), watched: Some((22, 70)) },
-    Film { id: "nosferatu", title: "Nosferatu", year: 1922, by: "F. W. Murnau", minutes: 94, poster: "https://thumb.wikimedia.org/wikipedia/en/thumb/9/90/Nosferatu_poster_%28Albin_Grau%2C_1922%29_1.jpg/960px-Nosferatu_poster_%28Albin_Grau%2C_1922%29_1.jpg", page: "Nosferatu", still: None, watched: None },
+    Film { id: "nosferatu", title: "Nosferatu", year: 1922, by: "F. W. Murnau", minutes: 94, poster: "https://upload.wikimedia.org/wikipedia/commons/9/95/Max_Schreck_as_Count_Orlok_in_Nosferatu_%E2%80%93_Eine_Symphonie_des_Grauens_%281922%29.jpg", page: "Nosferatu", still: None, watched: None },
     Film { id: "sunrise", title: "Sunrise", year: 1927, by: "F. W. Murnau", minutes: 94, poster: "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/27/Sunrise_-_A_Song_of_Two_Humans.jpg/960px-Sunrise_-_A_Song_of_Two_Humans.jpg", page: "Sunrise:_A_Song_of_Two_Humans", still: None, watched: None },
     Film { id: "sherlock-jr", title: "Sherlock Jr.", year: 1924, by: "Buster Keaton", minutes: 45, poster: "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c1/Sherlock_jr_poster.jpg/960px-Sherlock_jr_poster.jpg", page: "Sherlock_Jr.", still: Some("https://thumb.wikimedia.org/wikipedia/commons/thumb/7/77/Silent_film_theater_in_Sherlock_Jr.%2C_1924_%28cropped%29.jpg/1280px-Silent_film_theater_in_Sherlock_Jr.%2C_1924_%28cropped%29.jpg"), watched: Some((12, 96)) },
-    Film { id: "the-lost-world", title: "The Lost World", year: 1925, by: "Harry O. Hoyt", minutes: 106, poster: "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/76/The_Lost_World_%281925%29_-_film_poster.jpg/960px-The_Lost_World_%281925%29_-_film_poster.jpg", page: "The_Lost_World_(1925_film)", still: Some("https://upload.wikimedia.org/wikipedia/commons/3/3a/The_Lost_World_%281925%29_-_3.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"), watched: Some((40, 200)) },
+    Film { id: "the-lost-world", title: "The Lost World", year: 1925, by: "Harry O. Hoyt", minutes: 106, poster: "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/76/The_Lost_World_%281925%29_-_film_poster.jpg/960px-The_Lost_World_%281925%29_-_film_poster.jpg", page: "The_Lost_World_(1925_film)", still: Some("https://upload.wikimedia.org/wikipedia/commons/3/3a/The_Lost_World_%281925%29_-_3.jpg"), watched: Some((40, 200)) },
     Film { id: "caligari", title: "The Cabinet of Dr. Caligari", year: 1920, by: "Robert Wiene", minutes: 76, poster: "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/52/Das_Cabinet_des_Dr._Caligari.JPG/960px-Das_Cabinet_des_Dr._Caligari.JPG", page: "The_Cabinet_of_Dr._Caligari", still: None, watched: None },
     Film { id: "phantom", title: "The Phantom of the Opera", year: 1925, by: "Rupert Julian", minutes: 93, poster: "https://upload.wikimedia.org/wikipedia/commons/5/53/Phantom_of_the_opera_1925_poster.jpg", page: "The_Phantom_of_the_Opera_(1925_film)", still: Some("https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/The_Phantom_of_the_Opera_%281925%29_-_9.jpg/1280px-The_Phantom_of_the_Opera_%281925%29_-_9.jpg"), watched: None },
     Film { id: "gold-rush", title: "The Gold Rush", year: 1925, by: "Charlie Chaplin", minutes: 95, poster: "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/Gold_rush_poster.jpg/960px-Gold_rush_poster.jpg", page: "The_Gold_Rush", still: Some("https://thumb.wikimedia.org/wikipedia/commons/thumb/4/48/Charlie_Chaplin%2C_Mack_Swain_and_Tiny_Sandford_in_The_Gold_Rush.jpg/1280px-Charlie_Chaplin%2C_Mack_Swain_and_Tiny_Sandford_in_The_Gold_Rush.jpg"), watched: Some((61, 150)) },
@@ -117,6 +117,20 @@ mod tests {
             assert!(!f.id.is_empty() && !f.title.is_empty() && f.minutes > 0 && !f.poster.is_empty() && !f.page.is_empty(), "{}", f.title);
             if let Some((at, _)) = f.watched {
                 assert!(at > 0 && at < f.minutes, "{}", f.title);
+            }
+        }
+    }
+
+    #[test]
+    fn the_library_publishes_cleanly() {
+        let items = <Sample as sdk::Plugin>::refresh(&RefreshContext::default()).unwrap();
+        let rows: Vec<String> = <Sample as sdk::Plugin>::manifest().rows.into_iter().map(|r| r.id).collect();
+        let ids: std::collections::HashSet<&str> = items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids.len(), items.len());
+        for it in &items {
+            assert!(it.row.as_ref().is_none_or(|r| rows.contains(r)), "{}", it.title);
+            if it.kind == ItemKind::Resume {
+                assert!(it.thumbnail.is_some(), "{}", it.title);
             }
         }
     }
