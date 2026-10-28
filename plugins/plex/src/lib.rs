@@ -62,7 +62,7 @@ impl sdk::Plugin for Plex {
         recent.truncate(RECENT);
         for m in &recent {
             if let Some(mut item) = server.recent_item(m) {
-                item.is_new = sdk::new_this_week(item.added_ms, ctx.now_ms) && m.view_count.unwrap_or(0) == 0;
+                item.is_new = m.is_new(ctx.now_ms);
                 items.push(item);
             }
         }
@@ -206,6 +206,8 @@ pub struct Metadata {
     pub added_at: Option<i64>,
     #[serde(rename = "viewCount")]
     pub view_count: Option<i64>,
+    #[serde(rename = "viewedLeafCount")]
+    pub viewed_leaf_count: Option<i64>,
     #[serde(default)]
     pub thumb: Option<String>,
     #[serde(default)]
@@ -216,6 +218,15 @@ pub struct Metadata {
     pub grandparent_art: Option<String>,
     #[serde(rename = "parentThumb")]
     pub parent_thumb: Option<String>,
+}
+
+impl Metadata {
+    /// Whether it earns a New badge: added in the past week and none of it watched. A season or
+    /// show has no `viewCount` and counts its watched episodes in `viewedLeafCount`.
+    fn is_new(&self, now_ms: i64) -> bool {
+        let watched = self.view_count.unwrap_or(0) > 0 || self.viewed_leaf_count.unwrap_or(0) > 0;
+        sdk::new_this_week(self.added_at.map(|s| s * 1000), now_ms) && !watched
+    }
 }
 
 impl Server {
@@ -428,6 +439,20 @@ mod tests {
         assert_eq!(items[0].added_ms, Some(1760000000000));
         assert_eq!((items[1].title.as_str(), items[1].subtitle.as_deref()), ("The Bear", Some("Season 2")));
         assert!(items[1].poster.is_some());
+    }
+
+    #[test]
+    fn a_new_season_with_episodes_watched_loses_its_new_badge() {
+        let c: Container = serde_json::from_str(r#"{"MediaContainer": {"Metadata": [
+            {"ratingKey": "2", "type": "season", "title": "Season 2", "parentTitle": "The Bear", "addedAt": 1760000000, "leafCount": 10, "viewedLeafCount": 10},
+            {"ratingKey": "5", "type": "season", "title": "Season 1", "parentTitle": "Shogun", "addedAt": 1760000000, "leafCount": 10, "viewedLeafCount": 0},
+            {"ratingKey": "1", "type": "movie", "title": "Charade", "addedAt": 1760000000, "viewCount": 1},
+            {"ratingKey": "6", "type": "movie", "title": "Nosferatu", "addedAt": 1760000000}
+        ]}}"#).unwrap();
+        let now = 1_760_000_000_000 + 86_400_000;
+        let new: Vec<bool> = c.media_container.metadata.iter().map(|m| m.is_new(now)).collect();
+        assert_eq!(new, [false, true, false, true]);
+        assert!(!c.media_container.metadata[3].is_new(now + 7 * 86_400_000));
     }
 
     #[test]
