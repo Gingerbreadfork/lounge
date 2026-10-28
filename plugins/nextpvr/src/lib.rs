@@ -92,7 +92,13 @@ impl sdk::Plugin for NextPvr {
         let (id, title) = rest.split_once('|').unwrap_or((rest, rest));
         match what {
             "live" => Ok(Action::play(format!("{}/live?channel={id}&client=lounge&sid={}", s.base, s.sid), title)),
-            "rec" => Ok(Action::play(format!("{}/live?recording={id}&client=lounge&sid={}", s.base, s.sid), title)),
+            "rec" => {
+                // A part-watched recording carries where it was left, as "id@ms".
+                let (id, start) = id.split_once('@').map_or((id, None), |(id, at)| (id, at.parse::<i64>().ok()));
+                let mut play = Action::play(format!("{}/live?recording={id}&client=lounge&sid={}", s.base, s.sid), title);
+                play.start_ms = start;
+                Ok(play)
+            }
             _ => Err(format!("unknown action {action}")),
         }
     }
@@ -340,6 +346,7 @@ impl Server {
         };
         if in_progress {
             item.position_ms = Some(position_ms);
+            item.action.resolve = Some(format!("rec:{}@{position_ms}|{}", r.id, r.name));
             item.progress = duration_ms.map(|d| (position_ms as f32 / d as f32).clamp(0.0, 1.0));
         } else {
             item.row = Some("recordings".into());
@@ -587,7 +594,7 @@ mod tests {
         let a = s.recording_item(&list.recordings[0], 2);
         assert_eq!(a.kind, ItemKind::Resume);
         assert_eq!(a.progress, Some(0.25));
-        assert_eq!(a.action.resolve.as_deref(), Some("rec:10|Film"));
+        assert_eq!(a.action.resolve.as_deref(), Some("rec:10@1800000|Film"));
         assert_eq!(a.last_used_ms, None);
         let b = s.recording_item(&list.recordings[1], 1);
         assert_eq!(b.kind, ItemKind::Program);

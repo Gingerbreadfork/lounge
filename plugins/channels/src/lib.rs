@@ -283,6 +283,7 @@ pub fn recording_item(base: &str, r: &Recording, weight: i32) -> Item {
     };
     if in_progress {
         item.position_ms = Some(position_ms);
+        item.action.start_ms = Some(position_ms);
         item.progress = Some((position_ms as f32 / duration_ms as f32).clamp(0.0, 1.0));
         item.last_used_ms = epoch_ms(r.updated_at);
     } else {
@@ -342,6 +343,7 @@ mod tests {
         assert_eq!(a.last_used_ms, Some(1760790000456));
         assert_eq!(a.added_ms, Some(1760703600123));
         assert_eq!(a.action.play.as_deref(), Some("http://dvr:8089/dvr/files/1/stream.mpg"));
+        assert_eq!(a.action.start_ms, Some(1_200_000));
         let b = recording_item("http://dvr:8089", &files[1], 1);
         assert_eq!(b.kind, ItemKind::Program);
         assert_eq!(b.row.as_deref(), Some("recordings"));
