@@ -51,11 +51,12 @@ impl sdk::Plugin for Twitch {
         let user_id = client.user_id()?;
         let streams: Page<Stream> = client.get_json(&format!("/streams/followed?user_id={user_id}&first=100"))?;
         let mut avatars = Avatars::load();
+        avatars.expire(ctx.now_ms);
         let missing: Vec<&str> = streams.data.iter().map(|s| s.user_id.as_str()).filter(|id| !avatars.has(id)).take(100).collect();
         if !missing.is_empty() {
             let query: Vec<String> = missing.iter().map(|id| format!("id={id}")).collect();
             match client.get_json::<Page<User>>(&format!("/users?{}", query.join("&"))) {
-                Ok(users) => avatars.add(&users.data, ctx.now_ms),
+                Ok(users) => avatars.add(&users.data),
                 Err(e) => sdk::warn!("profile pictures: {e}"),
             }
         }
@@ -355,11 +356,15 @@ impl Avatars {
     fn get(&self, id: &str) -> Option<&str> {
         self.urls.get(id).map(String::as_str).filter(|u| !u.is_empty())
     }
-    fn add(&mut self, users: &[User], now_ms: i64) {
+    /// Forgets pictures a week old, before the refresh decides which to fetch, so it fetches them
+    /// all again rather than showing none.
+    fn expire(&mut self, now_ms: i64) {
         if now_ms - self.fetched_ms > 7 * 86_400_000 {
             self.urls.clear();
             self.fetched_ms = now_ms;
         }
+    }
+    fn add(&mut self, users: &[User]) {
         for u in users {
             self.urls.insert(u.id.clone(), u.profile_image_url.clone());
         }
