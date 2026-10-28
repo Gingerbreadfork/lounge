@@ -11,9 +11,7 @@ const GALLERY_KEY: &str = "gallery";
 const GALLERY_CAP: usize = 300;
 /// Met objects looked up per refresh: two fetches each, inside the host's budget with room to spare.
 const MET_PER_REFRESH: usize = 28;
-/// The TV prepares a picture of up to 12 MB and 13 million pixels; the Met's originals run
-/// about two thirds of a byte a pixel, so this many bytes stays inside both.
-const MET_ORIGINAL_MAX_BYTES: u64 = 7_500_000;
+/// The TV prepares a picture of up to 12 MB and 13 million pixels.
 const PICTURE_MAX_BYTES: u64 = 12 * 1024 * 1024;
 const PICTURE_MAX_PIXELS: u64 = 13_000_000;
 const MET_PAGE: usize = 40;
@@ -274,19 +272,46 @@ fn met_slice(query: &str, offset: usize, gallery: &Gallery) -> Result<(Vec<Paint
     Ok((found, next))
 }
 
-/// Whether the original is small enough for the TV to prepare: one HEAD request. The small
-/// picture the Met offers otherwise is a few hundred pixels across.
+/// Whether the original is small enough for the TV to prepare, from its first bytes: the whole
+/// size from the range the server answers with, the pixels from the JPEG's frame header. The
+/// small picture the Met offers otherwise is a few hundred pixels across.
 fn met_original_fits(url: &str) -> bool {
-    let req = HttpRequest { method: "HEAD".into(), url: url.to_string(), headers: Default::default(), body: None, timeout_ms: 0 };
-    match host::fetch(&req) {
-        Ok(r) if (200..300).contains(&r.status) => r
-            .headers
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case("content-length"))
-            .and_then(|(_, v)| v.trim().parse::<u64>().ok())
-            .is_some_and(|n| n <= MET_ORIGINAL_MAX_BYTES),
+    let Ok(r) = host::fetch(&HttpRequest::get(url).header("Range", "bytes=0-65535")) else { return false };
+    if !(200..300).contains(&r.status) {
+        return false;
+    }
+    let header = |name: &str| r.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.clone());
+    let total = header("content-range").and_then(|v| v.rsplit('/').next()?.trim().parse::<u64>().ok()).or_else(|| header("content-length")?.trim().parse().ok());
+    let size = jpeg_size(&sdk::body_bytes(r));
+    match (total, size) {
+        (Some(bytes), Some((w, h))) => bytes <= PICTURE_MAX_BYTES && u64::from(w) * u64::from(h) <= PICTURE_MAX_PIXELS,
         _ => false,
     }
+}
+
+/// A JPEG's width and height, from its frame header, if `bytes` reach that far.
+pub fn jpeg_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.get(..2)? != [0xFF, 0xD8] {
+        return None;
+    }
+    let mut i = 2;
+    while i + 4 <= bytes.len() {
+        if bytes[i] != 0xFF {
+            return None;
+        }
+        let marker = bytes[i + 1];
+        if marker == 0xFF {
+            i += 1;
+            continue;
+        }
+        // Frame headers are C0 to CF, apart from the tables and arithmetic coding markers.
+        if (0xC0..=0xCF).contains(&marker) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) {
+            let at = |k: usize| bytes.get(i + k).map(|&b| u32::from(b));
+            return Some((at(7)? << 8 | at(8)?, at(5)? << 8 | at(6)?));
+        }
+        i += 2 + (usize::from(bytes[i + 2]) << 8 | usize::from(bytes[i + 3]));
+    }
+    None
 }
 
 pub fn met_painting(o: MetObject, original_fits: &mut dyn FnMut(&str) -> bool) -> Option<Painting> {
@@ -499,6 +524,15 @@ mod tests {
         }
         assert_eq!(g.paintings.iter().filter(|p| p.museum == MET).count(), 20);
         assert_eq!(g.paintings.iter().filter(|p| p.museum == CMA).count(), GALLERY_CAP / 2);
+    }
+
+    #[test]
+    fn a_jpeg_tells_its_size_from_its_frame_header() {
+        let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0x4A, 0x46];
+        jpeg.extend([0xFF, 0xC0, 0x00, 0x11, 0x08, 0x0D, 0x5D, 0x0F, 0xA0, 0x03]);
+        assert_eq!(jpeg_size(&jpeg), Some((4000, 3421)));
+        assert_eq!(jpeg_size(&jpeg[..12]), None);
+        assert_eq!(jpeg_size(b"GIF89a"), None);
     }
 
     #[test]
