@@ -156,6 +156,15 @@ pub struct ArchiveFile {
     pub format: String,
     #[serde(default)]
     pub size: Option<Text>,
+    /// "true" for files only archive.org's own players may fetch, such as TV News clips.
+    #[serde(default)]
+    pub private: Option<Text>,
+}
+
+impl ArchiveFile {
+    fn is_private(&self) -> bool {
+        self.private.clone().is_some_and(|p| p.into_string() == "true")
+    }
 }
 
 /// A collection's films, leaving out what a living room row should not surprise anyone with.
@@ -228,15 +237,38 @@ fn item_for(d: &Doc, row: Option<&str>, weight: i32) -> Item {
     }
 }
 
-/// The best file to play: an MP4 first, then whatever the player stands a chance with.
+/// The file to play: an MP4 first, then whatever the player stands a chance with. Several files
+/// of one kind are usually a series or a film in parts, so the first by name plays.
 pub fn best_video(files: &[ArchiveFile]) -> Option<&ArchiveFile> {
     const ORDER: [&str; 6] = ["h.264", "h.264 HD", "MPEG4", "HiRes MPEG4", "512Kb MPEG4", "Ogg Video"];
+    let open = || files.iter().filter(|f| !f.is_private());
     for format in ORDER {
-        if let Some(f) = files.iter().filter(|f| f.format == format).max_by_key(|f| f.size.clone().map(|s| s.into_string().parse::<i64>().unwrap_or(0)).unwrap_or(0)) {
+        if let Some(f) = open().filter(|f| f.format == format).min_by_key(|f| natural_key(&f.name)) {
             return Some(f);
         }
     }
-    files.iter().find(|f| f.name.to_ascii_lowercase().ends_with(".mp4"))
+    open().find(|f| f.name.to_ascii_lowercase().ends_with(".mp4"))
+}
+
+/// `name` in lower case with each run of digits padded, so "Episode 2" sorts before "Episode 10".
+fn natural_key(name: &str) -> String {
+    let mut out = String::new();
+    let mut digits = String::new();
+    for c in name.to_lowercase().chars() {
+        if c.is_ascii_digit() {
+            digits.push(c);
+            continue;
+        }
+        if !digits.is_empty() {
+            out.push_str(&format!("{digits:0>20}"));
+            digits.clear();
+        }
+        out.push(c);
+    }
+    if !digits.is_empty() {
+        out.push_str(&format!("{digits:0>20}"));
+    }
+    out
 }
 
 /// "1:31:44", "72 min." or "20:33" → milliseconds.
@@ -325,6 +357,26 @@ mod tests {
             {"name": "__ia_thumb.jpg", "format": "Item Tile", "size": "12290"}
         ]"#).unwrap();
         assert_eq!(best_video(&files).unwrap().name, "x.mp4");
+    }
+
+    #[test]
+    fn a_series_plays_from_its_first_episode() {
+        let files: Vec<ArchiveFile> = serde_json::from_str(r#"[
+            {"name": "Season 1 - 010 - The Fair.mp4", "format": "h.264", "size": "900"},
+            {"name": "Season 1 - 002 - The Cow.mp4", "format": "h.264", "size": "300"},
+            {"name": "Season 1 - 1 - Pilot.mp4", "format": "h.264", "size": "200"}
+        ]"#).unwrap();
+        assert_eq!(best_video(&files).unwrap().name, "Season 1 - 1 - Pilot.mp4");
+    }
+
+    #[test]
+    fn private_files_are_never_chosen() {
+        let files: Vec<ArchiveFile> = serde_json::from_str(r#"[
+            {"name": "news.mp4", "format": "h.264", "private": "true"},
+            {"name": "news.ogv", "format": "Ogg Video"}
+        ]"#).unwrap();
+        assert_eq!(best_video(&files).unwrap().name, "news.ogv");
+        assert!(best_video(&files[..1]).is_none());
     }
 
     #[test]
