@@ -232,6 +232,7 @@ fn is_on_demand(url: &str) -> bool {
 pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Channel>, usize) {
     let mut out = Vec::new();
     let mut used = HashSet::new();
+    let mut next = HashMap::new();
     let mut total = 0;
     let mut pending: Option<(HashMap<String, String>, String)> = None;
     let mut index = 0usize;
@@ -254,7 +255,7 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Cha
             let name = if name.is_empty() { attrs.get("tvg-name").cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Channel {index}")) } else { name };
             let tvg_id = attrs.get("tvg-id").map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
             let base = tvg_id.clone().unwrap_or_else(|| Some(slug(&name)).filter(|s| !s.is_empty()).unwrap_or_else(|| url_hash(line)));
-            let id = unique_id(&mut used, base);
+            let id = unique_id(&mut used, &mut next, base);
             let group = attrs.get("group-title").cloned().filter(|g| !g.is_empty());
             if only_group.is_some_and(|want| !group.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(want))) {
                 continue;
@@ -355,14 +356,20 @@ fn url_hash(url: &str) -> String {
     format!("url-{:016x}", std::hash::Hasher::finish(&hash))
 }
 
-fn unique_id(used: &mut HashSet<String>, base: String) -> String {
-    let mut id = base.clone();
-    let mut n = 1;
-    while !used.insert(id.clone()) {
-        n += 1;
-        id = format!("{base}~{n}");
+/// `base` the first time, then `base~2`, `base~3` and so on, skipping any already taken.
+/// `next` keeps each base's next suffix, so many channels sharing one base stay cheap.
+fn unique_id(used: &mut HashSet<String>, next: &mut HashMap<String, u32>, base: String) -> String {
+    if used.insert(base.clone()) {
+        return base;
     }
-    id
+    let n = next.entry(base.clone()).or_insert(2);
+    loop {
+        let id = format!("{base}~{n}");
+        *n += 1;
+        if used.insert(id.clone()) {
+            return id;
+        }
+    }
 }
 
 pub fn normalise(name: &str) -> String {
@@ -1107,6 +1114,23 @@ http://s/n2
         assert_eq!(hd, ["bbc1.uk~2", "bbc1.uk~2~2"]);
         let items: Vec<Item> = chans.iter().map(Channel::to_item).collect();
         assert_eq!(items.iter().map(|i| &i.id).collect::<HashSet<_>>().len(), items.len());
+    }
+
+    #[test]
+    fn thousands_of_channels_sharing_an_id_are_numbered_quickly() {
+        let mut m3u = String::from("#EXTM3U\n");
+        for i in 0..8000 {
+            m3u.push_str(&format!("#EXTINF:-1 tvg-id=\"none\",Channel {i}\nhttp://s/{i}\n"));
+        }
+        let started = std::time::Instant::now();
+        let (chans, total) = parse_m3u(&m3u, None, usize::MAX);
+        let took = started.elapsed();
+        assert_eq!(total, 8000);
+        assert_eq!(chans[0].id, "none");
+        for (i, c) in chans.iter().enumerate().skip(1) {
+            assert_eq!(c.id, format!("none~{}", i + 1));
+        }
+        assert!(took < std::time::Duration::from_secs(2), "{took:?}");
     }
 
     #[test]
