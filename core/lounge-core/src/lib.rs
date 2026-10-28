@@ -876,7 +876,7 @@ impl Core {
             if let Some(plugin) = self.inner.opened_plugin.lock().take() {
                 self.inner.plugins.refresh_soon(&plugin);
             }
-            self.enqueue(worker::Job::Rebuild);
+            self.enqueue(worker::Job::Tick);
         }
     }
 

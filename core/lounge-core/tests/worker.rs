@@ -1,7 +1,8 @@
 //! The worker outlives a job that panics: a listener that panics on one snapshot gets the next.
 
 use lounge_core::{
-    AppRecord, Core, CoreConfig, DeviceTier, HomeSnapshot, LayoutCommand, Platform, PlatformError, PlaybackStatus, SessionRecord, SnapshotListener,
+    AppRecord, Core, CoreConfig, DeviceTier, HomeSnapshot, LayoutCommand, Platform, PlatformError, PlaybackStatus, ProgramKind, ProgramRecord,
+    SessionRecord, SnapshotListener, WatchNextType,
 };
 use parking_lot::Mutex;
 use std::path::Path;
@@ -357,4 +358,58 @@ fn a_listener_may_add_another_from_its_first_snapshot() {
 
     core.ingest_apps(vec![app("one.app")]);
     wait_for("the added listener's next snapshot", || added.0.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "allapps")));
+}
+
+/// A channel or a programme on it, as the TV provider reports them.
+fn on_channel_five(id: &str, kind: ProgramKind, start_ms: Option<i64>, end_ms: Option<i64>) -> ProgramRecord {
+    ProgramRecord {
+        id: id.into(),
+        kind,
+        package: "tv.tuner".into(),
+        title: id.into(),
+        subtitle: None,
+        season: None,
+        episode: None,
+        watch_next_type: WatchNextType::Unknown,
+        position_ms: None,
+        duration_ms: None,
+        engaged_ms: None,
+        poster_path: None,
+        poster_is_portrait: false,
+        thumbnail_path: None,
+        logo_path: None,
+        intent_uri: Some("content://tv/channel/5".into()),
+        channel_id: Some(5),
+        channel_name: Some("Five".into()),
+        channel_number: Some("5".into()),
+        input_id: None,
+        start_ms,
+        end_ms,
+        weight: 0,
+    }
+}
+
+#[test]
+fn the_clock_alone_does_not_rewrite_the_stored_home() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = Core::open(config(dir.path()), Arc::new(Quiet)).unwrap();
+    let latest = Arc::new(Latest::default());
+    core.add_listener(latest.clone());
+    // How far the news has got moves its Live now tile on at every rebuild.
+    let now = now_ms();
+    core.ingest_programs(vec![
+        on_channel_five("five", ProgramKind::Channel, None, None),
+        on_channel_five("news", ProgramKind::Schedule, Some(now - 1_800_000), Some(now + 1_800_000)),
+    ]);
+    wait_for("Live now", || latest.0.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "live")));
+    let published = || latest.0.lock().as_ref().map_or(0, |s| s.revision);
+    let written = stored_revision(dir.path());
+    assert_eq!(written as u64, published());
+
+    for _ in 0..2 {
+        let before = published();
+        core.set_screen_state(true);
+        wait_for("the clock's rebuild", || published() > before);
+    }
+    assert_eq!(stored_revision(dir.path()), written);
 }

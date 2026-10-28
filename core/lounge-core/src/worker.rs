@@ -45,6 +45,8 @@ pub(crate) enum Job {
     UpdateNotice(Option<String>),
     UtcOffset(i32),
     Rebuild,
+    /// Rebuild for the clock alone, as when the screen comes back on.
+    Tick,
     /// Delete prepared pictures and downloads nothing uses any more.
     Housekeeping,
 }
@@ -101,6 +103,9 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                 }
                 // Nothing arrived: the clock moved on, so what the screen says may have too.
                 let mut dirty = pending.is_empty() && screen_on;
+                // The stored snapshot is only the first frame after a restart, so what the clock
+                // alone changed is published but not written.
+                let persist = pending.iter().any(|job| !matches!(job, Job::Tick));
                 for job in pending {
                     // A job that panics is lost on its own; whatever it changed is still published.
                     let finished = crate::guarded("a worker job", || match job {
@@ -172,7 +177,7 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                             utc_offset = m;
                             dirty = true;
                         }
-                        Job::Rebuild => dirty = true,
+                        Job::Rebuild | Job::Tick => dirty = true,
                         Job::Housekeeping => housekeeping(&inner),
                     });
                     if finished.is_none() {
@@ -181,7 +186,7 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                 }
                 if dirty {
                     // A rebuild that panics waits for the next tick rather than retrying at once.
-                    next_change = crate::guarded("rebuilding the home", || rebuild(&inner, utc_offset)).flatten();
+                    next_change = crate::guarded("rebuilding the home", || rebuild(&inner, utc_offset, persist)).flatten();
                 }
             }
             tracing::info!("worker thread exiting");
@@ -1184,8 +1189,9 @@ fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::
     Ok(())
 }
 
-/// Build and publish the snapshot. Returns when what is airing next changes, if anything does.
-fn rebuild(inner: &Inner, utc_offset_minutes: i32) -> Option<i64> {
+/// Build and publish the snapshot, and store it when `persist`. Returns when what is airing next
+/// changes, if anything does.
+fn rebuild(inner: &Inner, utc_offset_minutes: i32, persist: bool) -> Option<i64> {
     let started = std::time::Instant::now();
     let (snapshot, next_change) = {
         let mut state = inner.state.lock();
@@ -1211,7 +1217,9 @@ fn rebuild(inner: &Inner, utc_offset_minutes: i32) -> Option<i64> {
     }
     match serde_json::to_string(&snapshot) {
         Ok(json) => {
-            if let Err(e) = inner.state.lock().store.save_snapshot(snapshot.revision, &json) {
+            if persist
+                && let Err(e) = inner.state.lock().store.save_snapshot(snapshot.revision, &json)
+            {
                 tracing::warn!("persist snapshot: {e}");
             }
             *inner.snapshot_json.lock() = json;
