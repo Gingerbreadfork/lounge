@@ -36,6 +36,7 @@ impl sdk::Plugin for YouTube {
                 },
                 SettingSpec { key: "per_source".into(), label: "Videos per channel".into(), kind: SettingKind::Number, required: false, help: None, default: Some("4".into()) },
                 SettingSpec { key: "days".into(), label: "Only the last … days".into(), kind: SettingKind::Number, required: false, help: Some("0 shows the feed's newest videos whatever their age.".into()), default: Some("30".into()) },
+                SettingSpec { key: "shorts".into(), label: "Include Shorts".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
             ],
             homepage: None,
         }
@@ -50,13 +51,14 @@ impl sdk::Plugin for YouTube {
         let per_source = number_setting("per_source", 4).clamp(1, 15) as usize;
         let days = number_setting("days", 30).max(0);
         let since = if days == 0 { 0 } else { ctx.now_ms - days * 86_400_000 };
+        let shorts = host::setting("shorts").is_some_and(|v| v == "true");
         let mut videos = Vec::new();
         let mut failures = Vec::new();
         for source in sources.iter().take(MAX_FEEDS) {
             match host::get_text(&source.feed_url()) {
                 Ok(xml) => {
                     let mut parsed = parse_feed(&xml);
-                    parsed.retain(|v| v.published_ms >= since);
+                    parsed.retain(|v| v.published_ms >= since && (shorts || !v.short));
                     parsed.truncate(per_source);
                     videos.extend(parsed);
                 }
@@ -198,6 +200,8 @@ pub struct Video {
     pub title: String,
     pub channel: String,
     pub published_ms: i64,
+    /// A vertical Short rather than a video.
+    pub short: bool,
 }
 
 /// Videos from YouTube's Atom feed, in feed order (newest first).
@@ -214,7 +218,7 @@ pub fn parse_feed(xml: &str) -> Vec<Video> {
             Ok(Event::Start(e)) => {
                 let name = e.name().as_ref().to_string();
                 if name == "entry" {
-                    current = Some(Video { id: String::new(), title: String::new(), channel: feed_author.clone(), published_ms: 0 });
+                    current = Some(Video { id: String::new(), title: String::new(), channel: feed_author.clone(), published_ms: 0, short: false });
                 }
                 path.push(name);
                 text.clear();
@@ -224,6 +228,13 @@ pub fn parse_feed(xml: &str) -> Vec<Video> {
                 text.push_str(&quick_xml::escape::unescape(raw.as_ref()).map(|c| c.into_owned()).unwrap_or_else(|_| raw.into_owned()));
             }
             Ok(Event::GeneralRef(r)) => text.push_str(&entity(&r)),
+            // An entry's own link goes to /shorts/ when it is a Short.
+            Ok(Event::Empty(e)) if e.name().as_ref() == "link" && path.last().is_some_and(|p| p == "entry") => {
+                let href = e.try_get_attribute("href").ok().flatten().map(|a| a.value.into_owned()).unwrap_or_default();
+                if let Some(v) = current.as_mut() {
+                    v.short |= href.contains("/shorts/");
+                }
+            }
             Ok(Event::End(_)) => {
                 let value = text.trim().to_string();
                 text.clear();
@@ -290,7 +301,14 @@ mod tests {
   <media:group><media:title>The NEW Tesla Roadster: My Honest Reaction</media:title><media:thumbnail url="https://i4.ytimg.com/vi/scwlR0QHGOk/hqdefault.jpg" width="480" height="360"/></media:group>
  </entry>
  <entry>
+  <yt:videoId>sh0rtsVid01</yt:videoId>
+  <title>One minute on the new phone</title>
+  <link rel="alternate" href="https://www.youtube.com/shorts/sh0rtsVid01"/>
+  <published>2026-10-12T10:00:00+00:00</published>
+ </entry>
+ <entry>
   <yt:videoId>abc123DEF45</yt:videoId>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=abc123DEF45"/>
   <title>Second &amp; last, it&#8217;s here</title>
   <author><name>Marques Brownlee</name></author>
   <published>2026-10-10T10:00:00+00:00</published>
@@ -300,12 +318,13 @@ mod tests {
     #[test]
     fn feed_entries_are_read_in_order() {
         let v = parse_feed(FEED);
-        assert_eq!(v.len(), 2);
+        assert_eq!(v.len(), 3);
         assert_eq!(v[0].id, "scwlR0QHGOk");
         assert_eq!(v[0].title, "The NEW Tesla Roadster: My Honest Reaction");
         assert_eq!(v[0].channel, "Marques Brownlee");
         assert_eq!(v[0].published_ms, 1792202963000);
-        assert_eq!(v[1].title, "Second & last, it\u{2019}s here");
+        assert_eq!(v.iter().map(|v| v.short).collect::<Vec<_>>(), [false, true, false]);
+        assert_eq!(v[2].title, "Second & last, it\u{2019}s here");
     }
 
     #[test]
