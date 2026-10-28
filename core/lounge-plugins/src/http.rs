@@ -8,7 +8,7 @@ use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use ureq::config::Config;
 use ureq::http::Uri;
 use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
@@ -58,8 +58,10 @@ impl Fetcher {
 
     /// Perform `req` on behalf of a plugin; `allowed` decides per host, including for redirects.
     /// The plugin's headers go only to the origin it addressed: a redirect elsewhere drops them.
+    /// The timeout covers the whole fetch, redirects included.
     pub fn fetch(&self, req: &HttpRequest, allowed: &dyn Fn(&str) -> bool) -> Result<HttpResponse> {
         let timeout = if req.timeout_ms == 0 { DEFAULT_TIMEOUT } else { Duration::from_millis(req.timeout_ms as u64).min(DEFAULT_TIMEOUT) };
+        let deadline = Instant::now() + timeout;
         let mut url = req.url.clone();
         let mut method = req.method.to_ascii_uppercase();
         let mut body = req.body.clone();
@@ -69,6 +71,7 @@ impl Fetcher {
             if !allowed(&host) {
                 return Err(PluginError::Denied(format!("host {host} is not in the plugin's allow list")));
             }
+            let timeout = time_left(deadline, &url)?;
             let (address, basic) = credentials_of(&url);
             // A header the plugin set itself wins over a name and password in the URL.
             let basic = basic.filter(|_| !headers.keys().any(|k| k.eq_ignore_ascii_case("authorization")));
@@ -151,20 +154,21 @@ impl Fetcher {
     }
 
     /// Download artwork to `<dir>/<sha256(url)>.img`, reusing a file already there; `allowed`
-    /// decides per host, including for redirects.
+    /// decides per host, including for redirects. The timeout covers the whole download.
     pub fn download(&self, url: &str, dir: &Path, max: usize, timeout: Duration, allowed: &dyn Fn(&str) -> bool) -> Result<Download> {
         if let Some(path) = Self::cached(url, dir) {
             return Ok(Download { path, fetched: 0 });
         }
         std::fs::create_dir_all(dir)?;
         let path = cache_path(url, dir);
-        let timeout = timeout.min(DEFAULT_TIMEOUT);
+        let deadline = Instant::now() + timeout.min(DEFAULT_TIMEOUT);
         let mut url = url.to_string();
         for _hop in 0..5 {
             let host = host_of(&url).ok_or_else(|| PluginError::Fetch(format!("bad url {}", redact(&url))))?;
             if !allowed(&host) {
                 return Err(PluginError::Denied(format!("host {host} is not in the plugin's allow list")));
             }
+            let timeout = time_left(deadline, &url)?;
             let (address, basic) = credentials_of(&url);
             let mut request = self.agent.get(&address);
             if let Some(basic) = &basic {
@@ -227,6 +231,12 @@ fn cache_path(url: &str, dir: &Path) -> PathBuf {
 
 fn fetch_error(e: ureq::Error, url: &str) -> PluginError {
     PluginError::Fetch(format!("{e} ({})", redact(url)))
+}
+
+/// The time left before `deadline`, or the timeout error once it has passed.
+fn time_left(deadline: Instant, url: &str) -> Result<Duration> {
+    let left = deadline.saturating_duration_since(Instant::now());
+    if left.is_zero() { Err(fetch_error(ureq::Error::Timeout(ureq::Timeout::Global), url)) } else { Ok(left) }
 }
 
 /// A URL fit for a log: no user name, password or query string.
@@ -617,5 +627,36 @@ mod tests {
         };
         assert!(err.to_string().contains("body is larger than"), "{err}");
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn the_timeout_covers_every_redirect() {
+        // A server that is slow to answer and always redirects back to itself.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for mut s in listener.incoming().flatten() {
+                std::thread::spawn(move || {
+                    let mut buf = [0u8; 2048];
+                    let _ = s.read(&mut buf);
+                    std::thread::sleep(Duration::from_millis(500));
+                    let _ = std::io::Write::write_all(&mut s, b"HTTP/1.1 302 Found\r\nlocation: /again\r\ncontent-length: 0\r\nconnection: close\r\n\r\n");
+                });
+            }
+        });
+        let fetcher = Fetcher::new();
+        let url = format!("http://127.0.0.1:{port}/start");
+        let timeout = Duration::from_millis(800);
+
+        let started = Instant::now();
+        let err = fetcher.fetch(&HttpRequest { timeout_ms: timeout.as_millis() as u32, ..HttpRequest::get(url.clone()) }, &|_| true).unwrap_err();
+        assert!(err.to_string().contains("timeout"), "{err}");
+        assert!(started.elapsed() < timeout * 2, "{:?}", started.elapsed());
+
+        let dir = tempfile::tempdir().unwrap();
+        let started = Instant::now();
+        let Err(err) = fetcher.download(&url, dir.path(), 1024, timeout, &|_| true) else { panic!("the download finished") };
+        assert!(err.to_string().contains("timeout"), "{err}");
+        assert!(started.elapsed() < timeout * 2, "{:?}", started.elapsed());
     }
 }
