@@ -10,8 +10,11 @@ pub struct Trakt;
 const API: &str = "https://api.trakt.tv";
 const TOKEN_KEY: &str = "token";
 const DEVICE_KEY: &str = "device";
-/// Shows whose next episode is looked up, one fetch each.
+/// Most shows in Up next.
 const UP_NEXT_SHOWS: usize = 12;
+/// Shows looked at to fill Up next, so ones already caught up on do not leave it short; well
+/// inside the host's 64 fetches a refresh.
+const UP_NEXT_LOOKUPS: usize = 36;
 const WATCHLIST_ITEMS: usize = 24;
 const WEEK_MS: i64 = 7 * 86_400_000;
 const HOUR_MS: i64 = 3_600_000;
@@ -78,7 +81,10 @@ impl sdk::Plugin for Trakt {
             let watched: Vec<Watched> = client.get_json("/sync/watched/shows?extended=noseasons,images")?;
             let mut shows: Vec<&Watched> = watched.iter().filter(|w| w.show.ids.trakt > 0).collect();
             shows.sort_by_key(|w| std::cmp::Reverse(w.last_watched_at.as_deref().and_then(parse_iso8601).unwrap_or(0)));
-            for (i, w) in shows.iter().take(UP_NEXT_SHOWS).enumerate() {
+            for (i, w) in shows.iter().take(UP_NEXT_LOOKUPS).enumerate() {
+                if up_next >= UP_NEXT_SHOWS {
+                    break;
+                }
                 let progress: Progress = match client.get_json(&format!("/shows/{}/progress/watched?hidden=false&specials=false&count_specials=false", w.show.ids.trakt)) {
                     Ok(p) => p,
                     Err(e) if e.contains("budget") => break,
@@ -88,7 +94,7 @@ impl sdk::Plugin for Trakt {
                     }
                 };
                 let next = progress.next_episode.as_ref().filter(|e| !paused_episodes.contains(&e.ids.trakt));
-                if let Some(item) = up_next_item(w, next, (UP_NEXT_SHOWS - i) as i32, &open) {
+                if let Some(item) = up_next_item(w, next, (UP_NEXT_LOOKUPS - i) as i32, &open) {
                     items.push(item);
                     up_next += 1;
                 }
