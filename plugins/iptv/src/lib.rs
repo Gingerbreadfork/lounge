@@ -61,7 +61,10 @@ impl sdk::Plugin for Iptv {
         match host::secret("epg_url") {
             Some(_) if budget == 0 => sdk::warn!("the channels fill all {} places the TV keeps, so the guide is left out", sdk::MAX_ITEMS),
             Some(epg_url) => match guide(&epg_url, &channels, ctx, budget) {
-                Ok(schedule) => items.extend(schedule),
+                Ok(schedule) => {
+                    sdk::guide_shown(ctx);
+                    items.extend(schedule);
+                }
                 Err(e) if sdk::last_guide_still_showing(ctx) => {
                     sdk::warn!("guide unavailable: {e}");
                     return Err(sdk::GUIDE_KEPT.into());

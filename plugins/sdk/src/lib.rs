@@ -372,10 +372,22 @@ pub fn server_address(value: &str) -> String {
     if address.contains("://") { address.to_string() } else { format!("http://{address}") }
 }
 
-/// Whether the guide from the last good refresh still reaches into the window. A refresh whose
-/// guide failed should then fail as well, so the TV keeps that guide instead of showing none.
+const GUIDE_SHOWN_KEY: &str = "sdk:guide_shown";
+
+/// Notes that this refresh published a guide, which [`last_guide_still_showing`] looks for.
+pub fn guide_shown(ctx: &RefreshContext) {
+    host::kv_set(GUIDE_SHOWN_KEY, ctx.now_ms.to_string().as_bytes());
+}
+
+/// Whether a guide an earlier refresh published still reaches into the window. A refresh whose
+/// guide failed should then fail as well, so the TV keeps that guide instead of showing none; a
+/// guide that never came through leaves the channels to show without one.
 pub fn last_guide_still_showing(ctx: &RefreshContext) -> bool {
-    ctx.since_ms.is_some_and(|t| ctx.now_ms - t < i64::from(ctx.window_hours.max(1)) * 3_600_000)
+    guide_reaches(host::kv_get_string(GUIDE_SHOWN_KEY).and_then(|v| v.parse().ok()), ctx)
+}
+
+fn guide_reaches(shown_ms: Option<i64>, ctx: &RefreshContext) -> bool {
+    shown_ms.is_some_and(|t| ctx.now_ms - t < i64::from(ctx.window_hours.max(1)) * 3_600_000)
 }
 
 /// Whether something added at `added_ms` arrived within the past week, the span a New badge
@@ -771,10 +783,10 @@ mod helper_tests {
 
     #[test]
     fn the_last_guide_counts_while_it_reaches_into_the_window() {
-        let ctx = |since| RefreshContext { now_ms: 100 * 3_600_000, since_ms: since, window_hours: 12, ..Default::default() };
-        assert!(last_guide_still_showing(&ctx(Some(95 * 3_600_000))));
-        assert!(!last_guide_still_showing(&ctx(Some(88 * 3_600_000))));
-        assert!(!last_guide_still_showing(&ctx(None)));
+        let ctx = RefreshContext { now_ms: 100 * 3_600_000, window_hours: 12, ..Default::default() };
+        assert!(guide_reaches(Some(95 * 3_600_000), &ctx));
+        assert!(!guide_reaches(Some(88 * 3_600_000), &ctx));
+        assert!(!guide_reaches(None, &ctx));
     }
 
     #[test]

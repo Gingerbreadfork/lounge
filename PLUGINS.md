@@ -243,9 +243,9 @@ cropped. Give both `thumbnail` and `poster` when you have them.
 no `action`: selecting it plays its channel. One with a `start_ms` and no `end_ms` is on from its
 start until something else is known, which is what a live stream is; its `subtitle` joins the
 Stage's lines while it is on. The guide window the host wants is in `RefreshContext.window_hours`.
-A refresh replaces everything the plugin published before, so when only the guide fails, return
-`sdk::GUIDE_KEPT` as the error while `sdk::last_guide_still_showing(ctx)` holds: the TV keeps the
-last guide and tries again in 5 minutes.
+A refresh replaces everything the plugin published before, so note each guide you publish with
+`sdk::guide_shown(ctx)`, and when only the guide fails, return `sdk::GUIDE_KEPT` as the error while
+`sdk::last_guide_still_showing(ctx)` holds: the TV keeps the last guide and tries again in 5 minutes.
 
 ## Actions
 

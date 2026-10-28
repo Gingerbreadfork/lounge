@@ -72,7 +72,12 @@ impl sdk::Plugin for Tvheadend {
         let tag = s.tag.as_deref().map(|t| format!("&channelTag={}", url_encode(t))).unwrap_or_default();
         'pages: for page in 0..MAX_PAGES {
             let grid: Grid<Event> = match s.get_json(&format!("/api/epg/events/grid?start={}&limit={PAGE}&sort=start&dir=ASC{tag}", page * PAGE)) {
-                Ok(grid) => grid,
+                Ok(grid) => {
+                    if page == 0 {
+                        sdk::guide_shown(ctx);
+                    }
+                    grid
+                }
                 Err(e) => {
                     sdk::warn!("guide unavailable: {e}");
                     if page == 0 && sdk::last_guide_still_showing(ctx) {
