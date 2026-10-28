@@ -149,6 +149,12 @@ impl sdk::Plugin for Kodi {
     /// Tells Kodi to play the item, then opens Kodi here or leaves it where it is.
     fn resolve(action: &str) -> Result<Action, String> {
         let kodi = Server::connect()?;
+        let front = host::setting("front").map(|v| v != "false").unwrap_or(true);
+        // Kodi's web server runs only while Kodi does, and Android stops it in the background,
+        // so a Kodi on this TV that does not answer is opened instead.
+        if front && kodi.on_this_tv() && !kodi.answers() {
+            return Ok(Action { launch: Some(app()), ..Default::default() });
+        }
         let (what, id) = action.split_once(':').ok_or_else(|| format!("unknown action {action}"))?;
         let id: u64 = id.parse().map_err(|_| format!("unknown action {action}"))?;
         let item = match what {
@@ -163,12 +169,19 @@ impl sdk::Plugin for Kodi {
         };
         let resume = what != "channel";
         kodi.call::<Value>("Player.Open", json!({"item": item, "options": {"resume": resume}})).map_err(|e| format!("Kodi would not play it: {e}"))?;
-        let front = host::setting("front").map(|v| v != "false").unwrap_or(true);
         Ok(if front { Action { launch: Some(app()), ..Default::default() } } else { Action::default() })
     }
 }
 
 sdk::export_plugin!(Kodi);
+
+/// `base` with its host swapped for localhost, the way to Kodi on this TV.
+fn on_localhost(base: &str) -> String {
+    let (scheme, rest) = base.split_once("://").unwrap_or(("http", base));
+    let (authority, path) = rest.split_at(rest.find('/').unwrap_or(rest.len()));
+    let port = authority.rsplit_once(':').map(|(_, p)| p).filter(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+    format!("{scheme}://localhost{}{path}", port.map(|p| format!(":{p}")).unwrap_or_default())
+}
 
 fn app() -> String {
     host::setting("app").map(|a| a.trim().to_string()).filter(|a| !a.is_empty()).unwrap_or_else(|| DEFAULT_APP.into())
@@ -365,15 +378,36 @@ impl Server {
         Server { base: base.to_string(), picture_base, auth }
     }
 
-    fn call<T: serde::de::DeserializeOwned>(&self, method: &str, params: Value) -> Result<T, String> {
+    fn request(&self, method: &str, params: Value) -> HttpRequest {
         let body = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).to_string();
         let mut req = HttpRequest { method: "POST".into(), url: format!("{}/jsonrpc", self.base), headers: Default::default(), body: Some(body), timeout_ms: 0 };
         req.headers.insert("Content-Type".into(), "application/json".into());
         if let Some(a) = &self.auth {
             req.headers.insert("Authorization".into(), a.clone());
         }
-        let r = host::fetch(&req).map_err(|e| {
-            if e.contains("budget") { e } else { format!("Kodi is not answering at {}: is it running, with remote control over HTTP allowed? ({e})", redact_url(&self.base)) }
+        req
+    }
+
+    /// Whether anything answers at Kodi's address at all.
+    fn answers(&self) -> bool {
+        host::fetch(&self.request("JSONRPC.Ping", json!({}))).is_ok()
+    }
+
+    fn on_this_tv(&self) -> bool {
+        lounge_plugin_sdk::host_in_setting(&self.base).is_some_and(|h| h == "localhost" || h == "::1" || h.starts_with("127."))
+    }
+
+    fn call<T: serde::de::DeserializeOwned>(&self, method: &str, params: Value) -> Result<T, String> {
+        let r = host::fetch(&self.request(method, params)).map_err(|e| {
+            if e.contains("budget") {
+                return e;
+            }
+            sdk::warn!("{e}");
+            if e.contains("leads to this device itself") {
+                format!("{} is this TV's own address, which a plugin may not use. For Kodi on this TV, set the address to {}.", redact_url(&self.base), on_localhost(&self.base))
+            } else {
+                format!("Kodi didn't answer at {}. Check that it is running and allows remote control over HTTP, then try again.", redact_url(&self.base))
+            }
         })?;
         match r.status {
             401 => return Err("Kodi refused the username or password".into()),
@@ -570,6 +604,14 @@ fn take_turns<T>(a: impl IntoIterator<Item = T>, b: impl IntoIterator<Item = T>)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn kodi_on_this_tv_is_reached_through_localhost() {
+        assert_eq!(on_localhost("http://192.168.0.30:8080"), "http://localhost:8080");
+        assert_eq!(on_localhost("https://tv.home/kodi"), "https://localhost/kodi");
+        assert!(Server::new("http://127.0.0.1:8080", None, "").on_this_tv());
+        assert!(!Server::new("http://192.168.0.30:8080", None, "").on_this_tv());
+    }
 
     #[test]
     fn search_results_take_turns() {
