@@ -85,7 +85,8 @@ fun NowPlayingCard(
     val leaving = !visibleState.targetState
     val playing = np.status == PlaybackStatus.PLAYING
 
-    // Position advances locally while playing; the core only hears about state changes.
+    // Position advances locally while playing; the core only hears about state changes. Only the
+    // bar's drawing reads the clock, so the card does not recompose as it ticks.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(playing, np.updatedMs) {
         while (playing) {
@@ -93,8 +94,13 @@ fun NowPlayingCard(
             delay(1000)
         }
     }
-    val position = np.positionMs?.let { p -> if (playing) p + (now - np.updatedMs).coerceAtLeast(0) else p }
-    val progress = if (position != null && np.durationMs != null && np.durationMs!! > 0) (position.toFloat() / np.durationMs!!).coerceIn(0f, 1f) else null
+    val position = np.positionMs
+    val duration = np.durationMs?.takeIf { it > 0 }
+    val progress: (() -> Float)? = if (position != null && duration != null) {
+        { (if (playing) position + (now - np.updatedMs).coerceAtLeast(0) else position).toFloat() / duration }
+    } else {
+        null
+    }
 
     Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(visibleState, enter = fadeIn(tween(200)), exit = fadeOut(tween(180))) {

@@ -169,16 +169,24 @@ fun ProgressBar(
     modifier: Modifier = Modifier,
     thickness: Dp = 4.dp,
     brightness: () -> Float = { 1f },
+) = ProgressBar({ progress }, modifier, thickness, brightness)
+
+/** A [ProgressBar] whose [progress] is read while drawing, so a moving bar redraws without recomposing. */
+@Composable
+fun ProgressBar(
+    progress: () -> Float,
+    modifier: Modifier = Modifier,
+    thickness: Dp = 4.dp,
+    brightness: () -> Float = { 1f },
 ) {
     val colors = LoungeTheme.colors
-    val p = progress.coerceIn(0f, 1f)
     val track = colors.limelight.copy(alpha = 0.22f)
     Box(
         modifier.height(thickness).drawBehind {
             val r = CornerRadius(size.height / 2f)
             val b = brightness().coerceIn(0f, 1f)
             drawRoundRect(track.copy(alpha = track.alpha * b), cornerRadius = r)
-            val w = size.width * p
+            val w = size.width * progress().coerceIn(0f, 1f)
             if (w > 0f) {
                 val fill = Color(colors.houselight.red * b, colors.houselight.green * b, colors.houselight.blue * b)
                 drawRoundRect(fill, size = Size(w, size.height), cornerRadius = r)
