@@ -9,6 +9,7 @@ pub use auth::{PairingInfo, TokenStore};
 pub use server::Companion;
 
 use serde::{Deserialize, Serialize};
+use std::net::{IpAddr, Ipv4Addr};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -85,11 +86,62 @@ pub enum CompanionError {
     Other(String),
 }
 
-/// The device's LAN address, found by asking the OS which interface would route outwards.
-pub fn local_ip() -> Option<std::net::IpAddr> {
+/// The device's LAN address: a private IPv4 address on an interface that is up, so a network
+/// with no way to the internet still has one. When several qualify, or none does, the address
+/// the OS would route outwards from decides.
+pub fn local_ip() -> Option<IpAddr> {
+    pick_lan_ip(&private_ipv4s(), routed_ip)
+}
+
+fn pick_lan_ip(private: &[Ipv4Addr], routed: impl FnOnce() -> Option<IpAddr>) -> Option<IpAddr> {
+    match private {
+        [] => routed(),
+        [only] => Some(IpAddr::V4(*only)),
+        several => match routed() {
+            Some(IpAddr::V4(ip)) if several.contains(&ip) => Some(IpAddr::V4(ip)),
+            _ => Some(IpAddr::V4(several[0])),
+        },
+    }
+}
+
+/// The address the OS would send from towards the internet; none when there is no route there.
+fn routed_ip() -> Option<IpAddr> {
     let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
     socket.connect("8.8.8.8:80").ok()?;
     socket.local_addr().ok().map(|a| a.ip()).filter(|ip| !ip.is_loopback() && !ip.is_unspecified())
+}
+
+/// Private IPv4 addresses on interfaces that are up and running, loopback aside.
+#[cfg(unix)]
+fn private_ipv4s() -> Vec<Ipv4Addr> {
+    let mut found = Vec::new();
+    let mut list: *mut libc::ifaddrs = std::ptr::null_mut();
+    // The list stays valid until freeifaddrs, and each pointer is checked before it is read.
+    unsafe {
+        if libc::getifaddrs(&mut list) != 0 {
+            return found;
+        }
+        let mut node = list;
+        while let Some(ifa) = node.as_ref() {
+            let flags = ifa.ifa_flags as libc::c_int;
+            let live = flags & libc::IFF_UP != 0 && flags & libc::IFF_RUNNING != 0 && flags & libc::IFF_LOOPBACK == 0;
+            if live && !ifa.ifa_addr.is_null() && (*ifa.ifa_addr).sa_family as libc::c_int == libc::AF_INET {
+                let addr = &*(ifa.ifa_addr as *const libc::sockaddr_in);
+                let ip = Ipv4Addr::from(u32::from_be(addr.sin_addr.s_addr));
+                if ip.is_private() {
+                    found.push(ip);
+                }
+            }
+            node = ifa.ifa_next;
+        }
+        libc::freeifaddrs(list);
+    }
+    found
+}
+
+#[cfg(not(unix))]
+fn private_ipv4s() -> Vec<Ipv4Addr> {
+    Vec::new()
 }
 
 /// Render a QR code of `text` to a PNG file; black modules on the house's light.
@@ -115,4 +167,38 @@ pub fn qr_png(text: &str, out: &Path, module_px: u32) -> Result<(), CompanionErr
     }
     img.save_with_format(out, image::ImageFormat::Png).map_err(|e| CompanionError::Other(e.to_string()))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_private_address_needs_no_route_out() {
+        let lan = Ipv4Addr::new(192, 168, 1, 20);
+        let vpn = Ipv4Addr::new(10, 8, 0, 2);
+        let public = IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7));
+        assert_eq!(pick_lan_ip(&[lan], || None), Some(IpAddr::V4(lan)));
+        assert_eq!(pick_lan_ip(&[lan], || Some(public)), Some(IpAddr::V4(lan)));
+        assert_eq!(pick_lan_ip(&[lan, vpn], || Some(IpAddr::V4(vpn))), Some(IpAddr::V4(vpn)));
+        assert_eq!(pick_lan_ip(&[lan, vpn], || None), Some(IpAddr::V4(lan)));
+        assert_eq!(pick_lan_ip(&[], || Some(public)), Some(public));
+        assert_eq!(pick_lan_ip(&[], || None), None);
+    }
+
+    #[test]
+    fn this_machine_has_a_lan_address_when_it_has_a_private_one() {
+        let private = private_ipv4s();
+        if let Some(IpAddr::V4(routed)) = routed_ip()
+            && routed.is_private()
+        {
+            assert!(private.contains(&routed), "{routed} is missing from {private:?}");
+        }
+        if private.is_empty() {
+            eprintln!("skipped: no private IPv4 address on this machine");
+            return;
+        }
+        let ip = local_ip();
+        assert!(matches!(ip, Some(IpAddr::V4(v4)) if private.contains(&v4)), "{ip:?} is not one of {private:?}");
+    }
 }

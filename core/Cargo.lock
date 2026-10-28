@@ -1036,6 +1036,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
+ "libc",
  "mime_guess",
  "parking_lot",
  "qrcode",
