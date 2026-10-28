@@ -190,10 +190,7 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
     })();
     let (hash, decoded, palette, opaque, focal_y, glow) = match shared {
         Ok(v) => v,
-        Err(e) => {
-            let msg = e.to_string();
-            return styles.iter().map(|_| Err(ArtworkError::Resize(msg.clone()))).collect();
-        }
+        Err(e) => return styles.iter().map(|_| Err(again(&e))).collect(),
     };
     let (sw, sh) = decoded.dimensions();
     styles
@@ -232,9 +229,9 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
                         let rgb = image::DynamicImage::ImageRgba8(scaled).to_rgb8();
                         let file = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
                         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, 90);
-                        rgb.write_with_encoder(encoder)?;
+                        rgb.write_with_encoder(encoder).map_err(writing)?;
                     } else {
-                        scaled.save_with_format(&tmp, ImageFormat::Png)?;
+                        scaled.save_with_format(&tmp, ImageFormat::Png).map_err(writing)?;
                     }
                     std::fs::rename(&tmp, &out_path)?;
                     Ok(())
@@ -256,6 +253,23 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
             })
         })
         .collect()
+}
+
+/// The shared stage's error again, for one more style. An I/O error stays one, so the caller can
+/// tell a full disk or a missing folder from a picture that will not decode.
+fn again(e: &ArtworkError) -> ArtworkError {
+    match e {
+        ArtworkError::Io(io) => ArtworkError::Io(std::io::Error::new(io.kind(), io.to_string())),
+        other => ArtworkError::Resize(other.to_string()),
+    }
+}
+
+/// An encoder's I/O error while writing the output is the disk's, not the picture's.
+fn writing(e: image::ImageError) -> ArtworkError {
+    match e {
+        image::ImageError::IoError(io) => ArtworkError::Io(io),
+        other => ArtworkError::Image(other),
+    }
 }
 
 /// Decode with hard limits: a 4 MB file that unpacks to a 500 MB bitmap is refused before
@@ -743,6 +757,55 @@ mod tests {
         img.save(&src).unwrap();
         let err = prepare(&src, &dir.path().join("art"), Style::Landscape).unwrap_err();
         assert!(err.to_string().contains("too large"), "{err}");
+    }
+
+    #[test]
+    fn a_folder_that_cannot_be_made_is_an_io_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("banner.png");
+        synthetic(64, 36).save(&src).unwrap();
+        // A file where the output folder's parent should be.
+        let out = src.join("art");
+        let results = prepare_many(&src, &out, &[Style::AppBanner, Style::Icon]);
+        assert_eq!(results.len(), 2);
+        for r in results {
+            assert!(matches!(r, Err(ArtworkError::Io(_))), "{r:?}");
+        }
+    }
+
+    #[test]
+    fn a_missing_source_is_an_io_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = prepare(&dir.path().join("gone.png"), &dir.path().join("art"), Style::AppBanner).unwrap_err();
+        assert!(matches!(err, ArtworkError::Io(_)), "{err:?}");
+    }
+
+    #[test]
+    fn a_picture_that_will_not_decode_is_not_an_io_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("noise.png");
+        std::fs::write(&src, b"not a picture at all").unwrap();
+        let err = prepare(&src, &dir.path().join("art"), Style::AppBanner).unwrap_err();
+        assert!(!matches!(err, ArtworkError::Io(_)), "{err:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_output_that_cannot_be_written_is_an_io_error() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("logo.png");
+        RgbaImage::from_pixel(64, 64, Rgba([200, 40, 40, 128])).save(&src).unwrap();
+        let out = dir.path().join("art");
+        std::fs::create_dir(&out).unwrap();
+        std::fs::set_permissions(&out, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // Permissions do not hold back root.
+        if std::fs::write(out.join("probe"), b"").is_ok() {
+            return;
+        }
+        let err = prepare(&src, &out, Style::Logo).unwrap_err();
+        std::fs::set_permissions(&out, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(matches!(err, ArtworkError::Io(_)), "{err:?}");
     }
 
     #[test]
