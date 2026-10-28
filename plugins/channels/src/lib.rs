@@ -34,7 +34,10 @@ impl sdk::Plugin for Channels {
         let max_recordings = host::setting("recordings").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(30).clamp(1, 100);
         let mut numbers = HashSet::new();
         let mut channels: Vec<Channel> = lineup(&base)
-            .map_err(|e| format!("No Channels DVR at {}: {e}", sdk::redact_url(&base)))?
+            .map_err(|e| {
+                sdk::warn!("{e}");
+                format!("No Channels DVR answered at {}. Check the server and its address, then try again.", sdk::address(&base))
+            })?
             .into_iter()
             .filter(|c| !c.hidden && (c.favorite || !favorites_only) && !c.number().is_empty() && numbers.insert(c.number()))
             .collect();
