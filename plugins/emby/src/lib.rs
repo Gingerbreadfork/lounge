@@ -251,13 +251,9 @@ impl Session {
         format!("{}/emby/Items/{item_id}/Images/{kind}?{size}&quality=90&api_key={}", self.server, self.token)
     }
 
+    /// Opens the Emby app at its home, since the app has no link to an item.
     fn open(&self, item: &MediaItem) -> Action {
-        Action {
-            view: Some(format!("{}/web/index.html#!/item?id={}", self.server, item.id)),
-            fallback_launch: Some(APP_PACKAGE.into()),
-            title: Some(item.name.clone()),
-            ..Default::default()
-        }
+        Action { launch: Some(APP_PACKAGE.into()), title: Some(item.name.clone()), ..Default::default() }
     }
 
     fn resume_item(&self, it: &MediaItem) -> Item {
@@ -442,7 +438,8 @@ mod tests {
         assert_eq!(item.duration_ms, Some(1_800_000));
         assert!(item.thumbnail.unwrap().contains("/Items/e1/Images/Primary"));
         assert!(item.poster.unwrap().contains("/Items/s1/Images/Primary"));
-        assert_eq!(item.action.fallback_launch.as_deref(), Some(APP_PACKAGE));
+        assert_eq!(item.action.launch.as_deref(), Some(APP_PACKAGE));
+        assert_eq!(item.action.view, None);
         assert_eq!(url_encode("the bear & co"), "the+bear+%26+co");
     }
 }
