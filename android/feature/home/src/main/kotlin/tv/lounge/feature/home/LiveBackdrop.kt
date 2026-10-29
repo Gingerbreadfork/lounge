@@ -69,12 +69,12 @@ private const val SLOW_MS = 24f
 private const val HOPELESS_MS = 500f
 /** The steps a scene takes as it proves too heavy: a fraction of the screen and the interval between frames, the rate dropping before the picture shrinks. */
 private val LADDER = listOf(2 to 33L, 2 to 50L, 3 to 33L, 3 to 50L)
-private const val RENDERER = 5
+private const val RENDERER = 6
 
-// The room's light over a live scene, drawn at the screen's own size over the scaled-up scene:
-// the scene dimmed and held under a ceiling so the tiles stay the brightest things in the room,
-// the focused tile's spill and the playbill's light as the still field draws them, and one level
-// of blue noise a pixel against banding.
+// The room's light over a live scene, drawn at the scene's own size: the scene dimmed and held
+// under a ceiling so the tiles stay the brightest things in the room, the focused tile's spill and
+// the playbill's light as the still field draws them, and one level of blue noise a pixel against
+// banding. The compositor scales the result to the screen.
 private const val LIVE_FINISH_SKSL = """
 uniform shader scene;
 uniform shader blue;
@@ -184,9 +184,9 @@ fun LiveBackdrop(style: ShaderStyle, state: LightState, onUnusable: (String) -> 
 
 /**
  * Draws the scene on its own thread, thirty times a second, at a fraction of the window's size
- * in a layer of its own, then the lights and the dither over the scaled-up layer at full size.
- * When frames take too long the fraction gets smaller, and a scene too heavy even at a third is
- * given up on.
+ * in a layer of its own, then the lights and the dither over it at that same size into a surface
+ * buffer of that size, which the compositor scales to the window. When frames take too long the
+ * fraction gets smaller, and a scene too heavy even at a third is given up on.
  */
 @RequiresApi(33)
 private class BackdropRenderer(context: Context, private val style: ShaderStyle, private val colors: LoungeColors, private val onUnusable: (String) -> Unit) : SurfaceHolder.Callback {
@@ -203,6 +203,8 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
     private var loop: Job? = null
     private var viewWidth = 0
     private var viewHeight = 0
+    /** The divisor the surface's buffer was last sized for. */
+    private var sizedFor = 0
     private var step = runCatching { memory.getInt(memoryKey, 0) }.getOrDefault(0).coerceIn(0, LADDER.lastIndex)
     private val divisor: Int get() = LADDER[step].first
     private val frameMs: Long get() = LADDER[step].second
@@ -233,6 +235,8 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
                 viewHeight = height
                 Log.i(TAG, "backdrop: ${style.id} surface ${width}x${height}, drawing at 1/$divisor")
                 start()
+            } else {
+                Log.i(TAG, "backdrop: ${style.id} buffer ${width}x${height}")
             }
         }
     }
@@ -269,6 +273,16 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
         main.post { onUnusable(why) }
     }
 
+    /** Sizes the surface's buffer to the scene, so the compositor scales it and no full-size pass is drawn. */
+    private fun sizeSurface() {
+        val d = divisor
+        if (sizedFor == d) return
+        sizedFor = d
+        val w = ceil(viewWidth / d.toFloat()).toInt().coerceAtLeast(1)
+        val hgt = ceil(viewHeight / d.toFloat()).toInt().coerceAtLeast(1)
+        main.post { holder?.setFixedSize(w, hgt) }
+    }
+
     private fun start() {
         val compiled = compileScene(style, colors)
         program = compiled.getOrNull()
@@ -276,6 +290,7 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
             giveUp(compiled.exceptionOrNull()?.message ?: "the program does not compile")
             return
         }
+        sizeSurface()
         finish.setInputShader("blue", BitmapShader(BlueNoise.bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT))
         loop = scope.launch {
             var started = System.nanoTime()
@@ -330,6 +345,7 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
                         step++
                         slow = 0
                         memory.edit().putInt(memoryKey, step).apply()
+                        sizeSurface()
                         settleUntil = System.currentTimeMillis() + SETTLE_MS
                         reported = false
                     }
@@ -349,7 +365,7 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
     }
 
     /** Draws the scene at [sw] by [sh] into a buffer the GPU can sample, as a shader scaled to the window. */
-    private fun renderScene(p: Program, sw: Int, sh: Int, time: Float): Shader? {
+    private fun renderScene(p: Program, sw: Int, sh: Int, time: Float, up: Float): Shader? {
         if (sw != sceneWidth || sh != sceneHeight) {
             releaseSceneTarget()
             val reader = ImageReader.newInstance(sw, sh, PixelFormat.RGBA_8888, 3, HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
@@ -388,7 +404,7 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
         lastImage?.close()
         lastImage = shownImage
         shownImage = image
-        sceneMatrix.setScale(divisor.toFloat(), divisor.toFloat())
+        sceneMatrix.setScale(up, up)
         return BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
             filterMode = BitmapShader.FILTER_MODE_LINEAR
             setLocalMatrix(sceneMatrix)
@@ -424,19 +440,21 @@ private class BackdropRenderer(context: Context, private val style: ShaderStyle,
             val w = canvas.width
             val hgt = canvas.height
             val d = divisor.toFloat()
-            val sw = ceil(w / d).toInt().coerceAtLeast(1)
-            val sh = ceil(hgt / d).toInt().coerceAtLeast(1)
-            val scene = renderScene(p, sw, sh, time) ?: return
+            val sw = ceil(viewWidth / d).toInt().coerceAtLeast(1)
+            val sh = ceil(viewHeight / d).toInt().coerceAtLeast(1)
+            // The canvas is the scene's own size once the surface is resized, the window's until then.
+            val scene = renderScene(p, sw, sh, time, w.toFloat() / sw) ?: return
+            val k = w.toFloat() / viewWidth
             finish.setInputShader("scene", scene)
             finish.setFloatUniform("level", l.level)
-            finish.setFloatUniform("spill", l.spill.x, l.spill.y)
-            finish.setFloatUniform("spillR", l.spillRadius)
+            finish.setFloatUniform("spill", l.spill.x * k, l.spill.y * k)
+            finish.setFloatUniform("spillR", l.spillRadius * k)
             finish.setFloatUniform("spillAlpha", l.spillAlpha)
             finish.setColorUniform("spillColor", android.graphics.Color.valueOf(l.spillColor.red, l.spillColor.green, l.spillColor.blue, 1f))
             val bill = l.bill
             if (bill != null) {
-                finish.setFloatUniform("bill", bill.x, bill.y)
-                finish.setFloatUniform("billRadii", l.billRadii.x.coerceAtLeast(1f), l.billRadii.y.coerceAtLeast(1f))
+                finish.setFloatUniform("bill", bill.x * k, bill.y * k)
+                finish.setFloatUniform("billRadii", (l.billRadii.x * k).coerceAtLeast(1f), (l.billRadii.y * k).coerceAtLeast(1f))
                 finish.setFloatUniform("billAlpha", l.billAlpha)
                 finish.setColorUniform("billColor", android.graphics.Color.valueOf(l.billColor.red, l.billColor.green, l.billColor.blue, 1f))
             } else {
