@@ -361,6 +361,9 @@ fn decode(bytes: &[u8], want: impl FnOnce(u32, u32) -> (u32, u32)) -> Result<Dec
         let img = RgbaImage::from_raw(dw as u32, dh as u32, pixels).ok_or_else(|| ArtworkError::Resize("jpeg buffer size mismatch".into()))?;
         return Ok(Decoded { image: oriented(img, orientation), source, opaque: true });
     }
+    if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        return decode_webp(bytes, want, too_big);
+    }
     let mut probe = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?.into_decoder()?;
     let (w, h) = probe.dimensions();
     let orientation = probe.orientation().unwrap_or(Orientation::NoTransforms);
@@ -389,6 +392,72 @@ fn decode(bytes: &[u8], want: impl FnOnce(u32, u32) -> (u32, u32)) -> Result<Dec
     let image = oriented(decoded, orientation);
     let source = image.dimensions();
     Ok(Decoded { image, source, opaque: false })
+}
+
+/// A WebP through libwebp, scaled on the way out to the smallest size, in its own proportions,
+/// that still covers what `want` asks of its full size.
+fn decode_webp(bytes: &[u8], want: impl FnOnce(u32, u32) -> (u32, u32), too_big: impl Fn(u64, u64) -> bool) -> Result<Decoded> {
+    use libwebp_sys as webp;
+    let failed = |what: &str| ArtworkError::Resize(format!("webp: {what}"));
+    // SAFETY: libwebp reads the bytes it is given and writes only the structs and buffer handed to it,
+    // which are sized as it requires.
+    unsafe {
+        let mut features: webp::WebPBitstreamFeatures = std::mem::zeroed();
+        if webp::WebPGetFeatures(bytes.as_ptr(), bytes.len(), &mut features) != webp::VP8StatusCode::VP8_STATUS_OK {
+            return Err(failed("unreadable header"));
+        }
+        let (w, h) = (features.width as u32, features.height as u32);
+        if w == 0 || h == 0 || too_big(w as u64, h as u64) {
+            return Err(ArtworkError::Resize(format!("{w}×{h} is too large a picture")));
+        }
+        let orientation = webp_exif_chunk(bytes).and_then(Orientation::from_exif_chunk).unwrap_or(Orientation::NoTransforms);
+        let turned = transposes(orientation);
+        let source = if turned { (h, w) } else { (w, h) };
+        let (ww, wh) = want(source.0, source.1);
+        let (ww, wh) = if turned { (wh, ww) } else { (ww, wh) };
+        let s = (ww as f64 / w as f64).max(wh as f64 / h as f64);
+        let (dw, dh) = if s < 1.0 {
+            (((w as f64 * s).ceil() as u32).clamp(1, w), ((h as f64 * s).ceil() as u32).clamp(1, h))
+        } else {
+            (w, h)
+        };
+        let mut pixels = vec![0u8; dw as usize * dh as usize * 4];
+        let mut config: webp::WebPDecoderConfig = std::mem::zeroed();
+        if !webp::WebPInitDecoderConfig(&mut config) {
+            return Err(failed("library mismatch"));
+        }
+        config.output.colorspace = webp::WEBP_CSP_MODE::MODE_RGBA;
+        config.output.width = dw as i32;
+        config.output.height = dh as i32;
+        config.output.is_external_memory = 1;
+        config.output.u.RGBA = webp::WebPRGBABuffer { rgba: pixels.as_mut_ptr(), stride: dw as i32 * 4, size: pixels.len() };
+        if (dw, dh) != (w, h) {
+            config.options.use_scaling = 1;
+            config.options.scaled_width = dw as i32;
+            config.options.scaled_height = dh as i32;
+        }
+        let status = webp::WebPDecode(bytes.as_ptr(), bytes.len(), &mut config);
+        if status != webp::VP8StatusCode::VP8_STATUS_OK {
+            return Err(failed(&format!("{status:?}")));
+        }
+        let img = RgbaImage::from_raw(dw, dh, pixels).ok_or_else(|| failed("buffer size mismatch"))?;
+        Ok(Decoded { image: oriented(img, orientation), source, opaque: features.has_alpha == 0 })
+    }
+}
+
+/// A WebP's EXIF chunk from its RIFF container, any "Exif\0\0" tag stripped.
+fn webp_exif_chunk(bytes: &[u8]) -> Option<&[u8]> {
+    let mut i = 12;
+    while i + 8 <= bytes.len() {
+        let size = u32::from_le_bytes([bytes[i + 4], bytes[i + 5], bytes[i + 6], bytes[i + 7]]) as usize;
+        let payload = bytes.get(i + 8..i + 8 + size)?;
+        if &bytes[i..i + 4] == b"EXIF" {
+            return Some(payload.strip_prefix(b"Exif\0\0").unwrap_or(payload));
+        }
+        // Chunks are padded to an even size.
+        i += 8 + size + (size & 1);
+    }
+    None
 }
 
 /// The smallest fraction, in eighths up to a whole, at which a `w`×`h` JPEG still covers `want`.
@@ -1002,6 +1071,39 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_webp_comes_out_right_and_a_big_one_decodes_small() {
+        let dir = tempfile::tempdir().unwrap();
+        for (w, h) in [(320u32, 180u32), (2400, 1350)] {
+            let src = dir.path().join(format!("{w}.webp"));
+            let img = image::DynamicImage::ImageRgba8(synthetic(w, h)).to_rgb8();
+            img.write_with_encoder(image::codecs::webp::WebPEncoder::new_lossless(std::fs::File::create(&src).unwrap())).unwrap();
+            let p = prepare(&src, &dir.path().join("art"), Style::Landscape).unwrap();
+            assert_eq!((p.src_width, p.src_height), (w, h));
+            assert_eq!((p.width, p.height), Style::Landscape.target());
+            assert!(p.path.ends_with(".jpg"), "{}", p.path);
+            let out = image::open(&p.path).unwrap().to_rgba8();
+            let (left, right) = (out.get_pixel(40, 100), out.get_pixel(430, 100));
+            assert!(left[0] > 200 && left[2] < 100, "{w}: left {left:?}");
+            assert!(right[0] < 60, "{w}: right {right:?}");
+        }
+    }
+
+    #[test]
+    fn a_webp_s_exif_chunk_is_found_past_padded_chunks() {
+        let mut riff = b"RIFF\0\0\0\0WEBP".to_vec();
+        riff.extend_from_slice(b"VP8X");
+        riff.extend_from_slice(&3u32.to_le_bytes());
+        riff.extend_from_slice(&[1, 2, 3, 0]);
+        riff.extend_from_slice(b"EXIF");
+        let exif = exif_orientation(6);
+        let payload = [b"Exif\0\0".as_slice(), &exif].concat();
+        riff.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        riff.extend_from_slice(&payload);
+        assert_eq!(webp_exif_chunk(&riff), Some(exif.as_slice()));
+        assert_eq!(Orientation::from_exif_chunk(webp_exif_chunk(&riff).unwrap()), Some(Orientation::Rotate90));
+    }
+
     /// A minimal big-endian EXIF block holding only an orientation.
     fn exif_orientation(value: u8) -> Vec<u8> {
         vec![b'M', b'M', 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, value, 0, 0, 0, 0, 0, 0]
@@ -1032,6 +1134,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("portrait.jpg");
         sideways(&src, |f| image::codecs::jpeg::JpegEncoder::new_with_quality(f, 95));
+        assert_stood_up(&src, dir.path());
+    }
+
+    #[test]
+    fn a_sideways_webp_is_stood_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("portrait.webp");
+        sideways(&src, image::codecs::webp::WebPEncoder::new_lossless);
         assert_stood_up(&src, dir.path());
     }
 

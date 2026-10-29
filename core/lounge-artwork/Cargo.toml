@@ -11,10 +11,11 @@ thiserror.workspace = true
 blake3.workspace = true
 lounge-graph.workspace = true
 turbojpeg.workspace = true
+libwebp-sys.workspace = true
 
 [build-dependencies]
 cc = "1"
 
 [dev-dependencies]
-image = { workspace = true, features = ["jpeg"] }
+image = { workspace = true, features = ["jpeg", "webp"] }
 tempfile = "3"

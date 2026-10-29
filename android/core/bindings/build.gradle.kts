@@ -51,6 +51,8 @@ abstract class CargoNdkBuild : DefaultTask() {
             environment("ANDROID_NDK_HOME", ndk.get())
             // libjpeg-turbo is built from source by cmake, which needs the NDK's toolchain file.
             environment("CMAKE_TOOLCHAIN_FILE", "${ndk.get()}/build/cmake/android.toolchain.cmake")
+            // C compiled for 32-bit ARM gets NEON; the default for the target leaves it out.
+            environment("CFLAGS_armv7_linux_androideabi", "-mfpu=neon-vfpv4")
             commandLine(args)
         }
     }
