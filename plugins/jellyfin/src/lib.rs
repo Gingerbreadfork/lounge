@@ -249,9 +249,10 @@ impl Session {
         })
     }
 
-    /// Item pictures need no sign-in, so the token stays out of every picture's address.
+    /// Item pictures need no sign-in, so the token stays out of every picture's address. They are
+    /// asked for as JPEG: a poster kept as PNG is many times the bytes and far slower to decode.
     fn image(&self, item_id: &str, kind: &str, size: &str) -> String {
-        format!("{}/Items/{item_id}/Images/{kind}?{size}&quality=90", self.server)
+        format!("{}/Items/{item_id}/Images/{kind}?{size}&quality=90&format=jpg", self.server)
     }
 
     fn resume_item(&self, it: &MediaItem) -> Item {
@@ -426,7 +427,7 @@ mod tests {
         assert_eq!(item.season.as_deref(), Some("2"));
         assert_eq!(item.progress, Some(0.5));
         assert_eq!(item.duration_ms, Some(1_800_000));
-        assert_eq!(item.thumbnail.as_deref(), Some("http://jf:8096/Items/e1/Images/Primary?maxWidth=960&quality=90"));
+        assert_eq!(item.thumbnail.as_deref(), Some("http://jf:8096/Items/e1/Images/Primary?maxWidth=960&quality=90&format=jpg"));
         assert!(item.poster.unwrap().contains("/Items/s1/Images/Primary"));
         assert_eq!(
             item.action.view.as_deref(),

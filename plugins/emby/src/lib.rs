@@ -248,8 +248,10 @@ impl Session {
         })
     }
 
+    /// Pictures are asked for as JPEG: a poster kept as PNG is many times the bytes and far slower
+    /// to decode.
     fn image(&self, item_id: &str, kind: &str, size: &str) -> String {
-        format!("{}/emby/Items/{item_id}/Images/{kind}?{size}&quality=90&api_key={}", self.server, self.token)
+        format!("{}/emby/Items/{item_id}/Images/{kind}?{size}&quality=90&format=jpg&api_key={}", self.server, self.token)
     }
 
     /// Opens the Emby app at its home, since the app has no link to an item.
