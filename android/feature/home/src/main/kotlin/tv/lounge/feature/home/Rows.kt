@@ -56,6 +56,7 @@ import tv.lounge.design.LiveDot
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.glowRoom
+import tv.lounge.design.lightState
 
 /**
  * Keeps a list that is showing its start showing it when items arrive ahead of its first one.
@@ -85,7 +86,6 @@ internal fun KeepStart(state: LazyListState, firstKey: Any?) {
 fun ContentRow(
     row: CoreRow,
     isFocusedRow: () -> Boolean,
-    idle: Boolean,
     listState: LazyListState = rememberLazyListState(),
     requesterFor: (Int) -> FocusRequester,
     onTileFocused: (Tile, Int, Rect) -> Unit,
@@ -133,7 +133,7 @@ fun ContentRow(
         ) {
             Text(row.title, style = LoungeTheme.typography.headline, color = colors.limelight)
             when (row.badge) {
-                Badge.LIVE -> LiveDot(idle, Modifier.padding(top = 15.dp))
+                Badge.LIVE -> RowLiveDot(Modifier.padding(top = 15.dp))
                 Badge.CONTROLLER -> Icon(LoungeIcons.Controller, contentDescription = "Controller connected", tint = colors.dust, modifier = Modifier.padding(top = 5.dp).size(30.dp))
                 else -> Unit
             }
@@ -181,7 +181,6 @@ fun ContentRow(
                             kind = row.kind,
                             size = size,
                             lights = lights,
-                            idle = idle,
                             rowName = row.title,
                             focusRequester = requesterFor(index),
                             onFocused = { focused, bounds ->
@@ -206,3 +205,7 @@ fun ContentRow(
         Spacer(Modifier.height(Dimens.rowGap))
     }
 }
+
+/** A row header's live dot, reading idle on its own so the row around it never recomposes for it. */
+@Composable
+private fun RowLiveDot(modifier: Modifier) = LiveDot(LoungeTheme.lightState.idle, modifier)

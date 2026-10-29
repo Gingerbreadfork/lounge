@@ -492,7 +492,6 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                         ContentRow(
                             row = row,
                             isFocusedRow = { state.focusedRowId == row.id },
-                            idle = state.idle,
                             listState = state.rowListState(row.id),
                             requesterFor = { index -> state.rowRequester(row.id, index) },
                             onTileFocused = { tile, index, _ ->
@@ -611,7 +610,6 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
             CompositionLocalProvider(LocalPhoneText provides phoneText) {
                 SearchScreen(
                     snapshot = snapshot,
-                    idle = state.idle,
                     visibleState = visibleState,
                     pendingQuery = state.pendingSearch,
                     onQueryTaken = { state.pendingSearch = null },
@@ -947,7 +945,6 @@ private fun StageSlot(
         selected = remember(selected) { object : androidx.compose.runtime.IntState { override val intValue: Int get() = selected.value } },
         expanded = expanded,
         height = height,
-        idle = state.idle,
         indexed = snapshot.revision > 0uL,
         stripRequester = state::stripRequester,
         stripFocus = { state.stripFocus() },

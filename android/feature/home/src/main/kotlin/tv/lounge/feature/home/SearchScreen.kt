@@ -72,7 +72,6 @@ import tv.lounge.design.LoungeTheme
 @Composable
 fun SearchScreen(
     snapshot: HomeSnapshot,
-    idle: Boolean,
     visibleState: MutableTransitionState<Boolean>,
     onTileFocused: (Tile, Rect) -> Unit,
     onTileClick: (Tile) -> Unit,
@@ -219,7 +218,6 @@ fun SearchScreen(
                     ContentRow(
                         row = row,
                         isFocusedRow = { focusedRow == row.id },
-                        idle = idle,
                         requesterFor = { index -> requester(row.id, index) },
                         onTileFocused = { tile, index, bounds ->
                             focusedRow = row.id

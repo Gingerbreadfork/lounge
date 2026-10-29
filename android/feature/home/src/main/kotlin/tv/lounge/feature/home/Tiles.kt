@@ -113,7 +113,6 @@ fun TileView(
     kind: TileKind,
     size: DpSize,
     lights: State<Lights>,
-    idle: Boolean,
     rowName: String,
     onFocused: (Boolean, Rect) -> Unit,
     onClick: () -> Unit,
@@ -139,24 +138,29 @@ fun TileView(
     // State, so a focus change recomposes this tile once and a neighbour's change not at all.
     val targetScale = if (lit) (if (kind == TileKind.COMPACT) 1.04f else 1.06f) else 1f
     val scale = animateFloatAsState(targetScale, if (lit) motion.snap() else motion.settle(), label = "tileScale")
-    val glow = animateFloatAsState(
-        if (lit) visuals.glowAlpha * (if (idle) 0.5f else 1f) else 0f,
-        when {
-            idle -> motion.dim()
-            lit -> motion.snap()
-            else -> motion.settle()
-        },
-        label = "tileGlow",
-    )
+    // Idle is read from the light state in effects and while drawing, never as a parameter, so the
+    // room going idle recomposes no tile.
+    val glow = remember { Animatable(0f) }
+    LaunchedEffect(lit) {
+        snapshotFlow { light.idle }.collectLatest { idle ->
+            val target = if (lit) visuals.glowAlpha * (if (idle) 0.5f else 1f) else 0f
+            val spec = when {
+                idle -> motion.dim<Float>()
+                lit -> motion.snap<Float>()
+                else -> motion.settle<Float>()
+            }
+            glow.animateTo(target, spec)
+        }
+    }
     val rim = animateFloatAsState(if (lit) 1f else 0f, if (lit) motion.snap() else motion.settle(), label = "tileRim")
     // Read unobserved: a change of light reaches the effect below and never recomposes the tile.
-    val initial = remember { (if (lit) Lights.Focused else Snapshot.withoutReadObservation { lights.value }).dimmed(idle) }
+    val initial = remember { Snapshot.withoutReadObservation { (if (lit) Lights.Focused else lights.value).dimmed(light.idle) } }
     val animBrightness = remember { Animatable(initial.first) }
     val animSaturation = remember { Animatable(initial.second) }
     // Keyed on the State too: a row hands a new one when the tile moves.
-    LaunchedEffect(lit, idle, lights) {
-        snapshotFlow { (if (lit) Lights.Focused else lights.value).dimmed(idle) }.collectLatest { (b, sat) ->
-            val spec = if (idle) motion.dim<Float>() else motion.settle()
+    LaunchedEffect(lit, lights) {
+        snapshotFlow { (if (lit) Lights.Focused else lights.value).dimmed(light.idle) }.collectLatest { (b, sat) ->
+            val spec = if (light.idle) motion.dim<Float>() else motion.settle()
             launch { animBrightness.animateTo(b, spec) }
             animSaturation.animateTo(sat, spec)
         }
@@ -213,8 +217,8 @@ fun TileView(
             .then(if (needsCurtain) Modifier.background(colors.curtain) else Modifier),
     ) {
         when (kind) {
-            TileKind.POSTER -> PosterContent(tile, filter, idle, size)
-            TileKind.LANDSCAPE -> LandscapeContent(tile, filter, brightnessNow, idle, chrome, size)
+            TileKind.POSTER -> PosterContent(tile, filter, size)
+            TileKind.LANDSCAPE -> LandscapeContent(tile, filter, brightnessNow, chrome, size)
             TileKind.APP_BANNER -> AppBannerContent(tile, filter, size)
             TileKind.COMPACT -> CompactContent(tile, filter)
         }
@@ -305,11 +309,11 @@ fun rememberFittedLine(text: String, style: TextStyle, width: Dp): String {
 }
 
 @Composable
-private fun PosterContent(tile: Tile, filter: () -> androidx.compose.ui.graphics.ColorFilter?, idle: Boolean, size: DpSize) {
+private fun PosterContent(tile: Tile, filter: () -> androidx.compose.ui.graphics.ColorFilter?, size: DpSize) {
     val colors = LoungeTheme.colors
     Box(Modifier.fillMaxSize()) {
         Artwork(tile.artworkPath, filter, LoungeTheme.colors.light(tile.lightArgb).copy(alpha = 0.25f), size)
-        TileBadge(tile.badge, idle, Modifier.align(Alignment.TopStart).padding(16.dp))
+        TileBadge(tile.badge, Modifier.align(Alignment.TopStart).padding(16.dp))
         if (tile.artworkPath == null) {
             Text(
                 tile.title,
@@ -328,7 +332,6 @@ private fun LandscapeContent(
     tile: Tile,
     filter: () -> androidx.compose.ui.graphics.ColorFilter?,
     brightness: () -> Float,
-    idle: Boolean,
     chrome: Boolean,
     size: DpSize,
 ) {
@@ -358,7 +361,7 @@ private fun LandscapeContent(
                 Modifier.align(Alignment.TopStart).padding(16.dp).size(56.dp).clip(RoundedCornerShape(8.dp)),
             )
         }
-        if (chrome) TileBadge(tile.badge, idle, Modifier.align(if (live) Alignment.TopEnd else Alignment.TopStart).padding(16.dp))
+        if (chrome) TileBadge(tile.badge, Modifier.align(if (live) Alignment.TopEnd else Alignment.TopStart).padding(16.dp))
         if (showText) {
             val title = rememberFittedLine(tile.title, LoungeTheme.typography.title, size.width - 40.dp)
             Column(
@@ -424,10 +427,11 @@ private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphic
 }
 
 @Composable
-private fun TileBadge(badge: Badge?, idle: Boolean, modifier: Modifier) {
+private fun TileBadge(badge: Badge?, modifier: Modifier) {
     val colors = LoungeTheme.colors
     when (badge) {
-        Badge.LIVE -> BadgeView("Live", dot = colors.ember, modifier = modifier, idle = idle)
+        // Reads idle here, so only the badge recomposes for it.
+        Badge.LIVE -> BadgeView("Live", dot = colors.ember, modifier = modifier, idle = LoungeTheme.lightState.idle)
         Badge.NEW -> BadgeView("New", textColor = colors.houselight, modifier = modifier)
         else -> Unit
     }
