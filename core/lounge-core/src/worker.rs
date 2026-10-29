@@ -26,6 +26,9 @@ const HOUSEKEEPING_EVERY: Duration = Duration::from_secs(6 * 3600);
 const FIRST_HOUSEKEEPING: Duration = Duration::from_secs(180);
 /// Prepared pictures nothing has used for this long may be deleted.
 const ART_KEEP: Duration = Duration::from_secs(24 * 3600);
+/// While pictures are still being prepared a few at a time, the home is rebuilt and published at
+/// most this often, not after every pass.
+const ART_PUBLISH_EVERY: Duration = Duration::from_secs(1);
 /// Schedule entries this far ahead get their pictures now; later ones on a later ingest.
 const SCHEDULE_ART_AHEAD_MS: i64 = 12 * 3_600_000;
 
@@ -71,6 +74,7 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
             let mut utc_offset = inner.config.utc_offset_minutes;
             let mut next_change: Option<i64> = None;
             let mut housekeeping_at = Instant::now() + FIRST_HOUSEKEEPING;
+            let mut last_rebuild = Instant::now() - ART_PUBLISH_EVERY;
             loop {
                 let screen_on = inner.screen_on.load(Ordering::Relaxed);
                 let now = Instant::now();
@@ -107,6 +111,7 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                 // The stored snapshot is only the first frame after a restart, so what the clock
                 // alone changed is published but not written.
                 let persist = pending.iter().any(|job| !matches!(job, Job::Tick));
+                let only_art = !pending.is_empty() && pending.iter().all(|job| matches!(job, Job::MoreArt));
                 for job in pending {
                     // A job that panics is lost on its own; whatever it changed is still published.
                     let finished = crate::guarded("a worker job", || match job {
@@ -186,6 +191,13 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                     }
                 }
                 if dirty {
+                    // A pass of pictures with more passes queued publishes only once the last
+                    // publish is old enough; the last pass always does.
+                    let more_to_come = only_art && !inner.state.lock().pending_art.backlogs.is_empty();
+                    if more_to_come && last_rebuild.elapsed() < ART_PUBLISH_EVERY {
+                        continue;
+                    }
+                    last_rebuild = Instant::now();
                     // A rebuild that panics waits for the next tick rather than retrying at once.
                     next_change = crate::guarded("rebuilding the home", || rebuild(&inner, utc_offset, persist)).flatten();
                 }

@@ -220,8 +220,9 @@ fn pictures_left_for_later_passes_end_as_a_full_ingest_would() {
     let icons = |s: &HomeSnapshot| s.rows.iter().find(|r| r.id == "allapps").map_or(0, |r| r.tiles.iter().filter(|t| t.icon_path.is_some()).count());
     wait_for("every icon", || latest.0.lock().as_ref().is_some_and(|s| icons(s) == 20));
     let passes = latest.0.lock().clone().unwrap();
-    // One for the listener's first snapshot, then at most one a pass with one to spare.
-    assert!(latest.1.load(Ordering::SeqCst) <= 1 + 5 + 1, "{} snapshots", latest.1.load(Ordering::SeqCst));
+    // One for the listener's first snapshot, one for the ingest, and the quick passes after it
+    // publish together rather than one at a time, with one to spare.
+    assert!(latest.1.load(Ordering::SeqCst) <= 1 + 1 + 2, "{} snapshots", latest.1.load(Ordering::SeqCst));
 
     // A pass writes only the items it dresses, so an app with no pictures keeps its first write.
     let db = rusqlite::Connection::open(dir.path().join("data").join("lounge.db")).unwrap();
