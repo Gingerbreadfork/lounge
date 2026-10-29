@@ -37,8 +37,8 @@ private const val BLOOM_OVER_Y = 0.6f
 
 /**
  * The lowered Stage's light (DESIGN.md §5.2): the picture's own colours eased across the band, its
- * light blooming toward the right, the edges falling away, and the room's dark on the left where
- * the title sits. Each part is drawn once into a layer of its own; [clock] only moves and fades the
+ * light blooming toward the right, the edges falling away, and the dark on the left where the
+ * title sits. Each part is drawn once into a layer of its own; [clock] only moves and fades the
  * pools and the bloom as layer properties, so the drift redraws nothing but the dither.
  */
 @Composable
@@ -98,8 +98,8 @@ internal fun BandLight(glow: List<Color>, light: Color, velvet: Color, clock: ()
                     }
                 },
         )
-        // What stays still: the edges falling away as if seen through glass, and the room's own
-        // dark under the text faintly lit by the picture.
+        // What stays still: the edges falling away as if seen through glass, and the picture's own
+        // colour in the dark under the text.
         Spacer(
             Modifier
                 .fillMaxSize()
@@ -113,10 +113,9 @@ internal fun BandLight(glow: List<Color>, light: Color, velvet: Color, clock: ()
                         val u = 0.86f + 0.14f * i / 5f
                         u to Color.Black.copy(alpha = 0.22f * smooth((u - 0.86f) / 0.14f))
                     })
-                    val ground = lerp(velvet, light, 0.08f)
                     val scrim = Brush.horizontalGradient(*Array(12) { i ->
                         val u = i / 11f
-                        u to ground.copy(alpha = 0.9f * (1f - smooth((u - 0.2f) / 0.52f)))
+                        u to Color.Black.copy(alpha = 0.3f * (1f - smooth((u - 0.2f) / 0.52f)))
                     })
                     onDrawBehind {
                         drawRect(edges)
