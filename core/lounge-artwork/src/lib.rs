@@ -356,8 +356,14 @@ fn decode(bytes: &[u8], want: impl FnOnce(u32, u32) -> (u32, u32)) -> Result<Dec
         decoder.set_scaling_factor(factor).map_err(jpeg)?;
         let (dw, dh) = (factor.scale(w as usize), factor.scale(h as usize));
         let mut pixels = vec![0u8; dw * dh * 4];
-        let output = turbojpeg::Image { pixels: &mut pixels[..], width: dw, pitch: dw * 4, height: dh, format: turbojpeg::PixelFormat::RGBA };
+        // A CMYK or YCCK picture comes out as CMYK, which libjpeg-turbo will not turn into RGB itself.
+        let inks = matches!(header.colorspace, turbojpeg::Colorspace::CMYK | turbojpeg::Colorspace::YCCK);
+        let format = if inks { turbojpeg::PixelFormat::CMYK } else { turbojpeg::PixelFormat::RGBA };
+        let output = turbojpeg::Image { pixels: &mut pixels[..], width: dw, pitch: dw * 4, height: dh, format };
         decoder.decompress(bytes, output).map_err(jpeg)?;
+        if inks {
+            inks_to_rgba(&mut pixels);
+        }
         let img = RgbaImage::from_raw(dw as u32, dh as u32, pixels).ok_or_else(|| ArtworkError::Resize("jpeg buffer size mismatch".into()))?;
         return Ok(Decoded { image: oriented(img, orientation), source, opaque: true });
     }
@@ -458,6 +464,18 @@ fn webp_exif_chunk(bytes: &[u8]) -> Option<&[u8]> {
         i += 8 + size + (size & 1);
     }
     None
+}
+
+/// CMYK pixels, stored inverted as Photoshop and every JPEG CMYK writer in practice does, to RGBA
+/// in place: each ink scaled by the black.
+fn inks_to_rgba(pixels: &mut [u8]) {
+    for p in pixels.chunks_exact_mut(4) {
+        let k = p[3] as u32;
+        for c in 0..3 {
+            p[c] = ((p[c] as u32 * k + 127) / 255) as u8;
+        }
+        p[3] = 255;
+    }
 }
 
 /// The smallest fraction, in eighths up to a whole, at which a `w`×`h` JPEG still covers `want`.
@@ -1102,6 +1120,31 @@ mod tests {
         riff.extend_from_slice(&payload);
         assert_eq!(webp_exif_chunk(&riff), Some(exif.as_slice()));
         assert_eq!(Orientation::from_exif_chunk(webp_exif_chunk(&riff).unwrap()), Some(Orientation::Rotate90));
+    }
+
+    #[test]
+    fn a_cmyk_jpeg_is_read_through_its_inks() {
+        // Cyan ink on the left, no ink on the right, in the inverted convention the files use.
+        let (w, h) = (320u32, 180u32);
+        let mut cmyk = vec![255u8; (w * h * 4) as usize];
+        for y in 0..h {
+            for x in 0..w / 2 {
+                cmyk[((y * w + x) * 4) as usize] = 0;
+            }
+        }
+        let mut compressor = turbojpeg::Compressor::new().unwrap();
+        compressor.set_quality(95).unwrap();
+        let data = compressor
+            .compress_to_vec(turbojpeg::Image { pixels: &cmyk[..], width: w as usize, pitch: w as usize * 4, height: h as usize, format: turbojpeg::PixelFormat::CMYK })
+            .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("inks.jpg");
+        std::fs::write(&src, &data).unwrap();
+        let p = prepare(&src, &dir.path().join("art"), Style::Landscape).unwrap();
+        let out = image::open(&p.path).unwrap().to_rgba8();
+        let (left, right) = (out.get_pixel(40, 100), out.get_pixel(430, 100));
+        assert!(left[0] < 40 && left[1] > 200 && left[2] > 200, "left {left:?}");
+        assert!(right[0] > 230 && right[1] > 230 && right[2] > 230, "right {right:?}");
     }
 
     /// A minimal big-endian EXIF block holding only an orientation.
