@@ -167,7 +167,7 @@ pub fn prepare(src: &Path, out_dir: &Path, style: Style) -> Result<Prepared> {
 /// As [`prepare`] for several styles of one source: the file is read, hashed, decoded and
 /// measured once, and every style is cut from that one decode.
 pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<Prepared>> {
-    let shared = (|| -> Result<(String, Decoded, Palette, f32, Vec<u32>)> {
+    let shared = (|| -> Result<(String, (RgbaImage, (u32, u32), bool), Palette, f32, Vec<u32>)> {
         std::fs::create_dir_all(out_dir)?;
         let size = std::fs::metadata(src)?.len();
         if size > MAX_SOURCE_BYTES {
@@ -177,31 +177,32 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
         let hash = blake3::hash(&bytes).to_hex().to_string();
         let decoded = decode(&bytes, |sw, sh| largest_target(styles, sw, sh))?;
         drop(bytes);
-        let palette = palette_of(&decoded.image);
+        // Opaque pictures become JPEGs: smaller, quicker to decode, and drawn without blending.
+        let opaque = decoded.opaque || decoded.image.pixels().all(|p| p.0[3] == 255);
+        let (sw, sh) = decoded.source;
+        let mid = reduce(decoded.image, styles, sw, sh)?;
+        let (mw, mh) = mid.dimensions();
+        let palette = palette_of(&mid);
         let (focal_y, glow) = if styles.iter().any(|s| s.wants_focal()) {
-            let (w, h) = decoded.image.dimensions();
-            let focal_y = focal_line(&decoded.image, w, h)?;
-            (focal_y, glow_of(&decoded.image, w, h, focal_y)?)
+            let focal_y = focal_line(&mid, mw, mh)?;
+            (focal_y, glow_of(&mid, mw, mh, focal_y)?)
         } else {
             (0.5, Vec::new())
         };
-        Ok((hash, decoded, palette, focal_y, glow))
+        Ok((hash, (mid, (sw, sh), opaque), palette, focal_y, glow))
     })();
-    let (hash, decoded, palette, focal_y, glow) = match shared {
+    let (hash, (mid, (sw, sh), opaque), palette, focal_y, glow) = match shared {
         Ok(v) => v,
         Err(e) => return styles.iter().map(|_| Err(again(&e))).collect(),
     };
-    // Opaque pictures become JPEGs: smaller, quicker to decode, and drawn without blending.
-    let opaque = decoded.opaque || decoded.image.pixels().all(|p| p.0[3] == 255);
-    let (sw, sh) = decoded.source;
-    let (dw, dh) = decoded.image.dimensions();
+    let (dw, dh) = mid.dimensions();
     styles
         .iter()
         .map(|&style| {
             let (tw, th) = target_for(style, sw, sh);
             let out_path = out_dir.join(format!("{}-{}.{}", &hash[..20], style.slug(), if opaque { "jpg" } else { "png" }));
             if !out_path.exists() {
-                let mut scaled = cover_resize(&decoded.image, dw, dh, tw, th)?;
+                let mut scaled = cover_resize(&mid, dw, dh, tw, th)?;
                 if let Some(sigma) = style.blur_sigma() {
                     scaled = image::imageops::blur(&scaled, sigma);
                 }
@@ -259,6 +260,34 @@ fn target_for(style: Style, sw: u32, sh: u32) -> (u32, u32) {
         }
     }
     (tw, th)
+}
+
+/// The decode brought down, once, to the least the styles need: scaled by exactly what the most
+/// demanding style asks, so that style comes out as a plain crop and every other style, the focal
+/// line and the glow are cut from a small picture instead of the whole decode. A decode no larger
+/// than needed is kept as it is.
+fn reduce(image: RgbaImage, styles: &[Style], sw: u32, sh: u32) -> Result<RgbaImage> {
+    let (dw, dh) = image.dimensions();
+    let s = scale_needed(styles, sw, sh, dw, dh);
+    if !(s < 0.999) {
+        return Ok(image);
+    }
+    let mw = ((dw as f64 * s).round() as u32).max(1);
+    let mh = ((dh as f64 * s).round() as u32).max(1);
+    crop_resize(&image, dw, dh, (0.0, 0.0, dw as f64, dh as f64), mw, mh)
+}
+
+/// The least a `dw`×`dh` decode of a `sw`×`sh` source must be scaled by for every style to be cut
+/// from it without upsampling.
+fn scale_needed(styles: &[Style], sw: u32, sh: u32, dw: u32, dh: u32) -> f64 {
+    styles
+        .iter()
+        .map(|&style| {
+            let (tw, th) = target_for(style, sw, sh);
+            let (_, _, cw, ch) = cover_rect(dw, dh, tw as f64 / th as f64);
+            (tw as f64 / cw).max(th as f64 / ch)
+        })
+        .fold(0.0, f64::max)
 }
 
 /// The widest and tallest any of `styles` draws a `sw`×`sh` source: what a decode must cover.
@@ -486,17 +515,20 @@ fn vignette(img: &mut RgbaImage) {
     let (w, h) = img.dimensions();
     let cx = w as f32 / 2.0;
     let cy = h as f32 / 2.0;
-    let half_diag = (cx * cx + cy * cy).sqrt().max(1.0);
+    let half_diag2 = (cx * cx + cy * cy).max(1.0);
+    // Inside six tenths of the half diagonal nothing changes, so no root is taken there.
+    let inner2 = 0.36 * half_diag2;
+    let half_diag = half_diag2.sqrt();
     const VELVET: [f32; 3] = [0x1A as f32, 0x10 as f32, 0x16 as f32];
     for (x, y, p) in img.enumerate_pixels_mut() {
         let dx = x as f32 - cx;
         let dy = y as f32 - cy;
-        let r = (dx * dx + dy * dy).sqrt() / half_diag;
-        let t = ((r - 0.6) / 0.4).clamp(0.0, 1.0);
-        let a = t * t * (3.0 - 2.0 * t) * 0.45;
-        if a <= 0.0 {
+        let r2 = dx * dx + dy * dy;
+        if r2 <= inner2 {
             continue;
         }
+        let t = ((r2.sqrt() / half_diag - 0.6) / 0.4).clamp(0.0, 1.0);
+        let a = t * t * (3.0 - 2.0 * t) * 0.45;
         for c in 0..3 {
             p[c] = (p[c] as f32 * (1.0 - a) + VELVET[c] * a).round().clamp(0.0, 255.0) as u8;
         }
@@ -508,8 +540,32 @@ fn cover_resize(src: &RgbaImage, sw: u32, sh: u32, tw: u32, th: u32) -> Result<R
     crop_resize(src, sw, sh, rect, tw, th)
 }
 
+/// The `(left, top, cw, ch)` region of `src` at `tw`×`th`. A region already that size is copied.
+/// A region at least twice the size is halved, box filtered, until it is within twice of it: a pass
+/// over the pixels each time, so the resampler, whose cost goes with its source, never runs over
+/// more than four times the output.
 fn crop_resize(src: &RgbaImage, sw: u32, sh: u32, (left, top, cw, ch): (f64, f64, f64, f64), tw: u32, th: u32) -> Result<RgbaImage> {
-    let src_img = ImageRef::new(sw, sh, src.as_raw(), PixelType::U8x4)
+    if (cw - tw as f64).abs() < 1.0 && (ch - th as f64).abs() < 1.0 {
+        let (x, y) = (left.round() as u32, top.round() as u32);
+        if x + tw <= sw && y + th <= sh {
+            return Ok(image::imageops::crop_imm(src, x, y, tw, th).to_image());
+        }
+    }
+    let halved;
+    let (source, rect) = if cw >= 2.0 * tw as f64 && ch >= 2.0 * th as f64 {
+        let (x, y) = (left.floor() as u32, top.floor() as u32);
+        let mut region = image::imageops::crop_imm(src, x, y, (cw.ceil() as u32).min(sw - x), (ch.ceil() as u32).min(sh - y)).to_image();
+        while region.width() >= 2 * tw && region.height() >= 2 * th {
+            region = halve(&region);
+        }
+        halved = region;
+        let (w, h) = halved.dimensions();
+        (&halved, (0.0, 0.0, w as f64, h as f64))
+    } else {
+        (src, (left, top, cw, ch))
+    };
+    let (sw, sh) = source.dimensions();
+    let src_img = ImageRef::new(sw, sh, source.as_raw(), PixelType::U8x4)
         .map_err(|e| ArtworkError::Resize(e.to_string()))?;
     let mut dst = Image::new(tw, th, PixelType::U8x4);
 
@@ -518,7 +574,7 @@ fn crop_resize(src: &RgbaImage, sw: u32, sh: u32, (left, top, cw, ch): (f64, f64
     } else {
         ResizeAlg::Convolution(FilterType::Mitchell)
     };
-    let options = ResizeOptions::new().resize_alg(alg).crop(left, top, cw, ch);
+    let options = ResizeOptions::new().resize_alg(alg).crop(rect.0, rect.1, rect.2, rect.3);
     let mut resizer = Resizer::new();
     resizer
         .resize(&src_img, &mut dst, &options)
@@ -526,6 +582,24 @@ fn crop_resize(src: &RgbaImage, sw: u32, sh: u32, (left, top, cw, ch): (f64, f64
 
     RgbaImage::from_raw(tw, th, dst.into_vec())
         .ok_or_else(|| ArtworkError::Resize("buffer size mismatch".into()))
+}
+
+/// Half the size, each pixel the mean of its 2×2 block.
+fn halve(img: &RgbaImage) -> RgbaImage {
+    let (w, h) = (img.width() / 2, img.height() / 2);
+    let stride = img.width() as usize * 4;
+    let src = img.as_raw();
+    let mut out = Vec::with_capacity((w * h * 4) as usize);
+    for y in 0..h as usize {
+        let a = &src[2 * y * stride..2 * y * stride + w as usize * 8];
+        let b = &src[(2 * y + 1) * stride..(2 * y + 1) * stride + w as usize * 8];
+        for (pa, pb) in a.chunks_exact(8).zip(b.chunks_exact(8)) {
+            for c in 0..4 {
+                out.push(((pa[c] as u16 + pa[c + 4] as u16 + pb[c] as u16 + pb[c + 4] as u16 + 2) >> 2) as u8);
+            }
+        }
+    }
+    RgbaImage::from_raw(w, h, out).expect("halved buffer fits")
 }
 
 /// k-means over a 48×48 thumbnail: dominant = largest cluster, vibrant = most saturated
@@ -858,6 +932,45 @@ mod tests {
         let (left, right) = (out.get_pixel(40, 100), out.get_pixel(430, 100));
         assert!(left[0] > 200 && left[2] < 100, "left {left:?}");
         assert!(right[0] < 60, "right {right:?}");
+    }
+
+    #[test]
+    fn the_most_demanding_style_sets_the_scale() {
+        let styles = [Style::Landscape, Style::Hero, Style::Poster, Style::Backdrop];
+        let s = scale_needed(&styles, 1920, 1080, 1920, 1080);
+        assert!((s - 1120.0 / 1920.0).abs() < 1e-6, "{s}");
+        // A portrait source has to be upsampled for the Hero, so the decode is kept whole.
+        let s = scale_needed(&styles, 1000, 1500, 1000, 1500);
+        assert!(s > 1.0, "{s}");
+        let mid = reduce(RgbaImage::new(1920, 1080), &styles, 1920, 1080).unwrap();
+        assert_eq!(mid.dimensions(), (1120, 630));
+    }
+
+    #[test]
+    fn a_crop_that_is_already_the_size_is_copied() {
+        let src = synthetic(1120, 840);
+        let out = crop_resize(&src, 1120, 840, (0.0, 105.0, 1120.0, 630.0), 1120, 630).unwrap();
+        assert_eq!(out.dimensions(), (1120, 630));
+        assert_eq!(out.get_pixel(10, 10), src.get_pixel(10, 115));
+        assert_eq!(out.get_pixel(1110, 600), src.get_pixel(1110, 705));
+    }
+
+    #[test]
+    fn halving_averages_each_block() {
+        let mut img = RgbaImage::new(4, 2);
+        for (x, y, p) in img.enumerate_pixels_mut() {
+            *p = Rgba([(x * 10 + y * 100) as u8, 0, 255, 255]);
+        }
+        let half = halve(&img);
+        assert_eq!(half.dimensions(), (2, 1));
+        // The block at (0,0): 0, 10, 100, 110 -> 55.
+        assert_eq!(half.get_pixel(0, 0), &Rgba([55, 0, 255, 255]));
+        assert_eq!(half.get_pixel(1, 0), &Rgba([75, 0, 255, 255]));
+        // A big region reaches the target through halving and still lands at size.
+        let big = synthetic(2000, 1200);
+        let out = crop_resize(&big, 2000, 1200, (0.0, 0.0, 2000.0, 1200.0), 160, 90).unwrap();
+        assert_eq!(out.dimensions(), (160, 90));
+        assert!(out.get_pixel(20, 45)[0] > 200 && out.get_pixel(140, 45)[0] < 60);
     }
 
     /// A minimal big-endian EXIF block holding only an orientation.
