@@ -326,6 +326,35 @@ fn a_film_that_plays_on_is_one_sitting() {
     assert_eq!(last_used, now);
 }
 
+#[test]
+fn playback_that_moves_on_as_expected_is_not_published() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = Core::open(config(dir.path()), Arc::new(Quiet)).unwrap();
+    let latest = Arc::new(Latest::default());
+    core.add_listener(latest.clone());
+    let now = now_ms();
+    let mut report = playing("film.app", now);
+    report.position_ms = Some(30_000);
+    core.ingest_sessions(vec![report]);
+    wait_for("now playing", || latest.0.lock().as_ref().is_some_and(|s| s.now_playing.is_some()));
+    let published = latest.1.load(Ordering::SeqCst);
+
+    // Five seconds on, the film is five seconds further: the chip already shows that, and the
+    // Stage still says 119 minutes are left.
+    let revision = core.diagnostics().revision;
+    let mut report = playing("film.app", now + 5_000);
+    report.position_ms = Some(35_000);
+    core.ingest_sessions(vec![report]);
+    wait_for("a rebuild", || core.diagnostics().revision > revision);
+
+    // A jump is news, and it is the next snapshot: the report before it published nothing.
+    let mut report = playing("film.app", now + 10_000);
+    report.position_ms = Some(600_000);
+    core.ingest_sessions(vec![report]);
+    wait_for("the jump", || latest.0.lock().as_ref().is_some_and(|s| s.now_playing.as_ref().is_some_and(|np| np.position_ms == Some(600_000))));
+    assert_eq!(latest.1.load(Ordering::SeqCst), published + 1);
+}
+
 /// Adds another listener from inside its first snapshot.
 struct Reentrant {
     core: Mutex<Option<Arc<Core>>>,
@@ -402,14 +431,15 @@ fn the_clock_alone_does_not_rewrite_the_stored_home() {
         on_channel_five("news", ProgramKind::Schedule, Some(now - 1_800_000), Some(now + 1_800_000)),
     ]);
     wait_for("Live now", || latest.0.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "live")));
-    let published = || latest.0.lock().as_ref().map_or(0, |s| s.revision);
     let written = stored_revision(dir.path());
-    assert_eq!(written as u64, published());
+    assert_eq!(written as u64, latest.0.lock().as_ref().map_or(0, |s| s.revision));
 
+    // A rebuild counts whether or not it finds anything new to publish.
+    let rebuilt = || core.diagnostics().revision;
     for _ in 0..2 {
-        let before = published();
+        let before = rebuilt();
         core.set_screen_state(true);
-        wait_for("the clock's rebuild", || published() > before);
+        wait_for("the clock's rebuild", || rebuilt() > before);
     }
     assert_eq!(stored_revision(dir.path()), written);
 }

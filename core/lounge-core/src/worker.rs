@@ -3,8 +3,9 @@
 
 use crate::plugins::{channel_key, ReadyItem};
 use crate::{
-    engine, now_ms, AppRecord, AppUsage, Inner, InputRecord, InputState, LayoutCommand, NowPlaying, Permissions,
-    PlaybackStatus, ProgramKind, ProgramRecord, SessionRecord, State, WatchNextType,
+    engine, now_ms, AppRecord, AppUsage, HomeSnapshot, Inner, InputRecord, InputState, LayoutCommand, NowPlaying,
+    Permissions, PlaybackStatus, ProgramKind, ProgramRecord, Row, SessionRecord, StageSpotlight, State, Tile,
+    WatchNextType,
 };
 use lounge_plugin_api::ItemKind as PluginItemKind;
 use lounge_artwork::{prepare_many, Prepared, Style};
@@ -1206,11 +1207,7 @@ fn rebuild(inner: &Inner, utc_offset_minutes: i32, persist: bool) -> Option<i64>
     // listener, no recomposition. Revision and time stamp are not part of "what the screen shows".
     let unchanged = {
         let prev = inner.snapshot.read();
-        prev.revision > 0
-            && prev.stage == snapshot.stage
-            && prev.rows == snapshot.rows
-            && prev.now_playing == snapshot.now_playing
-            && prev.wallpapers == snapshot.wallpapers
+        prev.revision > 0 && same_on_screen(&prev, &snapshot)
     };
     if unchanged {
         return next_change;
@@ -1238,6 +1235,56 @@ fn rebuild(inner: &Inner, utc_offset_minutes: i32, persist: bool) -> Option<i64>
         c.notify();
     }
     next_change
+}
+
+/// Whether two snapshots show the same, allowing for playback that moved on as expected: the shell
+/// reports a session at every change while it plays, and the chip already runs the position on
+/// from its time stamp, so only a jump, a pause or a change of what plays is news.
+fn same_on_screen(prev: &HomeSnapshot, next: &HomeSnapshot) -> bool {
+    same_tiles(&prev.stage.strip, &next.stage.strip)
+        && same_by(&prev.stage.spotlights, &next.stage.spotlights, |a, b| {
+            near(a.progress, b.progress) && StageSpotlight { progress: b.progress, ..a.clone() } == *b
+        })
+        && same_by(&prev.rows, &next.rows, |a, b| {
+            Row { tiles: Vec::new(), ..a.clone() } == Row { tiles: Vec::new(), ..b.clone() } && same_tiles(&a.tiles, &b.tiles)
+        })
+        && same_playing(prev.now_playing.as_ref(), next.now_playing.as_ref())
+        && prev.wallpapers == next.wallpapers
+}
+
+fn same_by<T>(a: &[T], b: &[T], same: impl Fn(&T, &T) -> bool) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same(a, b))
+}
+
+fn same_tiles(a: &[Tile], b: &[Tile]) -> bool {
+    same_by(a, b, |a, b| near(a.progress, b.progress) && Tile { progress: b.progress, ..a.clone() } == *b)
+}
+
+/// Progress bars within a hundredth of each other draw the same.
+fn near(a: Option<f32>, b: Option<f32>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => (a - b).abs() < 0.01,
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+/// The same session, with its position within two seconds of where the last report would put it
+/// by now.
+fn same_playing(prev: Option<&NowPlaying>, next: Option<&NowPlaying>) -> bool {
+    let (Some(a), Some(b)) = (prev, next) else { return prev.is_none() && next.is_none() };
+    let moved_on = NowPlaying { position_ms: b.position_ms, updated_ms: b.updated_ms, ..a.clone() };
+    if moved_on != *b {
+        return false;
+    }
+    match (a.position_ms, b.position_ms) {
+        (Some(pa), Some(pb)) => {
+            let expected = if a.status == PlaybackStatus::Playing { pa + (b.updated_ms - a.updated_ms) } else { pa };
+            (pb - expected).abs() <= 2_000
+        }
+        (None, None) => true,
+        _ => false,
+    }
 }
 
 /// Delete prepared pictures no item uses and that have not been written for a day, forget the
