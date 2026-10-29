@@ -45,6 +45,7 @@ class ArtworkFetcher(
     }
 
     suspend fun fetch(uri: String): String? = withContext(Dispatchers.IO) {
+        val uri = sizedForTiles(uri)
         val file = File(dir, "${sha1(uri)}.img")
         if (file.exists() && System.currentTimeMillis() - file.lastModified() < maxAgeMs && file.length() > 0 && urlInside(file) == null) {
             return@withContext file.absolutePath

@@ -14,6 +14,7 @@ android {
 
 
 dependencies {
+    testImplementation(libs.junit)
     implementation(project(":core:bindings"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.datastore.preferences)
