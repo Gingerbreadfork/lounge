@@ -279,6 +279,7 @@ impl ArtPlan {
             let st = state.lock();
             (st.art_dir.clone(), st.art_pool.clone())
         };
+        let looking = std::time::Instant::now();
         let mut signatures: HashMap<&str, Option<(u64, i64)>> = HashMap::new();
         let mut prepared: Vec<Option<Prepared>> = Vec::with_capacity(self.wants.len());
         let mut missed: Vec<bool> = Vec::with_capacity(self.wants.len());
@@ -311,6 +312,9 @@ impl ArtPlan {
                     missed.push(true);
                 }
             }
+        }
+        if self.wants.len() >= 100 {
+            tracing::info!("artwork: {} wanted, {} to prepare, looked up in {} ms", self.wants.len(), missed.iter().filter(|m| **m).count(), looking.elapsed().as_millis());
         }
         // Every source that missed is decoded once and all its styles are cut from that decode.
         let mut order: Vec<&str> = Vec::new();
