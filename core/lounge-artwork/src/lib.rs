@@ -167,7 +167,7 @@ pub fn prepare(src: &Path, out_dir: &Path, style: Style) -> Result<Prepared> {
 /// As [`prepare`] for several styles of one source: the file is read, hashed, decoded and
 /// measured once, and every style is cut from that one decode.
 pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<Prepared>> {
-    let shared = (|| -> Result<(String, RgbaImage, Palette, bool, f32, Vec<u32>)> {
+    let shared = (|| -> Result<(String, Decoded, Palette, f32, Vec<u32>)> {
         std::fs::create_dir_all(out_dir)?;
         let size = std::fs::metadata(src)?.len();
         if size > MAX_SOURCE_BYTES {
@@ -175,47 +175,33 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
         }
         let bytes = std::fs::read(src)?;
         let hash = blake3::hash(&bytes).to_hex().to_string();
-        let decoded = decode(&bytes)?;
+        let decoded = decode(&bytes, |sw, sh| largest_target(styles, sw, sh))?;
         drop(bytes);
-        let (sw, sh) = decoded.dimensions();
-        let palette = palette_of(&decoded);
-        // Opaque pictures become JPEGs: smaller, quicker to decode, and drawn without blending.
-        let opaque = decoded.pixels().all(|p| p.0[3] == 255);
+        let palette = palette_of(&decoded.image);
         let (focal_y, glow) = if styles.iter().any(|s| s.wants_focal()) {
-            let focal_y = focal_line(&decoded, sw, sh)?;
-            (focal_y, glow_of(&decoded, sw, sh, focal_y)?)
+            let (w, h) = decoded.image.dimensions();
+            let focal_y = focal_line(&decoded.image, w, h)?;
+            (focal_y, glow_of(&decoded.image, w, h, focal_y)?)
         } else {
             (0.5, Vec::new())
         };
-        Ok((hash, decoded, palette, opaque, focal_y, glow))
+        Ok((hash, decoded, palette, focal_y, glow))
     })();
-    let (hash, decoded, palette, opaque, focal_y, glow) = match shared {
+    let (hash, decoded, palette, focal_y, glow) = match shared {
         Ok(v) => v,
         Err(e) => return styles.iter().map(|_| Err(again(&e))).collect(),
     };
-    let (sw, sh) = decoded.dimensions();
+    // Opaque pictures become JPEGs: smaller, quicker to decode, and drawn without blending.
+    let opaque = decoded.opaque || decoded.image.pixels().all(|p| p.0[3] == 255);
+    let (sw, sh) = decoded.source;
+    let (dw, dh) = decoded.image.dimensions();
     styles
         .iter()
         .map(|&style| {
-            let (mut tw, mut th) = style.target();
+            let (tw, th) = target_for(style, sw, sh);
             let out_path = out_dir.join(format!("{}-{}.{}", &hash[..20], style.slug(), if opaque { "jpg" } else { "png" }));
-            if style.fits() && sw > 0 && sh > 0 {
-                let mut scale = (tw as f64 / sw as f64).min(th as f64 / sh as f64);
-                if style.never_upsamples() {
-                    scale = scale.min(1.0);
-                }
-                tw = ((sw as f64 * scale).round() as u32).max(1);
-                th = ((sh as f64 * scale).round() as u32).max(1);
-            } else if style.never_upsamples() && sw > 0 && sh > 0 {
-                // The target's shape at the source's own scale, when the source is smaller.
-                let scale = (tw as f64 / sw as f64).max(th as f64 / sh as f64);
-                if scale > 1.0 {
-                    tw = ((tw as f64 / scale).round() as u32).max(1);
-                    th = ((th as f64 / scale).round() as u32).max(1);
-                }
-            }
             if !out_path.exists() {
-                let mut scaled = cover_resize(&decoded, sw, sh, tw, th)?;
+                let mut scaled = cover_resize(&decoded.image, dw, dh, tw, th)?;
                 if let Some(sigma) = style.blur_sigma() {
                     scaled = image::imageops::blur(&scaled, sigma);
                 }
@@ -227,10 +213,7 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
                 let tmp = out_path.with_extension(format!("{}.tmp", NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
                 let written = (|| -> Result<()> {
                     if opaque {
-                        let rgb = image::DynamicImage::ImageRgba8(scaled).to_rgb8();
-                        let file = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
-                        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, 90);
-                        rgb.write_with_encoder(encoder).map_err(writing)?;
+                        std::fs::write(&tmp, encode_jpeg(&scaled)?)?;
                     } else {
                         scaled.save_with_format(&tmp, ImageFormat::Png).map_err(writing)?;
                     }
@@ -256,6 +239,47 @@ pub fn prepare_many(src: &Path, out_dir: &Path, styles: &[Style]) -> Vec<Result<
         .collect()
 }
 
+/// The size `style` draws a `sw`×`sh` source at: its target, or the source fitted inside it, held
+/// to the source's own scale where the style never upsamples.
+fn target_for(style: Style, sw: u32, sh: u32) -> (u32, u32) {
+    let (mut tw, mut th) = style.target();
+    if style.fits() && sw > 0 && sh > 0 {
+        let mut scale = (tw as f64 / sw as f64).min(th as f64 / sh as f64);
+        if style.never_upsamples() {
+            scale = scale.min(1.0);
+        }
+        tw = ((sw as f64 * scale).round() as u32).max(1);
+        th = ((sh as f64 * scale).round() as u32).max(1);
+    } else if style.never_upsamples() && sw > 0 && sh > 0 {
+        // The target's shape at the source's own scale, when the source is smaller.
+        let scale = (tw as f64 / sw as f64).max(th as f64 / sh as f64);
+        if scale > 1.0 {
+            tw = ((tw as f64 / scale).round() as u32).max(1);
+            th = ((th as f64 / scale).round() as u32).max(1);
+        }
+    }
+    (tw, th)
+}
+
+/// The widest and tallest any of `styles` draws a `sw`×`sh` source: what a decode must cover.
+fn largest_target(styles: &[Style], sw: u32, sh: u32) -> (u32, u32) {
+    styles.iter().map(|&s| target_for(s, sw, sh)).fold((0, 0), |(w, h), (tw, th)| (w.max(tw), h.max(th)))
+}
+
+/// The picture as a JPEG at quality 90 with 4:2:2 chroma.
+fn encode_jpeg(img: &RgbaImage) -> Result<Vec<u8>> {
+    let (w, h) = img.dimensions();
+    let mut compressor = turbojpeg::Compressor::new().map_err(jpeg)?;
+    compressor.set_quality(90).map_err(jpeg)?;
+    compressor.set_subsamp(turbojpeg::Subsamp::Sub2x1).map_err(jpeg)?;
+    let image = turbojpeg::Image { pixels: img.as_raw().as_slice(), width: w as usize, pitch: w as usize * 4, height: h as usize, format: turbojpeg::PixelFormat::RGBA };
+    compressor.compress_to_vec(image).map_err(jpeg)
+}
+
+fn jpeg(e: turbojpeg::Error) -> ArtworkError {
+    ArtworkError::Resize(format!("jpeg: {e}"))
+}
+
 /// The shared stage's error again, for one more style. An I/O error stays one, so the caller can
 /// tell a full disk or a missing folder from a picture that will not decode.
 fn again(e: &ArtworkError) -> ArtworkError {
@@ -273,27 +297,41 @@ fn writing(e: image::ImageError) -> ArtworkError {
     }
 }
 
+/// A decoded source: its pixels, possibly at a fraction of the source's size, and the source's
+/// own size as oriented.
+struct Decoded {
+    image: RgbaImage,
+    source: (u32, u32),
+    /// Known opaque without a scan: a JPEG has no alpha.
+    opaque: bool,
+}
+
 /// Decode with hard limits: a 4 MB file that unpacks to a 500 MB bitmap is refused before
-/// anything is allocated. JPEGs decode straight to RGBA, so no second full-size copy is made.
-/// The picture comes back turned the way its EXIF orientation says.
-fn decode(bytes: &[u8]) -> Result<RgbaImage> {
+/// anything is allocated. A JPEG decodes straight to RGBA at the smallest fraction of its size,
+/// in eighths, that still covers what `want` asks of its full size, so a 12 megapixel poster never
+/// becomes a 48 MB bitmap for a tile. The picture comes back turned the way its EXIF orientation
+/// says.
+fn decode(bytes: &[u8], want: impl FnOnce(u32, u32) -> (u32, u32)) -> Result<Decoded> {
     let too_big = |w: u64, h: u64| w > MAX_SOURCE_SIDE as u64 || h > MAX_SOURCE_SIDE as u64 || w * h > MAX_SOURCE_PIXELS;
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-        use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions};
-        let options = DecoderOptions::default()
-            .jpeg_set_out_colorspace(ColorSpace::RGBA)
-            .set_max_width(MAX_SOURCE_SIDE as usize)
-            .set_max_height(MAX_SOURCE_SIDE as usize);
-        let mut decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
-        decoder.decode_headers().map_err(|e| ArtworkError::Resize(format!("jpeg: {e:?}")))?;
-        let (w, h) = decoder.dimensions().ok_or_else(|| ArtworkError::Resize("jpeg has no size".into()))?;
+        let mut decoder = turbojpeg::Decompressor::new().map_err(jpeg)?;
+        let header = decoder.read_header(bytes).map_err(jpeg)?;
+        let (w, h) = (header.width as u32, header.height as u32);
         if too_big(w as u64, h as u64) {
             return Err(ArtworkError::Resize(format!("{w}×{h} is too large a picture")));
         }
-        let orientation = decoder.exif().and_then(|exif| Orientation::from_exif_chunk(exif)).unwrap_or(Orientation::NoTransforms);
-        let pixels = decoder.decode().map_err(|e| ArtworkError::Resize(format!("jpeg: {e:?}")))?;
-        let img = RgbaImage::from_raw(w as u32, h as u32, pixels).ok_or_else(|| ArtworkError::Resize("jpeg buffer size mismatch".into()))?;
-        return Ok(oriented(img, orientation));
+        let orientation = exif_chunk(bytes).and_then(Orientation::from_exif_chunk).unwrap_or(Orientation::NoTransforms);
+        let turned = transposes(orientation);
+        let source = if turned { (h, w) } else { (w, h) };
+        let (ww, wh) = want(source.0, source.1);
+        let factor = scaling_for((w, h), if turned { (wh, ww) } else { (ww, wh) });
+        decoder.set_scaling_factor(factor).map_err(jpeg)?;
+        let (dw, dh) = (factor.scale(w as usize), factor.scale(h as usize));
+        let mut pixels = vec![0u8; dw * dh * 4];
+        let output = turbojpeg::Image { pixels: &mut pixels[..], width: dw, pitch: dw * 4, height: dh, format: turbojpeg::PixelFormat::RGBA };
+        decoder.decompress(bytes, output).map_err(jpeg)?;
+        let img = RgbaImage::from_raw(dw as u32, dh as u32, pixels).ok_or_else(|| ArtworkError::Resize("jpeg buffer size mismatch".into()))?;
+        return Ok(Decoded { image: oriented(img, orientation), source, opaque: true });
     }
     let mut probe = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?.into_decoder()?;
     let (w, h) = probe.dimensions();
@@ -320,7 +358,44 @@ fn decode(bytes: &[u8]) -> Result<RgbaImage> {
             other => ArtworkError::Image(other),
         })?
         .into_rgba8();
-    Ok(oriented(decoded, orientation))
+    let image = oriented(decoded, orientation);
+    let source = image.dimensions();
+    Ok(Decoded { image, source, opaque: false })
+}
+
+/// The smallest fraction, in eighths up to a whole, at which a `w`×`h` JPEG still covers `want`.
+fn scaling_for((w, h): (u32, u32), (ww, wh): (u32, u32)) -> turbojpeg::ScalingFactor {
+    (1..=8)
+        .map(|n| turbojpeg::ScalingFactor::new(n, 8))
+        .find(|f| f.scale(w as usize) >= ww as usize && f.scale(h as usize) >= wh as usize)
+        .unwrap_or(turbojpeg::ScalingFactor::ONE)
+}
+
+/// A JPEG's EXIF block, after its "Exif\0\0" tag, from the first APP1 segment before the scan.
+fn exif_chunk(bytes: &[u8]) -> Option<&[u8]> {
+    let mut i = 2;
+    while i + 4 <= bytes.len() && bytes[i] == 0xFF {
+        let marker = bytes[i + 1];
+        if marker == 0xFF {
+            i += 1;
+            continue;
+        }
+        if marker == 0xDA || marker == 0xD9 {
+            return None;
+        }
+        let len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+        let payload = bytes.get(i + 4..(i + 2 + len).max(i + 4))?;
+        if marker == 0xE1 && payload.starts_with(b"Exif\0\0") {
+            return Some(&payload[6..]);
+        }
+        i += 2 + len;
+    }
+    None
+}
+
+/// Whether `o` turns the picture on its side, swapping its width and height.
+fn transposes(o: Orientation) -> bool {
+    matches!(o, Orientation::Rotate90 | Orientation::Rotate270 | Orientation::Rotate90FlipH | Orientation::Rotate270FlipH)
 }
 
 fn oriented(img: RgbaImage, orientation: Orientation) -> RgbaImage {
@@ -759,6 +834,30 @@ mod tests {
         let out = image::open(&p.path).unwrap().to_rgba8();
         let left = out.get_pixel(20, 100);
         assert!(left[0] > 200 && left[2] < 100, "left {left:?}");
+    }
+
+    #[test]
+    fn a_jpeg_decodes_at_the_smallest_fraction_that_covers_its_styles() {
+        let f = scaling_for((4000, 3000), (1120, 630));
+        assert_eq!((f.num(), f.denom()), (3, 8));
+        let f = scaling_for((2240, 1260), (1120, 630));
+        assert_eq!((f.num(), f.denom()), (1, 2));
+        let f = scaling_for((800, 600), (1120, 630));
+        assert_eq!((f.num(), f.denom()), (1, 1));
+    }
+
+    #[test]
+    fn a_big_jpeg_comes_out_at_size_and_reports_its_own() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("poster.jpg");
+        image::DynamicImage::ImageRgba8(synthetic(2400, 1350)).to_rgb8().save(&src).unwrap();
+        let p = prepare(&src, &dir.path().join("art"), Style::Landscape).unwrap();
+        assert_eq!((p.src_width, p.src_height), (2400, 1350));
+        assert_eq!((p.width, p.height), Style::Landscape.target());
+        let out = image::open(&p.path).unwrap().to_rgba8();
+        let (left, right) = (out.get_pixel(40, 100), out.get_pixel(430, 100));
+        assert!(left[0] > 200 && left[2] < 100, "left {left:?}");
+        assert!(right[0] < 60, "right {right:?}");
     }
 
     /// A minimal big-endian EXIF block holding only an orientation.

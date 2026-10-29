@@ -49,6 +49,8 @@ abstract class CargoNdkBuild : DefaultTask() {
         execOps.exec {
             workingDir = File(workspace.get())
             environment("ANDROID_NDK_HOME", ndk.get())
+            // libjpeg-turbo is built from source by cmake, which needs the NDK's toolchain file.
+            environment("CMAKE_TOOLCHAIN_FILE", "${ndk.get()}/build/cmake/android.toolchain.cmake")
             commandLine(args)
         }
     }

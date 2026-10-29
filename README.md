@@ -285,7 +285,8 @@ and GitHub twice a day for updates. There are no accounts and no analytics.
 ## Building from source
 
 You need JDK 21, the Android SDK with platform 37 and NDK 27, stable Rust with `cargo-ndk` and
-the `wasm32-unknown-unknown` target, and Node 24 with pnpm 10.
+the `wasm32-unknown-unknown` target, cmake and a C compiler for the bundled libjpeg-turbo, and
+Node 24 with pnpm 10.
 
 ```sh
 rustup target add wasm32-unknown-unknown aarch64-linux-android armv7-linux-androideabi
