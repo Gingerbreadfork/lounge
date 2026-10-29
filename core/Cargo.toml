@@ -29,7 +29,6 @@ tracing-subscriber = { version = "0.3", features = ["fmt"] }
 tracing-android = "0.2"
 image = { version = "0.25", default-features = false, features = ["png", "webp"] }
 turbojpeg = { version = "1.5", default-features = false, features = ["cmake"] }
-fast_image_resize = { version = "6", features = ["only_u8x4"] }
 rayon = "1"
 libc = "0.2"
 blake3 = "1"

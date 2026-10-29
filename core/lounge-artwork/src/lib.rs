@@ -1,7 +1,6 @@
 //! Index-time artwork pipeline: decode once, crop to the tile's aspect, pre-scale to the
 //! exact sizes the UI draws, write PNGs to the disk cache, and extract a palette.
 
-use fast_image_resize::{images::Image, images::ImageRef, FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
 use image::metadata::Orientation;
 use image::{ImageDecoder, ImageFormat, RgbaImage};
 use lounge_graph::Palette;
@@ -565,23 +564,27 @@ fn crop_resize(src: &RgbaImage, sw: u32, sh: u32, (left, top, cw, ch): (f64, f64
         (src, (left, top, cw, ch))
     };
     let (sw, sh) = source.dimensions();
-    let src_img = ImageRef::new(sw, sh, source.as_raw(), PixelType::U8x4)
-        .map_err(|e| ArtworkError::Resize(e.to_string()))?;
-    let mut dst = Image::new(tw, th, PixelType::U8x4);
+    // Lanczos3 going down, Mitchell going up.
+    let kernel = if tw < sw || th < sh { 0 } else { 1 };
+    let mut out = vec![0u8; tw as usize * th as usize * 4];
+    // SAFETY: the source buffer holds sw*sh*4 bytes and the output tw*th*4, as the C side expects.
+    let rc = unsafe { lounge_resize_rgba(source.as_raw().as_ptr(), sw, sh, rect.0, rect.1, rect.2, rect.3, out.as_mut_ptr(), tw, th, kernel) };
+    if rc != 0 {
+        return Err(ArtworkError::Resize("out of memory resampling".into()));
+    }
+    RgbaImage::from_raw(tw, th, out).ok_or_else(|| ArtworkError::Resize("buffer size mismatch".into()))
+}
 
-    let alg = if tw < sw || th < sh {
-        ResizeAlg::Convolution(FilterType::Lanczos3)
-    } else {
-        ResizeAlg::Convolution(FilterType::Mitchell)
-    };
-    let options = ResizeOptions::new().resize_alg(alg).crop(rect.0, rect.1, rect.2, rect.3);
-    let mut resizer = Resizer::new();
-    resizer
-        .resize(&src_img, &mut dst, &options)
-        .map_err(|e| ArtworkError::Resize(e.to_string()))?;
+/// The resampler on its own, for checking it across platforms.
+#[doc(hidden)]
+pub fn resample(src: &RgbaImage, rect: (f64, f64, f64, f64), tw: u32, th: u32) -> Result<RgbaImage> {
+    let (sw, sh) = src.dimensions();
+    crop_resize(src, sw, sh, rect, tw, th)
+}
 
-    RgbaImage::from_raw(tw, th, dst.into_vec())
-        .ok_or_else(|| ArtworkError::Resize("buffer size mismatch".into()))
+unsafe extern "C" {
+    /// The resampler in `csrc/resize.c`.
+    fn lounge_resize_rgba(src: *const u8, sw: u32, sh: u32, left: f64, top: f64, cw: f64, ch: f64, dst: *mut u8, tw: u32, th: u32, kernel: std::os::raw::c_int) -> std::os::raw::c_int;
 }
 
 /// Half the size, each pixel the mean of its 2×2 block.
@@ -971,6 +974,32 @@ mod tests {
         let out = crop_resize(&big, 2000, 1200, (0.0, 0.0, 2000.0, 1200.0), 160, 90).unwrap();
         assert_eq!(out.dimensions(), (160, 90));
         assert!(out.get_pixel(20, 45)[0] > 200 && out.get_pixel(140, 45)[0] < 60);
+    }
+
+    #[test]
+    fn resampling_keeps_a_flat_colour_and_a_one_to_one_copy_exact() {
+        let flat = RgbaImage::from_pixel(300, 200, Rgba([77, 150, 33, 255]));
+        for (tw, th) in [(100u32, 66u32), (600, 400), (300, 200)] {
+            let out = crop_resize(&flat, 300, 200, (0.0, 0.0, 300.0, 200.0), tw, th).unwrap();
+            assert!(out.pixels().all(|p| *p == Rgba([77, 150, 33, 255])), "{tw}x{th}");
+        }
+        let detailed = synthetic(300, 200);
+        let same = crop_resize(&detailed, 300, 200, (0.3, 0.2, 300.0, 200.0), 300, 200).unwrap();
+        assert_eq!(same.as_raw(), detailed.as_raw());
+    }
+
+    #[test]
+    fn resampling_keeps_a_gradient_in_order() {
+        let mut img = RgbaImage::new(512, 8);
+        for (x, _, p) in img.enumerate_pixels_mut() {
+            *p = Rgba([(x / 2) as u8, 0, 0, 255]);
+        }
+        for tw in [128u32, 200, 1024] {
+            let out = crop_resize(&img, 512, 8, (0.0, 0.0, 512.0, 8.0), tw, 4).unwrap();
+            let row: Vec<u8> = (0..tw).map(|x| out.get_pixel(x, 2)[0]).collect();
+            assert!(row.windows(2).all(|w| w[0] <= w[1]), "{tw}: {row:?}");
+            assert!(row[0] < 4 && row[tw as usize - 1] > 250, "{tw}: ends {} {}", row[0], row[tw as usize - 1]);
+        }
     }
 
     /// A minimal big-endian EXIF block holding only an orientation.
