@@ -126,7 +126,8 @@ internal fun BandLight(glow: List<Color>, light: Color, velvet: Color, clock: ()
                 },
         )
         // The dither adds to the finished band: in a layer of its own, Plus would add alpha too
-        // and make the layer opaque.
+        // and make the layer opaque. The caller composites the band as one layer, so the alpha
+        // it adds never reaches the frame's edge.
         Spacer(Modifier.fillMaxSize().drawBehind { drawRect(dither, blendMode = BlendMode.Plus) })
     }
 }

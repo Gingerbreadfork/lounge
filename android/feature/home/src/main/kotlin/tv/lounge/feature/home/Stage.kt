@@ -291,6 +291,8 @@ private fun StageFrame(
             modifier = Modifier
                 .wrapContentSize(Alignment.TopStart, unbounded = true)
                 .graphicsLayer {
+                    // Composited whole, so the dither's Plus never lands on the frame's anti-aliased edge.
+                    compositingStrategy = CompositingStrategy.Offscreen
                     val p = progress()
                     alpha = lightIn(p)
                     scaleX = geometry.width(p) / geometry.bandW
