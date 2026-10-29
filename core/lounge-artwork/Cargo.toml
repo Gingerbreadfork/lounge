@@ -12,9 +12,11 @@ blake3.workspace = true
 lounge-graph.workspace = true
 turbojpeg.workspace = true
 libwebp-sys.workspace = true
+libz-sys.workspace = true
 
 [build-dependencies]
 cc = "1"
+libpng-src = "0.2"
 
 [dev-dependencies]
 image = { workspace = true, features = ["jpeg", "webp"] }

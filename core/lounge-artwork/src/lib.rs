@@ -370,6 +370,9 @@ fn decode(bytes: &[u8], want: impl FnOnce(u32, u32) -> (u32, u32)) -> Result<Dec
     if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
         return decode_webp(bytes, want, too_big);
     }
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return decode_png(bytes, too_big);
+    }
     let mut probe = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?.into_decoder()?;
     let (w, h) = probe.dimensions();
     let orientation = probe.orientation().unwrap_or(Orientation::NoTransforms);
@@ -449,6 +452,51 @@ fn decode_webp(bytes: &[u8], want: impl FnOnce(u32, u32) -> (u32, u32), too_big:
         let img = RgbaImage::from_raw(dw, dh, pixels).ok_or_else(|| failed("buffer size mismatch"))?;
         Ok(Decoded { image: oriented(img, orientation), source, opaque: features.has_alpha == 0 })
     }
+}
+
+/// A PNG through libpng, whole, with its EXIF orientation read from the file's chunks.
+fn decode_png(bytes: &[u8], too_big: impl Fn(u64, u64) -> bool) -> Result<Decoded> {
+    let (mut w, mut h) = (0u32, 0u32);
+    // SAFETY: the shim reads the bytes it is given and writes only the sizes and the buffer handed
+    // to it, which holds w*h*4 bytes as it requires.
+    if unsafe { lounge_png_size(bytes.as_ptr(), bytes.len(), &mut w, &mut h) } != 0 {
+        return Err(ArtworkError::Resize("png: unreadable header".into()));
+    }
+    if too_big(w as u64, h as u64) {
+        return Err(ArtworkError::Resize(format!("{w}×{h} is too large a picture")));
+    }
+    let mut pixels = vec![0u8; w as usize * h as usize * 4];
+    if unsafe { lounge_png_decode(bytes.as_ptr(), bytes.len(), pixels.as_mut_ptr(), w, h) } != 0 {
+        return Err(ArtworkError::Resize("png: will not decode".into()));
+    }
+    let orientation = png_exif_chunk(bytes).and_then(Orientation::from_exif_chunk).unwrap_or(Orientation::NoTransforms);
+    let img = RgbaImage::from_raw(w, h, pixels).ok_or_else(|| ArtworkError::Resize("png buffer size mismatch".into()))?;
+    let image = oriented(img, orientation);
+    let source = image.dimensions();
+    Ok(Decoded { image, source, opaque: false })
+}
+
+/// A PNG's eXIf chunk, wherever it sits before the end.
+fn png_exif_chunk(bytes: &[u8]) -> Option<&[u8]> {
+    let mut i = 8;
+    while i + 12 <= bytes.len() {
+        let len = u32::from_be_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]) as usize;
+        let kind = &bytes[i + 4..i + 8];
+        if kind == b"IEND" {
+            return None;
+        }
+        if kind == b"eXIf" {
+            return bytes.get(i + 8..i + 8 + len);
+        }
+        i += 12 + len;
+    }
+    None
+}
+
+unsafe extern "C" {
+    /// The PNG shim in `csrc/png.c`.
+    fn lounge_png_size(data: *const u8, len: usize, w: *mut u32, h: *mut u32) -> std::os::raw::c_int;
+    fn lounge_png_decode(data: *const u8, len: usize, out: *mut u8, w: u32, h: u32) -> std::os::raw::c_int;
 }
 
 /// A WebP's EXIF chunk from its RIFF container, any "Exif\0\0" tag stripped.
@@ -660,6 +708,12 @@ fn crop_resize(src: &RgbaImage, sw: u32, sh: u32, (left, top, cw, ch): (f64, f64
         return Err(ArtworkError::Resize("out of memory resampling".into()));
     }
     RgbaImage::from_raw(tw, th, out).ok_or_else(|| ArtworkError::Resize("buffer size mismatch".into()))
+}
+
+/// A picture decoded whole, for checking the decoders across platforms.
+#[doc(hidden)]
+pub fn decode_whole(bytes: &[u8]) -> Result<RgbaImage> {
+    decode(bytes, |w, h| (w, h)).map(|d| d.image)
 }
 
 /// The resampler on its own, for checking it across platforms.
@@ -1145,6 +1199,26 @@ mod tests {
         let (left, right) = (out.get_pixel(40, 100), out.get_pixel(430, 100));
         assert!(left[0] < 40 && left[1] > 200 && left[2] > 200, "left {left:?}");
         assert!(right[0] > 230 && right[1] > 230 && right[2] > 230, "right {right:?}");
+    }
+
+    #[test]
+    fn pngs_of_every_depth_come_out_as_rgba() {
+        let dir = tempfile::tempdir().unwrap();
+        let rgba = synthetic(320, 180);
+        let sources: Vec<(&str, image::DynamicImage)> = vec![
+            ("rgb16.png", image::DynamicImage::ImageRgba8(rgba.clone()).to_rgb16().into()),
+            ("gray.png", image::DynamicImage::ImageLuma8(image::GrayImage::from_fn(320, 180, |x, _| image::Luma([if x < 160 { 200 } else { 20 }])))),
+            ("rgba.png", image::DynamicImage::ImageRgba8(rgba)),
+        ];
+        for (name, img) in sources {
+            let src = dir.path().join(name);
+            img.save(&src).unwrap();
+            let p = prepare(&src, &dir.path().join("art"), Style::Landscape).unwrap();
+            assert_eq!((p.src_width, p.src_height), (320, 180), "{name}");
+            let out = image::open(&p.path).unwrap().to_rgba8();
+            let (left, right) = (out.get_pixel(40, 100), out.get_pixel(430, 100));
+            assert!(left[0] > 180 && right[0] < 60, "{name}: left {left:?} right {right:?}");
+        }
     }
 
     /// A minimal big-endian EXIF block holding only an orientation.

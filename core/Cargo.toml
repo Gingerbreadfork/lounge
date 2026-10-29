@@ -30,6 +30,7 @@ tracing-android = "0.2"
 image = { version = "0.25", default-features = false, features = ["png"] }
 turbojpeg = { version = "1.5", default-features = false, features = ["cmake"] }
 libwebp-sys = "0.14"
+libz-sys = "1"
 rayon = "1"
 libc = "0.2"
 blake3 = "1"
