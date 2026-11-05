@@ -51,6 +51,8 @@ const MAX_PER_ADDRESS: usize = 12;
 const HEAD_TIMEOUT: Duration = Duration::from_secs(10);
 /// What one connection may hold while its request's head is still arriving.
 const MAX_BUFFER: usize = 16 * 1024;
+/// How long an upload's body may take to arrive, so a stalled one gives up its turn.
+const UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 /// How long open connections get to finish once the server is told to stop.
 const GRACE: Duration = Duration::from_secs(2);
 
@@ -554,9 +556,12 @@ async fn plugins(State(app): State<Shared>) -> Result<Response, ApiError> {
     Ok(json_raw(on_core(&app, |a| a.plugins_json()).await?))
 }
 
-/// The body of an upload that holds its turn, within the route's body limit.
+/// The body of an upload that holds its turn, within the route's body limit and time.
 async fn upload_body(req: Request) -> Result<Bytes, ApiError> {
-    Bytes::from_request(req, &()).await.map_err(|e| ApiError(e.status(), e.body_text()))
+    match tokio::time::timeout(UPLOAD_TIMEOUT, Bytes::from_request(req, &())).await {
+        Ok(body) => body.map_err(|e| ApiError(e.status(), e.body_text())),
+        Err(_) => Err(ApiError(StatusCode::REQUEST_TIMEOUT, "the upload stopped arriving".into())),
+    }
 }
 
 async fn install_plugin(State(app): State<Shared>, req: Request) -> Result<Response, ApiError> {
