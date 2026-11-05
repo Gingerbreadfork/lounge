@@ -5,7 +5,7 @@
 <h1 align="center">Lounge</h1>
 
 <p align="center">
-  An open-source, ad-free launcher for Android TV and Google TV, laid out around what you actually watch.<br>
+  A free, open-source launcher for Android TV and Google TV, laid out around what you actually watch.<br>
   Quick on the remote, calm to look at, and nothing leaves the house.
 </p>
 
@@ -17,12 +17,14 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="920" alt="The Lounge home screen: a still from Static Bloom large on the right, its magenta light on the wall and the Continue button, the title, year and director on the left, and a strip of what to watch next along the bottom">
+  <a href="../../releases/latest"><img src="https://img.shields.io/badge/Download-Android_TV_9%2B-FFA86B?style=for-the-badge&labelColor=412399&logo=android&logoColor=FFFFFF" alt="Download the latest APK"></a>
 </p>
 
-Lounge replaces the stock home screen on any Android TV or Google TV device running Android 9
-or later, the same way launchers like Projectivy and FLauncher do. It is free, has no ads and no
-account, and everything it learns about what you watch stays on the TV.
+<p align="center"><sub>One APK, no account: copy it to a USB stick, open it on the TV, and you are about five minutes from a new home screen. <a href="#installing-on-a-tv">Full steps</a>.</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="920" alt="The Lounge home screen: a still from Static Bloom large on the right, its magenta light on the wall and the Continue button, the title, year and director on the left, and a strip of what to watch next along the bottom">
+</p>
 
 ## At a glance
 
