@@ -111,14 +111,15 @@ fun UpdatesSheet(updates: UpdateManager, firstFocus: FocusRequester) {
         Spacer(Modifier.height(16.dp))
         Hairline(Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
-        val how = when (updates.currentPath()) {
+        val path = updates.currentPath()
+        val how = when (path) {
             InstallPath.Silent -> "Updates install by themselves while you are in another app, and Lounge comes back as it was."
             InstallPath.PowerSetup -> "Power Setup installs updates without asking, while you are in another app."
             InstallPath.Confirm -> "Android asks you to confirm this update, and Play Protect may add that it has not seen this developer: choose More details, then Install anyway. After this one, updates install by themselves."
             InstallPath.NeedsPermission -> "Android does not let Lounge install apps yet. Allow it in Settings → Apps → Special app access → Install unknown apps, or connect Power Setup."
         }
         Text("Lounge looks at its releases on GitHub twice a day. $how", style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.padding(horizontal = 16.dp))
-        if (updates.currentPath() == InstallPath.NeedsPermission) {
+        if (path == InstallPath.NeedsPermission) {
             Spacer(Modifier.height(8.dp))
             SheetRow(icon = LoungeIcons.Settings, title = "Allow Lounge to install updates", value = "Open", onClick = { activity?.let { updates.openInstallPermission(it) } })
         }
