@@ -27,6 +27,10 @@ class ReleaseTest {
         assertEquals(1, code)
         assertEquals("The update changed before it was installed", out)
         assertFalse(copy.exists())
+        // A hash is only ever compared, never run.
+        val marker = File(dir, "ran")
+        assertEquals(1, run("\$(touch ${marker.path})", "\$(touch ${marker.path})").first)
+        assertFalse(marker.exists())
         dir.deleteRecursively()
     }
 
@@ -85,6 +89,13 @@ class ReleaseTest {
     fun prereleasesAndReleasesWithoutAnApkAreSkipped() {
         assertNull(Release.parse(LATEST.replace("\"prerelease\": false", "\"prerelease\": true")))
         assertNull(Release.parse(LATEST.replace("Lounge-0.1.2.apk", "notes.txt")))
+        assertNull(Release.parse(LATEST.replace("\"name\": \"Lounge-0.1.2.apk\"", "\"name\": \"Lounge-/../../x.apk\"")))
+    }
+
+    @Test
+    fun aDigestThatIsNotASha256IsIgnored() {
+        assertNull(Release.parse(LATEST.replace("sha256:${"ab".repeat(32)}", "sha256:\$(reboot)"))!!.sha256)
+        assertEquals("ab".repeat(32), Release.parse(LATEST.replace("sha256:${"ab".repeat(32)}", "sha256:${"AB".repeat(32)}"))!!.sha256)
     }
 
     @Test
@@ -99,9 +110,12 @@ class ReleaseTest {
 
     @Test
     fun sumsFilesAreRead() {
-        val sums = "cafe  Lounge-0.1.2.apk\nbeef *SHA256SUMS\n"
-        assertEquals("cafe", Release.hashFromSums(sums, "Lounge-0.1.2.apk"))
-        assertEquals("beef", Release.hashFromSums(sums, "SHA256SUMS"))
+        val cafe = "cafe".repeat(16)
+        val beef = "beef".repeat(16)
+        val sums = "${cafe.uppercase()}  Lounge-0.1.2.apk\n$beef *SHA256SUMS\n\$(reboot) Lounge-0.1.3.apk\n"
+        assertEquals(cafe, Release.hashFromSums(sums, "Lounge-0.1.2.apk"))
+        assertEquals(beef, Release.hashFromSums(sums, "SHA256SUMS"))
+        assertNull(Release.hashFromSums(sums, "Lounge-0.1.3.apk"))
         assertNull(Release.hashFromSums(sums, "other.apk"))
     }
 

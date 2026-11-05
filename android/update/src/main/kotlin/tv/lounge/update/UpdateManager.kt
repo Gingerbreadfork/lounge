@@ -696,7 +696,7 @@ class UpdateManager(
                 "umask 077",
                 "rm -f $t",
                 "cp ${shellQuote(source)} $t || exit 1",
-                "if command -v sha256sum >/dev/null; then set -- \$(sha256sum $t); want=$sha256; else set -- \$(sha1sum $t); want=$sha1; fi",
+                "if command -v sha256sum >/dev/null; then set -- \$(sha256sum $t); want=${shellQuote(sha256)}; else set -- \$(sha1sum $t); want=${shellQuote(sha1)}; fi",
                 "if [ \"\$1\" != \"\$want\" ]; then rm -f $t; echo 'The update changed before it was installed'; exit 1; fi",
                 "$install $t; r=\$?",
                 "rm -f $t",

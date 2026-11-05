@@ -64,12 +64,12 @@ data class Release(
                 val a = assets.getJSONObject(i)
                 val name = a.optString("name")
                 when {
-                    name.startsWith(apkPrefix) && name.endsWith(".apk") -> apk = a
+                    name.startsWith(apkPrefix) && name.endsWith(".apk") && '/' !in name -> apk = a
                     name == "SHA256SUMS" -> sums = a
                 }
             }
             val asset = apk ?: return null
-            val digest = asset.optString("digest").takeIf { it.startsWith("sha256:") }?.removePrefix("sha256:")?.lowercase()
+            val digest = asset.optString("digest").takeIf { it.startsWith("sha256:") }?.removePrefix("sha256:")?.let(::sha256OrNull)
             val apkUrl = asset.getString("browser_download_url")
             val sumsUrl = sums?.optString("browser_download_url")?.takeIf { it.isNotEmpty() }
             if (!isHttps(apkUrl) || (sumsUrl != null && !isHttps(sumsUrl))) return null
@@ -88,13 +88,18 @@ data class Release(
 
         private fun isHttps(url: String): Boolean = url.startsWith("https://", ignoreCase = true)
 
-        /** The hash listed for [fileName] in a `sha256sum` style file. */
+        private val SHA256_HEX = Regex("[0-9a-f]{64}")
+
+        /** [text] in lower case when it is a SHA-256 written as hex, else null. */
+        private fun sha256OrNull(text: String): String? = text.lowercase().takeIf { SHA256_HEX.matches(it) }
+
+        /** The hash listed for [fileName] in a `sha256sum` style file, when it is a well-formed SHA-256. */
         fun hashFromSums(text: String, fileName: String): String? = text
             .lineSequence()
             .map { it.trim().split(Regex("\\s+"), limit = 2) }
             .firstOrNull { it.size == 2 && it[1].trimStart('*') == fileName }
             ?.get(0)
-            ?.lowercase()
+            ?.let(::sha256OrNull)
     }
 }
 
