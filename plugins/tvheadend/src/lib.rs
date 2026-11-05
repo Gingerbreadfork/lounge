@@ -92,7 +92,7 @@ impl sdk::Plugin for Tvheadend {
                 if e.start * 1000 >= window_end {
                     break 'pages;
                 }
-                if e.stop * 1000 > ctx.now_ms && uuids.contains(e.channel_uuid.as_str()) {
+                if e.stop > e.start && e.stop * 1000 > ctx.now_ms && uuids.contains(e.channel_uuid.as_str()) {
                     schedule.push(s.event_item(&e, None));
                 }
             }
