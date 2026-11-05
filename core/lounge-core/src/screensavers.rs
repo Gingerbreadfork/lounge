@@ -86,6 +86,9 @@ fn is_identifier(s: &str) -> bool {
 /// "#RRGGBB" or "#AARRGGBB" as ARGB.
 pub(crate) fn parse_color(text: &str) -> Option<u32> {
     let hex = text.trim().strip_prefix('#')?;
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
     let v = u32::from_str_radix(hex, 16).ok()?;
     match hex.len() {
         6 => Some(0xFF00_0000 | v),
@@ -165,6 +168,7 @@ mod tests {
         assert_eq!(parse_color("#FFA86B"), Some(0xFFFF_A86B));
         assert_eq!(parse_color("#80FFA86B"), Some(0x80FF_A86B));
         assert_eq!(parse_color("FFA86B"), None);
+        assert_eq!(parse_color("#+FA86B"), None);
     }
 
     #[test]
