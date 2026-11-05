@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
@@ -20,6 +20,9 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import tv.lounge.core.CoreClient
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LoungeThemeVariant
 import tv.lounge.design.LoungeVisuals
@@ -58,7 +61,11 @@ class AmbientDreamService : DreamService(), LifecycleOwner, SavedStateRegistryOw
                     reducedMotion = uiPrefs.reducedMotion ?: systemReducedMotion(),
                     visuals = LoungeVisuals.Lite,
                 ) {
-                    val core = remember { app.awaitCoreOrNull() }
+                    // A dream started while the core is still opening waits for it off the main thread.
+                    val opened by produceState<CoreClient?>(if (app.coreSettled) app.awaitCoreOrNull() else null) {
+                        if (value == null) value = withContext(Dispatchers.IO) { app.awaitCoreOrNull() }
+                    }
+                    val core = opened
                     // Without a core there is nothing to show, but the panel still rests in the dark.
                     if (core != null) Screensaver(core, prefs) else Box(Modifier.fillMaxSize().background(LoungeTheme.colors.velvet))
                 }
