@@ -35,6 +35,9 @@ def path_data(builder):
 def main(names):
     source = open(ICONS).read()
     icons = {m.group(1): m.group(2) for m in re.finditer(r'icon\("(\w+)"\) \{(.*?)\n        \}\n    \}', source, re.S)}
+    unknown = [name for name in names if name not in icons]
+    if unknown:
+        sys.exit(f"No icon named {', '.join(unknown)} in Icons.kt")
     for name in names:
         paths = []
         for kind, builder in re.findall(r"\b(stroke|fill) \{(.*?)\}", icons[name], re.S):
