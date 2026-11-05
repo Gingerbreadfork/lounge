@@ -17,8 +17,9 @@ impl sdk::Plugin for HdHomeRun {
             description: "Over-the-air channels and a guide from an HDHomeRun tuner on your network.".into(),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
-            // Tuners are found by discovery, so any on the home network may be reached.
-            fetch_hosts: vec!["$device".into(), "local-network".into(), "*".into()],
+            // Tuners are found by discovery, so any on the home network may be reached. Discovery,
+            // the guide and its pictures are all under hdhomerun.com.
+            fetch_hosts: vec!["$device".into(), "local-network".into(), "*.hdhomerun.com".into()],
             refresh_minutes: 60,
             rows: vec![],
             settings: vec![
@@ -265,6 +266,16 @@ mod tests {
         assert_eq!((s.season.as_deref(), s.episode.as_deref()), (Some("12"), Some("4")));
         assert_eq!(s.subtitle.as_deref(), Some("Tonight."));
         assert_eq!((s.start_ms, s.end_ms), (Some(1760800000000), Some(1760803600000)));
+    }
+
+    #[test]
+    fn reaches_hdhomerun_services_and_no_other_public_host() {
+        let m = <HdHomeRun as sdk::Plugin>::manifest();
+        m.validate().unwrap();
+        for host in ["ipv4-api.hdhomerun.com", "api.hdhomerun.com", "img.hdhomerun.com", "192.168.0.20", "hdhomerun.local"] {
+            assert!(m.allows_host(host), "{host}");
+        }
+        assert!(!m.allows_host("example.com"));
     }
 
     #[test]
