@@ -479,7 +479,7 @@ pub fn fetch_online(service: &str, request: &HttpRequest) -> Result<HttpResponse
 
 fn fetch_or(request: &HttpRequest, unreachable: impl FnOnce() -> String) -> Result<HttpResponse, String> {
     host::fetch(request).map_err(|e| {
-        if e == host::TOO_LARGE || e.contains("budget") {
+        if e == host::TOO_LARGE || e.starts_with("fetch budget ") {
             return e;
         }
         warn!("{e}");
