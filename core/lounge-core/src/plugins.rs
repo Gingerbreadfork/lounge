@@ -109,6 +109,8 @@ pub(crate) struct PluginManager {
     pub installing: Mutex<()>,
     /// Plugins with a refresh waiting to run; asking again meanwhile adds nothing.
     refresh_queued: Mutex<HashSet<String>>,
+    /// When refreshes ran that the store could not record, so those plugins are not due at once.
+    unrecorded_refresh: Mutex<HashMap<String, i64>>,
 }
 
 /// The host's view of storage, backed by the core's store once it exists.
@@ -265,6 +267,7 @@ impl PluginManager {
             search_generation: AtomicU64::new(0),
             installing: Mutex::new(()),
             refresh_queued: Mutex::new(HashSet::new()),
+            unrecorded_refresh: Mutex::new(HashMap::new()),
         });
         (manager, refresh_rx, calls_rx, services)
     }
@@ -708,6 +711,7 @@ fn due(inner: &Inner) -> Vec<String> {
     }
     let state = inner.state.lock();
     let rows = state.store.plugins().unwrap_or_default();
+    let unrecorded = inner.plugins.unrecorded_refresh.lock();
     let now = now_ms();
     state
         .plugins
@@ -715,7 +719,7 @@ fn due(inner: &Inner) -> Vec<String> {
         .filter(|p| p.enabled)
         .filter(|p| {
             let row = rows.iter().find(|r| r.id == p.id);
-            let last = row.and_then(|r| r.last_refresh_ms);
+            let last = row.and_then(|r| r.last_refresh_ms).max(unrecorded.get(&p.id).copied());
             refresh_due(last, row.is_some_and(|r| r.last_error.is_some()), p.manifest.refresh_minutes_or_default(), now)
         })
         .map(|p| p.id.clone())
@@ -727,6 +731,20 @@ fn due(inner: &Inner) -> Vec<String> {
 pub(crate) fn refresh_due_soon(inner: &Inner) {
     for id in due(inner) {
         inner.plugins.refresh_soon(&id);
+    }
+}
+
+fn record_refresh(inner: &Inner, store: &lounge_store::Store, id: &str, error: Option<&str>) {
+    let now = now_ms();
+    let mut unrecorded = inner.plugins.unrecorded_refresh.lock();
+    match store.plugin_set_refresh(id, now, error) {
+        Ok(()) => {
+            unrecorded.remove(id);
+        }
+        Err(e) => {
+            tracing::warn!("plugin {id}: could not record its refresh: {e}");
+            unrecorded.insert(id.to_string(), now);
+        }
     }
 }
 
@@ -767,7 +785,7 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
                 if !state.plugins.iter().any(|p| p.id == id && p.enabled) {
                     return;
                 }
-                let _ = state.store.plugin_set_refresh(id, now_ms(), None);
+                record_refresh(inner, &state.store, id, None);
                 screensavers::save(&state.store, id, &scenes);
             }
             inner.enqueue_job(worker::Job::PluginItems { plugin: id.to_string(), items });
@@ -776,7 +794,7 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
             let e = clip_bytes(&redact_urls(&e), 1000).to_string();
             tracing::warn!("plugin {id}: {e}");
             push_log(&inner.plugins.logs, id, 3, &e);
-            let _ = inner.state.lock().store.plugin_set_refresh(id, now_ms(), Some(&e));
+            record_refresh(inner, &inner.state.lock().store, id, Some(&e));
             inner.enqueue_job(worker::Job::Rebuild);
         }
     }
