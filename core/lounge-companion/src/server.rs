@@ -280,11 +280,8 @@ fn now_ms() -> i64 {
 struct Paired(String);
 
 fn bearer(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(|s| s.trim().to_string())
+    let (scheme, token) = headers.get(header::AUTHORIZATION)?.to_str().ok()?.split_once(' ')?;
+    scheme.eq_ignore_ascii_case("Bearer").then(|| token.trim().to_string())
 }
 
 fn cookie(headers: &HeaderMap, name: &str) -> Option<String> {
@@ -723,6 +720,19 @@ mod tests {
         assert!(cookie_route(&Method::GET, "/api/art"));
         assert!(!cookie_route(&Method::POST, "/api/backup"));
         assert!(!cookie_route(&Method::GET, "/api/state"));
+    }
+
+    #[test]
+    fn the_bearer_scheme_is_read_in_any_case() {
+        let with = |value: &str| {
+            let mut h = HeaderMap::new();
+            h.insert(header::AUTHORIZATION, value.parse().unwrap());
+            bearer(&h)
+        };
+        assert_eq!(with("Bearer tok").as_deref(), Some("tok"));
+        assert_eq!(with("bearer tok").as_deref(), Some("tok"));
+        assert_eq!(with("Basic tok"), None);
+        assert_eq!(with("Bearertok"), None);
     }
 
     #[test]
