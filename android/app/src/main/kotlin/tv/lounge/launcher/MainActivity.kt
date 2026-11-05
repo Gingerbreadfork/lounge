@@ -278,6 +278,7 @@ class MainActivity : ComponentActivity() {
         var left = frames
         lateinit var callback: android.view.Choreographer.FrameCallback
         callback = android.view.Choreographer.FrameCallback {
+            if (isDestroyed) return@FrameCallback
             left--
             if (left <= 0) block() else choreographer.postFrameCallback(callback)
         }
