@@ -357,6 +357,7 @@ impl PluginManager {
     pub fn remove_files(&self, id: &str) {
         self.loaded.lock().remove(id);
         self.fetchers.forget(id);
+        self.logs.lock().remove(id);
         for dir in [self.plugin_dir(id), self.plugin_art_dir(id)].into_iter().flatten() {
             let _ = std::fs::remove_dir_all(dir);
         }
