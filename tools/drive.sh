@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Drives Lounge on a device with remote key events and captures screenshots after each step.
-# Usage: tools/drive.sh <adb serial> <out dir> [install apk]
+# Usage: [PKG=<application id>] tools/drive.sh <adb serial> <out dir> [install apk]
+# PKG defaults to the debug build's id; set it to tv.lounge.launcher for a release APK.
 set -u
 SERIAL=${1:?adb serial}; OUT=${2:?out dir}; APK=${3:-}
 A="adb -s $SERIAL"; mkdir -p "$OUT"
