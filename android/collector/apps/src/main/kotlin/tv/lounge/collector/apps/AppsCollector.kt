@@ -134,10 +134,13 @@ class AppsCollector(private val context: Context) {
         val stamp = index.optLong(pkg, -1L)
         if (stamp != lastUpdate || !iconFile.exists()) {
             val banner = ri.activityInfo.loadBanner(pm) ?: appInfo.loadBanner(pm)
-            if (banner != null) render(banner, 640, 360, bannerFile) else bannerFile.delete()
+            if (banner == null) bannerFile.delete()
+            val bannerDone = banner == null || render(banner, 640, 360, bannerFile)
             val icon = ri.loadIcon(pm) ?: appInfo.loadIcon(pm)
-            if (icon != null) render(icon, 256, 256, iconFile) else iconFile.delete()
-            index.put(pkg, lastUpdate)
+            if (icon == null) iconFile.delete()
+            val iconDone = icon == null || render(icon, 256, 256, iconFile)
+            // A picture that failed is drawn again on the next pass.
+            if (bannerDone && iconDone) index.put(pkg, lastUpdate)
         }
 
         val isGame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -160,8 +163,9 @@ class AppsCollector(private val context: Context) {
         )
     }
 
-    private fun render(drawable: Drawable, width: Int, height: Int, out: File) {
-        try {
+    /** Draws [drawable] into [out] as a PNG; false when it could not. */
+    private fun render(drawable: Drawable, width: Int, height: Int, out: File): Boolean {
+        return try {
             val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
             drawable.setBounds(0, 0, width, height)
@@ -173,9 +177,11 @@ class AppsCollector(private val context: Context) {
                 tmp.delete()
             }
             bmp.recycle()
+            true
         } catch (e: Exception) {
             Log.w(TAG, "render ${out.name} failed", e)
             out.delete()
+            false
         }
     }
 
