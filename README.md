@@ -321,6 +321,7 @@ rules and the secrets it needs.
 ## Working on it
 
 ```sh
+cd companion && pnpm install && pnpm build   # once: the core embeds the phone app and needs it built
 cd core && cargo test --workspace            # the core: graph, ranking, colour, store, artwork, plugins
 cd plugins && cargo test --workspace         # the SDK and the built-in plugins
 cd android && ./gradlew :power:testDebugUnitTest
