@@ -3,7 +3,9 @@
 //! Most entry points return at once; their work runs on the core's worker thread and the
 //! results arrive through `SnapshotListener`. Those that answer a question wait for it: `guide`,
 //! `perform`, `available_channels`, `search_plugins`, `install_plugin` and `companion_pairing`,
-//! so they are called off the main thread.
+//! so they are called off the main thread. Reads such as `plugins`, `screensavers` and
+//! `diagnostics` share a lock with the worker and can wait out an ingest or a build, so they are
+//! called off the main thread too.
 
 mod companion;
 mod engine;

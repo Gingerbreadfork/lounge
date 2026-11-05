@@ -344,6 +344,9 @@ fun QuickSettingsSheet(
     val sounds0 = LoungeTheme.sounds
     var showDiagnostics by remember { mutableStateOf(false) }
     var diag by remember { mutableStateOf<Diagnostics?>(null) }
+    LaunchedEffect(showDiagnostics) {
+        diag = if (showDiagnostics) withContext(Dispatchers.IO) { diagnostics() } else null
+    }
     // Back from one of its pages puts focus on the row that opened it.
     val pages = listOf(Overlay.Channels, Overlay.Plugins, Overlay.Companion, Overlay.Ambient, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates)
     val returnTo = cameFrom?.takeIf { it in pages }
@@ -453,7 +456,7 @@ fun QuickSettingsSheet(
             focusRequester = focusFor(Overlay.PowerSetup),
         )
         SheetRow(icon = LoungeIcons.Refresh, title = "Updates", value = updateStatus, accent = if (updateStatus == "Up to date") colors.signal else colors.dust, onClick = onUpdates, focusRequester = focusFor(Overlay.Updates))
-        SheetRow(icon = LoungeIcons.Info, title = "Diagnostics", value = if (showDiagnostics) "Hide" else "Show", onClick = { showDiagnostics = !showDiagnostics; if (showDiagnostics) diag = diagnostics() })
+        SheetRow(icon = LoungeIcons.Info, title = "Diagnostics", value = if (showDiagnostics) "Hide" else "Show", onClick = { showDiagnostics = !showDiagnostics })
         if (showDiagnostics) {
             diag?.let { d ->
                 Column(Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
