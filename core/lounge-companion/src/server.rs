@@ -574,9 +574,9 @@ async fn install_plugin(State(app): State<Shared>, req: Request) -> Result<Respo
     tokio::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new("."))).await.map_err(|e| bad(e.to_string()))?;
     tokio::fs::write(&path, &body).await.map_err(|e| bad(e.to_string()))?;
     let p = path.clone();
-    let result = on_core(&app, move |a| a.install_plugin(&p)).await?;
+    let result = on_core(&app, move |a| a.install_plugin(&p)).await;
     let _ = tokio::fs::remove_file(&path).await;
-    Ok(json_raw(result.map_err(bad)?))
+    Ok(json_raw(result?.map_err(bad)?))
 }
 
 #[derive(Deserialize)]
@@ -587,11 +587,9 @@ async fn install_plugin_url(State(app): State<Shared>, Json(b): Json<UrlBody>) -
     let _turn = app.uploads.acquire().await.map_err(|e| bad(e.to_string()))?;
     let path = app.actions.temp_dir().join(format!("download-{}.lgp", now_ms()));
     let p = path.clone();
-    on_core(&app, move |a| a.download(&b.url, &p)).await?.map_err(bad)?;
-    let p = path.clone();
-    let result = on_core(&app, move |a| a.install_plugin(&p)).await?;
+    let result = on_core(&app, move |a| a.download(&b.url, &p).and_then(|()| a.install_plugin(&p))).await;
     let _ = tokio::fs::remove_file(&path).await;
-    Ok(json_raw(result.map_err(bad)?))
+    Ok(json_raw(result?.map_err(bad)?))
 }
 
 #[derive(Deserialize)]
