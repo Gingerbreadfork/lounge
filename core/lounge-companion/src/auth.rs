@@ -234,9 +234,8 @@ impl TokenStore {
         let id = d.id.clone();
         if now_ms - d.last_seen_ms > 60_000 {
             d.last_seen_ms = now_ms;
-            let snapshot = devices.clone();
-            drop(devices);
-            self.save(&snapshot);
+            // Saved under the lock, so an older list never lands after a newer one.
+            self.save(&devices);
         }
         Some(id)
     }
