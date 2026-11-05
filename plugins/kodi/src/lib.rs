@@ -456,14 +456,14 @@ impl Server {
 
     pub fn movie_item(&self, m: &Movie, resume: bool, offset: i32) -> Item {
         let title = if m.title.trim().is_empty() { m.label.clone() } else { m.title.clone() };
-        let duration = (m.runtime > 0.0).then(|| (m.runtime * 1000.0) as i64);
+        let duration = (m.runtime > 0.0).then_some((m.runtime * 1000.0) as i64);
         Item {
             id: format!("movie:{}", m.movieid),
             kind: if resume { ItemKind::Resume } else { ItemKind::Program },
             title: title.clone(),
             subtitle: (m.year > 0).then(|| m.year.to_string()),
             duration_ms: duration,
-            position_ms: resume.then(|| (m.resume.position * 1000.0) as i64),
+            position_ms: resume.then_some((m.resume.position * 1000.0) as i64),
             progress: progress(m.resume, resume),
             last_used_ms: parse_local(m.lastplayed.as_deref().unwrap_or(""), offset),
             added_ms: parse_local(m.dateadded.as_deref().unwrap_or(""), offset),
@@ -476,7 +476,7 @@ impl Server {
 
     pub fn episode_item(&self, e: &Episode, resume: bool, offset: i32) -> Item {
         let show = if e.showtitle.trim().is_empty() { e.label.clone() } else { e.showtitle.clone() };
-        let duration = (e.runtime > 0.0).then(|| (e.runtime * 1000.0) as i64);
+        let duration = (e.runtime > 0.0).then_some((e.runtime * 1000.0) as i64);
         Item {
             id: format!("episode:{}", e.episodeid),
             kind: if resume { ItemKind::Resume } else { ItemKind::Program },
@@ -485,7 +485,7 @@ impl Server {
             season: (e.season >= 0).then(|| e.season.to_string()),
             episode: (e.episode > 0).then(|| e.episode.to_string()),
             duration_ms: duration,
-            position_ms: resume.then(|| (e.resume.position * 1000.0) as i64),
+            position_ms: resume.then_some((e.resume.position * 1000.0) as i64),
             progress: progress(e.resume, resume),
             last_used_ms: parse_local(e.lastplayed.as_deref().unwrap_or(""), offset),
             added_ms: parse_local(e.dateadded.as_deref().unwrap_or(""), offset),
