@@ -384,6 +384,7 @@ impl PluginManager {
     /// Run a refresh now and download its artwork; returns items ready for the worker and
     /// sentences worth putting in the plugin's log.
     fn refresh(&self, entry: &PluginEntry, ctx: &RefreshContext) -> Result<(Vec<ReadyItem>, Vec<String>), String> {
+        let started = std::time::SystemTime::now();
         let plugin = self.loaded(&entry.id, &entry.manifest)?;
         let (items, sent) = self.host.refresh_counted(&plugin, ctx).map_err(|e| e.to_string())?;
         let (items, mut notes) = kept(items, sent);
@@ -397,7 +398,7 @@ impl PluginManager {
         if skipped > 0 {
             notes.push(format!("{skipped} pictures were not downloaded this time; they come with later refreshes"));
         }
-        prune_art_dir(&dir, &ready);
+        prune_art_dir(&dir, &ready, started);
         Ok((ready, notes))
     }
 
@@ -541,7 +542,8 @@ fn with_artwork(fetcher: &Fetcher, permitted: &(dyn Fn(&str) -> bool + Sync), di
 }
 
 /// Remove downloads the latest refresh no longer names, and temporary files left by a crash.
-fn prune_art_dir(dir: &Path, ready: &[ReadyItem]) {
+/// Pictures written since `since` stay, since a search saves its pictures here too.
+fn prune_art_dir(dir: &Path, ready: &[ReadyItem], since: std::time::SystemTime) {
     let keep: HashSet<PathBuf> = ready
         .iter()
         .flat_map(|r| [&r.poster, &r.thumbnail, &r.logo])
@@ -552,10 +554,10 @@ fn prune_art_dir(dir: &Path, ready: &[ReadyItem]) {
     let hour_ago = std::time::SystemTime::now() - Duration::from_secs(3600);
     for e in entries.flatten() {
         let path = e.path();
-        let is_img = path.extension().is_some_and(|x| x == "img");
-        let stale_tmp = path.extension().is_some_and(|x| x == "tmp")
-            && e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < hour_ago);
-        if (is_img && !keep.contains(&path)) || stale_tmp {
+        let modified = e.metadata().and_then(|m| m.modified());
+        let unnamed_img = path.extension().is_some_and(|x| x == "img") && !keep.contains(&path) && !modified.as_ref().is_ok_and(|t| *t >= since);
+        let stale_tmp = path.extension().is_some_and(|x| x == "tmp") && modified.is_ok_and(|t| t < hour_ago);
+        if unnamed_img || stale_tmp {
             let _ = std::fs::remove_file(path);
         }
     }
@@ -989,16 +991,23 @@ mod tests {
     }
 
     #[test]
-    fn pruning_keeps_what_the_refresh_names() {
+    fn pruning_keeps_what_the_refresh_names_and_what_arrived_meanwhile() {
         let dir = tempfile::tempdir().unwrap();
         let keep = dir.path().join("a.img");
         let stale = dir.path().join("b.img");
-        std::fs::write(&keep, b"x").unwrap();
-        std::fs::write(&stale, b"y").unwrap();
+        let searched = dir.path().join("c.img");
+        for p in [&keep, &stale, &searched] {
+            std::fs::write(p, b"x").unwrap();
+        }
+        let hour_ago = std::time::SystemTime::now() - Duration::from_secs(3600);
+        for p in [&keep, &stale] {
+            std::fs::File::options().write(true).open(p).unwrap().set_modified(hour_ago).unwrap();
+        }
         let ready = vec![ReadyItem { item: ApiItem::default(), poster: Some(keep.to_string_lossy().into_owned()), thumbnail: None, logo: None }];
-        prune_art_dir(dir.path(), &ready);
+        prune_art_dir(dir.path(), &ready, hour_ago + Duration::from_secs(60));
         assert!(keep.exists());
         assert!(!stale.exists());
+        assert!(searched.exists(), "a search's picture saved during the refresh stays");
     }
 
     #[test]
