@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,11 +56,15 @@ class MediaSessionsCollector(private val context: Context) {
             return@callbackFlow
         }
         val callbacks = HashMap<MediaController, MediaController.Callback>()
-        // Album art is encoded to disk here; that and the metadata reads leave the main thread.
+        val requests = Channel<Unit>(Channel.CONFLATED)
         fun publish() {
-            val current = controllers
-            launch(Dispatchers.IO) {
-                trySend(current.mapNotNull { c -> record(c) { uri -> uriArt(uri, this@callbackFlow) { publish() } } })
+            requests.trySend(Unit)
+        }
+        // One publication at a time, each of the latest sessions, so an older list never lands
+        // after a newer one. Album art is encoded to disk here, off the main thread.
+        launch(Dispatchers.IO) {
+            for (r in requests) {
+                trySend(controllers.mapNotNull { c -> record(c) { uri -> uriArt(uri, this@callbackFlow) { publish() } } })
             }
         }
         fun attach(list: List<MediaController>) {
