@@ -157,27 +157,30 @@ impl CompanionActions for CoreActions {
         let inner = self.inner()?;
         {
             let mut state = inner.state.lock();
+            // Changed on a copy, so a layout that fails to save never takes effect.
+            let mut layout = state.graph.layout.clone();
             if let Some(order) = patch.row_order {
-                state.graph.layout.row_order = order;
+                layout.row_order = order;
             }
             if let Some(hidden) = patch.hidden {
-                state.graph.layout.hidden = hidden.into_iter().collect();
+                layout.hidden = hidden.into_iter().collect();
             }
             if let Some(pins) = patch.pinned_apps {
-                state.graph.layout.pinned_apps = pins;
+                layout.pinned_apps = pins;
             }
             if let Some(pins) = patch.stage_pins {
-                state.graph.layout.stage_pins = pins;
+                layout.stage_pins = pins;
             }
             if let Some(channels) = patch.enabled_channels {
-                let before = std::mem::replace(&mut state.graph.layout.enabled_channels, channels.into_iter().collect());
-                if state.graph.layout.enabled_channels.difference(&before).next().is_some() {
-                    worker::want_program_art(&inner, &mut state);
-                }
+                layout.enabled_channels = channels.into_iter().collect();
             }
-            state.graph.layout.normalise();
-            let layout = state.graph.layout.clone();
+            layout.normalise();
             state.store.save_layout(&layout).map_err(|e| e.to_string())?;
+            let new_channels = layout.enabled_channels.difference(&state.graph.layout.enabled_channels).next().is_some();
+            state.graph.layout = layout;
+            if new_channels {
+                worker::want_program_art(&inner, &mut state);
+            }
         }
         inner.enqueue_job(worker::Job::Rebuild);
         Ok(layout_doc(&inner))
@@ -268,8 +271,8 @@ impl CompanionActions for CoreActions {
         layout.normalise();
         {
             let mut state = inner.state.lock();
-            state.graph.layout = layout.clone();
             state.store.save_layout(&layout).map_err(|e| e.to_string())?;
+            state.graph.layout = layout;
             // Only settings an installed plugin declares, and never a secret, which no backup
             // carries; each goes through the rule that keeps passwords with their server.
             for p in &backup.plugins {
@@ -329,5 +332,58 @@ mod tests {
             assert!(err.contains("this device"), "{url}: {err}");
         }
         assert!(listener.accept().is_err(), "a request reached the TV");
+    }
+
+    struct Quiet;
+
+    impl crate::Platform for Quiet {
+        fn launch_app(&self, _: String, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn view_uri(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn switch_input(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn tune(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn control(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn open_app_info(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn media_command(&self, _: String, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn request_permission(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn play_stream(&self, _: String, _: String, _: Option<i64>) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn send_key(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+    }
+
+    #[test]
+    fn a_layout_that_cannot_be_saved_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().join("data");
+        let config = crate::CoreConfig {
+            data_dir: data_dir.to_string_lossy().into_owned(),
+            cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+            tier: crate::DeviceTier::B,
+            utc_offset_minutes: 0,
+            has_tv_controls: false,
+            device_name: "TV".into(),
+            screen_width: 1920,
+            screen_height: 1080,
+        };
+        let core = crate::Core::open(config, Arc::new(Quiet)).unwrap();
+        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
+        let backup = actions.export_json();
+
+        let db = rusqlite::Connection::open(data_dir.join(crate::DB_FILE)).unwrap();
+        db.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+        db.execute_batch(
+            "CREATE TRIGGER refuse_insert BEFORE INSERT ON layout BEGIN SELECT RAISE(FAIL, 'refused'); END;
+             CREATE TRIGGER refuse_update BEFORE UPDATE ON layout BEGIN SELECT RAISE(FAIL, 'refused'); END;",
+        )
+        .unwrap();
+
+        let patch = LayoutPatch { hidden: Some(vec!["apps".into()]), pinned_apps: Some(vec!["tv.example".into()]), ..LayoutPatch::default() };
+        assert!(actions.set_layout(patch).is_err());
+        let after = actions.layout();
+        assert!(after.hidden.is_empty() && after.pinned_apps.is_empty(), "{after:?}");
+
+        let mut restored: serde_json::Value = serde_json::from_str(&backup).unwrap();
+        restored["layout"]["pinned_apps"] = serde_json::json!(["tv.example"]);
+        assert!(actions.import_json(&restored.to_string()).is_err());
+        assert!(actions.layout().pinned_apps.is_empty());
     }
 }
