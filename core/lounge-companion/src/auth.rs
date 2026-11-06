@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const CODE_TTL_MS: i64 = 5 * 60_000;
 /// Wrong codes in a row before pairing locks for that address; the lockout doubles each time,
@@ -23,6 +24,8 @@ const TRACKED_ADDRESSES: usize = 256;
 pub enum RedeemError {
     Wrong,
     LockedOut,
+    /// The device could not be written to disk, so it was not paired.
+    NotSaved(String),
 }
 
 #[derive(Default)]
@@ -78,6 +81,8 @@ pub struct TokenStore {
     lockouts: Mutex<Lockouts>,
     /// Ticks whenever a device is forgotten, so its open sockets can close at once.
     revoked: tokio::sync::watch::Sender<()>,
+    /// Set while the file is behind the list in memory; every authentication retries the save.
+    unsaved: AtomicBool,
 }
 
 impl TokenStore {
@@ -94,15 +99,26 @@ impl TokenStore {
             Err(_) => Vec::new(),
         };
         let revoked = tokio::sync::watch::channel(()).0;
-        TokenStore { path, devices: Mutex::new(devices), pending: Mutex::new(HashMap::new()), lockouts: Mutex::new(Lockouts::default()), revoked }
+        TokenStore { path, devices: Mutex::new(devices), pending: Mutex::new(HashMap::new()), lockouts: Mutex::new(Lockouts::default()), revoked, unsaved: AtomicBool::new(false) }
     }
 
-    fn save(&self, devices: &[Device]) {
-        let Ok(json) = serde_json::to_string_pretty(devices) else { return };
-        let tmp = self.path.with_extension("json.tmp");
-        if std::fs::write(&tmp, json).and_then(|_| std::fs::rename(&tmp, &self.path)).is_err() {
-            let _ = std::fs::remove_file(&tmp);
+    fn save(&self, devices: &[Device]) -> Result<(), String> {
+        let result = serde_json::to_string_pretty(devices).map_err(|e| e.to_string()).and_then(|json| {
+            let tmp = self.path.with_extension("json.tmp");
+            std::fs::write(&tmp, json).and_then(|_| std::fs::rename(&tmp, &self.path)).map_err(|e| {
+                let _ = std::fs::remove_file(&tmp);
+                e.to_string()
+            })
+        });
+        match &result {
+            Ok(()) => self.unsaved.store(false, Ordering::Relaxed),
+            Err(e) => {
+                if !self.unsaved.swap(true, Ordering::Relaxed) {
+                    tracing::warn!("companion: paired devices could not be saved ({e})");
+                }
+            }
         }
+        result
     }
 
     /// The paired devices, marking the one whose id is `current`.
@@ -153,7 +169,7 @@ impl TokenStore {
         match pending {
             Some(pending) => {
                 self.lockouts.lock().by_address.remove(&from);
-                self.register(&pending.token, device_name, now_ms);
+                self.register(&pending.token, device_name, now_ms).map_err(RedeemError::NotSaved)?;
                 Ok(pending.token)
             }
             None => {
@@ -181,26 +197,31 @@ impl TokenStore {
     /// Exchange the key a QR link carries for a token and register the device. The key sat in a
     /// URL, where a picture or a browser's history can keep it, so it works once and is never a
     /// token itself.
-    pub fn redeem_link(&self, link: &str, device_name: &str, now_ms: i64) -> Option<String> {
+    pub fn redeem_link(&self, link: &str, device_name: &str, now_ms: i64) -> Result<String, RedeemError> {
         let mut pending = self.pending.lock();
-        let code = pending.iter().find(|(_, p)| p.link == link && p.expires_ms >= now_ms).map(|(c, _)| c.clone())?;
-        let used = pending.remove(&code)?;
+        let code = pending.iter().find(|(_, p)| p.link == link && p.expires_ms >= now_ms).map(|(c, _)| c.clone()).ok_or(RedeemError::Wrong)?;
+        let used = pending.remove(&code).ok_or(RedeemError::Wrong)?;
         drop(pending);
-        self.register(&used.token, device_name, now_ms);
-        Some(used.token)
+        self.register(&used.token, device_name, now_ms).map_err(RedeemError::NotSaved)?;
+        Ok(used.token)
     }
 
-    /// Adds the device a token was just handed to.
-    fn register(&self, token: &str, device_name: &str, now_ms: i64) {
+    /// Adds the device a token was just handed to, unless it cannot be saved: a phone paired only
+    /// in memory would be dropped at the next restart.
+    fn register(&self, token: &str, device_name: &str, now_ms: i64) -> Result<(), String> {
         let h = hash(token);
         let mut devices = self.devices.lock();
         if devices.iter().any(|d| d.token_hash == h) {
-            return;
+            return Ok(());
         }
         // The id only names the device in the list; without randomness the hash serves.
         let id = random_token().map(|t| t[..12].to_string()).unwrap_or_else(|| h[..12].to_string());
         devices.push(Device { id, name: device_name.to_string(), created_ms: now_ms, last_seen_ms: now_ms, token_hash: h, session_hash: String::new() });
-        self.save(&devices);
+        if let Err(e) = self.save(&devices) {
+            devices.pop();
+            return Err(e);
+        }
+        Ok(())
     }
 
     /// The id of the device a token was handed to.
@@ -217,47 +238,59 @@ impl TokenStore {
     }
 
     /// A fresh session cookie value for a paired device, replacing its last one. None when the
-    /// device is gone or the system cannot give randomness.
+    /// device is gone, the system cannot give randomness, or the cookie cannot be saved.
     pub fn new_session(&self, device_id: &str) -> Option<String> {
         let session = random_token()?;
         let mut devices = self.devices.lock();
-        let d = devices.iter_mut().find(|d| d.id == device_id)?;
-        d.session_hash = hash(&session);
-        self.save(&devices);
+        let i = devices.iter().position(|d| d.id == device_id)?;
+        let previous = std::mem::replace(&mut devices[i].session_hash, hash(&session));
+        if self.save(&devices).is_err() {
+            devices[i].session_hash = previous;
+            return None;
+        }
         Some(session)
     }
 
     /// The id of the first device that matches, noting that it was just seen.
     fn seen(&self, matches: impl Fn(&Device) -> bool, now_ms: i64) -> Option<String> {
         let mut devices = self.devices.lock();
-        let d = devices.iter_mut().find(|d| matches(d))?;
-        let id = d.id.clone();
-        if now_ms - d.last_seen_ms > 60_000 {
-            d.last_seen_ms = now_ms;
+        let mut save = self.unsaved.load(Ordering::Relaxed);
+        let id = devices.iter_mut().find(|d| matches(d)).map(|d| {
+            if now_ms - d.last_seen_ms > 60_000 {
+                d.last_seen_ms = now_ms;
+                save = true;
+            }
+            d.id.clone()
+        });
+        if save {
             // Saved under the lock, so an older list never lands after a newer one.
-            self.save(&devices);
+            let _ = self.save(&devices);
         }
-        Some(id)
+        id
     }
 
-    pub fn revoke(&self, id: &str) -> bool {
+    /// Forgets a device at once. An error means it is forgotten only until the launcher
+    /// restarts, unless a later save gets through.
+    pub fn revoke(&self, id: &str) -> Result<bool, String> {
         let mut devices = self.devices.lock();
         let before = devices.len();
         devices.retain(|d| d.id != id);
-        let changed = devices.len() != before;
-        if changed {
-            self.save(&devices);
-            self.revoked.send_replace(());
+        if devices.len() == before {
+            return Ok(false);
         }
-        changed
+        let saved = self.save(&devices);
+        self.revoked.send_replace(());
+        saved.map(|()| true)
     }
 
-    pub fn revoke_all(&self) {
+    /// Forgets every device at once, with the same caveat as [`TokenStore::revoke`].
+    pub fn revoke_all(&self) -> Result<(), String> {
         let mut devices = self.devices.lock();
         devices.clear();
-        self.save(&devices);
+        let saved = self.save(&devices);
         self.pending.lock().clear();
         self.revoked.send_replace(());
+        saved
     }
 
     pub fn is_paired(&self, device_id: &str) -> bool {
@@ -307,7 +340,7 @@ mod tests {
         let token = store.redeem(&p.code, "Pixel", PHONE, 2_000).unwrap();
         // The link, seen on screen, is retired with the code and never was the token.
         assert_ne!(token, p.link);
-        assert!(store.redeem_link(&p.link, "Camera", 2_500).is_none());
+        assert!(store.redeem_link(&p.link, "Camera", 2_500).is_err());
         assert!(store.authenticate(&p.link, 2_500).is_none());
         assert!(store.redeem(&p.code, "Pixel", PHONE, 2_000).is_err());
         assert!(store.authenticate(&token, 3_000).is_some());
@@ -348,7 +381,7 @@ mod tests {
         }
         assert_eq!(store.redeem(&p.code, "x", PHONE, 20), Err(RedeemError::LockedOut));
         // The QR link still pairs, and typed codes work again once the window has passed.
-        assert!(store.redeem_link(&p.link, "Phone", 30).is_some());
+        assert!(store.redeem_link(&p.link, "Phone", 30).is_ok());
         let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 100).unwrap();
         assert!(store.redeem(&p2.code, "x", PHONE, CODE_TTL_MS + 200).is_ok());
     }
@@ -362,7 +395,7 @@ mod tests {
         if old.code != new.code {
             assert_eq!(store.redeem(&old.code, "x", PHONE, 20), Err(RedeemError::Wrong));
         }
-        assert!(store.redeem_link(&old.link, "Phone", 20).is_none());
+        assert!(store.redeem_link(&old.link, "Phone", 20).is_err());
         assert!(store.redeem(&new.code, "x", PHONE, 30).is_ok());
     }
 
@@ -371,15 +404,43 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::open(dir.path());
         let p = store.new_pairing("http://tv:8787", 0).unwrap();
-        assert!(store.redeem_link(&p.link, "Phone", CODE_TTL_MS + 1).is_none());
+        assert!(store.redeem_link(&p.link, "Phone", CODE_TTL_MS + 1).is_err());
         let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 1).unwrap();
         let token = store.redeem_link(&p2.link, "Pixel 8 · Chrome", CODE_TTL_MS + 10).unwrap();
         assert_ne!(token, p2.link);
         assert!(store.authenticate(&p2.link, CODE_TTL_MS + 20).is_none());
-        assert!(store.redeem_link(&p2.link, "Camera", CODE_TTL_MS + 20).is_none());
+        assert!(store.redeem_link(&p2.link, "Camera", CODE_TTL_MS + 20).is_err());
         assert!(store.redeem(&p2.code, "Camera", PHONE, CODE_TTL_MS + 20).is_err());
         assert!(store.authenticate(&token, 2 * CODE_TTL_MS + 10).is_some());
         assert_eq!(store.count(), 1);
         assert_eq!(store.devices(None)[0]["name"], "Pixel 8 · Chrome");
+    }
+
+    #[test]
+    fn a_forgotten_phone_that_cannot_be_saved_says_so_and_saves_later() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = TokenStore::open(dir.path());
+        let p = store.new_pairing("http://tv:8787", 0).unwrap();
+        let lost = store.redeem_link(&p.link, "Lost", 10).unwrap();
+        let p = store.new_pairing("http://tv:8787", 20).unwrap();
+        let kept = store.redeem_link(&p.link, "Kept", 30).unwrap();
+        let lost_id = store.authenticate(&lost, 40).unwrap();
+
+        // A directory where the temporary file goes makes every save fail.
+        let tmp = dir.path().join("companion-devices.json.tmp");
+        std::fs::create_dir(&tmp).unwrap();
+        assert!(store.revoke(&lost_id).is_err());
+        assert!(store.authenticate(&lost, 50).is_none());
+        let p = store.new_pairing("http://tv:8787", 60).unwrap();
+        assert!(matches!(store.redeem_link(&p.link, "New", 70), Err(RedeemError::NotSaved(_))));
+        assert_eq!(store.count(), 1);
+        assert!(TokenStore::open(dir.path()).authenticate(&lost, 80).is_some());
+
+        // The next phone the TV hears from saves the list it has.
+        std::fs::remove_dir(&tmp).unwrap();
+        assert!(store.authenticate(&kept, 90).is_some());
+        let reopened = TokenStore::open(dir.path());
+        assert!(reopened.authenticate(&lost, 100).is_none());
+        assert!(reopened.authenticate(&kept, 100).is_some());
     }
 }

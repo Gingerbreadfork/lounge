@@ -973,11 +973,12 @@ impl Core {
         companion::pairing(&self.inner).map_err(|detail| CoreError::Companion { detail })
     }
 
-    /// Forget every paired phone.
-    pub fn companion_forget_all(&self) {
+    /// Forget every paired phone. An error means they are forgotten only until the next restart.
+    pub fn companion_forget_all(&self) -> Result<(), CoreError> {
         self.count();
-        if let Some(c) = self.inner.companion.lock().as_ref() {
-            c.forget_all();
+        match self.inner.companion.lock().as_ref() {
+            Some(c) => c.forget_all().map_err(|detail| CoreError::Companion { detail }),
+            None => Ok(()),
         }
     }
 

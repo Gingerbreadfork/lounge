@@ -485,6 +485,7 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
     var status by remember { mutableStateOf<CompanionStatus?>(null) }
     var pairing by remember { mutableStateOf<PairingInfo?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var forgetFailed by remember { mutableStateOf(false) }
     // Starting binds a port and a new code writes its picture, so the server's calls run off the main thread.
     suspend fun refresh() {
         val s = withContext(Dispatchers.IO) { core.companionStatus() }
@@ -548,14 +549,21 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
         }
         if (s != null) {
             Spacer(Modifier.height(8.dp))
+            // A forget that could not be saved would undo itself at the next restart, so it stays
+            // on offer until it is saved.
             SheetRow(
                 icon = LoungeIcons.Phone,
                 title = "Paired phones",
-                value = if (s.paired == 0u) "None" else "${s.paired}, forget all",
+                value = when {
+                    forgetFailed -> "Couldn't save, try again"
+                    s.paired == 0u -> "None"
+                    else -> "${s.paired}, forget all"
+                },
+                accent = if (forgetFailed) colors.ember else colors.dust,
                 onClick = {
-                    if (s.paired > 0u) {
+                    if (s.paired > 0u || forgetFailed) {
                         scope.launch {
-                            withContext(Dispatchers.IO) { core.companionForgetAll() }
+                            forgetFailed = withContext(Dispatchers.IO) { core.companionForgetAll() }.isFailure
                             refresh()
                         }
                     }

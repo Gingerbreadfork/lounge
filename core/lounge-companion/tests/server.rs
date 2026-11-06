@@ -412,7 +412,7 @@ fn a_forgotten_phone_loses_its_live_socket() {
     let token = pair(&companion, &host);
     let mut socket = open_socket(port, &host, &session_cookie(port, &host, &token));
     assert_eq!(frame(&mut socket).0, TEXT);
-    companion.forget_all();
+    companion.forget_all().unwrap();
     let (op, payload) = frame(&mut socket);
     assert_eq!(op, CLOSE);
     assert_eq!(close_code(&payload), 4401);

@@ -85,7 +85,7 @@ class CoreClient(val core: Core) : SnapshotListener {
 
     fun companionPairing(): Result<PairingInfo> = runCatching { core.companionPairing() }
 
-    fun companionForgetAll() = core.companionForgetAll()
+    fun companionForgetAll(): Result<Unit> = runCatching { core.companionForgetAll() }
 
     fun setPermissions(permissions: Permissions) = core.setPermissions(permissions)
 

@@ -134,8 +134,9 @@ impl Companion {
         self.tokens.count()
     }
 
-    pub fn forget_all(&self) {
-        self.tokens.revoke_all();
+    /// Forgets every paired phone at once; an error means the change is not yet saved.
+    pub fn forget_all(&self) -> Result<(), String> {
+        self.tokens.revoke_all()
     }
 }
 
@@ -385,9 +386,12 @@ async fn pair(State(app): State<Shared>, ConnectInfo(peer): ConnectInfo<SocketAd
         .map(device_name)
         .unwrap_or_else(|| "Phone".to_string());
     let token = match (body.link, body.code) {
-        (Some(link), _) => app.tokens.redeem_link(link.trim(), &name, now_ms()).ok_or_else(|| {
-            tracing::warn!("companion: expired pairing link from {name}");
-            ApiError(StatusCode::FORBIDDEN, "expired pairing link".into())
+        (Some(link), _) => app.tokens.redeem_link(link.trim(), &name, now_ms()).map_err(|e| match e {
+            crate::auth::RedeemError::NotSaved(e) => not_saved(e),
+            _ => {
+                tracing::warn!("companion: expired pairing link from {name}");
+                ApiError(StatusCode::FORBIDDEN, "expired pairing link".into())
+            }
         }),
         (None, Some(code)) => app.tokens.redeem(code.trim(), &name, peer.ip(), now_ms()).map_err(|e| match e {
             crate::auth::RedeemError::LockedOut => {
@@ -398,10 +402,15 @@ async fn pair(State(app): State<Shared>, ConnectInfo(peer): ConnectInfo<SocketAd
                 tracing::warn!("companion: wrong pairing code from {name}");
                 ApiError(StatusCode::FORBIDDEN, "wrong or expired code".into())
             }
+            crate::auth::RedeemError::NotSaved(e) => not_saved(e),
         }),
         (None, None) => Err(bad("a pairing code or link is needed".into())),
     }?;
     Ok(Json(serde_json::json!({ "token": token, "device": app.actions.device_info().name })).into_response())
+}
+
+fn not_saved(e: String) -> ApiError {
+    ApiError(StatusCode::SERVICE_UNAVAILABLE, format!("the TV could not save this phone, so it is not paired: {e}"))
 }
 
 /// Hands the page a cookie for the routes it loads by URL. It holds a value of its own, not the
@@ -617,7 +626,11 @@ async fn devices(State(app): State<Shared>, Extension(Paired(device)): Extension
 }
 
 async fn revoke_device(State(app): State<Shared>, AxPath(id): AxPath<String>) -> Result<StatusCode, ApiError> {
-    if app.tokens.revoke(&id) { Ok(StatusCode::NO_CONTENT) } else { Err(ApiError(StatusCode::NOT_FOUND, "no such device".into())) }
+    match app.tokens.revoke(&id) {
+        Ok(true) => Ok(StatusCode::NO_CONTENT),
+        Ok(false) => Err(ApiError(StatusCode::NOT_FOUND, "no such device".into())),
+        Err(e) => Err(ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("forgotten, but the TV could not save that, so a restart may bring it back: {e}"))),
+    }
 }
 
 async fn backup(State(app): State<Shared>) -> Result<Response, ApiError> {
