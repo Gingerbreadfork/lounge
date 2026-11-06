@@ -19,7 +19,16 @@ function parseRoute(hash: string): Route {
   const h = hash.replace(/^#\/?/, '');
   const [page, id] = h.split('/');
   const pages = ['home', 'remote', 'layout', 'plugins', 'more', 'pair'];
-  return { page: (pages.includes(page) ? page : 'home') as Route['page'], id: id ? decodeURIComponent(id) : undefined };
+  return { page: (pages.includes(page) ? page : 'home') as Route['page'], id: id ? decodeId(id) : undefined };
+}
+
+/** A malformed escape such as `%` or `%GG` names nothing, so it leaves no id. */
+function decodeId(id: string): string | undefined {
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return undefined;
+  }
 }
 
 export function go(page: Route['page'], id?: string) {
