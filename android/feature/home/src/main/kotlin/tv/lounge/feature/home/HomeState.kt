@@ -23,6 +23,8 @@ sealed interface Overlay {
     data object QuickSettings : Overlay
     data object HomeRole : Overlay
     data object Search : Overlay
+    /** Every app, A to Z, with an alphabet to jump by. */
+    data object AllApps : Overlay
     data object NowPlaying : Overlay
     data object Channels : Overlay
     /** The row editor: which rows show and in what order, and what is hidden. */

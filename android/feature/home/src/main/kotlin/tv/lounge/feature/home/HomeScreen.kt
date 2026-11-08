@@ -150,11 +150,12 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     val menu = overlay as? Overlay.TileMenu
     // A menu opened from a search result keeps Search open beneath it.
     val searchOpen = overlay == Overlay.Search || menu?.under == Overlay.Search
+    val allAppsOpen = overlay == Overlay.AllApps || menu?.under == Overlay.AllApps
     val homeMenu = menu?.takeIf { it.under == Overlay.None }
     // The rows read the open menu through these, so opening one recomposes only the tile it came from.
     val heldMenu: () -> Overlay.TileMenu? = { state.overlay as? Overlay.TileMenu }
     val heldHomeMenu: () -> Overlay.TileMenu? = { heldMenu()?.takeIf { it.under == Overlay.None } }
-    val opaqueOverlay = searchOpen || overlay == Overlay.Onboarding || overlay == Overlay.AmbientPreview
+    val opaqueOverlay = searchOpen || allAppsOpen || overlay == Overlay.Onboarding || overlay == Overlay.AmbientPreview
     FieldSleep(light, { state.lastInputAt }, opaqueOverlay)
     // The rows the lowered Stage reveals are composed in idle frames while it is still up, so
     // the proscenium never composes a row in the middle of a frame.
@@ -279,6 +280,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 is UiCommand.Toast -> say(cmd.message)
                 UiCommand.InstallUpdate -> Unit
                 UiCommand.OpenTvControls -> openOverlay(Overlay.TvControls)
+                UiCommand.OpenAllApps -> if (state.overlay == Overlay.None) { uiSounds?.open(); openOverlay(Overlay.AllApps) }
                 is UiCommand.RequestPermission, is UiCommand.Key -> Unit
                 is UiCommand.TypeText -> if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) phoneText.tryEmit(cmd.text)
                 is UiCommand.Search -> {
@@ -304,12 +306,17 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     }
 
     fun openMenu(tile: Tile, rowId: String, anchor: Rect, returnFocus: FocusRequester) {
+        // A tile that only opens a screen has nothing to pin or hide.
+        if (tile.id.startsWith("control:")) return
         val resolved = if (anchor != Rect.Zero) anchor else if (light.center.isSpecified) {
             Rect(light.center.x - 100f, light.center.y - 60f, light.center.x + 100f, light.center.y + 60f)
         } else {
             Rect.Zero
         }
-        val under = if (state.overlay == Overlay.Search) Overlay.Search else Overlay.None
+        val under = when (state.overlay) {
+            Overlay.Search, Overlay.AllApps -> state.overlay
+            else -> Overlay.None
+        }
         state.overlay = Overlay.TileMenu(tile, rowId, resolved, returnFocus, under)
     }
 
@@ -625,7 +632,19 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
             }
         }
 
-        // The menu draws over Search when it opened from a result.
+        Presence(if (allAppsOpen) Unit else null) { _, visibleState ->
+            AllAppsScreen(
+                apps = snapshot.allApps,
+                visibleState = visibleState,
+                covered = menu != null,
+                heldTileId = { heldMenu()?.tile?.id },
+                onTileClick = { perform(it) },
+                onTileLongPress = { tile, bounds, fr -> openMenu(tile, "allapps", bounds, fr) },
+                onClose = { closeOverlay() },
+            )
+        }
+
+        // The menu draws over Search or All apps when it opened from one of their tiles.
         Presence(menu) { ov, visibleState ->
             val pkg = ov.tile.id.removePrefix("app:")
             // Search keeps the home's row ids; hiding a row from there would be a surprise.

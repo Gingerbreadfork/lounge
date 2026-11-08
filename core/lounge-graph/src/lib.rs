@@ -229,13 +229,12 @@ pub struct Layout {
 }
 
 impl Layout {
-    pub const DEFAULT_ROWS: [&'static str; 6] = [
+    pub const DEFAULT_ROWS: [&'static str; 5] = [
         "continue",
         "apps",
         "games",
         "live",
         "tvcontrols",
-        "allapps",
     ];
 
     /// Drop repeats from the ordered lists, keeping each entry's first place; the home keys rows

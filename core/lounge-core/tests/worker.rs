@@ -87,7 +87,7 @@ fn the_worker_carries_on_after_a_panic() {
 
     core.ingest_apps(vec![app("one.app"), app("two.app")]);
     wait_for("a snapshot after the panic", || {
-        listener.last.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "allapps" && r.tiles.len() == 2))
+        listener.last.lock().as_ref().is_some_and(|s| s.all_apps.len() == 2)
     });
 }
 
@@ -124,7 +124,7 @@ fn a_pin_past_the_stage_s_places_replaces_the_oldest() {
         core.command(LayoutCommand::PinToStage { id: format!("app:{p}") });
     }
     let pinned = |s: &HomeSnapshot| -> Vec<String> {
-        let all = s.rows.iter().find(|r| r.id == "allapps").map(|r| r.tiles.clone()).unwrap_or_default();
+        let all = s.all_apps.clone();
         all.iter().filter(|t| t.stage_pinned).map(|t| t.id.clone()).collect()
     };
     wait_for("the last pin", || latest.0.lock().as_ref().is_some_and(|s| pinned(s).contains(&"app:app7.tv".to_string())));
@@ -169,7 +169,7 @@ fn pictures_that_cannot_be_written_leave_the_worker_idle() {
     let latest = Arc::new(Latest::default());
     core.add_listener(latest.clone());
     core.ingest_apps(apps);
-    wait_for("the apps", || latest.0.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "allapps" && r.tiles.len() == 8)));
+    wait_for("the apps", || latest.0.lock().as_ref().is_some_and(|s| s.all_apps.len() == 8));
     let settled = core.diagnostics().revision;
     std::thread::sleep(Duration::from_secs(1));
     assert_eq!(core.diagnostics().revision, settled, "the worker kept rebuilding");
@@ -217,7 +217,7 @@ fn pictures_left_for_later_passes_end_as_a_full_ingest_would() {
     let latest = Arc::new(Latest::default());
     core.add_listener(latest.clone());
     core.ingest_apps(apps.clone());
-    let icons = |s: &HomeSnapshot| s.rows.iter().find(|r| r.id == "allapps").map_or(0, |r| r.tiles.iter().filter(|t| t.icon_path.is_some()).count());
+    let icons = |s: &HomeSnapshot| s.all_apps.iter().filter(|t| t.icon_path.is_some()).count();
     wait_for("every icon", || latest.0.lock().as_ref().is_some_and(|s| icons(s) == 20));
     let passes = latest.0.lock().clone().unwrap();
     // One for the listener's first snapshot, one for the ingest, and the quick passes after it
@@ -387,7 +387,7 @@ fn a_listener_may_add_another_from_its_first_snapshot() {
     assert!(added.1.load(Ordering::SeqCst) >= 1);
 
     core.ingest_apps(vec![app("one.app")]);
-    wait_for("the added listener's next snapshot", || added.0.lock().as_ref().is_some_and(|s| s.rows.iter().any(|r| r.id == "allapps")));
+    wait_for("the added listener's next snapshot", || added.0.lock().as_ref().is_some_and(|s| !s.all_apps.is_empty()));
 }
 
 /// A channel or a programme on it, as the TV provider reports them.

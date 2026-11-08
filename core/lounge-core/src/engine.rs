@@ -5,7 +5,7 @@ use crate::{
     StageSpotlight, State, Tile, TileKind,
 };
 use lounge_graph::{DeepLink, Graph, Item, ItemKind};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Lookups a build needs more than once, computed once per build.
 pub(crate) struct BuildIndex<'a> {
@@ -38,19 +38,19 @@ impl<'a> BuildIndex<'a> {
 pub(crate) const STAGE_CAP: usize = 6;
 const NOTICE_TV_LISTINGS: &str = "notice:tv_listings";
 
-/// The core rows and their titles, in default order.
-pub(crate) const CORE_ROWS: [(&str, &str); 6] = [
+/// The core rows and their titles, in default order. Every app is reachable from the All apps
+/// screen, which Your apps ends with, so there is no row of them all.
+pub(crate) const CORE_ROWS: [(&str, &str); 5] = [
     ("continue", "Continue watching"),
     ("apps", "Your apps"),
     ("games", "Games"),
     ("live", "Live now"),
     ("tvcontrols", "TV controls"),
-    ("allapps", "All apps"),
 ];
 
 /// The row order as it will be built: the user's order (or the default), with plugin and
-/// channel rows the user has not placed inserted before All apps. Rows that cannot be built
-/// now, such as a switched-off plugin's, are left out; their saved places are kept for later.
+/// channel rows the user has not placed appended. Rows that cannot be built now, such as a
+/// switched-off plugin's, are left out; their saved places are kept for later.
 pub(crate) fn effective_row_order(state: &State) -> Vec<String> {
     let graph = &state.graph;
     let mut order = graph.layout.row_order_or_default();
@@ -67,10 +67,7 @@ pub(crate) fn effective_row_order(state: &State) -> Vec<String> {
     }
     order.retain(|id| extra.contains(id));
     let missing: Vec<String> = extra.into_iter().filter(|id| !order.contains(id)).collect();
-    let at = order.iter().position(|r| r == "allapps").unwrap_or(order.len());
-    for (i, id) in missing.into_iter().enumerate() {
-        order.insert(at + i, id);
-    }
+    order.extend(missing);
     order
 }
 
@@ -86,24 +83,9 @@ pub(crate) fn moved_row_order(state: &State, id: &str, to: usize) -> Vec<String>
     order
 }
 
-/// Whether a row belongs on the home screen: the user's choice, or its default. All apps stays
-/// out of the way while it would only repeat Your apps, and only while Your apps is shown.
+/// Whether a row belongs on the home screen: the user's choice, or shown.
 pub(crate) fn row_shown(state: &State, row_id: &str) -> bool {
-    if let Some(choice) = state.graph.row_choice(row_id) {
-        return choice;
-    }
-    row_id != "allapps" || !all_apps_is_spare(state)
-}
-
-/// All apps would only repeat a Your apps row that is on the screen.
-fn all_apps_is_spare(state: &State) -> bool {
-    row_shown(state, "apps") && all_apps_repeat_your_apps(&state.graph)
-}
-
-/// Every app All apps would list is already in Your apps.
-fn all_apps_repeat_your_apps(graph: &Graph) -> bool {
-    let yours: HashSet<&str> = graph.your_apps().iter().map(|it| it.id.as_str()).collect();
-    graph.all_apps().iter().all(|it| yours.contains(it.id.as_str()))
+    state.graph.row_choice(row_id).unwrap_or(true)
 }
 
 /// `order` with `id` moved to `to`, clamped to the ends; an id not in the order is placed there.
@@ -175,17 +157,6 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
                         let n = graph.devices().len();
                         (n, counted(n, "input", "inputs", "No inputs found"))
                     }
-                    "allapps" => {
-                        let n = graph.all_apps().len();
-                        let detail = if n == 0 {
-                            "Nothing to show yet".to_string()
-                        } else if !chosen && all_apps_is_spare(state) {
-                            "Same apps as Your apps".to_string()
-                        } else {
-                            format!("{}, A to Z", counted(n, "app", "apps", ""))
-                        };
-                        (n, detail)
-                    }
                     _ => (0, String::new()),
                 };
                 (title, n, detail)
@@ -252,6 +223,7 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
         stage: build_stage(graph, &index, now, hour_local, config),
         rows,
         hidden_rows,
+        all_apps: graph.all_apps().iter().map(|it| tile_for(graph, it, TileKind::AppBanner)).collect(),
         now_playing: state.now_playing.clone(),
         wallpapers: graph
             .wallpapers()
@@ -288,7 +260,16 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
             }
             ("Continue watching", TileKind::Landscape, RowSize::M, None, items.into_iter().take(ROW_TILES).collect())
         }
-        "apps" => ("Your apps", TileKind::AppBanner, RowSize::M, None, graph.your_apps()),
+        "apps" => {
+            let items = graph.your_apps();
+            if items.is_empty() {
+                return None;
+            }
+            // The row ends with the way to every app, so the list of them all needs no row.
+            let mut tiles: Vec<Tile> = items.iter().map(|it| tile_for(graph, it, TileKind::AppBanner)).collect();
+            tiles.push(all_apps_tile(graph.all_apps().len()));
+            return Some(Row { id: row_id.to_string(), title: "Your apps".to_string(), kind: TileKind::AppBanner, size: RowSize::M, badge: None, tiles });
+        }
         "games" => ("Games", TileKind::Landscape, RowSize::M, Some(Badge::Controller), graph.games()),
         "live" => {
             let channels = graph.live_now();
@@ -324,7 +305,6 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
                 tiles,
             });
         }
-        "allapps" => ("All apps", TileKind::Compact, RowSize::M, None, graph.all_apps()),
         _ => return None,
     };
     if items.is_empty() {
@@ -410,6 +390,25 @@ fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &s
             stage_pinned: false,
             borrowed_art: false,
         }],
+    }
+}
+
+/// The last tile of Your apps: opens the All apps screen.
+fn all_apps_tile(count: usize) -> Tile {
+    Tile {
+        id: "control:allapps".to_string(),
+        kind: TileKind::AppBanner,
+        title: "All apps".to_string(),
+        subtitle: Some(counted(count, "app", "apps", "Nothing yet")),
+        artwork_path: None,
+        icon_path: None,
+        light_argb: lounge_graph::color::HOUSELIGHT,
+        progress: None,
+        badge: None,
+        action: "control:allapps".to_string(),
+        pinned: false,
+        stage_pinned: false,
+        borrowed_art: false,
     }
 }
 

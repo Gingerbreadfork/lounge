@@ -56,6 +56,8 @@ import kotlinx.coroutines.withContext
 import androidx.tv.material3.Text
 import tv.lounge.core.HomeSnapshot
 import tv.lounge.core.Row as CoreRow
+import tv.lounge.core.RowSize
+import tv.lounge.core.TileKind
 import tv.lounge.core.Tile
 import tv.lounge.design.Dimens
 import tv.lounge.design.Hairline
@@ -262,10 +264,12 @@ private fun search(snapshot: HomeSnapshot, query: String): List<CoreRow> {
         return tokens.all { hay.contains(it) }
     }
     val seen = HashSet<String>()
-    // Hidden rows are searched too: hiding Games takes it off the home, not out of reach.
-    return (snapshot.rows + snapshot.hiddenRows).mapNotNull { row ->
-        // A tile that only opens search would lead straight back here.
-        val hits = row.tiles.filter { matches(it) && !it.action.startsWith("control:search:") && seen.add(it.id) }
+    // Hidden rows are searched too: hiding Games takes it off the home, not out of reach. Every
+    // app comes last, so one already found in Your apps is not shown twice.
+    val allApps = CoreRow(id = "allapps", title = "All apps", kind = TileKind.APP_BANNER, size = RowSize.M, badge = null, tiles = snapshot.allApps)
+    return (snapshot.rows + snapshot.hiddenRows + allApps).mapNotNull { row ->
+        // A tile that only opens search or another screen would lead away from the result.
+        val hits = row.tiles.filter { matches(it) && !it.action.startsWith("control:") && seen.add(it.id) }
         if (hits.isEmpty()) null else row.copy(tiles = hits)
     }
 }
@@ -276,8 +280,8 @@ private fun recentlyOpened(snapshot: HomeSnapshot): List<CoreRow> {
     snapshot.rows.firstOrNull { it.id == "continue" && it.tiles.isNotEmpty() && !it.tiles.first().id.startsWith("notice:") }?.let {
         out += it.copy(id = "recent:continue", title = "Recently watched", tiles = it.tiles.take(6))
     }
-    snapshot.rows.firstOrNull { it.id == "apps" && it.tiles.isNotEmpty() }?.let {
-        out += it.copy(id = "recent:apps", title = "Your apps", tiles = it.tiles.take(6))
+    snapshot.rows.firstOrNull { it.id == "apps" && it.tiles.any { t -> !t.id.startsWith("control:") } }?.let {
+        out += it.copy(id = "recent:apps", title = "Your apps", tiles = it.tiles.filter { t -> !t.id.startsWith("control:") }.take(6))
     }
     return out
 }

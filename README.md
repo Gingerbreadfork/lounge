@@ -110,8 +110,11 @@ Hold OK on any tile for a menu: pin it to the front of Your apps, pin it to the 
 among the big pictures at the top, move it, hide it, hide the whole row, app info, the store page,
 uninstall. Each choice says what it does, and a pinned tile wears a small pin. Settings, Rows
 lists every row the home could show, with what each holds: OK shows or hides one, holding OK
-picks it up to move. Rows with nothing in them stay out of the way, and All apps stays off the
-screen while it would only repeat Your apps.
+picks it up to move. Rows with nothing in them stay out of the way.
+
+**All apps.** Your apps ends with a tile that opens every app on the TV as one screen: a grid of
+banners, A to Z, with the alphabet down the side to jump by. A hundred apps are a few presses
+away rather than a long scroll, and the same hold-OK menu works there.
 
 Streaming apps, including Netflix, appear in Continue watching when they publish readable
 Watch Next entries on your TV. Enable TV listings in Settings; Lounge refreshes them when

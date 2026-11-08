@@ -401,8 +401,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
         put_apps(&core, &[("tv.a", true), ("tv.b", false)]);
-        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "allapps"));
-        assert!(rows.contains(&"apps".to_string()) && rows.contains(&"allapps".to_string()), "{rows:?}");
+        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
+        assert!(rows.contains(&"apps".to_string()), "{rows:?}");
 
         core.command(crate::LayoutCommand::HideRow { row_id: "apps".into() });
         let rows = rows_when(&core, |ids| !ids.iter().any(|r| r == "apps"));
@@ -423,41 +423,31 @@ mod tests {
     }
 
     #[test]
-    fn all_apps_stays_away_while_it_only_repeats_your_apps() {
+    fn every_app_reaches_the_all_apps_screen() {
         let dir = tempfile::tempdir().unwrap();
         let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
-        put_apps(&core, &[("tv.a", true), ("tv.b", true)]);
-        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
-        assert!(!rows.contains(&"allapps".to_string()), "{rows:?}");
-        let info = core.home_rows().into_iter().find(|r| r.id == "allapps").unwrap();
-        assert!(!info.shown);
-        assert_eq!(info.detail, "Same apps as Your apps");
+        put_apps(&core, &[("tv.b", false), ("tv.a", true)]);
+        rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
+        let snap = core.snapshot();
+        // A to Z, with and without banners, and no row of them on the home.
+        let all: Vec<&str> = snap.all_apps.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(all, ["app:tv.a", "app:tv.b"]);
+        assert!(snap.rows.iter().all(|r| r.id != "allapps"));
+        // Your apps holds the banner apps and ends with the way to the rest.
+        let apps = snap.rows.iter().find(|r| r.id == "apps").unwrap();
+        let ids: Vec<&str> = apps.tiles.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids, ["app:tv.a", "control:allapps"]);
+        let last = apps.tiles.last().unwrap();
+        assert_eq!((last.title.as_str(), last.subtitle.as_deref(), last.action.as_str()), ("All apps", Some("2 apps"), "control:allapps"));
 
-        // Asked for by hand, it stays whatever the apps do.
-        core.command(crate::LayoutCommand::ShowRow { row_id: "allapps".into() });
-        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "allapps"));
-        assert!(rows.contains(&"allapps".to_string()), "{rows:?}");
-        let info = core.home_rows().into_iter().find(|r| r.id == "allapps").unwrap();
-        assert_eq!(info.detail, "2 apps, A to Z");
-
-        // With Your apps hidden there would be no apps at all, so All apps steps in.
-        core.command(crate::LayoutCommand::HideRow { row_id: "apps".into() });
-        core.command(crate::LayoutCommand::SetRowOrder { row_ids: Vec::new() });
-        let mut cleared = std::collections::HashMap::new();
-        cleared.insert("apps".to_string(), false);
-        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
-        actions.set_layout(LayoutPatch { row_visibility: Some(cleared), ..LayoutPatch::default() }).unwrap();
-        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "allapps") && !ids.iter().any(|r| r == "apps"));
-        assert!(rows.contains(&"allapps".to_string()) && !rows.contains(&"apps".to_string()), "{rows:?}");
-        let info = core.home_rows().into_iter().find(|r| r.id == "allapps").unwrap();
-        assert!(info.shown && !info.chosen);
-
-        // An app without a banner makes the rows differ, so the default shows All apps too.
-        let dir2 = tempfile::tempdir().unwrap();
-        let core2 = crate::Core::open(test_config(dir2.path()), Arc::new(Quiet)).unwrap();
-        put_apps(&core2, &[("tv.a", true), ("tv.b", false)]);
-        let rows = rows_when(&core2, |ids| ids.iter().any(|r| r == "allapps"));
-        assert!(rows.contains(&"allapps".to_string()), "{rows:?}");
+        // A hidden app leaves the screen's list too.
+        core.command(crate::LayoutCommand::HideItem { id: "app:tv.b".into() });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while core.snapshot().all_apps.len() > 1 && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+        assert_eq!(core.snapshot().all_apps.len(), 1);
+        assert!(core.home_rows().iter().all(|r| r.id != "allapps"));
     }
 
     #[test]
@@ -465,12 +455,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
         put_apps(&core, &[("tv.a", true), ("tv.b", false)]);
-        rows_when(&core, |ids| ids.iter().any(|r| r == "allapps"));
-        core.command(crate::LayoutCommand::MoveRow { row_id: "allapps".into(), to_index: 0 });
-        let rows = rows_when(&core, |ids| ids.first().is_some_and(|r| r == "allapps"));
-        assert_eq!(rows.first().map(String::as_str), Some("allapps"), "{rows:?}");
+        rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
+        core.command(crate::LayoutCommand::MoveRow { row_id: "apps".into(), to_index: 0 });
+        let rows = rows_when(&core, |ids| ids.first().is_some_and(|r| r == "apps"));
+        assert_eq!(rows.first().map(String::as_str), Some("apps"), "{rows:?}");
         let order = core.home_rows().into_iter().map(|r| r.id).collect::<Vec<_>>();
-        assert_eq!(order[..3], ["allapps", "continue", "apps"]);
+        assert_eq!(order[..3], ["apps", "continue", "games"]);
 
         // A row that cannot be built now is neither listed nor forgotten.
         core.command(crate::LayoutCommand::SetRowOrder { row_ids: vec!["plugin:gone:recent".into(), "games".into(), "continue".into()] });
@@ -490,7 +480,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
         put_apps(&core, &[("tv.a", true), ("tv.b", false)]);
-        rows_when(&core, |ids| ids.iter().any(|r| r == "allapps"));
+        rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
         let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
         let mut visibility = std::collections::HashMap::new();
         visibility.insert("games".to_string(), false);

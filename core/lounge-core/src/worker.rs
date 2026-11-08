@@ -1269,6 +1269,7 @@ fn same_on_screen(prev: &HomeSnapshot, next: &HomeSnapshot) -> bool {
         })
         && same_by(&prev.rows, &next.rows, same_row)
         && same_by(&prev.hidden_rows, &next.hidden_rows, same_row)
+        && same_tiles(&prev.all_apps, &next.all_apps)
         && same_playing(prev.now_playing.as_ref(), next.now_playing.as_ref())
         && prev.wallpapers == next.wallpapers
 }

@@ -450,6 +450,9 @@ pub struct HomeSnapshot {
     /// Rows the user hid, built all the same so search still finds what is in them.
     #[serde(default)]
     pub hidden_rows: Vec<Row>,
+    /// Every app, A to Z, for the All apps screen and for search.
+    #[serde(default)]
+    pub all_apps: Vec<Tile>,
     #[serde(default)]
     pub now_playing: Option<NowPlaying>,
     /// Pictures plugins published for the screensaver, prepared like any artwork.
@@ -503,6 +506,7 @@ impl HomeSnapshot {
             },
             rows: Vec::new(),
             hidden_rows: Vec::new(),
+            all_apps: Vec::new(),
             now_playing: None,
             wallpapers: Vec::new(),
         }

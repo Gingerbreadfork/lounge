@@ -420,9 +420,13 @@ private fun AppBannerContent(tile: Tile, filter: () -> androidx.compose.ui.graph
             if (tile.iconPath != null) {
                 FilteredPicture(tile.iconPath!!, filter, null, DpSize(72.dp, 72.dp), ContentScale.Fit, Modifier.size(72.dp).clip(RoundedCornerShape(16.dp)))
             } else {
-                Icon(LoungeIcons.Apps, contentDescription = null, tint = colors.dust, modifier = Modifier.size(48.dp))
+                Icon(LoungeIcons.Apps, contentDescription = null, tint = if (tile.subtitle != null) colors.houselight else colors.dust, modifier = Modifier.size(48.dp))
             }
-            Text(tile.title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(tile.title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                // Only the All apps tile has a line under its name: how many it opens onto.
+                tile.subtitle?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1) }
+            }
         }
     }
 }
