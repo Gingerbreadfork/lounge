@@ -373,7 +373,7 @@ fun QuickSettingsSheet(
             focusRequester = focusFor(Overlay.Rows) ?: focusFor(null),
         )
         val steps = listOf(0, 5, 10, 15)
-        val at = steps.indexOf(recentApps).let { if (it < 0) 2 else it }
+        val at = steps.indexOf(recentApps).let { if (it < 0) 1 else it }
         SheetRow(
             icon = LoungeIcons.Apps,
             title = "Your apps",

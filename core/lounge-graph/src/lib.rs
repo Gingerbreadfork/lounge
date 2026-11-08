@@ -231,7 +231,7 @@ pub struct Layout {
     pub recent_apps: u32,
 }
 
-pub const DEFAULT_RECENT_APPS: u32 = 10;
+pub const DEFAULT_RECENT_APPS: u32 = 5;
 
 fn default_recent_apps() -> u32 {
     DEFAULT_RECENT_APPS

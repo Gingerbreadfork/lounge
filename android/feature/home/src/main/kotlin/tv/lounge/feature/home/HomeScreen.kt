@@ -865,7 +865,7 @@ private fun SheetContent(
                 onChannels = { open(Overlay.Channels) },
                 onRows = { open(Overlay.Rows) },
                 rowsSummary = rowsSummary,
-                recentApps = if (recentApps < 0) 10 else recentApps,
+                recentApps = if (recentApps < 0) 5 else recentApps,
                 onSetRecentApps = { n -> recentApps = n; core.command(LayoutCommand.SetRecentApps(n.toUInt())) },
                 onPlugins = { open(Overlay.Plugins) },
                 onCompanion = { open(Overlay.Companion) },

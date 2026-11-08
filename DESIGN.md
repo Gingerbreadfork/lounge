@@ -391,7 +391,7 @@ No sound on Home, on scroll end, or on errors (the toast is enough).
 
 - Remote keys: Home → Stage; Back → up one level; Assistant → system (we never intercept); YouTube/Netflix → launch (we never intercept); star button → whatever the user set in Google's own settings (we suggest our Search).
 - TV controls card replaces the Inputs row; it is the last Stage-strip tile and also lives in the top bar.
-- Default home layout: Stage, Continue watching, Your apps, Games. Your apps is the pins in their order, then the ten apps opened last (Settings: pins only, 5, 10 or 15), then the All apps tile; games keep to their row. The TV controls row appears only on a TV with inputs; on the Streamer the card is the last strip tile and lives in the top bar, nowhere else.
+- Default home layout: Stage, Continue watching, Your apps, Games. Your apps is the pins in their order, then the five apps opened last (Settings: pins only, 5, 10 or 15), then the All apps tile; games keep to their row. The TV controls row appears only on a TV with inputs; on the Streamer the card is the last strip tile and lives in the top bar, nowhere else.
 - Google Photos ambient remains the user's screensaver unless they pick ours.
 
 ## 14. Design QA checklist (per release)
