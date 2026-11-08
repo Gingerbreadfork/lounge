@@ -44,6 +44,10 @@ class AppsCollector(private val context: Context) {
         collecting.withLock { collect(includeMobileApps) }
     }
 
+    /** This build of Lounge, or another one installed beside it: a home screen is not an app on itself. */
+    private fun isLounge(ri: ResolveInfo): Boolean =
+        ri.activityInfo.packageName == context.packageName || ri.activityInfo.name == LOUNGE_ACTIVITY
+
     private fun collect(includeMobileApps: Boolean): List<AppRecord> {
         val index = loadIndex()
         val leanback = pm.queryIntentActivities(
@@ -54,7 +58,7 @@ class AppsCollector(private val context: Context) {
         val records = ArrayList<AppRecord>(leanback.size)
         for (ri in leanback) {
             val pkg = ri.activityInfo.packageName
-            if (pkg == context.packageName || !seen.add(pkg)) continue
+            if (isLounge(ri) || !seen.add(pkg)) continue
             records += record(ri, index, isLeanback = true)
         }
         if (includeMobileApps) {
@@ -64,7 +68,7 @@ class AppsCollector(private val context: Context) {
             )
             for (ri in mobile) {
                 val pkg = ri.activityInfo.packageName
-                if (pkg == context.packageName || !seen.add(pkg)) continue
+                if (isLounge(ri) || !seen.add(pkg)) continue
                 records += record(ri, index, isLeanback = false)
             }
         }
@@ -202,5 +206,7 @@ class AppsCollector(private val context: Context) {
 
     private companion object {
         const val TAG = "LoungeApps"
+        /** The home activity every build of Lounge shares, whatever its application id. */
+        const val LOUNGE_ACTIVITY = "tv.lounge.launcher.MainActivity"
     }
 }
