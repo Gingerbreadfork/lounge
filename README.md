@@ -104,8 +104,8 @@ next few. Move down into the rows and the Stage lowers to a band with the title 
 move back up and it rises again, one continuous picture, nothing squeezed.
 
 **Rows you own.** Continue watching comes from every app that publishes it, from the TV's own
-listings, and from plugins. Your apps sit in the order you pin them, sorted by how recently you
-opened them until you do. Games get a row of their own, marked when a controller is connected.
+listings, and from plugins. Your apps holds the apps you pin, in your order, then the ten you
+opened last; Settings turns that ten into five, fifteen or none, and the rest wait in All apps. Games get a row of their own, marked when a controller is connected.
 Hold OK on any tile for a menu: pin it to the front of Your apps, pin it to the Stage so it stays
 among the big pictures at the top, move it, hide it, hide the whole row, app info, the store page,
 uninstall. Each choice says what it does, and a pinned tile wears a small pin. Settings, Rows

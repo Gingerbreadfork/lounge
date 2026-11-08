@@ -211,7 +211,7 @@ impl Item {
 }
 
 /// User-authored layout state that survives re-indexing.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
     pub hidden: HashSet<String>,
     pub pinned_apps: Vec<String>,
@@ -226,6 +226,30 @@ pub struct Layout {
     /// Rows the user showed or hid by hand; a row not listed follows its default.
     #[serde(default)]
     pub row_visibility: HashMap<String, bool>,
+    /// How many recently opened apps follow the pins in Your apps; zero keeps the row to pins.
+    #[serde(default = "default_recent_apps")]
+    pub recent_apps: u32,
+}
+
+pub const DEFAULT_RECENT_APPS: u32 = 10;
+
+fn default_recent_apps() -> u32 {
+    DEFAULT_RECENT_APPS
+}
+
+impl Default for Layout {
+    fn default() -> Self {
+        Layout {
+            hidden: HashSet::new(),
+            pinned_apps: Vec::new(),
+            row_order: Vec::new(),
+            stage_pins: Vec::new(),
+            dismissed_notices: HashSet::new(),
+            enabled_channels: HashSet::new(),
+            row_visibility: HashMap::new(),
+            recent_apps: DEFAULT_RECENT_APPS,
+        }
+    }
 }
 
 impl Layout {
@@ -371,7 +395,9 @@ impl Graph {
         self.layout = Layout::default();
     }
 
-    /// Apps the user pinned, in their order, followed by the rest by recency then name.
+    /// Apps the user pinned, in their order, then the most recently opened of the rest, as many
+    /// as the layout allows. Games keep to their own row. Without usage data the recent ones
+    /// are the first by name, so the row is never empty on a new TV.
     pub fn your_apps(&self) -> Vec<&Item> {
         let mut out: Vec<&Item> = Vec::new();
         for p in &self.layout.pinned_apps {
@@ -384,13 +410,22 @@ impl Graph {
         let mut rest: Vec<&Item> = self
             .items
             .values()
-            .filter(|it| it.kind == ItemKind::App && it.flags.has_banner)
+            .filter(|it| it.kind == ItemKind::App && !it.flags.is_game)
             .filter(|it| !self.is_hidden(&it.id))
             .filter(|it| !out.iter().any(|o| o.id == it.id))
             .collect();
-        rank::by_recency_then_title(&mut rest);
-        out.extend(rest);
+        // Apps with a banner first among those never opened, so a bare system app does not fill a
+        // new TV's row ahead of the streaming apps.
+        rest.sort_by(|a, b| b.last_used_ms.cmp(&a.last_used_ms).then(b.flags.has_banner.cmp(&a.flags.has_banner)).then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase())));
+        out.extend(rest.into_iter().take(self.layout.recent_apps as usize));
         out
+    }
+
+    /// The apps Your apps holds right now: pinned, and recent behind them.
+    pub fn your_apps_counts(&self) -> (usize, usize) {
+        let all = self.your_apps();
+        let pinned = all.iter().filter(|it| it.package().is_some_and(|p| self.layout.pinned_apps.iter().any(|x| x == p))).count();
+        (pinned, all.len() - pinned)
     }
 
     pub fn all_apps(&self) -> Vec<&Item> {
@@ -725,6 +760,34 @@ mod tests {
         g.pin_app("c");
         let ids: Vec<&str> = g.your_apps().iter().map(|i| i.id.as_str()).collect();
         assert_eq!(ids, vec!["app:c", "app:b", "app:a"]);
+    }
+
+    #[test]
+    fn your_apps_holds_the_pins_and_then_the_recent_few() {
+        let mut g = Graph::default();
+        let mut apps: Vec<Item> = (0..6).map(|i| app(&format!("p{i}"), &format!("App {i}"), Some(100 - i as i64))).collect();
+        let mut game = app("game", "A Game", Some(1000));
+        game.flags.is_game = true;
+        apps.push(game);
+        let mut plain = Item::app("plain", "Main", "Aardvark");
+        plain.last_used_ms = None;
+        apps.push(plain);
+        g.replace_source("apps", apps);
+        g.layout.recent_apps = 3;
+        g.pin_app("p5");
+        let ids: Vec<&str> = g.your_apps().iter().map(|i| i.id.as_str()).collect();
+        // The pin, then the three opened most recently; the game and the never-opened app wait.
+        assert_eq!(ids, vec!["app:p5", "app:p0", "app:p1", "app:p2"]);
+        assert_eq!(g.your_apps_counts(), (1, 3));
+        g.layout.recent_apps = 0;
+        assert_eq!(g.your_apps().len(), 1);
+        // Never opened: a banner app comes before a bare one with an earlier name.
+        g.layout.recent_apps = 10;
+        for it in g.items.values_mut() {
+            it.last_used_ms = None;
+        }
+        let ids: Vec<&str> = g.your_apps().iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids.last(), Some(&"app:plain"));
     }
 
     #[test]

@@ -532,6 +532,8 @@ pub enum LayoutCommand {
     HideRow { row_id: String },
     /// Moves a row to `to_index` in the home's order, counting every row the home could show.
     MoveRow { row_id: String, to_index: u32 },
+    /// How many recently opened apps follow the pins in Your apps; zero keeps the row to pins.
+    SetRecentApps { count: u32 },
     ResetLayout,
     DismissNotice { id: String },
     EnableChannel { channel_id: i64 },
@@ -889,6 +891,12 @@ impl Core {
         engine::wait_for_graph(&self.inner);
         let state = self.inner.state.lock();
         engine::row_infos(&state, &self.inner.config)
+    }
+
+    /// How many recently opened apps follow the pins in Your apps.
+    pub fn recent_apps(&self) -> u32 {
+        self.count();
+        self.inner.state.lock().graph.layout.recent_apps
     }
 
     /// Items hidden from every row, by title.

@@ -142,8 +142,15 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
                         (n, counted(n, "title", "titles", "Nothing to continue yet"))
                     }
                     "apps" => {
-                        let n = graph.your_apps().len();
-                        (n, counted(n, "app", "apps", "Nothing to show yet"))
+                        let (pinned, recent) = graph.your_apps_counts();
+                        let detail = match (pinned, recent) {
+                            (0, 0) => "Nothing to show yet".to_string(),
+                            _ if !state.permissions.usage && recent > 0 => "Allow usage access so it follows what you open".to_string(),
+                            (0, r) => format!("{} you opened last", counted(r, "app", "apps", "")),
+                            (p, 0) => format!("{}, pinned only", counted(p, "app", "apps", "")),
+                            (p, r) => format!("{p} pinned, {r} you opened last"),
+                        };
+                        (pinned + recent, detail)
                     }
                     "games" => {
                         let n = graph.games().len();

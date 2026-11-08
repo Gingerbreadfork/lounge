@@ -123,6 +123,11 @@
     change({ pinnedApps: layout.pinnedApps.filter((p) => p !== a.package) }, `${a.title} unpinned from Your apps`);
   }
 
+  function setRecent(n: number) {
+    if (!layout || layout.recentApps === n) return;
+    change({ recentApps: n }, n === 0 ? 'Your apps shows pins only' : `Your apps shows ${n} recent apps`);
+  }
+
   // Hidden
   function showItem(item: NamedRef) {
     if (!layout) return;
@@ -173,7 +178,12 @@
 
     <section class="section">
       <div class="section-head"><h3>Your apps</h3></div>
-      <p class="caption">Pinned apps stay at the front in this order. The rest follow what you open.</p>
+      <p class="caption">Pinned apps stay at the front in this order, then the apps you opened last. Everything else is in All apps on the TV.</p>
+      <div class="segments" role="radiogroup" aria-label="Recent apps shown after the pins">
+        {#each [0, 5, 10, 15] as n}
+          <button class="segment" class:on={layout.recentApps === n} role="radio" aria-checked={layout.recentApps === n} onclick={() => setRecent(n)}>{n === 0 ? 'Pins only' : `${n} recent`}</button>
+        {/each}
+      </div>
       {#if pinnedApps.length}
         <Reorder items={pinnedApps} keyOf={(a) => a.package} nameOf={(a) => a.title} onmove={movePinned} ondone={savePinned}>
           {#snippet children(a)}
@@ -224,6 +234,9 @@
 
 <style>
   .row-icon { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; flex: none; }
+  .segments { display: flex; gap: 6px; padding: 4px; background: var(--curtain); border-radius: 14px; }
+  .segment { flex: 1; min-height: 40px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--dust); transition: background 120ms ease-out, color 120ms ease-out; }
+  .segment.on { background: var(--velvet); color: var(--limelight); box-shadow: inset 0 0 0 1px var(--curtain-edge); }
   .dim .title { color: var(--dust); }
   .center { text-align: center; margin-top: -10px; }
   .one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

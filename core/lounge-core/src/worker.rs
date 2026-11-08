@@ -1193,6 +1193,7 @@ fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::
             let order = crate::engine::moved_row_order(&state, &row_id, to_index as usize);
             state.graph.set_row_order(order);
         }
+        LayoutCommand::SetRecentApps { count } => state.graph.layout.recent_apps = count.min(60),
         LayoutCommand::ResetLayout => state.graph.reset_layout(),
         LayoutCommand::DismissNotice { id } => {
             state.graph.layout.dismissed_notices.insert(id);

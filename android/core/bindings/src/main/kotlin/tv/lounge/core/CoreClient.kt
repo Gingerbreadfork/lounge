@@ -93,6 +93,9 @@ class CoreClient(val core: Core) : SnapshotListener {
 
     fun availableChannels(): List<ChannelInfo> = core.availableChannels()
 
+    /** How many recently opened apps follow the pins in Your apps. */
+    fun recentApps(): UInt = core.recentApps()
+
     /** Every row the home could show, in order; waits for the core to load, so call it off the main thread. */
     fun homeRows(): List<RowInfo> = core.homeRows()
 

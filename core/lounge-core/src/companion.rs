@@ -97,6 +97,7 @@ fn layout_doc(inner: &Inner) -> LayoutDoc {
         apps,
         hidden_items: engine::hidden_items(&state).into_iter().map(named).collect(),
         stage_items: l.stage_pins.iter().map(|id| named(engine::item_ref(graph, id))).collect(),
+        recent_apps: l.recent_apps,
     }
 }
 
@@ -180,6 +181,9 @@ impl CompanionActions for CoreActions {
             }
             if let Some(visibility) = patch.row_visibility {
                 layout.row_visibility = visibility;
+            }
+            if let Some(count) = patch.recent_apps {
+                layout.recent_apps = count.min(60);
             }
             layout.normalise();
             state.store.save_layout(&layout).map_err(|e| e.to_string())?;
@@ -412,7 +416,8 @@ mod tests {
         assert_eq!(aside, ["apps"]);
         let info = core.home_rows().into_iter().find(|r| r.id == "apps").unwrap();
         assert!(!info.shown && info.chosen);
-        assert_eq!((info.count, info.detail.as_str()), (1, "1 app"));
+        // Without usage access the row cannot follow what is opened, and says so.
+        assert_eq!((info.count, info.detail.as_str()), (2, "Allow usage access so it follows what you open"));
         let doc = CoreActions { inner: Arc::downgrade(&core.inner) }.layout();
         assert_eq!(doc.row_visibility.get("apps"), Some(&false));
         assert_eq!(doc.row_order.first().map(String::as_str), Some("continue"));
@@ -433,10 +438,11 @@ mod tests {
         let all: Vec<&str> = snap.all_apps.iter().map(|t| t.id.as_str()).collect();
         assert_eq!(all, ["app:tv.a", "app:tv.b"]);
         assert!(snap.rows.iter().all(|r| r.id != "allapps"));
-        // Your apps holds the banner apps and ends with the way to the rest.
+        // Your apps holds the recent few, banner apps first while nothing has been opened, and
+        // ends with the way to the rest.
         let apps = snap.rows.iter().find(|r| r.id == "apps").unwrap();
         let ids: Vec<&str> = apps.tiles.iter().map(|t| t.id.as_str()).collect();
-        assert_eq!(ids, ["app:tv.a", "control:allapps"]);
+        assert_eq!(ids, ["app:tv.a", "app:tv.b", "control:allapps"]);
         let last = apps.tiles.last().unwrap();
         assert_eq!((last.title.as_str(), last.subtitle.as_deref(), last.action.as_str()), ("All apps", Some("2 apps"), "control:allapps"));
 

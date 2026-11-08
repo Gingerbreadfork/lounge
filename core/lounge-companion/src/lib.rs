@@ -84,6 +84,9 @@ pub struct LayoutDoc {
     /// The Stage pins with their names, in pin order.
     #[serde(default)]
     pub stage_items: Vec<NamedRef>,
+    /// How many recently opened apps follow the pins in Your apps; zero keeps the row to pins.
+    #[serde(default)]
+    pub recent_apps: u32,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -95,6 +98,7 @@ pub struct LayoutPatch {
     pub stage_pins: Option<Vec<String>>,
     pub enabled_channels: Option<Vec<i64>>,
     pub row_visibility: Option<HashMap<String, bool>>,
+    pub recent_apps: Option<u32>,
 }
 
 /// Everything the API can do, provided by the core.

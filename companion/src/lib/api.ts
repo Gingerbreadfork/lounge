@@ -35,6 +35,8 @@ export type Layout = {
   /** Rows shown or hidden by hand; a row not listed follows its default. */
   rowVisibility: Record<string, boolean>;
   apps: AppRef[]; hiddenItems: NamedRef[]; stageItems: NamedRef[];
+  /** How many recently opened apps follow the pins in Your apps; zero keeps the row to pins. */
+  recentApps: number;
 };
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
 export type Plugin = {

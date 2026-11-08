@@ -327,6 +327,9 @@ fun QuickSettingsSheet(
     onRows: () -> Unit,
     /** "All shown" or "2 hidden": what the row editor would say first. */
     rowsSummary: String,
+    /** How many recently opened apps follow the pins in Your apps. */
+    recentApps: Int,
+    onSetRecentApps: (Int) -> Unit,
     onPlugins: () -> Unit,
     onCompanion: () -> Unit,
     companionOn: Boolean,
@@ -368,6 +371,16 @@ fun QuickSettingsSheet(
             value = rowsSummary,
             onClick = onRows,
             focusRequester = focusFor(Overlay.Rows) ?: focusFor(null),
+        )
+        val steps = listOf(0, 5, 10, 15)
+        val at = steps.indexOf(recentApps).let { if (it < 0) 2 else it }
+        SheetRow(
+            icon = LoungeIcons.Apps,
+            title = "Your apps",
+            subtitle = "Pinned apps, then the ones you opened last",
+            value = if (recentApps == 0) "Pinned only" else "$recentApps recent",
+            onClick = { sounds0?.tick(); onSetRecentApps(steps[(at + 1) % steps.size]) },
+            onCycle = { by -> sounds0?.tick(); onSetRecentApps(steps[(at + by).mod(steps.size)]) },
         )
         Spacer(Modifier.height(16.dp))
         Hairline(Modifier.fillMaxWidth())

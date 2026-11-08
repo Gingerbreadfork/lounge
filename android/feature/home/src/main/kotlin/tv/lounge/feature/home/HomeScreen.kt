@@ -823,6 +823,8 @@ private fun SheetContent(
             // Both wait on the core, which may still be loading, so they are read off the main thread.
             val enabledChannels by produceState(0) { value = withContext(Dispatchers.IO) { core.availableChannels().count { it.enabled } } }
             val enabledPlugins by produceState(0) { value = withContext(Dispatchers.IO) { core.plugins().count { it.enabled } } }
+            var recentApps by remember { mutableStateOf(-1) }
+            LaunchedEffect(Unit) { recentApps = withContext(Dispatchers.IO) { core.recentApps().toInt() } }
             val rowsSummary by produceState("") {
                 value = withContext(Dispatchers.IO) {
                     // Only rows the person hid count; All apps stepping aside on its own is not their doing.
@@ -853,6 +855,8 @@ private fun SheetContent(
                 onChannels = { open(Overlay.Channels) },
                 onRows = { open(Overlay.Rows) },
                 rowsSummary = rowsSummary,
+                recentApps = if (recentApps < 0) 10 else recentApps,
+                onSetRecentApps = { n -> recentApps = n; core.command(LayoutCommand.SetRecentApps(n.toUInt())) },
                 onPlugins = { open(Overlay.Plugins) },
                 onCompanion = { open(Overlay.Companion) },
                 companionOn = uiPrefs.companionEnabled,
