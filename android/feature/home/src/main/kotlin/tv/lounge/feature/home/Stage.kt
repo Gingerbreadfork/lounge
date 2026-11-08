@@ -378,13 +378,14 @@ private fun BandChrome(
         // With progress the line beside the bar is how long is left, which the core puts last.
         val line = if (spotlight.progress != null) spotlight.lines.lastOrNull() else spotlight.lines.firstOrNull()
         Column(Modifier.align(Alignment.CenterStart).padding(start = 48.dp).graphicsLayer { translationX = textShift() }) {
+            // A long title takes a second line before it is cut; the band has the height for it.
             Text(
                 spotlight.title,
                 style = LoungeTheme.typography.displayL,
                 color = colors.limelight,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 720.dp),
+                modifier = Modifier.widthIn(max = 960.dp),
             )
             Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
