@@ -352,6 +352,9 @@ pub struct Tile {
     pub action: String,
     pub pinned: bool,
     pub stage_pinned: bool,
+    /// The picture is the owning app's banner, standing in for art the item did not bring.
+    #[serde(default)]
+    pub borrowed_art: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum, Serialize, Deserialize)]

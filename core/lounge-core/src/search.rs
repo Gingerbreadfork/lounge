@@ -87,6 +87,7 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
                     action: format!("open:{id}"),
                     pinned: false,
                     stage_pinned: false,
+                    borrowed_art: false,
                 });
                 links.insert(id, link);
             }

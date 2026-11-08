@@ -359,12 +359,18 @@ private fun LandscapeContent(
     Box(Modifier.fillMaxSize()) {
         Artwork(tile.artworkPath, filter, LoungeTheme.colors.light(tile.lightArgb).copy(alpha = 0.25f), size)
         if (showText && tile.artworkPath != null) {
+            // A borrowed banner is a backdrop, not the picture, so its scrim starts higher and ends deeper.
+            val scrim = if (tile.borrowedArt) {
+                Brush.verticalGradient(0f to colors.velvet.copy(alpha = 0.10f), 0.35f to colors.velvet.copy(alpha = 0.70f), 1f to colors.velvet.copy(alpha = 0.94f))
+            } else {
+                Brush.verticalGradient(0f to Color.Transparent, 0.45f to colors.velvet.copy(alpha = 0.55f), 1f to colors.velvet.copy(alpha = 0.90f))
+            }
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(size.height * 0.6f)
-                    .background(Brush.verticalGradient(0f to Color.Transparent, 0.45f to colors.velvet.copy(alpha = 0.55f), 1f to colors.velvet.copy(alpha = 0.90f))),
+                    .height(if (tile.borrowedArt) size.height else size.height * 0.6f)
+                    .background(scrim),
             )
         }
         // A live tile carries the channel's logo top-left and its badge top-right (DESIGN.md §7.1).

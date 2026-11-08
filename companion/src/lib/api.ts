@@ -6,6 +6,8 @@ export type Tile = {
   id: string; kind: 'POSTER' | 'LANDSCAPE' | 'APP_BANNER' | 'COMPACT' | string; title: string; subtitle?: string | null;
   artworkPath?: string | null; iconPath?: string | null; lightArgb: number; progress?: number | null;
   badge?: string | null; action: string; pinned: boolean; stagePinned: boolean;
+  /** The picture is the owning app's banner, standing in for art the item did not bring. */
+  borrowedArt?: boolean;
 };
 export type Row = { id: string; title: string; kind: string; size: string; badge?: string | null; tiles: Tile[] };
 export type Spotlight = {

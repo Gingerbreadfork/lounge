@@ -120,9 +120,10 @@
         <div class="section-head"><h3>Stage</h3></div>
         <div class="row-scroller">
           {#each snapshot.stage.strip as t (t.id)}
-            <button class="tile landscape" style="--light: {argb(t.lightArgb)}" onclick={() => open(t)}>
+            <button class="tile landscape" class:borrowed={t.borrowedArt} style="--light: {argb(t.lightArgb)}" aria-label={describe(t)} onclick={() => open(t)} use:hold={() => menu(t, null, null)}>
               {#if t.artworkPath}<img src={art(t.artworkPath)} alt="" loading="lazy" />{/if}
-              {#if t.kind !== 'APP_BANNER' || !t.artworkPath}<div class="scrim"><div class="t">{t.title}</div>{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
+              {#if tag(t.kind) !== 'APP_BANNER' || !t.artworkPath}<div class="scrim"><div class="t">{t.title}</div>{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
+              {#if t.stagePinned}<span class="pinmark" aria-hidden="true"><Icon name="pin" size={13} /></span>{/if}
               {#if t.progress != null}<div class="bar"><i style="width: {progressPct(t.progress)}%"></i></div>{/if}
             </button>
           {/each}
@@ -134,15 +135,16 @@
         <div class="section-head"><h3>{row.title}</h3>{#if tag(row.badge) === 'LIVE'}<span class="pill bad"><span class="dot"></span>Live</span>{/if}</div>
         <div class="row-scroller">
           {#each row.tiles as t (t.id)}
-            <button class="tile {row.kind.toLowerCase()}" style="--light: {argb(t.lightArgb)}" onclick={() => open(t)}>
-              {#if row.kind === 'COMPACT'}
+            <button class="tile {tag(row.kind).toLowerCase()}" class:borrowed={t.borrowedArt} style="--light: {argb(t.lightArgb)}" aria-label={describe(t)} onclick={() => open(t)} use:hold={t.id.startsWith('notice:') ? null : () => menu(t, row.id, row.title)}>
+              {#if tag(row.kind) === 'COMPACT'}
                 {#if t.iconPath}<img class="icon" src={art(t.iconPath)} alt="" loading="lazy" />{/if}
                 <span class="t">{t.title}</span>
                 {#if t.pinned || t.stagePinned}<span class="pin-inline" aria-hidden="true"><Icon name="pin" size={14} /></span>{/if}
               {:else}
                 {#if t.artworkPath}<img src={art(t.artworkPath)} alt="" loading="lazy" />{:else}<div class="fill" style="background: color-mix(in srgb, {argb(t.lightArgb)} 35%, var(--curtain))"></div>{/if}
-                {#if t.badge === 'LIVE'}<span class="badge"><span class="dot"></span>Live</span>{/if}
-                {#if row.kind !== 'APP_BANNER' && row.kind !== 'POSTER'}<div class="scrim"><div class="t">{t.title}</div>{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
+                {#if tag(t.badge) === 'LIVE'}<span class="badge"><span class="dot"></span>Live</span>{/if}
+                {#if tag(row.kind) !== 'APP_BANNER' && tag(row.kind) !== 'POSTER'}<div class="scrim"><div class="t">{t.title}</div>{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
+                {#if t.pinned || t.stagePinned}<span class="pinmark" aria-hidden="true"><Icon name="pin" size={13} /></span>{/if}
                 {#if t.progress != null}<div class="bar"><i style="width: {progressPct(t.progress)}%"></i></div>{/if}
               {/if}
             </button>
@@ -183,5 +185,10 @@
   .round:disabled { opacity: 0.35; }
   .tile .fill { position: absolute; inset: 0; }
   .tile .icon { width: 28px; height: 28px; border-radius: 7px; flex: none; object-fit: cover; }
-  .tile.compact .t { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.compact .t { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .hint { margin: -12px 0 -8px; }
+  .pinmark { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--velvet) 72%, transparent); color: var(--limelight); }
+  .pin-inline { color: var(--dust); display: grid; place-items: center; flex: none; }
+  /* A tile wearing its app's banner: a deeper scrim with the title on it, so it reads as something from the app. */
+  .tile.borrowed .scrim { inset: 0; padding-top: 0; display: flex; flex-direction: column; justify-content: flex-end; background: linear-gradient(to top, color-mix(in srgb, var(--velvet) 94%, transparent), color-mix(in srgb, var(--velvet) 70%, transparent) 55%, color-mix(in srgb, var(--velvet) 10%, transparent)); }
 </style>

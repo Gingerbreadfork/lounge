@@ -408,6 +408,7 @@ fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &s
             action: action.to_string(),
             pinned: false,
             stage_pinned: false,
+            borrowed_art: false,
         }],
     }
 }
@@ -426,6 +427,7 @@ fn tv_controls_tile(config: &CoreConfig) -> Tile {
         action: "control:tv:open".to_string(),
         pinned: false,
         stage_pinned: false,
+        borrowed_art: false,
     }
 }
 
@@ -474,10 +476,21 @@ fn elapsed(prog: &Item, now: i64) -> Option<f32> {
     Some(((now - s) as f32 / (e - s) as f32).clamp(0.0, 1.0))
 }
 
+/// The app whose pictures stand in for a session that brought none of its own: a live stream
+/// from 7plus has no key art, so its tile wears the 7plus banner.
+pub(crate) fn lender<'a>(graph: &'a Graph, it: &Item) -> Option<&'a Item> {
+    if it.kind != ItemKind::MediaSession || it.artwork.landscape.is_some() {
+        return None;
+    }
+    graph.get(&format!("app:{}", it.owner.as_deref()?)).filter(|app| app.artwork.landscape.is_some())
+}
+
 pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
+    let lent = lender(graph, it);
+    let art = lent.map(|app| &app.artwork).unwrap_or(&it.artwork);
     let artwork = match kind {
-        TileKind::Poster => it.artwork.poster.clone().or_else(|| it.artwork.landscape.clone()),
-        TileKind::Landscape | TileKind::AppBanner => it.artwork.landscape.clone().or_else(|| it.artwork.poster.clone()),
+        TileKind::Poster => art.poster.clone().or_else(|| art.landscape.clone()),
+        TileKind::Landscape | TileKind::AppBanner => art.landscape.clone().or_else(|| art.poster.clone()),
         TileKind::Compact => None,
     };
     let badge = if it.flags.is_live {
@@ -506,8 +519,8 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         title: it.title.clone(),
         subtitle,
         artwork_path: artwork,
-        icon_path: it.artwork.logo.clone(),
-        light_argb: it.light(),
+        icon_path: art.logo.clone(),
+        light_argb: lent.map(|app| app.light()).unwrap_or_else(|| it.light()),
         progress: it.progress,
         badge,
         action: match &it.deep_link {
@@ -518,6 +531,7 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         // Only an app itself is pinned; a programme from a pinned app is not.
         pinned: it.kind == ItemKind::App && it.package().is_some_and(|p| graph.layout.pinned_apps.iter().any(|x| x == p)),
         stage_pinned: graph.layout.stage_pins.iter().any(|x| x == &it.id),
+        borrowed_art: lent.is_some(),
     }
 }
 
@@ -635,7 +649,8 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
 
     let mut title = it.title.clone();
     let mut progress = it.progress;
-    let mut artwork = it.artwork.clone();
+    let lent = lender(graph, it);
+    let mut artwork = lent.map(|app| app.artwork.clone()).unwrap_or_else(|| it.artwork.clone());
     let mut lines = Vec::new();
     // Where OK will take you sits in its own chip, not among the lines (DESIGN.md §5.1).
     let mut source = app_label(graph, it);
@@ -727,7 +742,9 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
         ItemKind::Input | ItemKind::Device => crate::SpotlightKind::Device,
         ItemKind::Program | ItemKind::Resume | ItemKind::MediaSession | ItemKind::Wallpaper => crate::SpotlightKind::Content,
     };
-    let framed = matches!(it.kind, ItemKind::App | ItemKind::Game | ItemKind::Input | ItemKind::Device) || it.framed_art();
+    // A borrowed banner sits in its frame like the app's own would; blown up it would be a logo wall.
+    let framed = matches!(it.kind, ItemKind::App | ItemKind::Game | ItemKind::Input | ItemKind::Device) || it.framed_art() || lent.is_some();
+    let kind = if lent.is_some() { crate::SpotlightKind::App } else { kind };
     StageSpotlight {
         id: it.id.clone(),
         kind,
@@ -738,7 +755,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
         artwork_path: artwork.hero.clone().or_else(|| artwork.landscape.clone()).or_else(|| artwork.poster.clone()),
         backdrop_path: artwork.backdrop.clone(),
         icon_path: artwork.logo.clone(),
-        light_argb: it.light(),
+        light_argb: lent.map(|app| app.light()).unwrap_or_else(|| it.light()),
         primary: StageAction {
             label: primary_label.to_string(),
             action: format!("open:{}", it.id),
@@ -924,6 +941,50 @@ fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_session_without_pictures_wears_its_apps_banner() {
+        let mut g = Graph::default();
+        let mut app = Item::app("au.com.seven", "Main", "7plus");
+        app.artwork.landscape = Some("/art/seven-land.jpg".into());
+        app.artwork.logo = Some("/art/seven-icon.png".into());
+        g.upsert(app);
+        let mut live = Item::content("session:au.com.seven:racing", ItemKind::MediaSession, "sessions", "Racing.com", DeepLink::None);
+        live.owner = Some("au.com.seven".into());
+        let mut own = Item::content("session:au.com.seven:news", ItemKind::MediaSession, "sessions", "News", DeepLink::None);
+        own.owner = Some("au.com.seven".into());
+        own.artwork.landscape = Some("/art/news-land.jpg".into());
+
+        let tile = tile_for(&g, &live, TileKind::Landscape);
+        assert_eq!(tile.artwork_path.as_deref(), Some("/art/seven-land.jpg"));
+        assert_eq!(tile.icon_path.as_deref(), Some("/art/seven-icon.png"));
+        assert!(tile.borrowed_art);
+        // A session with pictures of its own keeps them, and the app's own tile is not borrowed.
+        let tile = tile_for(&g, &own, TileKind::Landscape);
+        assert_eq!(tile.artwork_path.as_deref(), Some("/art/news-land.jpg"));
+        assert!(!tile.borrowed_art);
+        assert!(!tile_for(&g, g.get("app:au.com.seven").unwrap(), TileKind::AppBanner).borrowed_art);
+        // Nothing to borrow when the app is gone.
+        let mut orphan = live.clone();
+        orphan.owner = Some("au.com.gone".into());
+        assert!(tile_for(&g, &orphan, TileKind::Landscape).artwork_path.is_none());
+    }
+
+    #[test]
+    fn a_move_places_the_row_and_clamps_to_the_ends() {
+        let order: Vec<String> = ["a", "b", "c"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(moved(order.clone(), "c", 0), vec!["c", "a", "b"]);
+        assert_eq!(moved(order.clone(), "a", 99), vec!["b", "c", "a"]);
+        assert_eq!(moved(order.clone(), "new", 1), vec!["a", "new", "b", "c"]);
+        assert_eq!(moved(order, "b", 1), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn counts_read_as_sentences() {
+        assert_eq!(counted(0, "app", "apps", "Nothing yet"), "Nothing yet");
+        assert_eq!(counted(1, "app", "apps", "Nothing yet"), "1 app");
+        assert_eq!(counted(14, "app", "apps", "Nothing yet"), "14 apps");
+    }
 
     #[test]
     fn local_hour_wraps() {
