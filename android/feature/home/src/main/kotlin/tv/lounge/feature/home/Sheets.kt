@@ -377,7 +377,7 @@ fun QuickSettingsSheet(
         SheetRow(
             icon = LoungeIcons.Apps,
             title = "Your apps",
-            subtitle = "Pinned apps, then the ones you opened last",
+            subtitle = "Pins, then recent apps",
             value = if (recentApps == 0) "Pinned only" else "$recentApps recent",
             onClick = { sounds0?.tick(); onSetRecentApps(steps[(at + 1) % steps.size]) },
             onCycle = { by -> sounds0?.tick(); onSetRecentApps(steps[(at + by).mod(steps.size)]) },

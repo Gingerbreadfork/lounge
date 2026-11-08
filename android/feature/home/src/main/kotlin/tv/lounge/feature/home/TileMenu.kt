@@ -77,17 +77,17 @@ fun TileMenuPopover(
             content = {
                 // Placed to the right of the tile unless it would run off the screen; the
                 // transform origin follows, so the menu always grows out of the tile's side.
-                val toRight = with(density) { anchor.right + (24.dp * 2 + 360.dp).toPx() <= screenWidth - 48.dp.toPx() }
+                val toRight = with(density) { anchor.right + (24.dp * 2 + MenuWidth).toPx() <= screenWidth - 48.dp.toPx() }
                 AnimatedVisibility(
                     visibleState,
                     enter = fadeIn(motion.snap()) +
                         scaleIn(motion.snap(), initialScale = 0.96f, transformOrigin = TransformOrigin(if (toRight) 0f else 1f, 0.15f)) +
-                        slideInHorizontally(motion.snap()) { full -> if (toRight) -(full * 8 / 360) else (full * 8 / 360) },
+                        slideInHorizontally(motion.snap()) { full -> if (toRight) -(full * 8 / 480) else (full * 8 / 480) },
                     exit = fadeOut(androidx.compose.animation.core.tween(90)),
                 ) {
                     Column(
                         Modifier
-                            .width(360.dp)
+                            .width(MenuWidth)
                             .clip(RoundedCornerShape(16.dp))
                             .background(colors.curtain)
                             .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
@@ -146,6 +146,9 @@ fun TileMenuPopover(
     }
     LaunchedEffect(Unit) { firstFocus.requestWhenReady() }
 }
+
+/** Wide enough for the longest item, "Hide the Continue watching row", on one line. */
+private val MenuWidth = 480.dp
 
 /** What each pin does, in the menu and on the phone, so the word "pin" never stands alone. */
 object PinWords {

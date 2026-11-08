@@ -69,7 +69,7 @@ object Dimens {
     val glowRoom: Dp = 56.dp
     val tileRadius: Dp = 12.dp
     val stageRadius: Dp = 20.dp
-    val sheetWidth: Dp = 560.dp
+    val sheetWidth: Dp = 640.dp
     val stageArtworkWidth: Dp = 1120.dp
     val stageArtworkHeight: Dp = 630.dp
     val playbillWidth: Dp = 560.dp
