@@ -109,6 +109,11 @@ opened them until you do. Games get a row of their own, marked when a controller
 Hold OK on any tile for a menu: pin, move, hide, pin it to the Stage, app info, the store page,
 uninstall. Rows with nothing in them stay out of the way.
 
+Streaming apps, including Netflix, appear in Continue watching when they publish readable
+Watch Next entries on your TV. Enable TV listings in Settings; Lounge refreshes them when
+you return from a player. [TV listings troubleshooting](docs/TV_LISTINGS.md) explains how to
+check what an app actually publishes.
+
 **Live TV with a guide.** Channels from the TV's tuner and from plugins show what is on now, and
 a guide lays the schedule out as a grid of channels and time.
 
