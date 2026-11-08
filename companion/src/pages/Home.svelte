@@ -36,6 +36,15 @@
     if (!np) return;
     act('', () => api.open(`media:${np!.package}:${cmd}`));
   }
+  /** What a screen reader says for a tile: the title, then what the eye would see on it. */
+  function describe(t: Tile) {
+    const parts = [t.title];
+    if (t.subtitle) parts.push(t.subtitle);
+    if (tag(t.badge) === 'LIVE') parts.push('live');
+    if (t.stagePinned) parts.push('pinned to the Stage');
+    else if (t.pinned) parts.push('pinned');
+    return parts.join(', ');
+  }
   function progressPct(p: number | null | undefined) {
     return p == null ? null : Math.round(Math.max(0, Math.min(1, p)) * 100);
   }
@@ -74,7 +83,7 @@
         {#if np.subtitle}<p class="meta">{np.subtitle}</p>{/if}
         <div class="np-controls">
           <button class="round" disabled={!np.canSkipPrevious} onclick={() => media('previous')} aria-label="Previous"><Icon name="skip_previous" size={20} /></button>
-          <button class="round big" onclick={() => media('play-pause')} aria-label={np.status === 'PLAYING' ? 'Pause' : 'Play'}><Icon name={np.status === 'PLAYING' ? 'pause' : 'play'} size={24} /></button>
+          <button class="round big" onclick={() => media('play-pause')} aria-label={tag(np.status) === 'PLAYING' ? 'Pause' : 'Play'}><Icon name={tag(np.status) === 'PLAYING' ? 'pause' : 'play'} size={24} /></button>
           <button class="round" disabled={!np.canSkipNext} onclick={() => media('next')} aria-label="Next"><Icon name="skip_next" size={20} /></button>
         </div>
       </div>
@@ -122,7 +131,7 @@
     {/if}
     {#each snapshot.rows as row (row.id)}
       <section class="section">
-        <div class="section-head"><h3>{row.title}</h3>{#if row.badge === 'LIVE'}<span class="pill bad"><span class="dot"></span>Live</span>{/if}</div>
+        <div class="section-head"><h3>{row.title}</h3>{#if tag(row.badge) === 'LIVE'}<span class="pill bad"><span class="dot"></span>Live</span>{/if}</div>
         <div class="row-scroller">
           {#each row.tiles as t (t.id)}
             <button class="tile {row.kind.toLowerCase()}" style="--light: {argb(t.lightArgb)}" onclick={() => open(t)}>
