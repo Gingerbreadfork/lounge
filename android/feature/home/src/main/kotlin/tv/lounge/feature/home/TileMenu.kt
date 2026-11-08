@@ -174,6 +174,8 @@ fun menuItemsFor(
     rowId: String,
     rowTitle: String?,
     isPinned: Boolean,
+    canMoveLeft: Boolean,
+    canMoveRight: Boolean,
     isStagePinned: Boolean,
     onHide: () -> Unit,
     onHideRow: () -> Unit,
@@ -197,8 +199,8 @@ fun menuItemsFor(
     }
     if (isApp && rowId == "apps") {
         if (isPinned) {
-            items += MenuItem("Move left", LoungeIcons.Move, onSelect = onMoveLeft)
-            items += MenuItem("Move right", LoungeIcons.Move, onSelect = onMoveRight)
+            if (canMoveLeft) items += MenuItem("Move left", LoungeIcons.Move, onSelect = onMoveLeft)
+            if (canMoveRight) items += MenuItem("Move right", LoungeIcons.Move, onSelect = onMoveRight)
             items += MenuItem(PinWords.UNPIN_APP, LoungeIcons.Pin, detail = PinWords.UNPIN_APP_DETAIL, onSelect = onUnpin)
         } else {
             items += MenuItem(PinWords.PIN_APP, LoungeIcons.Pin, detail = PinWords.PIN_APP_DETAIL, onSelect = onPin)

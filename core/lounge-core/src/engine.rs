@@ -144,11 +144,11 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
                     "apps" => {
                         let (pinned, recent) = graph.your_apps_counts();
                         let detail = match (pinned, recent) {
-                            (0, 0) => "Nothing to show yet".to_string(),
-                            _ if !state.permissions.usage && recent > 0 => "Allow usage access so it follows what you open".to_string(),
-                            (0, r) => format!("{} you opened last", counted(r, "app", "apps", "")),
+                            (0, 0) => "Only the way to All apps, until you pin one".to_string(),
+                            _ if !state.permissions.usage && recent > 0 => "Allow usage access in Settings to follow what you open".to_string(),
+                            (0, r) => format!("{} recent", counted(r, "app", "apps", "")),
                             (p, 0) => format!("{}, pinned only", counted(p, "app", "apps", "")),
-                            (p, r) => format!("{p} pinned, {r} you opened last"),
+                            (p, r) => format!("{p} pinned, {r} recent"),
                         };
                         (pinned + recent, detail)
                     }
@@ -200,6 +200,7 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
     let now = now_ms();
     let hour_local = local_hour(now, utc_offset_minutes);
     let index = BuildIndex::new(state, now);
+    let all_apps = graph.all_apps();
     let mut rows = Vec::new();
     let mut hidden_rows = Vec::new();
     for row_id in effective_row_order(state) {
@@ -227,10 +228,10 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
     HomeSnapshot {
         revision: state.revision,
         generated_at_ms: now,
-        stage: build_stage(graph, &index, now, hour_local, config),
+        stage: build_stage(state, &index, now, hour_local, config),
         rows,
         hidden_rows,
-        all_apps: graph.all_apps().iter().map(|it| tile_for(graph, it, TileKind::AppBanner)).collect(),
+        all_apps: ranked_app_tiles(graph, &all_apps),
         now_playing: state.now_playing.clone(),
         wallpapers: graph
             .wallpapers()
@@ -268,13 +269,14 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
             ("Continue watching", TileKind::Landscape, RowSize::M, None, items.into_iter().take(ROW_TILES).collect())
         }
         "apps" => {
-            let items = graph.your_apps();
-            if items.is_empty() {
+            // The row ends with the way to every app, and stands even with no pins and no recent
+            // apps, so that way is never lost.
+            let total = graph.all_apps().len();
+            if total == 0 {
                 return None;
             }
-            // The row ends with the way to every app, so the list of them all needs no row.
-            let mut tiles: Vec<Tile> = items.iter().map(|it| tile_for(graph, it, TileKind::AppBanner)).collect();
-            tiles.push(all_apps_tile(graph.all_apps().len()));
+            let mut tiles: Vec<Tile> = graph.your_apps().iter().map(|it| tile_for(graph, it, TileKind::AppBanner)).collect();
+            tiles.push(all_apps_tile(total));
             return Some(Row { id: row_id.to_string(), title: "Your apps".to_string(), kind: TileKind::AppBanner, size: RowSize::M, badge: None, tiles });
         }
         "games" => ("Games", TileKind::Landscape, RowSize::M, Some(Badge::Controller), graph.games()),
@@ -396,10 +398,36 @@ fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &s
             pinned: false,
             stage_pinned: false,
             borrowed_art: false,
-        last_used_ms: None,
-        added_ms: None,
+            opened_rank: None,
+            installed_rank: None,
         }],
     }
+}
+
+/// Every app as a tile, A to Z, each carrying its place by last opened and by arrival so the
+/// screen can reorder without the times themselves, which move while something plays.
+fn ranked_app_tiles(graph: &Graph, apps: &[&Item]) -> Vec<Tile> {
+    let mut by_opened: Vec<usize> = (0..apps.len()).collect();
+    by_opened.sort_by(|&a, &b| apps[b].last_used_ms.cmp(&apps[a].last_used_ms).then(a.cmp(&b)));
+    let mut by_added: Vec<usize> = (0..apps.len()).collect();
+    by_added.sort_by(|&a, &b| apps[b].added_ms.cmp(&apps[a].added_ms).then(a.cmp(&b)));
+    let mut opened_rank = vec![0u32; apps.len()];
+    let mut installed_rank = vec![0u32; apps.len()];
+    for (rank, &i) in by_opened.iter().enumerate() {
+        opened_rank[i] = rank as u32;
+    }
+    for (rank, &i) in by_added.iter().enumerate() {
+        installed_rank[i] = rank as u32;
+    }
+    apps.iter()
+        .enumerate()
+        .map(|(i, it)| {
+            let mut tile = tile_for(graph, it, TileKind::AppBanner);
+            tile.opened_rank = Some(opened_rank[i]);
+            tile.installed_rank = Some(installed_rank[i]);
+            tile
+        })
+        .collect()
 }
 
 /// The last tile of Your apps: opens the All apps screen.
@@ -418,8 +446,8 @@ fn all_apps_tile(count: usize) -> Tile {
         pinned: false,
         stage_pinned: false,
         borrowed_art: false,
-        last_used_ms: None,
-        added_ms: None,
+        opened_rank: None,
+        installed_rank: None,
     }
 }
 
@@ -438,8 +466,8 @@ fn tv_controls_tile(config: &CoreConfig) -> Tile {
         pinned: false,
         stage_pinned: false,
         borrowed_art: false,
-        last_used_ms: None,
-        added_ms: None,
+        opened_rank: None,
+        installed_rank: None,
     }
 }
 
@@ -544,9 +572,8 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         pinned: it.kind == ItemKind::App && it.package().is_some_and(|p| graph.layout.pinned_apps.iter().any(|x| x == p)),
         stage_pinned: graph.layout.stage_pins.iter().any(|x| x == &it.id),
         borrowed_art: lent.is_some(),
-        // Apps only: a session's time moves with playback and would republish every tick.
-        last_used_ms: it.last_used_ms.filter(|_| it.kind == ItemKind::App),
-        added_ms: it.added_ms.filter(|_| it.kind == ItemKind::App),
+        opened_rank: None,
+        installed_rank: None,
     }
 }
 
@@ -596,7 +623,8 @@ fn season_episode_long(it: &Item) -> Option<String> {
     }
 }
 
-fn build_stage(graph: &Graph, index: &BuildIndex, now: i64, hour_local: u32, config: &CoreConfig) -> Stage {
+fn build_stage(state: &State, index: &BuildIndex, now: i64, hour_local: u32, config: &CoreConfig) -> Stage {
+    let graph = &state.graph;
     let candidates = graph.stage_candidates(STAGE_CAP);
     let mut spotlights = Vec::with_capacity(candidates.len() + 1);
     let mut strip = Vec::with_capacity(candidates.len() + 1);
@@ -604,6 +632,32 @@ fn build_stage(graph: &Graph, index: &BuildIndex, now: i64, hour_local: u32, con
         spotlights.push(spotlight_for(graph, &index, it, now, hour_local));
         let kind = if it.kind == ItemKind::App { TileKind::AppBanner } else { TileKind::Landscape };
         let tile = if it.kind == ItemKind::Channel { live_tile(graph, index.airing(it), it, now) } else { tile_for(graph, it, kind) };
+        strip.push(tile);
+    }
+    // With Your apps off the home, the strip ends with the way to every app instead.
+    if !row_shown(state, "apps") && !graph.all_apps().is_empty() {
+        let tile = all_apps_tile(graph.all_apps().len());
+        spotlights.push(StageSpotlight {
+            id: tile.id.clone(),
+            kind: crate::SpotlightKind::App,
+            category: "Your apps".to_string(),
+            title: "All apps".to_string(),
+            lines: vec![tile.subtitle.clone().unwrap_or_default(), "Hold OK on an app there to pin it".to_string()],
+            progress: None,
+            artwork_path: None,
+            backdrop_path: None,
+            icon_path: None,
+            light_argb: lounge_graph::color::HOUSELIGHT,
+            primary: StageAction { label: "Open".to_string(), action: tile.action.clone() },
+            secondary: None,
+            explanation: None,
+            framed: true,
+            art_aspect: 0.0,
+            glow_argb: Vec::new(),
+            focal_y: 0.5,
+            source: None,
+            source_icon_path: None,
+        });
         strip.push(tile);
     }
     if config.has_tv_controls {
@@ -913,7 +967,12 @@ pub(crate) fn wait_for_graph(inner: &Inner) {
 fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
     let platform_err = |e: crate::PlatformError| CoreError::Platform { detail: e.to_string() };
     match link {
-        DeepLink::LaunchApp { package, activity } => inner.platform.launch_app(package, activity).map_err(platform_err),
+        DeepLink::LaunchApp { package, activity } => {
+            inner.platform.launch_app(package.clone(), activity).map_err(platform_err)?;
+            // An app opened from here counts as used even when usage access is off.
+            inner.enqueue_job(crate::worker::Job::Usage(vec![crate::AppUsage { package, last_used_ms: now_ms() }]));
+            Ok(())
+        }
         DeepLink::ViewUri(uri) => inner.platform.view_uri(uri).map_err(platform_err),
         DeepLink::ViewOrLaunch { uri, package } => match inner.platform.view_uri(uri) {
             Ok(()) => Ok(()),

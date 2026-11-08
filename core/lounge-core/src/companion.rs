@@ -417,7 +417,7 @@ mod tests {
         let info = core.home_rows().into_iter().find(|r| r.id == "apps").unwrap();
         assert!(!info.shown && info.chosen);
         // Without usage access the row cannot follow what is opened, and says so.
-        assert_eq!((info.count, info.detail.as_str()), (2, "Allow usage access so it follows what you open"));
+        assert_eq!((info.count, info.detail.as_str()), (2, "Allow usage access in Settings to follow what you open"));
         let doc = CoreActions { inner: Arc::downgrade(&core.inner) }.layout();
         assert_eq!(doc.row_visibility.get("apps"), Some(&false));
         assert_eq!(doc.row_order.first().map(String::as_str), Some("continue"));
@@ -454,6 +454,54 @@ mod tests {
         }
         assert_eq!(core.snapshot().all_apps.len(), 1);
         assert!(core.home_rows().iter().all(|r| r.id != "allapps"));
+    }
+
+    #[test]
+    fn the_way_to_all_apps_survives_an_empty_or_hidden_your_apps() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        put_apps(&core, &[("tv.a", true), ("tv.b", false)]);
+        rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
+        // Pins only, with nothing pinned: the row stands with just the All apps tile.
+        core.command(crate::LayoutCommand::SetRecentApps { count: 0 });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let snap = core.snapshot();
+            let apps = snap.rows.iter().find(|r| r.id == "apps");
+            if apps.is_some_and(|r| r.tiles.len() == 1) || std::time::Instant::now() > deadline {
+                let row = apps.expect("Your apps row");
+                assert_eq!(row.tiles.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["control:allapps"]);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+        // Hidden altogether: the Stage strip ends with the tile instead.
+        core.command(crate::LayoutCommand::HideRow { row_id: "apps".into() });
+        rows_when(&core, |ids| !ids.iter().any(|r| r == "apps"));
+        let snap = core.snapshot();
+        assert_eq!(snap.stage.strip.last().map(|t| t.id.as_str()), Some("control:allapps"));
+        assert_eq!(snap.stage.spotlights.last().map(|s| s.title.as_str()), Some("All apps"));
+    }
+
+    #[test]
+    fn a_playing_app_does_not_republish_the_home_every_tick() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        put_apps(&core, &[("tv.a", true), ("tv.b", true)]);
+        rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
+        core.report_usage(vec![crate::AppUsage { package: "tv.a".into(), last_used_ms: 1_000 }]);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while core.snapshot().all_apps.iter().find(|t| t.id == "app:tv.a").and_then(|t| t.opened_rank) != Some(0) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+        let before = core.snapshot();
+        assert_eq!(before.all_apps.iter().find(|t| t.id == "app:tv.a").and_then(|t| t.opened_rank), Some(0));
+        // The same app, used again a moment later: the order is unchanged, so the tiles are too.
+        core.report_usage(vec![crate::AppUsage { package: "tv.a".into(), last_used_ms: 2_000 }]);
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        let after = core.snapshot();
+        assert_eq!(after.all_apps, before.all_apps);
+        assert_eq!(after.rows, before.rows);
     }
 
     #[test]

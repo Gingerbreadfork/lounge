@@ -397,7 +397,7 @@ impl Graph {
 
     /// Apps the user pinned, in their order, then the most recently opened of the rest, as many
     /// as the layout allows. Games keep to their own row. Without usage data the recent ones
-    /// are the first by name, so the row is never empty on a new TV.
+    /// are the first by name, so a new TV's row has something in it.
     pub fn your_apps(&self) -> Vec<&Item> {
         let mut out: Vec<&Item> = Vec::new();
         for p in &self.layout.pinned_apps {
@@ -416,7 +416,7 @@ impl Graph {
             .collect();
         // Apps with a banner first among those never opened, so a bare system app does not fill a
         // new TV's row ahead of the streaming apps.
-        rest.sort_by(|a, b| b.last_used_ms.cmp(&a.last_used_ms).then(b.flags.has_banner.cmp(&a.flags.has_banner)).then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase())));
+        rest.sort_by_cached_key(|it| (std::cmp::Reverse(it.last_used_ms), !it.flags.has_banner, it.title.to_lowercase()));
         out.extend(rest.into_iter().take(self.layout.recent_apps as usize));
         out
     }
@@ -435,7 +435,7 @@ impl Graph {
             .filter(|it| it.kind == ItemKind::App)
             .filter(|it| !self.is_hidden(&it.id))
             .collect();
-        v.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+        v.sort_by_cached_key(|it| it.title.to_lowercase());
         v
     }
 
@@ -649,9 +649,13 @@ impl Graph {
             }
         }
         // Without usage data (first run, or usage access not granted) the Stage still has to
-        // open on something: the user's apps in their own order.
+        // open on something: the pinned apps, then banner apps by name, whatever Your apps shows.
         if out.len() < cap {
-            for it in self.your_apps() {
+            let mut fallback: Vec<&Item> = self.your_apps();
+            let mut named: Vec<&Item> = self.items.values().filter(|it| it.kind == ItemKind::App && it.flags.has_banner && !it.flags.is_game && !self.is_hidden(&it.id)).collect();
+            named.sort_by_cached_key(|it| it.title.to_lowercase());
+            fallback.extend(named);
+            for it in fallback {
                 if out.len() >= cap {
                     break;
                 }

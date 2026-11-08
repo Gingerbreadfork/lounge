@@ -355,11 +355,12 @@ pub struct Tile {
     /// The picture is the owning app's banner, standing in for art the item did not bring.
     #[serde(default)]
     pub borrowed_art: bool,
-    /// When the item was last opened and when it arrived, for sorting the All apps screen.
-    #[serde(default)]
-    pub last_used_ms: Option<i64>,
-    #[serde(default)]
-    pub added_ms: Option<i64>,
+    /// Where the app falls by last opened and by arrival, for sorting the All apps screen; set
+    /// only on that screen's tiles, and only changing when the order does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opened_rank: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_rank: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum, Serialize, Deserialize)]

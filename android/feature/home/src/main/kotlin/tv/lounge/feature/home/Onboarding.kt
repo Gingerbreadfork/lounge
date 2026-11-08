@@ -330,7 +330,7 @@ private fun StepAccess(core: CoreClient, context: Context, tick: Int) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AccessRow(LoungeIcons.Play, "TV listings", "Continue watching, channels and the guide", tv) { allow("tv_listings") }
         AccessRow(LoungeIcons.Equaliser, "Now playing", "What is playing, with play and pause", notifications) { allow("notifications") }
-        AccessRow(LoungeIcons.Apps, "Usage access", "Your apps sorted by what you open", usage) { allow("usage") }
+        AccessRow(LoungeIcons.Apps, "Usage access", "Your apps follows what you open", usage) { allow("usage") }
     }
     Spacer(Modifier.height(20.dp))
     Text("Now playing and usage access open a system screen; press Back to come back here.", style = LoungeTheme.typography.caption, color = colors.dust)

@@ -58,7 +58,6 @@
     const byId = new Map(layout.availableRows.map((r) => [r.id, r]));
     return layout.rowOrder.map((id) => byId.get(id) ?? { id, title: id, shown: true, chosen: false, count: 0, detail: '' });
   });
-  // All apps stepping aside on its own is not something the person hid.
   let hiddenRows = $derived(rows.filter((r) => !r.shown && r.chosen).length);
   // A drag reorders on screen as it goes and saves once the row is set down.
   function moveRow(from: number, to: number) {
@@ -125,7 +124,7 @@
 
   function setRecent(n: number) {
     if (!layout || layout.recentApps === n) return;
-    change({ recentApps: n }, n === 0 ? 'Your apps shows pins only' : `Your apps shows ${n} recent apps`);
+    change({ recentApps: n }, n === 0 ? 'Your apps shows pinned apps only' : `Your apps shows ${n} recent apps`);
   }
 
   // Hidden
@@ -178,10 +177,10 @@
 
     <section class="section">
       <div class="section-head"><h3>Your apps</h3></div>
-      <p class="caption">Pinned apps stay at the front in this order, then the apps you opened last. Everything else is in All apps on the TV.</p>
+      <p class="caption">Pinned apps stay at the front in this order, then the apps you opened last. Everything else is in All apps on the TV, where holding OK on an app pins it.</p>
       <div class="segments" role="radiogroup" aria-label="Recent apps shown after the pins">
         {#each [0, 5, 10, 15] as n}
-          <button class="segment" class:on={layout.recentApps === n} role="radio" aria-checked={layout.recentApps === n} onclick={() => setRecent(n)}>{n === 0 ? 'Pins only' : `${n} recent`}</button>
+          <button class="segment" class:on={layout.recentApps === n} role="radio" aria-checked={layout.recentApps === n} onclick={() => setRecent(n)}>{n === 0 ? 'Pinned only' : `${n} recent`}</button>
         {/each}
       </div>
       {#if pinnedApps.length}

@@ -354,7 +354,8 @@ private fun LandscapeContent(
 ) {
     val colors = LoungeTheme.colors
     // A banner names itself and the filmstrip speaks through its pictures; text only with chrome or when the art is missing.
-    val showText = (chrome || tile.artworkPath == null) && !tile.artIsBanner()
+    // A borrowed banner always carries its title, or the strip would show the app twice over.
+    val showText = (chrome || tile.artworkPath == null || tile.borrowedArt) && !tile.artIsBanner()
     val live = tile.badge == Badge.LIVE
     Box(Modifier.fillMaxSize()) {
         Artwork(tile.artworkPath, filter, LoungeTheme.colors.light(tile.lightArgb).copy(alpha = 0.25f), size)
@@ -420,7 +421,7 @@ private fun AppBannerContent(tile: Tile, filter: () -> androidx.compose.ui.graph
             if (tile.iconPath != null) {
                 FilteredPicture(tile.iconPath!!, filter, null, DpSize(72.dp, 72.dp), ContentScale.Fit, Modifier.size(72.dp).clip(RoundedCornerShape(16.dp)))
             } else {
-                Icon(LoungeIcons.Apps, contentDescription = null, tint = if (tile.subtitle != null) colors.houselight else colors.dust, modifier = Modifier.size(48.dp))
+                Icon(LoungeIcons.Apps, contentDescription = null, tint = if (tile.id == "control:allapps") colors.houselight else colors.dust, modifier = Modifier.size(48.dp))
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(tile.title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)

@@ -1284,7 +1284,23 @@ fn same_by<T>(a: &[T], b: &[T], same: impl Fn(&T, &T) -> bool) -> bool {
 }
 
 fn same_tiles(a: &[Tile], b: &[Tile]) -> bool {
-    same_by(a, b, |a, b| near(a.progress, b.progress) && Tile { progress: b.progress, ..a.clone() } == *b)
+    same_by(a, b, |a, b| {
+        near(a.progress, b.progress)
+            && a.id == b.id
+            && a.kind == b.kind
+            && a.title == b.title
+            && a.subtitle == b.subtitle
+            && a.artwork_path == b.artwork_path
+            && a.icon_path == b.icon_path
+            && a.light_argb == b.light_argb
+            && a.badge == b.badge
+            && a.action == b.action
+            && a.pinned == b.pinned
+            && a.stage_pinned == b.stage_pinned
+            && a.borrowed_art == b.borrowed_art
+            && a.opened_rank == b.opened_rank
+            && a.installed_rank == b.installed_rank
+    })
 }
 
 /// Progress bars within a hundredth of each other draw the same.

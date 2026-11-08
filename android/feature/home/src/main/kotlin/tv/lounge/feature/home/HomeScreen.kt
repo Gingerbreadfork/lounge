@@ -186,11 +186,6 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         }
     }
 
-    fun perform(tile: Tile) {
-        uiSounds?.open()
-        perform(tile.action, tile.title)
-    }
-
     fun close() {
         uiSounds?.close()
     }
@@ -271,6 +266,16 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         state.overlay = next
     }
 
+    fun perform(tile: Tile) {
+        uiSounds?.open()
+        // The All apps tile opens a screen of this app's own; no need to go through the core for that.
+        if (tile.action == "control:allapps") {
+            openOverlay(Overlay.AllApps)
+            return
+        }
+        perform(tile.action, tile.title)
+    }
+
     // Text from the phone goes to Lounge's focused text field, and only while Lounge is in front.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val phoneText = remember { MutableSharedFlow<String>(extraBufferCapacity = 8) }
@@ -280,7 +285,8 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 is UiCommand.Toast -> say(cmd.message)
                 UiCommand.InstallUpdate -> Unit
                 UiCommand.OpenTvControls -> openOverlay(Overlay.TvControls)
-                UiCommand.OpenAllApps -> if (state.overlay == Overlay.None) { uiSounds?.open(); openOverlay(Overlay.AllApps) }
+                // From the phone: only while Lounge is in front with nothing open, or the screen would wait behind another app.
+                UiCommand.OpenAllApps -> if (state.overlay == Overlay.None && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { uiSounds?.open(); openOverlay(Overlay.AllApps) }
                 is UiCommand.RequestPermission, is UiCommand.Key -> Unit
                 is UiCommand.TypeText -> if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) phoneText.tryEmit(cmd.text)
                 is UiCommand.Search -> {
@@ -661,6 +667,9 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     rowId = ov.rowId,
                     rowTitle = homeRow?.title,
                     isPinned = ov.tile.pinned,
+                    // Moves stay among the pins: hopping past a recent app would pin it unasked.
+                    canMoveLeft = indexInRow(ov.rowId, ov.tile.id) > 0,
+                    canMoveRight = indexInRow(ov.rowId, ov.tile.id).let { at -> at >= 0 && (homeRow?.tiles?.getOrNull(at + 1)?.pinned == true) },
                     isStagePinned = ov.tile.stagePinned,
                     onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say("Hidden from every row") },
                     onHideRow = {
@@ -824,10 +833,11 @@ private fun SheetContent(
             val enabledChannels by produceState(0) { value = withContext(Dispatchers.IO) { core.availableChannels().count { it.enabled } } }
             val enabledPlugins by produceState(0) { value = withContext(Dispatchers.IO) { core.plugins().count { it.enabled } } }
             var recentApps by remember { mutableStateOf(-1) }
-            LaunchedEffect(Unit) { recentApps = withContext(Dispatchers.IO) { core.recentApps().toInt() } }
+            // Read again with each snapshot, so a change made on the phone shows here too.
+            LaunchedEffect(Unit) { core.snapshots.collect { recentApps = withContext(Dispatchers.IO) { core.recentApps().toInt() } } }
             val rowsSummary by produceState("") {
                 value = withContext(Dispatchers.IO) {
-                    // Only rows the person hid count; All apps stepping aside on its own is not their doing.
+                    // Only rows the person hid count.
                     val hidden = core.homeRows().count { !it.shown && it.chosen }
                     if (hidden == 0) "All shown" else if (hidden == 1) "1 hidden" else "$hidden hidden"
                 }

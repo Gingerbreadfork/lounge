@@ -61,7 +61,11 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
@@ -91,7 +95,7 @@ import tv.lounge.platform.Prefs
  * Every app as a grid of banners (DESIGN.md §5.5), sorted A to Z, by when they were opened or by
  * when they arrived, and narrowed by typing. Up from the grid reaches the sort and the search
  * field; Left from the first column reaches the alphabet, which Up and Down scroll by and Right
- * or OK drop in from. Holding OK on an app opens the home's menu.
+ * or OK drop in from. Holding OK on an app opens the home's menu, where it can be pinned.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -118,10 +122,25 @@ fun AllAppsScreen(
     val query = field.text.trim()
     val fieldFocus = remember { FocusRequester() }
     var fieldFocused by remember { mutableStateOf(false) }
-    PhoneTextInput(active = !leaving && !covered) { text -> field = TextFieldValue(field.text + text, TextRange(field.text.length + text.length)) }
+    // Typing from the phone lands in the field, so the grid never narrows under a focused tile.
+    PhoneTextInput(active = !leaving && !covered) { text ->
+        field = TextFieldValue(field.text + text, TextRange(field.text.length + text.length))
+        fieldFocus.requestFocus()
+    }
+    // The order shown now; it answers the pill at once and the saved choice catches up.
+    var sortNow by remember { mutableStateOf(sort) }
+    LaunchedEffect(sort) { sortNow = sort }
 
-    val shown: List<Tile> = remember(apps, sort, query) { arrange(apps, sort, query) }
-    val alphabetical = sort == Prefs.SORT_AZ && query.isEmpty()
+    // The list is arranged afresh for a new order or query. An app list that changes while the
+    // screen is open keeps the order on screen, so a tile never moves out from under focus.
+    var shown by remember { mutableStateOf(arrange(apps, sort, query)) }
+    var arrangedFor by remember { mutableStateOf(sort to query) }
+    LaunchedEffect(apps, sortNow, query) {
+        val next = arrange(apps, sortNow, query)
+        shown = if (arrangedFor != sortNow to query) next else settle(shown, next)
+        arrangedFor = sortNow to query
+    }
+    val alphabetical = sortNow == Prefs.SORT_AZ && query.isEmpty()
 
     val requesters = remember { ArrayList<FocusRequester>() }
     fun requester(index: Int): FocusRequester {
@@ -136,24 +155,35 @@ fun AllAppsScreen(
     var focusedIndex by remember { mutableIntStateOf(-1) }
     var focusedTileId by remember { mutableStateOf<String?>(null) }
     var focusedLetter by remember { mutableStateOf<Char?>(null) }
-    // The letter the grid is at, or the one chosen on the alphabet.
-    val currentLetter = focusedLetter ?: letters.getOrNull(focusedIndex)
+    // The letter the grid is at, or the one chosen on the alphabet; derived, so a move along the
+    // grid redraws one letter rather than the rail.
+    val currentLetter by remember(letters) { derivedStateOf { focusedLetter ?: letters.getOrNull(focusedIndex) } }
     val held = rememberUpdatedState(heldTileId)
     val roomDim = remember { derivedStateOf { held.value() != null } }
 
     // A new order or a narrower list starts from its top.
-    LaunchedEffect(sort, query) { gridState.scrollToItem(0) }
-    // An app hidden or pinned from its menu leaves its place: focus goes to the tile that took
-    // it, or the last one.
-    LaunchedEffect(shown) {
+    LaunchedEffect(sortNow, query) { gridState.scrollToItem(0) }
+    /** Focus onto the app at [index], composing it first if it is off the screen. */
+    suspend fun focusApp(index: Int) {
+        if (shown.isEmpty()) {
+            fieldFocus.requestWhenReady()
+            return
+        }
+        val i = index.coerceIn(0, shown.lastIndex)
+        gridState.scrollToItem(i)
+        requester(i).requestWhenReady()
+    }
+    // An app hidden from its menu leaves its place: focus goes to the tile that took it, or the
+    // last one; with nothing left, to the field.
+    LaunchedEffect(shown, covered) {
         val id = focusedTileId ?: return@LaunchedEffect
         if (leaving || covered || fieldFocused || shown.any { it.id == id }) return@LaunchedEffect
-        if (shown.isEmpty()) return@LaunchedEffect
-        requester(focusedIndex.coerceIn(0, shown.lastIndex)).requestWhenReady()
+        focusApp(focusedIndex)
     }
 
     val rise = with(LocalDensity.current) { 10.dp.roundToPx() }
-    val pivotPx = with(LocalDensity.current) { Dimens.glowRoom.toPx() }
+    // The focused row sits a glow's width below the fade, so its light is never under it.
+    val pivotPx = with(LocalDensity.current) { (Dimens.glowRoom * 2).toPx() }
 
     AnimatedVisibility(visibleState, enter = fadeIn(tween(180)), exit = fadeOut(motion.settle())) {
         Box(
@@ -168,7 +198,8 @@ fun AllAppsScreen(
                 }
                 .trapFocus(leaving)
                 .focusGroup()
-                .focusProperties { if (leaving) canFocus = false },
+                .focusProperties { if (leaving) canFocus = false }
+                .semantics { paneTitle = "All apps" },
         ) {
             // The grid comes first so the heading paints over it: scrolled rows pass under a fade
             // rather than through the words. The keyboard covers the grid's lower rows rather than
@@ -185,7 +216,7 @@ fun AllAppsScreen(
                                 var letterFocused by remember { mutableStateOf(false) }
                                 Box(
                                     Modifier
-                                        .size(40.dp, 30.dp)
+                                        .size(40.dp, 28.dp)
                                         .then(
                                             if (live) {
                                                 Modifier
@@ -199,16 +230,16 @@ fun AllAppsScreen(
                                                         }
                                                     }
                                                     .onPreviewKeyEvent { e ->
-                                                        val enter = e.key == Key.DirectionRight || e.key == Key.DirectionCenter || e.key == Key.Enter
+                                                        val enter = e.key == Key.DirectionRight || e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter || e.key == Key.ButtonA
                                                         if (enter && e.type == KeyEventType.KeyDown) {
-                                                            requester(first!!).requestFocus()
+                                                            scope.launch { focusApp(first!!) }
                                                             true
                                                         } else {
                                                             false
                                                         }
                                                     }
                                                     .focusable()
-                                                    .semantics { contentDescription = "Apps starting with $c" }
+                                                    .semantics { contentDescription = if (c == '#') "Apps starting with a number or symbol" else "Apps starting with $c" }
                                             } else {
                                                 Modifier
                                             },
@@ -233,8 +264,6 @@ fun AllAppsScreen(
                     }
                 }
                 if (shown.isEmpty()) {
-                    // Something must hold focus while there is nothing to show.
-                    Box(Modifier.size(1.dp).focusRequester(requester(0)).focusable())
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Icon(LoungeIcons.Apps, contentDescription = null, tint = colors.dust, modifier = Modifier.size(32.dp))
                         Text(
@@ -307,33 +336,34 @@ fun AllAppsScreen(
                         verticalAlignment = Alignment.Top,
                     ) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("All apps", style = LoungeTheme.typography.displayL, color = colors.limelight)
+                            Text("All apps", style = LoungeTheme.typography.displayL, color = colors.limelight, modifier = Modifier.semantics { heading() })
                             Text(
-                                when {
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                text = when {
                                     apps.isEmpty() -> "Nothing here yet."
                                     query.isNotEmpty() && shown.isEmpty() -> "Nothing matches “$query”."
                                     query.isNotEmpty() -> "${shown.size} of ${apps.size} match “$query”."
-                                    else -> "${apps.size} ${if (apps.size == 1) "app" else "apps"}, ${sortLine(sort)}."
+                                    else -> "${apps.size} ${if (apps.size == 1) "app" else "apps"}, ${sortLine(sortNow)}."
                                 },
                                 style = LoungeTheme.typography.meta,
                                 color = colors.dust,
                             )
                             Text(
-                                if (alphabetical) "Hold OK on an app for its menu. Up for search and sorting, left of the grid for the alphabet." else "Hold OK on an app for its menu. Up for search and sorting.",
+                                if (alphabetical) "Hold OK on an app to pin it to Your apps. Up to search or sort, Left for the alphabet." else "Hold OK on an app to pin it to Your apps. Up to search or sort.",
                                 style = LoungeTheme.typography.caption,
                                 color = colors.dust,
                             )
                         }
                         // The sort and the search: one pill that cycles, one field that narrows.
                         Row(Modifier.padding(top = 8.dp).focusGroup(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            SortPill(sort = sort, onSetSort = { s -> sounds?.tick(); onSetSort(s) })
+                            SortPill(sort = sortNow, onSetSort = { s -> sounds?.tick(); sortNow = s; onSetSort(s) })
                             SearchField(
                                 field = field,
                                 onChange = { field = it },
                                 focusRequester = fieldFocus,
                                 onFocused = { fieldFocused = it },
                                 // The field keeps Down for itself, so the grid is reached by hand: the app last focused, or the first.
-                                onDown = { if (shown.isNotEmpty()) requester(focusedIndex.coerceIn(0, shown.lastIndex)).requestFocus() },
+                                onDown = { scope.launch { focusApp(shown.indexOfFirst { it.id == focusedTileId }.takeIf { it >= 0 } ?: 0) } },
                             )
                         }
                     }
@@ -398,11 +428,12 @@ private fun SearchField(field: TextFieldValue, onChange: (TextFieldValue) -> Uni
                     textStyle = LoungeTheme.typography.title.copy(color = colors.limelight),
                     cursorBrush = SolidColor(colors.houselight),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { }),
+                    keyboardActions = KeyboardActions(onSearch = { onDown() }),
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
-                        .onFocusChanged { focused = it.isFocused; onFocused(it.isFocused) },
+                        .onFocusChanged { focused = it.isFocused; onFocused(it.isFocused) }
+                        .semantics { contentDescription = "Find an app" },
                 )
             }
         }
@@ -429,21 +460,33 @@ private fun sortLine(sort: String) = when (sort) {
     else -> "A to Z"
 }
 
+private val collator: java.text.Collator = java.text.Collator.getInstance().apply { strength = java.text.Collator.PRIMARY }
+
 /** The apps in the chosen order, narrowed to those whose name has every word typed. */
 private fun arrange(apps: List<Tile>, sort: String, query: String): List<Tile> {
-    val words = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    val words = query.lowercase().split(' ').filter { it.isNotEmpty() }
     val matching = if (words.isEmpty()) apps else apps.filter { t -> val name = t.title.lowercase(); words.all { name.contains(it) } }
-    val byName = compareBy<Tile> { it.title.lowercase() }
+    // Names sort as a person reads them, so "Équipe" sits with the Es and case does not matter.
+    val byName = Comparator<Tile> { a, b -> collator.compare(a.title, b.title) }
     return when (sort) {
-        // Never opened sorts after everything that was, by name.
-        Prefs.SORT_OPENED -> matching.sortedWith(compareByDescending<Tile> { it.lastUsedMs ?: Long.MIN_VALUE }.then(byName))
-        Prefs.SORT_INSTALLED -> matching.sortedWith(compareByDescending<Tile> { it.addedMs ?: Long.MIN_VALUE }.then(byName))
+        Prefs.SORT_OPENED -> matching.sortedWith(compareBy<Tile> { it.openedRank ?: Int.MAX_VALUE }.then(byName))
+        Prefs.SORT_INSTALLED -> matching.sortedWith(compareBy<Tile> { it.installedRank ?: Int.MAX_VALUE }.then(byName))
         else -> matching.sortedWith(byName)
     }
 }
 
-/** The alphabet entry a title files under: its first letter, or # for a digit or symbol. */
+/** [next] in the order of [prev] where they share apps, with the newcomers slotted where [next] puts them. */
+private fun settle(prev: List<Tile>, next: List<Tile>): List<Tile> {
+    val byId = next.associateBy { it.id }
+    val out = prev.mapNotNull { byId[it.id] }.toMutableList()
+    val kept = out.mapTo(HashSet()) { it.id }
+    next.forEachIndexed { i, t -> if (t.id !in kept) out.add(i.coerceAtMost(out.size), t) }
+    return out
+}
+
+/** The alphabet entry a title files under: its first letter with any accent taken off, or # for anything else. */
 private fun letterOf(title: String): Char {
-    val c = title.trim().firstOrNull()?.uppercaseChar() ?: '#'
-    return if (c in 'A'..'Z') c else '#'
+    val first = title.trim().firstOrNull() ?: return '#'
+    val plain = java.text.Normalizer.normalize(first.toString(), java.text.Normalizer.Form.NFD).firstOrNull()?.uppercaseChar() ?: '#'
+    return if (plain in 'A'..'Z') plain else '#'
 }

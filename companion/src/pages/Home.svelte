@@ -134,7 +134,7 @@
       <section class="section">
         <div class="section-head"><h3>{row.title}</h3>{#if tag(row.badge) === 'LIVE'}<span class="pill bad"><span class="dot"></span>Live</span>{/if}</div>
         <div class="row-scroller">
-          {#each row.tiles as t (t.id)}
+          {#each row.tiles.filter((t) => !t.id.startsWith('control:')) as t (t.id)}
             <button class="tile {tag(row.kind).toLowerCase()}" class:borrowed={t.borrowedArt} style="--light: {argb(t.lightArgb)}" aria-label={describe(t)} onclick={() => open(t)} use:hold={t.id.startsWith('notice:') || t.id.startsWith('control:') ? null : () => menu(t, row.id, row.title)}>
               {#if tag(row.kind) === 'COMPACT'}
                 {#if t.iconPath}<img class="icon" src={art(t.iconPath)} alt="" loading="lazy" />{/if}
