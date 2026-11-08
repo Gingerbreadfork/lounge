@@ -14,6 +14,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -157,15 +159,12 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch(Dispatchers.IO) { guarded("inputs") { core.ingestInputs(inputs.snapshot()) } }
             if (fresh) {
                 collectAppsNow()
-                collectTvNow()
                 installBundledPlugins()
             } else {
                 lifecycleScope.launch {
                     delay(1_000)
                     collectAppsNow()
-                    delay(1_500)
-                    collectTvNow()
-                    delay(1_000)
+                    delay(2_500)
                     installBundledPlugins()
                 }
             }
@@ -191,7 +190,13 @@ class MainActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch(Dispatchers.IO) {
-            for (request in tvCollects) guarded("TV listings") { core.ingestPrograms(tvProvider.snapshot()) }
+            val enabledChannels = core.snapshots.map {
+                runCatching { core.availableChannels().filter { it.enabled }.map { it.id }.toSet() }
+                    .onFailure { android.util.Log.w("Lounge", "collecting TV channels failed", it) }
+                    .getOrNull()
+            }.filterNotNull().distinctUntilChanged()
+            val requests = combine(tvCollects.receiveAsFlow(), enabledChannels) { _, enabled -> enabled }
+            tvProvider.snapshots(requests).collect { records -> guarded("TV listings") { core.ingestPrograms(records) } }
         }
         lifecycleScope.launch {
             platform.commands.collect { cmd ->
@@ -233,7 +238,7 @@ class MainActivity : ComponentActivity() {
             permissions.filterNotNull().collect { now ->
                 core.setPermissions(now)
                 // An access granted while Lounge runs fills its part of the home at once.
-                if (before?.tvListings == false && now.tvListings) collectTvNow()
+                // TV listings refresh when the permission-driven observer subscribes below.
                 if (before?.usage == false && now.usage) collectAppsNow()
                 before = now
             }
@@ -390,7 +395,6 @@ class MainActivity : ComponentActivity() {
         permissions.value = Permissions(tvListings = tvProvider.hasPermission(), notifications = media.isEnabled(), usage = apps.hasUsageAccess())
     }
 
-    private var lastTvCollectMs = 0L
     private val tvCollects = Channel<Unit>(Channel.CONFLATED)
     /** Phone keys for the app in front, sent one at a time so they arrive in the order pressed. */
     private val remoteKeys = Channel<tv.lounge.power.PowerAction>(capacity = 16, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
@@ -398,7 +402,6 @@ class MainActivity : ComponentActivity() {
 
     private fun collectTvNow() {
         if (!tvProvider.hasPermission()) return
-        lastTvCollectMs = System.currentTimeMillis()
         tvCollects.trySend(Unit)
     }
 
@@ -425,8 +428,6 @@ class MainActivity : ComponentActivity() {
         core.setUtcOffsetMinutes(TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
         if (resumedBefore) {
             pushPermissions()
-            // The content observer already refreshes on change; a quick hop out and back is not one.
-            if (System.currentTimeMillis() - lastTvCollectMs > 5 * 60_000L) collectTvNow()
         }
         resumedBefore = true
         lifecycleScope.launch(Dispatchers.IO) {

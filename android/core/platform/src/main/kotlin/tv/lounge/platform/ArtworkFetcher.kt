@@ -5,11 +5,9 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
@@ -35,23 +33,22 @@ class ArtworkFetcher(
     })
 
     private val failures = HashMap<String, Long>()
-    private val gate = Semaphore(4)
 
-    /** Fetch every distinct URI in parallel (four at a time); returns a local path per input, or null. */
-    suspend fun fetchAll(uris: List<String?>): List<String?> = coroutineScope {
-        val paths = uris.filterNotNull().distinct().map { uri -> uri to async { gate.withPermit { fetch(uri) } } }
-            .associate { (uri, path) -> uri to path.await() }
-        uris.map { uri -> uri?.let { paths[it] } }
-    }
+    /** Disk only: stale artwork is useful while a refresh is in flight or the TV is offline. */
+    fun cached(uri: String, allowStale: Boolean = true): String? = usable(File(dir, "${sha1(sizedForTiles(uri))}.img"), allowStale)
+
+    private fun usable(file: File, allowStale: Boolean): String? = file.takeIf {
+        it.isFile && it.length() > 0 && (allowStale || System.currentTimeMillis() - it.lastModified() < maxAgeMs) &&
+            urlInside(it) == null
+    }?.absolutePath
 
     suspend fun fetch(uri: String): String? = withContext(Dispatchers.IO) {
+        currentCoroutineContext().ensureActive()
         val uri = sizedForTiles(uri)
         val file = File(dir, "${sha1(uri)}.img")
-        if (file.exists() && System.currentTimeMillis() - file.lastModified() < maxAgeMs && file.length() > 0 && urlInside(file) == null) {
-            return@withContext file.absolutePath
-        }
+        usable(file, allowStale = false)?.let { return@withContext it }
         val failedAt = synchronized(failures) { failures[uri] }
-        if (failedAt != null && System.currentTimeMillis() - failedAt < 3_600_000L) return@withContext file.takeIf { it.exists() }?.absolutePath
+        if (failedAt != null && System.currentTimeMillis() - failedAt < 3_600_000L) return@withContext usable(file, allowStale = true)
         dir.mkdirs()
         val tmp = File.createTempFile(file.name + ".", ".tmp", dir)
         val started = System.currentTimeMillis()
@@ -63,16 +60,20 @@ class ArtworkFetcher(
                 open(Uri.parse(target)).use { input -> copyBounded(input, tmp, started) }
                 if (tmp.length() == 0L || urlInside(tmp) != null) throw IllegalStateException("empty redirect")
             }
+            currentCoroutineContext().ensureActive()
             if (!tmp.renameTo(file)) {
                 tmp.copyTo(file, overwrite = true)
                 tmp.delete()
             }
             file.absolutePath
+        } catch (e: CancellationException) {
+            tmp.delete()
+            throw e
         } catch (e: Exception) {
             tmp.delete()
             synchronized(failures) { failures[uri] = System.currentTimeMillis() }
             Log.d(TAG, "artwork $uri: ${e.javaClass.simpleName} ${e.message}")
-            file.takeIf { it.exists() }?.absolutePath
+            usable(file, allowStale = true)
         }
     }
 
@@ -80,11 +81,12 @@ class ArtworkFetcher(
      * Copies at most [MAX_BYTES], and only until [DEADLINE_MS] after [started]: no picture needs
      * more, and a server that trickles must not hold up the rest of the listings.
      */
-    private fun copyBounded(input: InputStream, file: File, started: Long) {
+    private suspend fun copyBounded(input: InputStream, file: File, started: Long) {
         file.outputStream().use { out ->
             val buf = ByteArray(64 * 1024)
             var total = 0L
             while (true) {
+                currentCoroutineContext().ensureActive()
                 val n = input.read(buf)
                 if (n < 0) break
                 total += n

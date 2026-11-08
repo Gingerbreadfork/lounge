@@ -3,6 +3,7 @@ package tv.lounge.collector.tvprovider
 import android.content.Context
 import android.content.pm.PackageManager
 import android.database.ContentObserver
+import android.database.Cursor
 import android.media.tv.TvContract
 import android.net.Uri
 import android.os.Handler
@@ -15,41 +16,142 @@ import androidx.tvprovider.media.tv.Program
 import androidx.tvprovider.media.tv.TvContractCompat
 import androidx.tvprovider.media.tv.WatchNextProgram
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel as WorkChannel
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import tv.lounge.core.ProgramKind
 import tv.lounge.core.ProgramRecord
 import tv.lounge.core.WatchNextType
-import tv.lounge.platform.ArtworkFetcher
-import java.io.File
 
 /**
  * Reads Watch Next, other apps' preview channels and programmes, and TIF channels with their
  * schedule under READ_TV_LISTINGS. Artwork is copied to local files. What ends up on screen is the
  * core's decision.
  */
-class TvProviderCollector(private val context: Context) {
+class TvProviderCollector internal constructor(private val context: Context, private val artwork: TvArtwork) {
+    constructor(context: Context) : this(context, CachedTvArtwork(context))
+
     private val resolver = context.contentResolver
-    private val artwork = ArtworkFetcher(context, File(context.cacheDir, "tvart"))
-    /** One snapshot at a time: they share the artwork cache, and pruning must not see another's downloads. */
+    /** Provider reads are serialized; downloads never hold this mutex. */
     private val collecting = Mutex()
 
     fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, TvContractCompat.PERMISSION_READ_TV_LISTINGS) == PackageManager.PERMISSION_GRANTED
 
     /**
-     * Everything the provider has, with artwork fetched. Schedule entries cover one hour back to
-     * [scheduleHours] ahead.
+     * Everything the provider has, using only artwork already on disk. Schedule entries cover
+     * one hour back to [scheduleHours] ahead. [snapshots] fills in missing artwork separately.
      */
     suspend fun snapshot(nowMs: Long = System.currentTimeMillis(), scheduleHours: Int = 6): List<ProgramRecord> = withContext(Dispatchers.IO) {
-        collecting.withLock { collect(nowMs, scheduleHours) }
+        collecting.withLock {
+            val drafts = collect(nowMs, scheduleHours)
+            val paths = cachedPaths(drafts)
+            drafts.map { it.toRecord(paths) }
+        }
     }
 
-    private suspend fun collect(nowMs: Long, scheduleHours: Int): List<ProgramRecord> {
+    /**
+     * Each request carries the preview channels enabled in Lounge. Metadata and cached art are
+     * published first; four workers then fill in missing artwork and republish in batches. A
+     * late image only ever dresses the latest listings.
+     */
+    fun snapshots(requests: Flow<Set<Long>>): Flow<List<ProgramRecord>> = channelFlow {
+        val state = Mutex()
+        var drafts = emptyList<Draft>()
+        var paths = emptyMap<String, String>().toMutableMap()
+        var previous: List<ProgramRecord>? = null
+        val pending = ArrayDeque<String>()
+        val inFlight = mutableSetOf<String>()
+        val wakeWorkers = WorkChannel<Unit>(4)
+        val artChanged = WorkChannel<Unit>(WorkChannel.CONFLATED)
+
+        // Called under state so an older artwork publication cannot overtake newer metadata.
+        suspend fun publish() {
+            val records = drafts.map { it.toRecord(paths) }
+            if (records != previous) {
+                send(records)
+                previous = records
+            }
+        }
+
+        launch {
+            for (change in artChanged) {
+                delay(500)
+                // Include all completions during this interval in a single publication.
+                while (artChanged.tryReceive().isSuccess) { }
+                state.withLock { publish() }
+            }
+        }
+        val workers = List(4) {
+            launch {
+                for (wake in wakeWorkers) {
+                    while (true) {
+                        val uri = state.withLock {
+                            pending.removeFirstOrNull()?.also { inFlight += it }
+                        } ?: break
+                        val path = try {
+                            artwork.fetch(uri)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w(TAG, "artwork download failed", e)
+                            null
+                        }
+                        state.withLock {
+                            inFlight -= uri
+                            if (path != null && path != paths[uri] && drafts.any { uri in it.artUris() }) {
+                                paths[uri] = path
+                                artChanged.trySend(Unit)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        requests.collect { enabledChannels ->
+            try {
+                val latest = collecting.withLock { collect(System.currentTimeMillis(), 6) }
+                state.withLock {
+                    drafts = latest
+                    paths = cachedPaths(drafts).toMutableMap()
+                    pending.clear()
+                    pending.addAll(drafts.asSequence()
+                        .filter { it.kind != ProgramKind.PREVIEW || it.channelId in enabledChannels }
+                        .sortedBy { if (it.kind == ProgramKind.WATCH_NEXT) 0 else 1 }
+                        .flatMap { it.artUris() }
+                        .distinct()
+                        .filter { it !in inFlight && artwork.cached(it, allowStale = false) == null }
+                        .toList())
+                    publish()
+                    artwork.prune(paths.values)
+                }
+                repeat(4) { wakeWorkers.trySend(Unit) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "TV listings refresh", e)
+            }
+        }
+        wakeWorkers.close()
+        workers.joinAll()
+        artChanged.close()
+    }.buffer(WorkChannel.CONFLATED).flowOn(Dispatchers.IO)
+
+    private fun cachedPaths(drafts: List<Draft>): Map<String, String> =
+        drafts.flatMap { it.artUris() }.distinct().mapNotNull { uri -> artwork.cached(uri)?.let { uri to it } }.toMap()
+
+    private fun collect(nowMs: Long, scheduleHours: Int): List<Draft> {
         if (!hasPermission()) return emptyList()
         val drafts = ArrayList<Draft>()
         runCatching { drafts += watchNext() }.onFailure { Log.w(TAG, "watch next", it) }
@@ -63,14 +165,15 @@ class TvProviderCollector(private val context: Context) {
                     .onFailure { Log.w(TAG, "schedule ${ch.id}", it) }
             }
         }
-        val posters = artwork.fetchAll(drafts.map { it.posterUri })
-        val thumbnails = artwork.fetchAll(drafts.map { it.thumbnailUri })
-        val logos = artwork.fetchAll(drafts.map { it.logoUri })
-        artwork.prune(posters.filterNotNull() + thumbnails.filterNotNull() + logos.filterNotNull())
-        return drafts.mapIndexed { i, d -> d.toRecord(posters[i], thumbnails[i], logos[i]) }
+        Log.d(TAG, "TV listings: ${drafts.groupingBy { it.kind }.eachCount()}")
+        return drafts
     }
 
-    /** Emits when any TV provider table changes; callers should debounce. */
+    /**
+     * Refresh after registering, as well as on changes. The home stops observing while a player
+     * is in front, so each new subscription must catch writes made while it was away. Register
+     * first so a write between the refresh and observer setup cannot be missed.
+     */
     fun changes(): Flow<Unit> = callbackFlow {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
@@ -83,17 +186,24 @@ class TvProviderCollector(private val context: Context) {
             TvContractCompat.PreviewPrograms.CONTENT_URI,
             TvContractCompat.Programs.CONTENT_URI,
         )
-        if (hasPermission()) uris.forEach { runCatching { resolver.registerContentObserver(it, true, observer) } }
+        if (hasPermission()) {
+            uris.forEach { uri ->
+                runCatching { resolver.registerContentObserver(uri, true, observer) }
+                    .onFailure { Log.w(TAG, "observe $uri", it) }
+            }
+            trySend(Unit)
+        }
         awaitClose { runCatching { resolver.unregisterContentObserver(observer) } }
     }
 
     private fun watchNext(): List<Draft> {
         val out = ArrayList<Draft>()
-        resolver.query(TvContractCompat.WatchNextPrograms.CONTENT_URI, WatchNextProgram.PROJECTION, null, null, null)?.use { c ->
-            while (c.moveToNext()) {
+        val uri = TvContractCompat.WatchNextPrograms.CONTENT_URI
+        resolver.query(uri, WatchNextProgram.PROJECTION, null, null, null)?.use { c ->
+            c.readRows(uri) {
                 val p = WatchNextProgram.fromCursor(c)
-                if (!p.isBrowsable) continue
-                val title = p.title?.takeIf { it.isNotBlank() } ?: continue
+                if (!p.isBrowsable) return@readRows
+                val title = p.title?.takeIf { it.isNotBlank() } ?: return@readRows
                 out += Draft(
                     id = watchNextId(p),
                     kind = ProgramKind.WATCH_NEXT,
@@ -135,10 +245,13 @@ class TvProviderCollector(private val context: Context) {
 
     private fun channels(): List<Channel> {
         val out = ArrayList<Channel>()
-        resolver.query(TvContractCompat.Channels.CONTENT_URI, Channel.PROJECTION, null, null, null)?.use { c ->
-            while (c.moveToNext()) {
+        val uri = TvContractCompat.Channels.CONTENT_URI
+        resolver.query(uri, Channel.PROJECTION, null, null, null)?.use { c ->
+            c.readRows(uri) {
                 val ch = Channel.fromCursor(c)
-                if (ch.isBrowsable) out += ch
+                // Preview rows are opt-in through Lounge's own channel settings. The system's
+                // browsable flag reflects the stock launcher's choices, not Lounge's layout.
+                if (ch.type == TvContractCompat.Channels.TYPE_PREVIEW || ch.isBrowsable) out += ch
             }
         }
         return out
@@ -148,10 +261,10 @@ class TvProviderCollector(private val context: Context) {
         val out = ArrayList<Draft>()
         val uri = TvContractCompat.buildPreviewProgramsUriForChannel(ch.id)
         resolver.query(uri, PreviewProgram.PROJECTION, null, null, null)?.use { c ->
-            while (c.moveToNext()) {
+            c.readRows(uri) {
                 val p = PreviewProgram.fromCursor(c)
-                if (!p.isBrowsable) continue
-                val title = p.title?.takeIf { it.isNotBlank() } ?: continue
+                if (!p.isBrowsable) return@readRows
+                val title = p.title?.takeIf { it.isNotBlank() } ?: return@readRows
                 out += Draft(
                     id = "preview:${p.id}",
                     kind = ProgramKind.PREVIEW,
@@ -205,9 +318,9 @@ class TvProviderCollector(private val context: Context) {
         val out = ArrayList<Draft>()
         val uri = TvContract.buildProgramsUriForChannel(ch.id, fromMs, toMs)
         resolver.query(uri, Program.PROJECTION, null, null, null)?.use { c ->
-            while (c.moveToNext()) {
+            c.readRows(uri) {
                 val p = Program.fromCursor(c)
-                val title = p.title?.takeIf { it.isNotBlank() } ?: continue
+                val title = p.title?.takeIf { it.isNotBlank() } ?: return@readRows
                 out += Draft(
                     id = "prog:${p.id}",
                     kind = ProgramKind.SCHEDULE,
@@ -235,6 +348,17 @@ class TvProviderCollector(private val context: Context) {
             }
         }
         return out
+    }
+
+    /** One app's malformed metadata must not discard the other apps' rows in this table. */
+    private inline fun Cursor.readRows(uri: Uri, read: () -> Unit) {
+        while (moveToNext()) {
+            try {
+                read()
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "Skipping malformed row $position in $uri", e)
+            }
+        }
     }
 
     private fun isPortrait(aspect: Int): Boolean = when (aspect) {
@@ -271,6 +395,10 @@ class TvProviderCollector(private val context: Context) {
         val endMs: Long? = null,
         val weight: Int = 0,
     ) {
+        fun artUris(): List<String> = listOfNotNull(posterUri, thumbnailUri, logoUri)
+
+        fun toRecord(paths: Map<String, String>) = toRecord(posterUri?.let(paths::get), thumbnailUri?.let(paths::get), logoUri?.let(paths::get))
+
         fun toRecord(posterPath: String?, thumbnailPath: String?, logoPath: String?) = ProgramRecord(
             id = id,
             kind = kind,

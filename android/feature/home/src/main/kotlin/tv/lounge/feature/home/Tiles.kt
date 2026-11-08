@@ -336,8 +336,8 @@ private fun LandscapeContent(
     size: DpSize,
 ) {
     val colors = LoungeTheme.colors
-    // A banner names itself; the strip is a filmstrip of pictures. Text and scrim only where they add something.
-    val showText = chrome && !tile.artIsBanner()
+    // A banner names itself and the filmstrip speaks through its pictures; text only with chrome or when the art is missing.
+    val showText = (chrome || tile.artworkPath == null) && !tile.artIsBanner()
     val live = tile.badge == Badge.LIVE
     Box(Modifier.fillMaxSize()) {
         Artwork(tile.artworkPath, filter, LoungeTheme.colors.light(tile.lightArgb).copy(alpha = 0.25f), size)
