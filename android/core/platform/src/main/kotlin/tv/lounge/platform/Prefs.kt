@@ -46,6 +46,8 @@ class Prefs(private val context: Context) {
         val companionEnabled: Boolean = false,
         /** The home's background: "still" for the light field, or the id of an abstract scene drawn live. */
         val backdrop: String = STILL_BACKDROP,
+        /** How the All apps screen is sorted: "az", "opened" or "installed". */
+        val allAppsSort: String = SORT_AZ,
         /** False only for the placeholder used before the store has been read. */
         val loaded: Boolean = false,
     )
@@ -60,6 +62,7 @@ class Prefs(private val context: Context) {
             onboardingDone = p[ONBOARDING_DONE] ?: false,
             companionEnabled = p[COMPANION_ENABLED] ?: false,
             backdrop = p[BACKDROP] ?: STILL_BACKDROP,
+            allAppsSort = p[ALL_APPS_SORT] ?: SORT_AZ,
             loaded = true,
         )
     }
@@ -82,6 +85,7 @@ class Prefs(private val context: Context) {
     val ambientStyle: Flow<String> = data.map { it[AMBIENT_STYLE] ?: "pictures" }
     suspend fun setAmbientStyle(id: String) { context.dataStore.edit { it[AMBIENT_STYLE] = id } }
     suspend fun setBackdrop(id: String) { context.dataStore.edit { it[BACKDROP] = id } }
+    suspend fun setAllAppsSort(sort: String) { context.dataStore.edit { it[ALL_APPS_SORT] = sort } }
     suspend fun setPreviousScreensaver(component: String?) {
         context.dataStore.edit { if (component.isNullOrBlank()) it.remove(PREVIOUS_SCREENSAVER) else it[PREVIOUS_SCREENSAVER] = component }
     }
@@ -106,6 +110,9 @@ class Prefs(private val context: Context) {
 
     companion object {
         const val STILL_BACKDROP = "still"
+        const val SORT_AZ = "az"
+        const val SORT_OPENED = "opened"
+        const val SORT_INSTALLED = "installed"
         private val THEME = stringPreferencesKey("theme")
         private val SOUNDS = booleanPreferencesKey("sounds")
         private val LITE_MODE = booleanPreferencesKey("lite_mode")
@@ -118,5 +125,6 @@ class Prefs(private val context: Context) {
         private val PREVIOUS_SCREENSAVER_ENABLED = stringPreferencesKey("previous_screensaver_enabled")
         private val AMBIENT_STYLE = stringPreferencesKey("ambient_style")
         private val BACKDROP = stringPreferencesKey("backdrop")
+        private val ALL_APPS_SORT = stringPreferencesKey("all_apps_sort")
     }
 }

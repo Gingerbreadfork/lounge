@@ -389,6 +389,8 @@ fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &s
             pinned: false,
             stage_pinned: false,
             borrowed_art: false,
+        last_used_ms: None,
+        added_ms: None,
         }],
     }
 }
@@ -409,6 +411,8 @@ fn all_apps_tile(count: usize) -> Tile {
         pinned: false,
         stage_pinned: false,
         borrowed_art: false,
+        last_used_ms: None,
+        added_ms: None,
     }
 }
 
@@ -427,6 +431,8 @@ fn tv_controls_tile(config: &CoreConfig) -> Tile {
         pinned: false,
         stage_pinned: false,
         borrowed_art: false,
+        last_used_ms: None,
+        added_ms: None,
     }
 }
 
@@ -531,6 +537,9 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         pinned: it.kind == ItemKind::App && it.package().is_some_and(|p| graph.layout.pinned_apps.iter().any(|x| x == p)),
         stage_pinned: graph.layout.stage_pins.iter().any(|x| x == &it.id),
         borrowed_art: lent.is_some(),
+        // Apps only: a session's time moves with playback and would republish every tick.
+        last_used_ms: it.last_used_ms.filter(|_| it.kind == ItemKind::App),
+        added_ms: it.added_ms.filter(|_| it.kind == ItemKind::App),
     }
 }
 

@@ -355,6 +355,11 @@ pub struct Tile {
     /// The picture is the owning app's banner, standing in for art the item did not bring.
     #[serde(default)]
     pub borrowed_art: bool,
+    /// When the item was last opened and when it arrived, for sorting the All apps screen.
+    #[serde(default)]
+    pub last_used_ms: Option<i64>,
+    #[serde(default)]
+    pub added_ms: Option<i64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum, Serialize, Deserialize)]

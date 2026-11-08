@@ -8,6 +8,7 @@ export type Tile = {
   badge?: string | null; action: string; pinned: boolean; stagePinned: boolean;
   /** The picture is the owning app's banner, standing in for art the item did not bring. */
   borrowedArt?: boolean;
+  lastUsedMs?: number | null; addedMs?: number | null;
 };
 export type Row = { id: string; title: string; kind: string; size: string; badge?: string | null; tiles: Tile[] };
 export type Spotlight = {

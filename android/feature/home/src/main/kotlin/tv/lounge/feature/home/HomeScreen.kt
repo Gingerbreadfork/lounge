@@ -633,15 +633,19 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         }
 
         Presence(if (allAppsOpen) Unit else null) { _, visibleState ->
-            AllAppsScreen(
-                apps = snapshot.allApps,
-                visibleState = visibleState,
-                covered = menu != null,
-                heldTileId = { heldMenu()?.tile?.id },
-                onTileClick = { perform(it) },
-                onTileLongPress = { tile, bounds, fr -> openMenu(tile, "allapps", bounds, fr) },
-                onClose = { closeOverlay() },
-            )
+            CompositionLocalProvider(LocalPhoneText provides phoneText) {
+                AllAppsScreen(
+                    apps = snapshot.allApps,
+                    sort = uiPrefs.allAppsSort,
+                    onSetSort = { s -> scope.launch { prefs.setAllAppsSort(s) } },
+                    visibleState = visibleState,
+                    covered = menu != null,
+                    heldTileId = { heldMenu()?.tile?.id },
+                    onTileClick = { perform(it) },
+                    onTileLongPress = { tile, bounds, fr -> openMenu(tile, "allapps", bounds, fr) },
+                    onClose = { closeOverlay() },
+                )
+            }
         }
 
         // The menu draws over Search or All apps when it opened from one of their tiles.
