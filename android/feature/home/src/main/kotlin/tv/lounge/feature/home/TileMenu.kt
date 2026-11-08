@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,7 +43,14 @@ import tv.lounge.core.Tile
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 
-data class MenuItem(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val destructive: Boolean = false, val onSelect: () -> Unit)
+/** One menu entry; [detail] is a second line that says what the action does, for the ones that need it. */
+data class MenuItem(
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val destructive: Boolean = false,
+    val detail: String? = null,
+    val onSelect: () -> Unit,
+)
 
 /**
  * The long-press menu: a `curtain` popover beside the tile (DESIGN.md §5.4). It grows from the edge
@@ -84,6 +94,9 @@ fun TileMenuPopover(
                             .focusProperties { canFocus = !leaving }
                             .trapFocus(leaving)
                             .focusGroup()
+                            // A long menu at large text scrolls rather than running off the screen.
+                            .heightIn(max = 900.dp)
+                            .verticalScroll(rememberScrollState())
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
@@ -107,6 +120,8 @@ fun TileMenuPopover(
                             SheetRow(
                                 icon = item.icon,
                                 title = item.label,
+                                subtitle = item.detail,
+                                subtitleLines = 2,
                                 accent = if (item.destructive) colors.ember else colors.dust,
                                 onClick = { item.onSelect(); onDismiss() },
                                 focusRequester = if (i == 0) firstFocus else null,
@@ -132,13 +147,33 @@ fun TileMenuPopover(
     LaunchedEffect(Unit) { firstFocus.requestWhenReady() }
 }
 
-/** Menu items for a tile, by what it is and where it sits. All of them do something real. */
+/** What each pin does, in the menu and on the phone, so the word "pin" never stands alone. */
+object PinWords {
+    const val PIN_APP = "Pin to the front of Your apps"
+    const val PIN_APP_DETAIL = "Stays put ahead of recent apps"
+    const val UNPIN_APP = "Unpin from Your apps"
+    const val UNPIN_APP_DETAIL = "Follows what you open again"
+    const val PIN_STAGE = "Pin to the Stage"
+    const val PIN_STAGE_DETAIL = "Stays in the big pictures up top"
+    const val UNPIN_STAGE = "Unpin from the Stage"
+    const val UNPIN_STAGE_DETAIL = "What you watch takes its place"
+    const val HIDE_DETAIL = "Off every row until you show it"
+    const val HIDE_ROW_DETAIL = "Settings, Rows brings it back"
+}
+
+/**
+ * Menu items for a tile, by what it is and where it sits. All of them do something real.
+ * [rowTitle] names the home row the tile sits in; the caller passes null for the Stage and for
+ * search results, which keep their home row ids.
+ */
 fun menuItemsFor(
     tile: Tile,
     rowId: String,
+    rowTitle: String?,
     isPinned: Boolean,
     isStagePinned: Boolean,
     onHide: () -> Unit,
+    onHideRow: () -> Unit,
     onPin: () -> Unit,
     onUnpin: () -> Unit,
     onMoveLeft: () -> Unit,
@@ -161,16 +196,25 @@ fun menuItemsFor(
         if (isPinned) {
             items += MenuItem("Move left", LoungeIcons.Move, onSelect = onMoveLeft)
             items += MenuItem("Move right", LoungeIcons.Move, onSelect = onMoveRight)
-            items += MenuItem("Unpin from Your apps", LoungeIcons.Pin, onSelect = onUnpin)
+            items += MenuItem(PinWords.UNPIN_APP, LoungeIcons.Pin, detail = PinWords.UNPIN_APP_DETAIL, onSelect = onUnpin)
         } else {
-            items += MenuItem("Pin to Your apps", LoungeIcons.Pin, onSelect = onPin)
+            items += MenuItem(PinWords.PIN_APP, LoungeIcons.Pin, detail = PinWords.PIN_APP_DETAIL, onSelect = onPin)
         }
     } else if (isApp && rowId == "allapps") {
-        items += MenuItem(if (isPinned) "Unpin from Your apps" else "Pin to Your apps", LoungeIcons.Pin, onSelect = if (isPinned) onUnpin else onPin)
+        items += if (isPinned) {
+            MenuItem(PinWords.UNPIN_APP, LoungeIcons.Pin, detail = PinWords.UNPIN_APP_DETAIL, onSelect = onUnpin)
+        } else {
+            MenuItem(PinWords.PIN_APP, LoungeIcons.Pin, detail = PinWords.PIN_APP_DETAIL, onSelect = onPin)
+        }
     }
     if (tile.id.startsWith("chan:")) items += MenuItem("TV guide", LoungeIcons.Guide, onSelect = onGuide)
-    items += if (isStagePinned) MenuItem("Unpin from Stage", LoungeIcons.Pin, onSelect = onUnpinStage) else MenuItem("Pin to Stage", LoungeIcons.Pin, onSelect = onPinStage)
-    items += MenuItem("Hide", LoungeIcons.Hide, onSelect = onHide)
+    items += if (isStagePinned) {
+        MenuItem(PinWords.UNPIN_STAGE, LoungeIcons.Pin, detail = PinWords.UNPIN_STAGE_DETAIL, onSelect = onUnpinStage)
+    } else {
+        MenuItem(PinWords.PIN_STAGE, LoungeIcons.Pin, detail = PinWords.PIN_STAGE_DETAIL, onSelect = onPinStage)
+    }
+    items += MenuItem("Hide", LoungeIcons.Hide, detail = PinWords.HIDE_DETAIL, onSelect = onHide)
+    if (rowTitle != null) items += MenuItem("Hide the $rowTitle row", LoungeIcons.Rows, detail = PinWords.HIDE_ROW_DETAIL, onSelect = onHideRow)
     if (isApp) {
         items += MenuItem("App info", LoungeIcons.Info, onSelect = onAppInfo)
         items += MenuItem("Open in Play Store", LoungeIcons.Play, onSelect = onPlay)

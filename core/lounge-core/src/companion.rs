@@ -1,7 +1,7 @@
 //! The companion server's view of the core: snapshots, actions, layout, plugins, backup.
 
 use crate::{engine, now_ms, plugins, worker, CompanionStatus, Inner, PairingInfo};
-use lounge_companion::{CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, RowRef};
+use lounge_companion::{AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, NamedRef, RowRef};
 use lounge_graph::Layout;
 use lounge_plugins::http::{Fetcher, Reach};
 use serde::{Deserialize, Serialize};
@@ -64,35 +64,39 @@ pub(crate) fn pairing(inner: &Arc<Inner>) -> Result<PairingInfo, String> {
     Ok(PairingInfo { code: info.code, url: info.url, qr_png_path: png.to_string_lossy().into_owned(), expires_ms: info.expires_ms })
 }
 
-/// Row ids and their titles for the layout editor: the core rows, plus plugin and channel rows.
-fn available_rows(inner: &Inner) -> Vec<RowRef> {
-    let state = inner.state.lock();
-    let mut rows: Vec<RowRef> = engine::CORE_ROWS
-        .iter()
-        .map(|(id, title)| RowRef { id: id.to_string(), title: if *id == "tvcontrols" && !inner.config.has_tv_controls { "Inputs".into() } else { title.to_string() } })
-        .collect();
-    for p in state.plugins.iter().filter(|p| p.enabled) {
-        for r in &p.manifest.rows {
-            rows.push(RowRef { id: format!("plugin:{}:{}", p.id, r.id), title: format!("{} · {}", p.manifest.name, r.title) });
-        }
-    }
-    for (id, name, _) in state.graph.preview_channels() {
-        rows.push(RowRef { id: format!("channel:{id}"), title: if name.is_empty() { format!("Channel {id}") } else { name } });
-    }
-    rows
+fn named(r: crate::ItemRef) -> NamedRef {
+    NamedRef { id: r.id, title: r.title, icon_path: r.icon_path }
 }
 
 fn layout_doc(inner: &Inner) -> LayoutDoc {
-    let available = available_rows(inner);
     let state = inner.state.lock();
-    let l = &state.graph.layout;
+    let graph = &state.graph;
+    let l = &graph.layout;
+    // The same rows the TV's own editor lists, in the same order and words.
+    let available_rows = engine::row_infos(&state, &inner.config)
+        .into_iter()
+        .map(|r| RowRef { id: r.id, title: r.title, shown: r.shown, chosen: r.chosen, count: r.count, detail: r.detail })
+        .collect();
+    let apps = graph
+        .all_apps()
+        .into_iter()
+        .filter_map(|it| {
+            let package = it.package()?.to_string();
+            let pinned = l.pinned_apps.contains(&package);
+            Some(AppRef { package, title: it.title.clone(), icon_path: it.artwork.logo.clone(), pinned })
+        })
+        .collect();
     LayoutDoc {
         row_order: engine::effective_row_order(&state),
-        available_rows: available,
+        available_rows,
         hidden: l.hidden.iter().cloned().collect(),
         pinned_apps: l.pinned_apps.clone(),
         stage_pins: l.stage_pins.clone(),
         enabled_channels: l.enabled_channels.iter().copied().collect(),
+        row_visibility: l.row_visibility.clone(),
+        apps,
+        hidden_items: engine::hidden_items(&state).into_iter().map(named).collect(),
+        stage_items: l.stage_pins.iter().map(|id| named(engine::item_ref(graph, id))).collect(),
     }
 }
 
@@ -173,6 +177,9 @@ impl CompanionActions for CoreActions {
             }
             if let Some(channels) = patch.enabled_channels {
                 layout.enabled_channels = channels.into_iter().collect();
+            }
+            if let Some(visibility) = patch.row_visibility {
+                layout.row_visibility = visibility;
             }
             layout.normalise();
             state.store.save_layout(&layout).map_err(|e| e.to_string())?;
@@ -350,21 +357,157 @@ mod tests {
         fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
     }
 
-    #[test]
-    fn a_layout_that_cannot_be_saved_changes_nothing() {
-        let dir = tempfile::tempdir().unwrap();
-        let data_dir = dir.path().join("data");
-        let config = crate::CoreConfig {
-            data_dir: data_dir.to_string_lossy().into_owned(),
-            cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+    fn test_config(dir: &std::path::Path) -> crate::CoreConfig {
+        crate::CoreConfig {
+            data_dir: dir.join("data").to_string_lossy().into_owned(),
+            cache_dir: dir.join("cache").to_string_lossy().into_owned(),
             tier: crate::DeviceTier::B,
             utc_offset_minutes: 0,
             has_tv_controls: false,
             device_name: "TV".into(),
             screen_width: 1920,
             screen_height: 1080,
-        };
-        let core = crate::Core::open(config, Arc::new(Quiet)).unwrap();
+        }
+    }
+
+    /// Apps straight into the graph, with or without banners, then a rebuild.
+    fn put_apps(core: &crate::Core, apps: &[(&str, bool)]) {
+        let items = apps
+            .iter()
+            .map(|(pkg, banner)| {
+                let mut it = lounge_graph::Item::app(pkg, "Main", &pkg.to_uppercase());
+                it.flags.has_banner = *banner;
+                it
+            })
+            .collect();
+        core.inner.state.lock().graph.replace_source("apps", items);
+        core.inner.enqueue_job(worker::Job::Rebuild);
+    }
+
+    /// The row ids on the home once `pred` holds for them, or the last seen if it never does.
+    fn rows_when(core: &crate::Core, pred: impl Fn(&[String]) -> bool) -> Vec<String> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let ids: Vec<String> = core.snapshot().rows.iter().map(|r| r.id.clone()).collect();
+            if pred(&ids) || std::time::Instant::now() > deadline {
+                return ids;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+    }
+
+    #[test]
+    fn a_hidden_row_leaves_the_home_and_comes_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        put_apps(&core, &[("tv.a", true), ("tv.b", false)]);
+        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "allapps"));
+        assert!(rows.contains(&"apps".to_string()) && rows.contains(&"allapps".to_string()), "{rows:?}");
+
+        core.command(crate::LayoutCommand::HideRow { row_id: "apps".into() });
+        let rows = rows_when(&core, |ids| !ids.iter().any(|r| r == "apps"));
+        assert!(!rows.contains(&"apps".to_string()), "{rows:?}");
+        // Built all the same, so search still reaches its tiles.
+        let aside: Vec<String> = core.snapshot().hidden_rows.iter().map(|r| r.id.clone()).collect();
+        assert_eq!(aside, ["apps"]);
+        let info = core.home_rows().into_iter().find(|r| r.id == "apps").unwrap();
+        assert!(!info.shown && info.chosen);
+        assert_eq!((info.count, info.detail.as_str()), (1, "1 app"));
+        let doc = CoreActions { inner: Arc::downgrade(&core.inner) }.layout();
+        assert_eq!(doc.row_visibility.get("apps"), Some(&false));
+        assert_eq!(doc.row_order.first().map(String::as_str), Some("continue"));
+
+        core.command(crate::LayoutCommand::ShowRow { row_id: "apps".into() });
+        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
+        assert!(rows.contains(&"apps".to_string()), "{rows:?}");
+    }
+
+    #[test]
+    fn all_apps_stays_away_while_it_only_repeats_your_apps() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        put_apps(&core, &[("tv.a", true), ("tv.b", true)]);
+        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
+        assert!(!rows.contains(&"allapps".to_string()), "{rows:?}");
+        let info = core.home_rows().into_iter().find(|r| r.id == "allapps").unwrap();
+        assert!(!info.shown);
+        assert_eq!(info.detail, "Same apps as Your apps");
+
+        // Asked for by hand, it stays whatever the apps do.
+        core.command(crate::LayoutCommand::ShowRow { row_id: "allapps".into() });
+        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "allapps"));
+        assert!(rows.contains(&"allapps".to_string()), "{rows:?}");
+        let info = core.home_rows().into_iter().find(|r| r.id == "allapps").unwrap();
+        assert_eq!(info.detail, "2 apps, A to Z");
+
+        // With Your apps hidden there would be no apps at all, so All apps steps in.
+        core.command(crate::LayoutCommand::HideRow { row_id: "apps".into() });
+        core.command(crate::LayoutCommand::SetRowOrder { row_ids: Vec::new() });
+        let mut cleared = std::collections::HashMap::new();
+        cleared.insert("apps".to_string(), false);
+        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
+        actions.set_layout(LayoutPatch { row_visibility: Some(cleared), ..LayoutPatch::default() }).unwrap();
+        let rows = rows_when(&core, |ids| ids.iter().any(|r| r == "allapps") && !ids.iter().any(|r| r == "apps"));
+        assert!(rows.contains(&"allapps".to_string()) && !rows.contains(&"apps".to_string()), "{rows:?}");
+        let info = core.home_rows().into_iter().find(|r| r.id == "allapps").unwrap();
+        assert!(info.shown && !info.chosen);
+
+        // An app without a banner makes the rows differ, so the default shows All apps too.
+        let dir2 = tempfile::tempdir().unwrap();
+        let core2 = crate::Core::open(test_config(dir2.path()), Arc::new(Quiet)).unwrap();
+        put_apps(&core2, &[("tv.a", true), ("tv.b", false)]);
+        let rows = rows_when(&core2, |ids| ids.iter().any(|r| r == "allapps"));
+        assert!(rows.contains(&"allapps".to_string()), "{rows:?}");
+    }
+
+    #[test]
+    fn a_moved_row_gets_an_order_of_its_own() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        put_apps(&core, &[("tv.a", true), ("tv.b", false)]);
+        rows_when(&core, |ids| ids.iter().any(|r| r == "allapps"));
+        core.command(crate::LayoutCommand::MoveRow { row_id: "allapps".into(), to_index: 0 });
+        let rows = rows_when(&core, |ids| ids.first().is_some_and(|r| r == "allapps"));
+        assert_eq!(rows.first().map(String::as_str), Some("allapps"), "{rows:?}");
+        let order = core.home_rows().into_iter().map(|r| r.id).collect::<Vec<_>>();
+        assert_eq!(order[..3], ["allapps", "continue", "apps"]);
+
+        // A row that cannot be built now is neither listed nor forgotten.
+        core.command(crate::LayoutCommand::SetRowOrder { row_ids: vec!["plugin:gone:recent".into(), "games".into(), "continue".into()] });
+        // Continue watching stands in as its notice tile while TV listings are off.
+        let rows = rows_when(&core, |ids| ids.first().is_some_and(|r| r == "notice:tv_listings"));
+        assert_eq!(rows.first().map(String::as_str), Some("notice:tv_listings"), "{rows:?}");
+        assert!(core.home_rows().iter().all(|r| r.id != "plugin:gone:recent"));
+        core.command(crate::LayoutCommand::MoveRow { row_id: "apps".into(), to_index: 0 });
+        rows_when(&core, |ids| ids.first().is_some_and(|r| r == "apps"));
+        let saved = core.inner.state.lock().graph.layout.row_order.clone();
+        assert_eq!(saved.first().map(String::as_str), Some("apps"));
+        assert!(saved.contains(&"plugin:gone:recent".to_string()), "{saved:?}");
+    }
+
+    #[test]
+    fn the_phone_can_hide_a_row_and_sees_every_app() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        put_apps(&core, &[("tv.a", true), ("tv.b", false)]);
+        rows_when(&core, |ids| ids.iter().any(|r| r == "allapps"));
+        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
+        let mut visibility = std::collections::HashMap::new();
+        visibility.insert("games".to_string(), false);
+        let doc = actions.set_layout(LayoutPatch { row_visibility: Some(visibility), ..LayoutPatch::default() }).unwrap();
+        assert_eq!(doc.row_visibility.get("games"), Some(&false));
+        assert!(!doc.available_rows.iter().find(|r| r.id == "games").unwrap().shown);
+        let mut apps: Vec<&str> = doc.apps.iter().map(|a| a.package.as_str()).collect();
+        apps.sort();
+        assert_eq!(apps, ["tv.a", "tv.b"]);
+        assert!(doc.apps.iter().all(|a| !a.pinned));
+    }
+
+    #[test]
+    fn a_layout_that_cannot_be_saved_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().join("data");
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
         let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
         let backup = actions.export_json();
 

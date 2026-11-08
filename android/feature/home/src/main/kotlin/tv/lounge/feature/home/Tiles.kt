@@ -180,6 +180,8 @@ fun TileView(
             Badge.CONNECTED -> append(", connected")
             else -> Unit
         }
+        if (tile.stagePinned) append(", pinned to the Stage")
+        if (tile.pinned) append(", pinned")
     }
 
     // The curtain only shows where no picture covers it; an opaque JPEG over it would be pure overdraw.
@@ -222,6 +224,21 @@ fun TileView(
             TileKind.APP_BANNER -> AppBannerContent(tile, filter, size)
             TileKind.COMPACT -> CompactContent(tile, filter)
         }
+        // A pinned tile says so where it sits, so the word in the menu has something to point at.
+        // The live badge owns the top-right corner, so the mark steps down beside the progress bar.
+        if (kind != TileKind.COMPACT && (tile.pinned || tile.stagePinned)) {
+            val live = tile.badge == Badge.LIVE && chrome
+            PinMark(Modifier.align(if (live) Alignment.BottomEnd else Alignment.TopEnd).padding(horizontal = 10.dp, vertical = if (live) 22.dp else 10.dp))
+        }
+    }
+}
+
+/** A small pin on a `velvet` disc, the same on every tile style (DESIGN.md §7.3). */
+@Composable
+private fun PinMark(modifier: Modifier) {
+    val colors = LoungeTheme.colors
+    Box(modifier.size(26.dp).background(colors.velvet.copy(alpha = 0.72f), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+        Icon(LoungeIcons.Pin, contentDescription = null, tint = colors.limelight, modifier = Modifier.size(15.dp))
     }
 }
 
@@ -422,6 +439,7 @@ private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphic
             Text(tile.title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
             tile.subtitle?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
+        if (tile.pinned || tile.stagePinned) Icon(LoungeIcons.Pin, contentDescription = null, tint = colors.dust, modifier = Modifier.size(15.dp))
         if (tile.badge == Badge.CONNECTED) tv.lounge.design.Dot(colors.signal)
     }
 }

@@ -1,15 +1,37 @@
 <script lang="ts">
-  import { api, argb, art, type Tile } from '../lib/api';
+  import { api, argb, art, tag, type Tile } from '../lib/api';
+  import { hold } from '../lib/hold';
   import Icon from '../lib/Icon.svelte';
   import { act, app, connectionLabel, dismissShare, openShare } from '../lib/state.svelte';
+  import TileSheet from '../lib/TileSheet.svelte';
 
   let snapshot = $derived(app.state?.snapshot ?? null);
   let spotlight = $derived(snapshot?.stage.spotlights[0] ?? null);
   let np = $derived(snapshot?.nowPlaying ?? null);
+  /** The tile whose menu is open, and the home row it was held in. */
+  let sheet = $state<{ tile: Tile; rowId: string | null; rowTitle: string | null } | null>(null);
+  // The hint goes once a tile has been held; the gesture is then known.
+  let hintSeen = $state(read('lounge.heldTile'));
 
+  function read(key: string) {
+    try { return localStorage.getItem(key) === '1'; } catch { return false; }
+  }
   function open(t: Tile) {
     act(`Opening ${t.title} on the TV`, () => api.open(t.action));
   }
+  function menu(t: Tile, rowId: string | null, rowTitle: string | null) {
+    sheet = { tile: t, rowId, rowTitle };
+    if (!hintSeen) {
+      hintSeen = true;
+      try { localStorage.setItem('lounge.heldTile', '1'); } catch { /* private mode */ }
+    }
+  }
+  // A menu left open for a tile the TV has since dropped closes on its own.
+  $effect(() => {
+    if (!sheet || !snapshot) return;
+    const all = [...snapshot.stage.strip, ...snapshot.rows.flatMap((r) => r.tiles)];
+    if (!all.some((t) => t.id === sheet!.tile.id)) sheet = null;
+  });
   function media(cmd: string) {
     if (!np) return;
     act('', () => api.open(`media:${np!.package}:${cmd}`));
@@ -81,6 +103,9 @@
   {/if}
 
   {#if snapshot}
+    {#if !hintSeen && (snapshot.stage.strip.length || snapshot.rows.length)}
+      <p class="caption hint">Hold a tile to pin it to the Stage or the front of Your apps, or to hide it.</p>
+    {/if}
     {#if snapshot.stage.strip.length}
       <section class="section">
         <div class="section-head"><h3>Stage</h3></div>
@@ -104,6 +129,7 @@
               {#if row.kind === 'COMPACT'}
                 {#if t.iconPath}<img class="icon" src={art(t.iconPath)} alt="" loading="lazy" />{/if}
                 <span class="t">{t.title}</span>
+                {#if t.pinned || t.stagePinned}<span class="pin-inline" aria-hidden="true"><Icon name="pin" size={14} /></span>{/if}
               {:else}
                 {#if t.artworkPath}<img src={art(t.artworkPath)} alt="" loading="lazy" />{:else}<div class="fill" style="background: color-mix(in srgb, {argb(t.lightArgb)} 35%, var(--curtain))"></div>{/if}
                 {#if t.badge === 'LIVE'}<span class="badge"><span class="dot"></span>Live</span>{/if}
@@ -119,6 +145,10 @@
     <p class="empty">Waiting for the TV…</p>
   {/if}
 </main>
+
+{#if sheet}
+  <TileSheet tile={sheet.tile} rowId={sheet.rowId} rowTitle={sheet.rowTitle} onclose={() => (sheet = null)} />
+{/if}
 
 <style>
   .share { display: flex; flex-direction: column; gap: 10px; }

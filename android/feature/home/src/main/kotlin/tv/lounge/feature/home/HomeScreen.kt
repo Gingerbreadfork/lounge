@@ -446,7 +446,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         Column(Modifier.fillMaxSize()) {
             TopBar(
                 showTvControls = power.hasTvControls,
-                showGuide = snapshot.rows.any { it.id == "live" },
+                showGuide = (snapshot.rows + snapshot.hiddenRows).any { it.id == "live" },
                 nowPlaying = nowPlaying,
                 idle = state.idle,
                 focus = state.topBar,
@@ -628,17 +628,24 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         // The menu draws over Search when it opened from a result.
         Presence(menu) { ov, visibleState ->
             val pkg = ov.tile.id.removePrefix("app:")
+            // Search keeps the home's row ids; hiding a row from there would be a surprise.
+            val homeRow = if (ov.under == Overlay.Search) null else snapshot.rows.firstOrNull { it.id == ov.rowId }
             TileMenuPopover(
                 tile = ov.tile,
                 anchor = ov.anchor,
                 items = menuItemsFor(
                     tile = ov.tile,
                     rowId = ov.rowId,
+                    rowTitle = homeRow?.title,
                     isPinned = ov.tile.pinned,
                     isStagePinned = ov.tile.stagePinned,
-                    onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say("Hidden from ${rowTitle(snapshot, ov.rowId)}") },
-                    onPin = { core.command(LayoutCommand.PinApp(pkg)); say("Pinned to Your apps") },
-                    onUnpin = { core.command(LayoutCommand.UnpinApp(pkg)) },
+                    onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say("Hidden from every row") },
+                    onHideRow = {
+                        core.command(LayoutCommand.HideRow(ov.rowId))
+                        say("${homeRow?.title ?: "Row"} hidden. Settings, Rows brings it back")
+                    },
+                    onPin = { core.command(LayoutCommand.PinApp(pkg)); say("Pinned to the front of Your apps") },
+                    onUnpin = { core.command(LayoutCommand.UnpinApp(pkg)); say("Unpinned from Your apps") },
                     // The tile's place in Your apps now, wherever its menu was opened from.
                     onMoveLeft = {
                         val at = indexInRow(ov.rowId, ov.tile.id)
@@ -649,7 +656,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                         if (at >= 0) core.command(LayoutCommand.MoveApp(pkg, (at + 1).toUInt()))
                     },
                     onPinStage = { core.command(LayoutCommand.PinToStage(ov.tile.id)); say("Pinned to the Stage") },
-                    onUnpinStage = { core.command(LayoutCommand.UnpinFromStage(ov.tile.id)) },
+                    onUnpinStage = { core.command(LayoutCommand.UnpinFromStage(ov.tile.id)); say("Unpinned from the Stage") },
                     onAppInfo = { perform("info:${ov.tile.id}", ov.tile.title) },
                     onUninstall = { requestUninstall(context, pkg) },
                     onPlay = { openPlayListing(context, pkg) },
@@ -713,7 +720,7 @@ private data class TopInsetShape(val top: Float) : androidx.compose.ui.graphics.
 }
 
 private fun Overlay.isSheet(): Boolean = when (this) {
-    Overlay.QuickSettings, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels,
+    Overlay.QuickSettings, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels, Overlay.Rows,
     Overlay.Plugins, is Overlay.PluginDetail, Overlay.HomeRole, Overlay.Companion, Overlay.Updates,
     -> true
     else -> false
@@ -793,6 +800,13 @@ private fun SheetContent(
             // Both wait on the core, which may still be loading, so they are read off the main thread.
             val enabledChannels by produceState(0) { value = withContext(Dispatchers.IO) { core.availableChannels().count { it.enabled } } }
             val enabledPlugins by produceState(0) { value = withContext(Dispatchers.IO) { core.plugins().count { it.enabled } } }
+            val rowsSummary by produceState("") {
+                value = withContext(Dispatchers.IO) {
+                    // Only rows the person hid count; All apps stepping aside on its own is not their doing.
+                    val hidden = core.homeRows().count { !it.shown && it.chosen }
+                    if (hidden == 0) "All shown" else if (hidden == 1) "1 hidden" else "$hidden hidden"
+                }
+            }
             QuickSettingsSheet(
                 prefs = prefs,
                 theme = theme,
@@ -814,6 +828,8 @@ private fun SheetContent(
                 onSetShowMobileApps = { on -> scope.launch { prefs.setShowMobileApps(on) } },
                 onRequestPermission = { name -> closeAll(); scope.launch { withContext(Dispatchers.IO) { core.perform("permission:$name") } } },
                 onChannels = { open(Overlay.Channels) },
+                onRows = { open(Overlay.Rows) },
+                rowsSummary = rowsSummary,
                 onPlugins = { open(Overlay.Plugins) },
                 onCompanion = { open(Overlay.Companion) },
                 companionOn = uiPrefs.companionEnabled,
@@ -858,6 +874,57 @@ private fun SheetContent(
                 onToggle = { ch ->
                     core.command(if (ch.enabled) LayoutCommand.DisableChannel(ch.id) else LayoutCommand.EnableChannel(ch.id))
                     channels = channels?.map { if (it.id == ch.id) it.copy(enabled = !it.enabled) else it }
+                },
+                firstFocus = first,
+            )
+        }
+        Overlay.Rows -> {
+            var rows by remember { mutableStateOf<List<tv.lounge.core.RowInfo>?>(null) }
+            var hidden by remember { mutableStateOf<List<tv.lounge.core.ItemRef>?>(null) }
+            // Each change is shown at once; a read that began before a later change is thrown away,
+            // so it cannot put the older state back on screen.
+            val edits = remember { intArrayOf(0) }
+            suspend fun reload() {
+                val began = edits[0]
+                val (r, h) = withContext(Dispatchers.IO) { core.homeRows() to core.hiddenItems() }
+                if (edits[0] == began) {
+                    rows = r
+                    hidden = h
+                }
+            }
+            // A change that alters nothing on screen publishes no snapshot, so the list is also
+            // read again a moment after each command has had its turn.
+            LaunchedEffect(Unit) { core.snapshots.collect { reload() } }
+            fun edited() {
+                edits[0]++
+                scope.launch { kotlinx.coroutines.delay(400); reload() }
+            }
+            RowsSheet(
+                rows = rows,
+                hidden = hidden,
+                onToggle = { row ->
+                    val shown = rows?.firstOrNull { it.id == row.id }?.shown ?: row.shown
+                    edited()
+                    core.command(if (shown) LayoutCommand.HideRow(row.id) else LayoutCommand.ShowRow(row.id))
+                    rows = rows?.map { if (it.id == row.id) it.copy(shown = !shown, chosen = true) else it }
+                },
+                onMove = { row, to ->
+                    edited()
+                    core.command(LayoutCommand.MoveRow(row.id, to.toUInt()))
+                    rows = rows?.let { list ->
+                        val moved = list.filter { it.id != row.id }.toMutableList()
+                        moved.add(to.coerceIn(0, moved.size), row)
+                        moved
+                    }
+                },
+                onResetOrder = {
+                    edited()
+                    core.command(LayoutCommand.SetRowOrder(emptyList()))
+                },
+                onShowItem = { item ->
+                    edited()
+                    core.command(LayoutCommand.UnhideItem(item.id))
+                    hidden = hidden?.filter { it.id != item.id }
                 },
                 firstFocus = first,
             )

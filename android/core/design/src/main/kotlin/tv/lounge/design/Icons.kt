@@ -227,6 +227,21 @@ object LoungeIcons {
         }
     }
 
+    val Show: ImageVector by lazy {
+        icon("show") {
+            stroke { moveTo(3f, 14f); curveTo(6f, 8f, 10f, 6f, 14f, 6f); curveTo(18f, 6f, 22f, 8f, 25f, 14f); curveTo(22f, 20f, 18f, 22f, 14f, 22f); curveTo(10f, 22f, 6f, 20f, 3f, 14f); close() }
+            stroke { moveTo(14f, 10.5f); arcTo(3.5f, 3.5f, 0f, true, true, 14f, 17.5f); arcTo(3.5f, 3.5f, 0f, true, true, 14f, 10.5f) }
+        }
+    }
+
+    val Rows: ImageVector by lazy {
+        icon("rows") {
+            stroke { moveTo(4f, 7f); lineTo(24f, 7f) }
+            stroke { moveTo(4f, 14f); lineTo(24f, 14f) }
+            stroke { moveTo(4f, 21f); lineTo(24f, 21f) }
+        }
+    }
+
     val Pin: ImageVector by lazy {
         icon("pin") {
             stroke { moveTo(10f, 3f); lineTo(18f, 3f); lineTo(17f, 11f); lineTo(21f, 15f); lineTo(7f, 15f); lineTo(11f, 11f); close() }

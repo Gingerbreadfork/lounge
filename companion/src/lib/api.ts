@@ -23,7 +23,16 @@ export type Wallpaper = { artworkPath: string; title: string; subtitle?: string 
 export type Snapshot = { revision: number; generatedAtMs: number; stage: { spotlights: Spotlight[]; strip: Tile[] }; rows: Row[]; nowPlaying?: NowPlaying | null; wallpapers?: Wallpaper[] };
 /** The snapshot is null while the TV is shutting down. */
 export type State = { device: { name: string; model: string; version: string; tier: string }; snapshot: Snapshot | null };
-export type Layout = { rowOrder: string[]; availableRows: { id: string; title: string }[]; hidden: string[]; pinnedApps: string[]; stagePins: string[]; enabledChannels: number[] };
+/** One row the home could show: whether it is on, and one line on what it holds. */
+export type RowRef = { id: string; title: string; shown: boolean; chosen: boolean; count: number; detail: string };
+export type NamedRef = { id: string; title: string; iconPath?: string | null };
+export type AppRef = { package: string; title: string; iconPath?: string | null; pinned: boolean };
+export type Layout = {
+  rowOrder: string[]; availableRows: RowRef[]; hidden: string[]; pinnedApps: string[]; stagePins: string[]; enabledChannels: number[];
+  /** Rows shown or hidden by hand; a row not listed follows its default. */
+  rowVisibility: Record<string, boolean>;
+  apps: AppRef[]; hiddenItems: NamedRef[]; stageItems: NamedRef[];
+};
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
 export type Plugin = {
   id: string; name: string; version: string; description: string; publisher: string; publisherName: string; kinds: string[];
@@ -86,6 +95,11 @@ export const api = {
   backupUrl: () => '/api/backup',
   restore: (json: string) => call<void>('POST', '/api/restore', undefined, json),
 };
+
+/** An enum name as the TV sends it ("AppBanner", "Live", "Playing") in the page's own form: "APP_BANNER". */
+export function tag(name: string | null | undefined): string {
+  return (name ?? '').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
+}
 
 /** Artwork files live on the TV; the server exposes them by path under this route. */
 export function art(path: string | null | undefined): string | undefined {

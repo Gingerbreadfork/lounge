@@ -180,6 +180,9 @@ fun SheetRow(
     leading: (@Composable () -> Unit)? = null,
     /** A second line under the title, for rows that must stay narrow; the row grows past [height] when large text needs it. */
     subtitle: String? = null,
+    /** Holding OK, where a row has a second action; a plain press otherwise. */
+    onLongClick: (() -> Unit)? = null,
+    subtitleLines: Int = 1,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -222,7 +225,7 @@ fun SheetRow(
                     Modifier
                 },
             )
-            .tilePress({ direction = 1; onClick() }, onClick)
+            .tilePress({ direction = 1; onClick() }, onLongClick ?: onClick)
             .focusable()
             .semantics { role = Role.Button }
             .padding(horizontal = 20.dp),
@@ -234,7 +237,7 @@ fun SheetRow(
         if (subtitle != null) {
             Column(Modifier.weight(1f).padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(subtitle, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis)
             }
         } else {
             // A long title wraps to a second line and the row grows, rather than losing its end.
@@ -321,6 +324,9 @@ fun QuickSettingsSheet(
     onSetShowMobileApps: (Boolean) -> Unit,
     onRequestPermission: (String) -> Unit,
     onChannels: () -> Unit,
+    onRows: () -> Unit,
+    /** "All shown" or "2 hidden": what the row editor would say first. */
+    rowsSummary: String,
     onPlugins: () -> Unit,
     onCompanion: () -> Unit,
     companionOn: Boolean,
@@ -348,12 +354,23 @@ fun QuickSettingsSheet(
         diag = if (showDiagnostics) withContext(Dispatchers.IO) { diagnostics() } else null
     }
     // Back from one of its pages puts focus on the row that opened it.
-    val pages = listOf(Overlay.Channels, Overlay.Plugins, Overlay.Companion, Overlay.Ambient, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates)
+    val pages = listOf(Overlay.Rows, Overlay.Channels, Overlay.Plugins, Overlay.Companion, Overlay.Ambient, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates)
     val returnTo = cameFrom?.takeIf { it in pages }
     fun focusFor(page: Overlay?) = firstFocus.takeIf { page == returnTo }
 
     SheetHeading("Settings")
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SheetGroup("Home screen")
+        SheetRow(
+            icon = LoungeIcons.Rows,
+            title = "Rows",
+            subtitle = "Show, hide and move rows",
+            value = rowsSummary,
+            onClick = onRows,
+            focusRequester = focusFor(Overlay.Rows) ?: focusFor(null),
+        )
+        Spacer(Modifier.height(16.dp))
+        Hairline(Modifier.fillMaxWidth())
         SheetGroup("Look and sound")
         SheetRow(
             icon = LoungeIcons.Theme,
@@ -361,7 +378,6 @@ fun QuickSettingsSheet(
             value = theme.title,
             onClick = { sounds0?.tick(); onSetTheme(theme.step(1)) },
             onCycle = { by -> sounds0?.tick(); onSetTheme(theme.step(by)) },
-            focusRequester = focusFor(null),
         )
         val scenes = listOf(Triple(Prefs.STILL_BACKDROP, "Still", "The room's own light")) + backdrops.map { Triple(it.id, it.name, it.description ?: it.origin) }
         val sceneAt = scenes.indexOfFirst { it.first == backdrop }.coerceAtLeast(0)

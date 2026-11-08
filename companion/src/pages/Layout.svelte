@@ -1,21 +1,38 @@
 <script lang="ts">
-  import { api, type Layout } from '../lib/api';
+  // The home screen's shape, from the phone: which rows show and in what order, what sits on
+  // the Stage, which apps stay at the front, and everything that is hidden.
+  import { untrack } from 'svelte';
+  import { api, art, type AppRef, type Layout, type NamedRef, type RowRef } from '../lib/api';
   import Icon from '../lib/Icon.svelte';
-  import { act, app } from '../lib/state.svelte';
+  import Reorder from '../lib/Reorder.svelte';
+  import { act, app, quiet } from '../lib/state.svelte';
+  import { words } from '../lib/words';
 
   let layout = $state<Layout | null>(null);
   let busy = $state(false);
+  let appQuery = $state('');
 
-  $effect(() => { load(); });
+  // Read once, then again with each snapshot, so a tile pinned with the remote shows up here too.
+  $effect(() => {
+    app.state?.snapshot?.revision;
+    untrack(() => load());
+  });
 
+  // A read that began before a change was made here is thrown away, so it cannot put the
+  // older layout back on screen.
+  let edits = 0;
   async function load() {
-    layout = (await act('', () => api.layout())) ?? null;
+    if (waiting > 0) return;
+    const began = edits;
+    const l = await quiet(() => api.layout());
+    if (l && waiting === 0 && edits === began) layout = l;
   }
   // Saves run one at a time and in order, so the TV ends up with the last move. Only the last
   // answer is shown, so an older one cannot undo a newer move on screen.
   let queue: Promise<void> = Promise.resolve();
   let waiting = 0;
   function save(patch: Partial<Layout>, message = 'Saved to the TV') {
+    edits++;
     busy = true;
     waiting++;
     queue = queue.then(async () => {
@@ -27,49 +44,89 @@
       }
     });
   }
-  function move(id: string, dir: -1 | 1) {
+  // Each change shows at once, so the next one builds on it even before the TV has answered;
+  // `local` is what the page shows meanwhile beyond what the TV is sent.
+  function change(patch: Partial<Layout>, message: string, local: Partial<Layout> = {}) {
     if (!layout) return;
-    const order = [...layout.rowOrder];
-    const i = order.indexOf(id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= order.length) return;
-    [order[i], order[j]] = [order[j], order[i]];
-    layout = { ...layout, rowOrder: order };
-    save({ rowOrder: order });
-  }
-  function titleOf(id: string) {
-    return layout?.availableRows.find((r) => r.id === id)?.title ?? id;
-  }
-  function sourceOf(id: string) {
-    if (id.startsWith('plugin:')) return 'From a plugin';
-    if (id.startsWith('channel:')) return 'A channel another app publishes';
-    return null;
-  }
-  // Each change shows at once, so the next one builds on it even before the TV has answered.
-  function change(patch: Partial<Layout>, message: string) {
-    if (!layout) return;
-    layout = { ...layout, ...patch };
+    layout = { ...layout, ...patch, ...local };
     save(patch, message);
   }
-  function toggleHidden(id: string) {
+
+  // Rows
+  let rows = $derived.by(() => {
+    if (!layout) return [] as RowRef[];
+    const byId = new Map(layout.availableRows.map((r) => [r.id, r]));
+    return layout.rowOrder.map((id) => byId.get(id) ?? { id, title: id, shown: true, chosen: false, count: 0, detail: '' });
+  });
+  // All apps stepping aside on its own is not something the person hid.
+  let hiddenRows = $derived(rows.filter((r) => !r.shown && r.chosen).length);
+  // A drag reorders on screen as it goes and saves once the row is set down.
+  function moveRow(from: number, to: number) {
     if (!layout) return;
-    const shown = layout.hidden.includes(id);
-    change({ hidden: shown ? layout.hidden.filter((h) => h !== id) : [...layout.hidden, id] }, shown ? 'Shown again' : 'Hidden on the TV');
+    const order = [...layout.rowOrder];
+    const [id] = order.splice(from, 1);
+    order.splice(to, 0, id);
+    edits++;
+    layout = { ...layout, rowOrder: order };
   }
-  function unpinStage(id: string) {
+  function saveRows() {
+    if (layout) save({ rowOrder: layout.rowOrder }, 'Rows reordered');
+  }
+  function toggleRow(row: RowRef) {
     if (!layout) return;
-    change({ stagePins: layout.stagePins.filter((p) => p !== id) }, 'Unpinned from the Stage');
+    const shown = !row.shown;
+    change(
+      { rowVisibility: { ...layout.rowVisibility, [row.id]: shown } },
+      shown ? `${row.title} is back on the TV` : `${row.title} hidden on the TV`,
+      { availableRows: layout.availableRows.map((r) => (r.id === row.id ? { ...r, shown } : r)) },
+    );
   }
-  function unpinApp(pkg: string) {
+  function resetRows() {
     if (!layout) return;
-    change({ pinnedApps: layout.pinnedApps.filter((p) => p !== pkg) }, 'Unpinned');
+    save({ rowOrder: [] }, 'Rows back to their usual order');
   }
-  let snapshotTiles = $derived(app.state?.snapshot?.rows.flatMap((r) => r.tiles) ?? []);
-  function tileTitle(id: string) {
-    return snapshotTiles.find((t) => t.id === id)?.title ?? app.state?.snapshot?.stage.strip.find((t) => t.id === id)?.title ?? id;
+
+  // Stage
+  function unpinStage(item: NamedRef) {
+    if (!layout) return;
+    change({ stagePins: layout.stagePins.filter((p) => p !== item.id) }, 'Unpinned from the Stage', { stageItems: layout.stageItems.filter((i) => i.id !== item.id) });
   }
-  function appTitle(pkg: string) {
-    return snapshotTiles.find((t) => t.id === `app:${pkg}`)?.title ?? pkg;
+
+  // Apps
+  let pinnedApps = $derived.by(() => {
+    if (!layout) return [] as AppRef[];
+    const byPkg = new Map(layout.apps.map((a) => [a.package, a]));
+    return layout.pinnedApps.map((p) => byPkg.get(p) ?? { package: p, title: p, pinned: true });
+  });
+  let otherApps = $derived.by(() => {
+    if (!layout) return [] as AppRef[];
+    const q = appQuery.trim().toLowerCase();
+    return layout.apps.filter((a) => !layout!.pinnedApps.includes(a.package)).filter((a) => !q || a.title.toLowerCase().includes(q));
+  });
+  function movePinned(from: number, to: number) {
+    if (!layout) return;
+    const pins = [...layout.pinnedApps];
+    const [p] = pins.splice(from, 1);
+    pins.splice(to, 0, p);
+    edits++;
+    layout = { ...layout, pinnedApps: pins };
+  }
+  function savePinned() {
+    if (layout) save({ pinnedApps: layout.pinnedApps }, 'Your apps reordered');
+  }
+  function pinApp(a: AppRef) {
+    if (!layout) return;
+    change({ pinnedApps: [...layout.pinnedApps, a.package] }, `${a.title} pinned to the front of Your apps`);
+  }
+  function unpinApp(a: AppRef) {
+    if (!layout) return;
+    change({ pinnedApps: layout.pinnedApps.filter((p) => p !== a.package) }, `${a.title} unpinned from Your apps`);
+  }
+
+  // Hidden
+  function showItem(item: NamedRef) {
+    if (!layout) return;
+    change({ hidden: layout.hidden.filter((h) => h !== item.id) }, `${item.title} is back on the TV`, { hiddenItems: layout.hiddenItems.filter((i) => i.id !== item.id) });
   }
 </script>
 
@@ -81,55 +138,81 @@
 
   {#if layout}
     <section class="section">
-      <div class="section-head"><h3>Rows, top to bottom</h3><span class="caption">Empty rows stay hidden</span></div>
-      <div class="list">
-        {#each layout.rowOrder as id, i (id)}
-          <div class="list-row">
-            <div class="grow"><div class="title">{titleOf(id)}</div>{#if sourceOf(id)}<div class="caption">{sourceOf(id)}</div>{/if}</div>
-            <button class="icon-btn" onclick={() => move(id, -1)} disabled={i === 0} aria-label="Move up"><Icon name="up" size={22} /></button>
-            <button class="icon-btn" onclick={() => move(id, 1)} disabled={i === layout.rowOrder.length - 1} aria-label="Move down"><Icon name="down" size={22} /></button>
+      <div class="section-head"><h3>Rows, top to bottom</h3><span class="caption">{hiddenRows ? `${hiddenRows} hidden` : 'All shown'}</span></div>
+      <p class="caption">Drag the dots to reorder. A row with nothing in it stays off the screen until it has something to show.</p>
+      <Reorder items={rows} keyOf={(r) => r.id} nameOf={(r) => r.title} onmove={moveRow} ondone={saveRows}>
+        {#snippet children(row)}
+          <div class="grow" class:dim={!row.shown}>
+            <div class="title">{row.title}</div>
+            <div class="caption one-line">{row.shown ? row.detail : `Hidden · ${row.detail}`}</div>
           </div>
-        {/each}
-      </div>
-      {#if layout.rowOrder.length}
-        <button class="btn ghost" onclick={() => save({ rowOrder: [] }, 'Default order restored')}>Reset order</button>
-      {/if}
+          <button class="icon-btn" class:quiet={row.shown} onclick={() => toggleRow(row)} aria-label={row.shown ? `Hide ${row.title}` : `Show ${row.title}`}>
+            <Icon name={row.shown ? 'show' : 'hide'} size={22} />
+          </button>
+        {/snippet}
+      </Reorder>
+      <button class="btn ghost" onclick={resetRows}>Put the rows back in their usual order</button>
+      <p class="caption center">Keeps what you have hidden.</p>
     </section>
 
     <section class="section">
-      <div class="section-head"><h3>Pinned to the Stage</h3></div>
-      {#if layout.stagePins.length === 0}
-        <p class="caption">Long-press a tile on the TV and choose “Pin to Stage”.</p>
-      {:else}
+      <div class="section-head"><h3>On the Stage</h3></div>
+      <p class="caption">Pinned things stay among the big pictures at the top. Hold a tile on What's on and choose “{words.pinStage}”.</p>
+      {#if layout.stageItems.length}
         <div class="list">
-          {#each layout.stagePins as id (id)}
-            <div class="list-row"><div class="grow title">{tileTitle(id)}</div><button class="btn ghost" onclick={() => unpinStage(id)}>Unpin</button></div>
+          {#each layout.stageItems as item (item.id)}
+            <div class="list-row">
+              {#if item.iconPath}<img class="row-icon" src={art(item.iconPath)} alt="" />{:else}<span class="glyph"><Icon name="pin" size={24} /></span>{/if}
+              <div class="grow title">{item.title}</div>
+              <button class="btn ghost" onclick={() => unpinStage(item)}>Unpin</button>
+            </div>
           {/each}
         </div>
       {/if}
     </section>
 
     <section class="section">
-      <div class="section-head"><h3>Your apps, in order</h3></div>
-      {#if layout.pinnedApps.length === 0}
-        <p class="caption">Apps follow recency until you pin one.</p>
-      {:else}
+      <div class="section-head"><h3>Your apps</h3></div>
+      <p class="caption">Pinned apps stay at the front in this order. The rest follow what you open.</p>
+      {#if pinnedApps.length}
+        <Reorder items={pinnedApps} keyOf={(a) => a.package} nameOf={(a) => a.title} onmove={movePinned} ondone={savePinned}>
+          {#snippet children(a)}
+            {#if a.iconPath}<img class="row-icon" src={art(a.iconPath)} alt="" />{/if}
+            <div class="grow"><div class="title">{a.title}</div><div class="caption">Pinned</div></div>
+            <button class="btn ghost" onclick={() => unpinApp(a)}>Unpin</button>
+          {/snippet}
+        </Reorder>
+      {/if}
+      {#if layout.apps.length > 8}
+        <div class="field"><input type="search" placeholder="Find an app to pin" bind:value={appQuery} aria-label="Find an app to pin" autocomplete="off" /></div>
+      {/if}
+      {#if otherApps.length}
         <div class="list">
-          {#each layout.pinnedApps as pkg (pkg)}
-            <div class="list-row"><div class="grow"><div class="title">{appTitle(pkg)}</div><div class="caption">{pkg}</div></div><button class="btn ghost" onclick={() => unpinApp(pkg)}>Unpin</button></div>
+          {#each otherApps as a (a.package)}
+            <div class="list-row">
+              {#if a.iconPath}<img class="row-icon" src={art(a.iconPath)} alt="" />{:else}<span class="glyph"><Icon name="pin" size={24} /></span>{/if}
+              <div class="grow title">{a.title}</div>
+              <button class="btn ghost" onclick={() => pinApp(a)}>Pin</button>
+            </div>
           {/each}
         </div>
+      {:else if appQuery}
+        <p class="caption">No app called “{appQuery}”.</p>
       {/if}
     </section>
 
     <section class="section">
-      <div class="section-head"><h3>Hidden</h3></div>
-      {#if layout.hidden.length === 0}
-        <p class="caption">Nothing hidden. Long-press a tile on the TV and choose “Hide”.</p>
+      <div class="section-head"><h3>Hidden from every row</h3></div>
+      {#if layout.hiddenItems.length === 0}
+        <p class="caption">Nothing is hidden. Hold a tile on What's on, or OK on the TV, and choose Hide.</p>
       {:else}
         <div class="list">
-          {#each layout.hidden as id (id)}
-            <div class="list-row"><div class="grow title">{tileTitle(id)}</div><button class="btn ghost" onclick={() => toggleHidden(id)}>Show</button></div>
+          {#each layout.hiddenItems as item (item.id)}
+            <div class="list-row">
+              {#if item.iconPath}<img class="row-icon" src={art(item.iconPath)} alt="" />{:else}<span class="glyph"><Icon name="hide" size={24} /></span>{/if}
+              <div class="grow title">{item.title}</div>
+              <button class="btn ghost" onclick={() => showItem(item)}>Show</button>
+            </div>
           {/each}
         </div>
       {/if}
@@ -140,6 +223,9 @@
 </main>
 
 <style>
-  .icon-btn { width: 44px; height: 44px; border-radius: 12px; background: var(--velvet); color: var(--limelight); display: grid; place-items: center; flex: none; }
-  .icon-btn:disabled { opacity: 0.3; }
+  .row-icon { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; flex: none; }
+  .dim .title { color: var(--dust); }
+  .center { text-align: center; margin-top: -10px; }
+  .one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .section > .caption { margin-top: -4px; }
 </style>

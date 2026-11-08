@@ -93,6 +93,12 @@ class CoreClient(val core: Core) : SnapshotListener {
 
     fun availableChannels(): List<ChannelInfo> = core.availableChannels()
 
+    /** Every row the home could show, in order; waits for the core to load, so call it off the main thread. */
+    fun homeRows(): List<RowInfo> = core.homeRows()
+
+    /** Items hidden from every row, by title; waits like [homeRows]. */
+    fun hiddenItems(): List<ItemRef> = core.hiddenItems()
+
     fun diagnostics(): Diagnostics = core.diagnostics()
 
     companion object {

@@ -25,6 +25,8 @@ sealed interface Overlay {
     data object Search : Overlay
     data object NowPlaying : Overlay
     data object Channels : Overlay
+    /** The row editor: which rows show and in what order, and what is hidden. */
+    data object Rows : Overlay
     data object Guide : Overlay
     data object Plugins : Overlay
     data class PluginDetail(val id: String) : Overlay

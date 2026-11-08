@@ -297,6 +297,30 @@ pub struct ChannelInfo {
     pub programmes: u32,
 }
 
+/// One row the home screen could show, for the row editor: whether it is on, and what it holds.
+#[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RowInfo {
+    pub id: String,
+    pub title: String,
+    pub shown: bool,
+    /// Whether the user chose that, rather than the row following its default.
+    pub chosen: bool,
+    /// Tiles the row would carry now; a shown row with none stays off the screen.
+    pub count: u32,
+    /// One short line under the title: "14 apps", "Jellyfin · 30 titles", "Same apps as Your apps".
+    pub detail: String,
+}
+
+/// An item named for an editor list: something hidden or pinned.
+#[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemRef {
+    pub id: String,
+    pub title: String,
+    pub icon_path: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum, Serialize, Deserialize)]
 pub enum TileKind {
     Poster,
@@ -420,6 +444,9 @@ pub struct HomeSnapshot {
     pub generated_at_ms: i64,
     pub stage: Stage,
     pub rows: Vec<Row>,
+    /// Rows the user hid, built all the same so search still finds what is in them.
+    #[serde(default)]
+    pub hidden_rows: Vec<Row>,
     #[serde(default)]
     pub now_playing: Option<NowPlaying>,
     /// Pictures plugins published for the screensaver, prepared like any artwork.
@@ -472,6 +499,7 @@ impl HomeSnapshot {
                 strip: Vec::new(),
             },
             rows: Vec::new(),
+            hidden_rows: Vec::new(),
             now_playing: None,
             wallpapers: Vec::new(),
         }
@@ -488,6 +516,10 @@ pub enum LayoutCommand {
     PinToStage { id: String },
     UnpinFromStage { id: String },
     SetRowOrder { row_ids: Vec<String> },
+    ShowRow { row_id: String },
+    HideRow { row_id: String },
+    /// Moves a row to `to_index` in the home's order, counting every row the home could show.
+    MoveRow { row_id: String, to_index: u32 },
     ResetLayout,
     DismissNotice { id: String },
     EnableChannel { channel_id: i64 },
@@ -837,6 +869,22 @@ impl Core {
             now_ms: now,
             channels,
         }
+    }
+
+    /// Every row the home could show, in order, for the row editor.
+    pub fn home_rows(&self) -> Vec<RowInfo> {
+        self.count();
+        engine::wait_for_graph(&self.inner);
+        let state = self.inner.state.lock();
+        engine::row_infos(&state, &self.inner.config)
+    }
+
+    /// Items hidden from every row, by title.
+    pub fn hidden_items(&self) -> Vec<ItemRef> {
+        self.count();
+        engine::wait_for_graph(&self.inner);
+        let state = self.inner.state.lock();
+        engine::hidden_items(&state)
     }
 
     /// Preview channels other apps publish, with whether each is shown as a row.

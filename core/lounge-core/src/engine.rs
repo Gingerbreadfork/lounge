@@ -1,11 +1,11 @@
 //! Turns the graph into a `HomeSnapshot` and resolves actions back into platform calls.
 
 use crate::{
-    now_ms, Badge, CoreConfig, CoreError, HomeSnapshot, Inner, Row, RowSize, Stage, StageAction, StageSpotlight, State,
-    Tile, TileKind,
+    now_ms, Badge, CoreConfig, CoreError, HomeSnapshot, Inner, ItemRef, Row, RowInfo, RowSize, Stage, StageAction,
+    StageSpotlight, State, Tile, TileKind,
 };
 use lounge_graph::{DeepLink, Graph, Item, ItemKind};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Lookups a build needs more than once, computed once per build.
 pub(crate) struct BuildIndex<'a> {
@@ -49,11 +49,12 @@ pub(crate) const CORE_ROWS: [(&str, &str); 6] = [
 ];
 
 /// The row order as it will be built: the user's order (or the default), with plugin and
-/// channel rows the user has not placed inserted before All apps.
+/// channel rows the user has not placed inserted before All apps. Rows that cannot be built
+/// now, such as a switched-off plugin's, are left out; their saved places are kept for later.
 pub(crate) fn effective_row_order(state: &State) -> Vec<String> {
     let graph = &state.graph;
     let mut order = graph.layout.row_order_or_default();
-    let mut extra: Vec<String> = Vec::new();
+    let mut extra: Vec<String> = CORE_ROWS.iter().map(|(id, _)| id.to_string()).collect();
     for p in state.plugins.iter().filter(|p| p.enabled) {
         for r in &p.manifest.rows {
             extra.push(format!("plugin:{}:{}", p.id, r.id));
@@ -64,12 +65,149 @@ pub(crate) fn effective_row_order(state: &State) -> Vec<String> {
             extra.push(format!("channel:{id}"));
         }
     }
+    order.retain(|id| extra.contains(id));
     let missing: Vec<String> = extra.into_iter().filter(|id| !order.contains(id)).collect();
     let at = order.iter().position(|r| r == "allapps").unwrap_or(order.len());
     for (i, id) in missing.into_iter().enumerate() {
         order.insert(at + i, id);
     }
     order
+}
+
+/// `order` with `id` moved to `to` among the rows that can be built now; rows saved but not
+/// buildable keep a place after them.
+pub(crate) fn moved_row_order(state: &State, id: &str, to: usize) -> Vec<String> {
+    let mut order = moved(effective_row_order(state), id, to);
+    for saved in state.graph.layout.row_order_or_default() {
+        if !order.contains(&saved) {
+            order.push(saved);
+        }
+    }
+    order
+}
+
+/// Whether a row belongs on the home screen: the user's choice, or its default. All apps stays
+/// out of the way while it would only repeat Your apps, and only while Your apps is shown.
+pub(crate) fn row_shown(state: &State, row_id: &str) -> bool {
+    if let Some(choice) = state.graph.row_choice(row_id) {
+        return choice;
+    }
+    row_id != "allapps" || !all_apps_is_spare(state)
+}
+
+/// All apps would only repeat a Your apps row that is on the screen.
+fn all_apps_is_spare(state: &State) -> bool {
+    row_shown(state, "apps") && all_apps_repeat_your_apps(&state.graph)
+}
+
+/// Every app All apps would list is already in Your apps.
+fn all_apps_repeat_your_apps(graph: &Graph) -> bool {
+    let yours: HashSet<&str> = graph.your_apps().iter().map(|it| it.id.as_str()).collect();
+    graph.all_apps().iter().all(|it| yours.contains(it.id.as_str()))
+}
+
+/// `order` with `id` moved to `to`, clamped to the ends; an id not in the order is placed there.
+pub(crate) fn moved(mut order: Vec<String>, id: &str, to: usize) -> Vec<String> {
+    order.retain(|r| r != id);
+    order.insert(to.min(order.len()), id.to_string());
+    order
+}
+
+/// "3 apps", "1 title", or `none` when there are none.
+fn counted(n: usize, one: &str, many: &str, none: &str) -> String {
+    match n {
+        0 => none.to_string(),
+        1 => format!("1 {one}"),
+        n => format!("{n} {many}"),
+    }
+}
+
+/// Every row the home could show, in order, with what each holds, for the row editors on the
+/// TV and the phone. Rows with nothing in them are listed too: the editor is where you learn why
+/// a row is not on the screen.
+pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
+    let graph = &state.graph;
+    let previews = graph.preview_channels();
+    effective_row_order(state)
+        .into_iter()
+        .map(|id| {
+            let shown = row_shown(state, &id);
+            let chosen = graph.row_choice(&id).is_some();
+            let (title, count, detail): (String, usize, String) = if let Some(rest) = id.strip_prefix("plugin:") {
+                let (pid, rid) = rest.split_once(':').unwrap_or((rest, ""));
+                let plugin = state.plugins.iter().find(|p| p.id == pid);
+                let name = plugin.map(|p| p.manifest.name.clone()).unwrap_or_else(|| pid.to_string());
+                let title = plugin
+                    .and_then(|p| p.manifest.rows.iter().find(|r| r.id == rid))
+                    .map(|r| r.title.clone())
+                    .unwrap_or_else(|| rid.to_string());
+                let n = graph.plugin_row(pid, rid).len();
+                (title, n, format!("{name} · {}", counted(n, "title", "titles", "nothing yet")))
+            } else if let Some(cid) = id.strip_prefix("channel:") {
+                let cid: i64 = cid.parse().unwrap_or(0);
+                let found = previews.iter().find(|(id, _, _)| *id == cid);
+                let (name, n) = found.map(|(_, name, items)| (name.clone(), items.len())).unwrap_or_default();
+                let title = if name.is_empty() { format!("Channel {cid}") } else { name };
+                (title, n, counted(n, "programme", "programmes", "Nothing yet"))
+            } else {
+                let title = match id.as_str() {
+                    "tvcontrols" if !config.has_tv_controls => "Inputs".to_string(),
+                    other => CORE_ROWS.iter().find(|(i, _)| *i == other).map(|(_, t)| t.to_string()).unwrap_or_else(|| other.to_string()),
+                };
+                let (n, detail) = match id.as_str() {
+                    "continue" => {
+                        let n = graph.continue_watching().len();
+                        (n, counted(n, "title", "titles", "Nothing to continue yet"))
+                    }
+                    "apps" => {
+                        let n = graph.your_apps().len();
+                        (n, counted(n, "app", "apps", "Nothing to show yet"))
+                    }
+                    "games" => {
+                        let n = graph.games().len();
+                        (n, counted(n, "game", "games", "No games installed"))
+                    }
+                    "live" => {
+                        let n = graph.live_now().len();
+                        (n, counted(n, "channel", "channels", "No channels yet"))
+                    }
+                    "tvcontrols" => {
+                        let n = graph.devices().len();
+                        (n, counted(n, "input", "inputs", "No inputs found"))
+                    }
+                    "allapps" => {
+                        let n = graph.all_apps().len();
+                        let detail = if n == 0 {
+                            "Nothing to show yet".to_string()
+                        } else if !chosen && all_apps_is_spare(state) {
+                            "Same apps as Your apps".to_string()
+                        } else {
+                            format!("{}, A to Z", counted(n, "app", "apps", ""))
+                        };
+                        (n, detail)
+                    }
+                    _ => (0, String::new()),
+                };
+                (title, n, detail)
+            };
+            RowInfo { id, title, shown, chosen, count: count as u32, detail }
+        })
+        .collect()
+}
+
+/// A hidden or pinned item named for an editor; an item that has since gone keeps a readable name.
+pub(crate) fn item_ref(graph: &Graph, id: &str) -> ItemRef {
+    match graph.get(id) {
+        Some(it) => ItemRef { id: id.to_string(), title: it.title.clone(), icon_path: it.artwork.logo.clone() },
+        None => ItemRef { id: id.to_string(), title: id.rsplit(':').next().unwrap_or(id).to_string(), icon_path: None },
+    }
+}
+
+/// The items the user hid from every row, by title.
+pub(crate) fn hidden_items(state: &State) -> Vec<ItemRef> {
+    let mut v: Vec<ItemRef> = state.graph.layout.hidden.iter().map(|id| item_ref(&state.graph, id)).collect();
+    v.sort_by_key(|r| r.title.to_lowercase());
+    v
 }
 
 /// The most tiles a content row carries, so a big source cannot swell every rebuild. The guide
@@ -85,6 +223,7 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
     let hour_local = local_hour(now, utc_offset_minutes);
     let index = BuildIndex::new(state, now);
     let mut rows = Vec::new();
+    let mut hidden_rows = Vec::new();
     for row_id in effective_row_order(state) {
         let built = if let Some(rest) = row_id.strip_prefix("plugin:") {
             plugin_row(state, rest)
@@ -94,7 +233,11 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
             build_row(state, &index, &row_id, now, config)
         };
         if let Some(row) = built {
-            rows.push(row);
+            if row_shown(state, &row_id) {
+                rows.push(row);
+            } else {
+                hidden_rows.push(row);
+            }
         }
     }
     if let Some(version) = &state.update {
@@ -108,6 +251,7 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
         generated_at_ms: now,
         stage: build_stage(graph, &index, now, hour_local, config),
         rows,
+        hidden_rows,
         now_playing: state.now_playing.clone(),
         wallpapers: graph
             .wallpapers()
@@ -371,10 +515,8 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
             DeepLink::Control(c) if c.starts_with("search:") => format!("control:{c}"),
             _ => format!("open:{}", it.id),
         },
-        pinned: it
-            .package()
-            .map(|p| graph.layout.pinned_apps.iter().any(|x| x == p))
-            .unwrap_or(false),
+        // Only an app itself is pinned; a programme from a pinned app is not.
+        pinned: it.kind == ItemKind::App && it.package().is_some_and(|p| graph.layout.pinned_apps.iter().any(|x| x == p)),
         stage_pinned: graph.layout.stage_pins.iter().any(|x| x == &it.id),
     }
 }

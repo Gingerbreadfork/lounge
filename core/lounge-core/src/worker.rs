@@ -1187,6 +1187,12 @@ fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::
         }
         LayoutCommand::UnpinFromStage { id } => state.graph.layout.stage_pins.retain(|p| p != &id),
         LayoutCommand::SetRowOrder { row_ids } => state.graph.set_row_order(row_ids),
+        LayoutCommand::ShowRow { row_id } => state.graph.set_row_shown(&row_id, true),
+        LayoutCommand::HideRow { row_id } => state.graph.set_row_shown(&row_id, false),
+        LayoutCommand::MoveRow { row_id, to_index } => {
+            let order = crate::engine::moved_row_order(&state, &row_id, to_index as usize);
+            state.graph.set_row_order(order);
+        }
         LayoutCommand::ResetLayout => state.graph.reset_layout(),
         LayoutCommand::DismissNotice { id } => {
             state.graph.layout.dismissed_notices.insert(id);
@@ -1261,11 +1267,14 @@ fn same_on_screen(prev: &HomeSnapshot, next: &HomeSnapshot) -> bool {
         && same_by(&prev.stage.spotlights, &next.stage.spotlights, |a, b| {
             near(a.progress, b.progress) && StageSpotlight { progress: b.progress, ..a.clone() } == *b
         })
-        && same_by(&prev.rows, &next.rows, |a, b| {
-            Row { tiles: Vec::new(), ..a.clone() } == Row { tiles: Vec::new(), ..b.clone() } && same_tiles(&a.tiles, &b.tiles)
-        })
+        && same_by(&prev.rows, &next.rows, same_row)
+        && same_by(&prev.hidden_rows, &next.hidden_rows, same_row)
         && same_playing(prev.now_playing.as_ref(), next.now_playing.as_ref())
         && prev.wallpapers == next.wallpapers
+}
+
+fn same_row(a: &Row, b: &Row) -> bool {
+    Row { tiles: Vec::new(), ..a.clone() } == Row { tiles: Vec::new(), ..b.clone() } && same_tiles(&a.tiles, &b.tiles)
 }
 
 fn same_by<T>(a: &[T], b: &[T], same: impl Fn(&T, &T) -> bool) -> bool {

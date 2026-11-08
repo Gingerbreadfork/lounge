@@ -223,6 +223,9 @@ pub struct Layout {
     /// Preview channels (other apps' rows) the user chose to show.
     #[serde(default)]
     pub enabled_channels: HashSet<i64>,
+    /// Rows the user showed or hid by hand; a row not listed follows its default.
+    #[serde(default)]
+    pub row_visibility: HashMap<String, bool>,
 }
 
 impl Layout {
@@ -354,6 +357,15 @@ impl Graph {
     pub fn set_row_order(&mut self, rows: Vec<String>) {
         self.layout.row_order = rows;
         self.layout.normalise();
+    }
+
+    pub fn set_row_shown(&mut self, row_id: &str, shown: bool) {
+        self.layout.row_visibility.insert(row_id.to_string(), shown);
+    }
+
+    /// The user's own choice for a row, if they made one.
+    pub fn row_choice(&self, row_id: &str) -> Option<bool> {
+        self.layout.row_visibility.get(row_id).copied()
     }
 
     pub fn reset_layout(&mut self) {
@@ -680,6 +692,24 @@ mod tests {
         }
         let ids: Vec<&str> = g.wallpapers().iter().map(|it| it.id.as_str()).collect();
         assert_eq!(ids, ["plugin:art:0", "plugin:immich:0", "plugin:art:1", "plugin:immich:1", "plugin:immich:2", "plugin:immich:3", "plugin:immich:4"]);
+    }
+
+    #[test]
+    fn a_layout_saved_before_row_visibility_still_loads() {
+        let json = r#"{"hidden":[],"pinned_apps":["a"],"row_order":["apps"],"stage_pins":[]}"#;
+        let l: Layout = serde_json::from_str(json).unwrap();
+        assert!(l.row_visibility.is_empty());
+        assert_eq!(l.pinned_apps, vec!["a"]);
+    }
+
+    #[test]
+    fn a_row_choice_is_remembered() {
+        let mut g = Graph::default();
+        assert_eq!(g.row_choice("games"), None);
+        g.set_row_shown("games", false);
+        assert_eq!(g.row_choice("games"), Some(false));
+        g.set_row_shown("games", true);
+        assert_eq!(g.row_choice("games"), Some(true));
     }
 
     #[test]

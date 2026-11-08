@@ -9,6 +9,7 @@ pub use auth::{PairingInfo, TokenStore};
 pub use server::Companion;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::{Path, PathBuf};
 
@@ -25,6 +26,41 @@ pub struct DeviceInfo {
 pub struct RowRef {
     pub id: String,
     pub title: String,
+    /// Whether the row is on the home screen now, by the user's choice or its default.
+    #[serde(default = "shown_by_default")]
+    pub shown: bool,
+    /// Whether the user chose that, rather than the row following its default.
+    #[serde(default)]
+    pub chosen: bool,
+    /// Tiles the row would carry now.
+    #[serde(default)]
+    pub count: u32,
+    /// One short line under the title: "14 apps", "Jellyfin · 30 titles".
+    #[serde(default)]
+    pub detail: String,
+}
+
+fn shown_by_default() -> bool {
+    true
+}
+
+/// An item named for an editor list: something hidden or pinned to the Stage.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamedRef {
+    pub id: String,
+    pub title: String,
+    pub icon_path: Option<String>,
+}
+
+/// An installed app, for pinning from the phone.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppRef {
+    pub package: String,
+    pub title: String,
+    pub icon_path: Option<String>,
+    pub pinned: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -36,6 +72,18 @@ pub struct LayoutDoc {
     pub pinned_apps: Vec<String>,
     pub stage_pins: Vec<String>,
     pub enabled_channels: Vec<i64>,
+    /// Rows the user showed or hid by hand; a row not listed follows its default.
+    #[serde(default)]
+    pub row_visibility: HashMap<String, bool>,
+    /// Every app on the TV, A to Z, so any of them can be pinned from the phone.
+    #[serde(default)]
+    pub apps: Vec<AppRef>,
+    /// The hidden items with their names, by title.
+    #[serde(default)]
+    pub hidden_items: Vec<NamedRef>,
+    /// The Stage pins with their names, in pin order.
+    #[serde(default)]
+    pub stage_items: Vec<NamedRef>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -46,6 +94,7 @@ pub struct LayoutPatch {
     pub pinned_apps: Option<Vec<String>>,
     pub stage_pins: Option<Vec<String>>,
     pub enabled_channels: Option<Vec<i64>>,
+    pub row_visibility: Option<HashMap<String, bool>>,
 }
 
 /// Everything the API can do, provided by the core.

@@ -61,6 +61,9 @@ p { margin: 0; }
 .list-row .title { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list-row .value { color: var(--dust); font-size: 14px; white-space: nowrap; }
 .list-row .glyph { width: 28px; height: 28px; flex: none; color: var(--dust); }
+.icon-btn { width: 44px; height: 44px; border-radius: 12px; background: var(--velvet); color: var(--limelight); display: grid; place-items: center; flex: none; }
+.icon-btn:disabled { opacity: 0.3; }
+.icon-btn.quiet { background: transparent; color: var(--dust); }
 
 /* Controls */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 22px; border-radius: 24px; background: var(--curtain); color: var(--limelight); font-weight: 600; font-size: 16px; box-shadow: inset 0 0 0 1px var(--curtain-edge); transition: transform 120ms ease-out, background 120ms ease-out; }
@@ -79,7 +82,7 @@ p { margin: 0; }
 .toggle.on::after { transform: translateX(20px); background: var(--velvet); }
 
 /* Tiles mirror the TV: artwork is the surface, the light is the focus */
-.tile { position: relative; flex: none; scroll-snap-align: start; border-radius: var(--radius); overflow: hidden; background: var(--curtain); color: var(--limelight); text-align: left; }
+.tile { position: relative; flex: none; scroll-snap-align: start; border-radius: var(--radius); overflow: hidden; background: var(--curtain); color: var(--limelight); text-align: left; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 .tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .tile.landscape { width: 196px; aspect-ratio: 16 / 9; }
 .tile.poster { width: 112px; aspect-ratio: 2 / 3; }
@@ -105,6 +108,6 @@ p { margin: 0; }
 .pill.on { color: var(--signal); }
 .pill.bad { color: var(--ember); }
 .empty { padding: 32px 16px; text-align: center; color: var(--dust); }
-.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 92px); transform: translateX(-50%); background: var(--curtain); border: 1px solid var(--curtain-edge); border-radius: 14px; padding: 12px 18px; font-weight: 600; max-width: calc(100vw - 32px); z-index: 10; }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 92px); transform: translateX(-50%); background: var(--curtain); border: 1px solid var(--curtain-edge); border-radius: 14px; padding: 12px 18px; font-weight: 600; max-width: calc(100vw - 32px); z-index: 30; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

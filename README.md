@@ -106,8 +106,12 @@ move back up and it rises again, one continuous picture, nothing squeezed.
 **Rows you own.** Continue watching comes from every app that publishes it, from the TV's own
 listings, and from plugins. Your apps sit in the order you pin them, sorted by how recently you
 opened them until you do. Games get a row of their own, marked when a controller is connected.
-Hold OK on any tile for a menu: pin, move, hide, pin it to the Stage, app info, the store page,
-uninstall. Rows with nothing in them stay out of the way.
+Hold OK on any tile for a menu: pin it to the front of Your apps, pin it to the Stage so it stays
+among the big pictures at the top, move it, hide it, hide the whole row, app info, the store page,
+uninstall. Each choice says what it does, and a pinned tile wears a small pin. Settings, Rows
+lists every row the home could show, with what each holds: OK shows or hides one, holding OK
+picks it up to move. Rows with nothing in them stay out of the way, and All apps stays off the
+screen while it would only repeat Your apps.
 
 Streaming apps, including Netflix, appear in Continue watching when they publish readable
 Watch Next entries on your TV. Enable TV listings in Settings; Lounge refreshes them when
@@ -155,11 +159,13 @@ home screen like an app. The TV serves it itself and remembers the phone until y
   <img src="docs/screenshots/phone-plugins.png" width="23%" alt="Plugins: the built-in plugins, each marked off or needing setup">
 </p>
 
-- **What's on** mirrors the home screen. Tap a tile and it opens on the TV.
+- **What's on** mirrors the home screen. Tap a tile and it opens on the TV; hold it for the same
+  menu as the remote's: pin it to the Stage or the front of Your apps, hide it, hide its row.
 - **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into whatever
   the TV has focused, and a place to paste a link that opens on the TV. With Power Setup
   connected, the keys reach whatever app is in front.
-- **Layout** reorders the rows and your pinned apps, and shows what is pinned to the Stage.
+- **Layout** shows and hides rows and drags them into order, pins any app to the front of Your
+  apps and orders the pinned ones, and brings back anything hidden or pinned to the Stage.
 - **Plugins** configures the installed plugins and installs new ones from a file or a link.
 - **More** backs up your layout and settings as one file and restores it, lists the paired
   phones, and shows the TV's diagnostics.

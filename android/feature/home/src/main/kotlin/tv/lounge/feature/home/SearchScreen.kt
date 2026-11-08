@@ -262,7 +262,8 @@ private fun search(snapshot: HomeSnapshot, query: String): List<CoreRow> {
         return tokens.all { hay.contains(it) }
     }
     val seen = HashSet<String>()
-    return snapshot.rows.mapNotNull { row ->
+    // Hidden rows are searched too: hiding Games takes it off the home, not out of reach.
+    return (snapshot.rows + snapshot.hiddenRows).mapNotNull { row ->
         // A tile that only opens search would lead straight back here.
         val hits = row.tiles.filter { matches(it) && !it.action.startsWith("control:search:") && seen.add(it.id) }
         if (hits.isEmpty()) null else row.copy(tiles = hits)
