@@ -70,6 +70,10 @@
     if (last < text.length) parts.push({ text: text.slice(last) });
     return parts;
   }
+  /** Where a link leads, for its button, or the link itself when it cannot be read. */
+  function host(link: string) {
+    try { return new URL(link).host; } catch { return link; }
+  }
   function status(p: Plugin) {
     // A plugin waiting on you is not a problem: a sign-in when there is a page or a code.
     if (p.enabled && p.ask) return { text: p.ask.link || p.ask.code ? 'Sign in' : 'Needs setup', cls: 'ask' };
@@ -122,7 +126,7 @@
         {#if ask.link || ask.code}
           <p class="houselight">Sign in</p>
           {#if ask.link}
-            <a class="btn primary" href={ask.link} target="_blank" rel="noopener">Open {ask.linkText ?? new URL(ask.link).host}</a>
+            <a class="btn primary" href={ask.link} target="_blank" rel="noopener">Open {ask.linkText ?? host(ask.link)}</a>
             {#if ask.code}<p class="dust">and enter</p>{/if}
           {:else if ask.after}
             <p class="dust">{ask.after}</p>

@@ -224,7 +224,7 @@ impl CompanionActions for CoreActions {
                 if !inner.state.lock().plugins.iter().any(|p| p.id == id) {
                     return Err("plugin is not installed".into());
                 }
-                inner.plugins.refresh_soon(id);
+                inner.plugins.refresh_now(id);
             }
             "remove" => inner.plugin_remove(id)?,
             other => return Err(format!("unknown command {other}")),
@@ -556,7 +556,7 @@ mod tests {
         assert_eq!((info.last_error.as_deref(), info.ask), (Some(said), None));
 
         let ask = lounge_plugin_api::Ask { say: said.into(), link: Some("plex.tv/link".into()), code: Some("25Q4".into()), after: None, watch: true };
-        core.inner.plugins.asks.lock().insert(manifest.id.clone(), plugins::PendingAsk { ask, since_ms: 0, asking_again: false });
+        core.inner.plugins.asks.lock().insert(manifest.id.clone(), plugins::PendingAsk { ask, since_ms: 0, watch: None });
         let info = core.plugins().remove(0);
         assert_eq!(info.last_error, None);
         let shown = info.ask.unwrap();

@@ -1051,7 +1051,7 @@ impl Core {
 
     pub fn refresh_plugin(&self, id: String) {
         self.count();
-        self.inner.plugins.refresh_soon(&id);
+        self.inner.plugins.refresh_now(&id);
     }
 
     /// Ask the enabled search plugins about `query`: one row per plugin that found something.

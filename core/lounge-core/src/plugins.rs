@@ -113,13 +113,26 @@ pub(crate) struct PluginManager {
     unrecorded_refresh: Mutex<HashMap<String, i64>>,
     /// What each plugin waits on the person for, from its last refresh.
     pub(crate) asks: Mutex<HashMap<String, PendingAsk>>,
+    /// Numbers the watches kept on plugins that ask, so each sleeping thread knows its own.
+    ask_watches: AtomicU64,
+    /// Where the QR pictures of asks are kept, a folder per plugin.
+    ask_dir: PathBuf,
 }
 
-/// A plugin's ask, with when it was first made and whether it is being asked again by itself.
+/// A plugin's ask, with when its wait began and the watch kept on it, if one is.
 pub(crate) struct PendingAsk {
     pub ask: Ask,
     pub since_ms: i64,
-    pub asking_again: bool,
+    pub watch: Option<u64>,
+}
+
+impl PendingAsk {
+    /// When the wait a new ask belongs to began, and whether it is still watched. The wait runs
+    /// from the plugin's first ask, so one that keeps changing its code cannot keep the watch up.
+    fn carried_on(earlier: Option<&PendingAsk>, ask: &Ask, now_ms: i64) -> (i64, bool) {
+        let since_ms = earlier.map_or(now_ms, |p| p.since_ms);
+        (since_ms, ask.watch && now_ms - since_ms < ASK_AGAIN_FOR_MS)
+    }
 }
 
 /// Why a refresh brought no items: it failed, or the plugin waits on the person.
@@ -297,12 +310,30 @@ impl PluginManager {
             refresh_queued: Mutex::new(HashSet::new()),
             unrecorded_refresh: Mutex::new(HashMap::new()),
             asks: Mutex::new(HashMap::new()),
+            ask_watches: AtomicU64::new(0),
+            ask_dir: cache_dir.join("plugin-asks"),
         });
         (manager, refresh_rx, calls_rx, services)
     }
 
     pub fn logs(&self, plugin: &str) -> Vec<String> {
         self.logs.lock().get(plugin).map(|q| q.iter().cloned().collect()).unwrap_or_default()
+    }
+
+    /// A refresh the person asked for. A plugin that waits on them is watched afresh.
+    pub fn refresh_now(&self, id: &str) {
+        if let Some(pending) = self.asks.lock().get_mut(id) {
+            pending.since_ms = now_ms();
+        }
+        self.refresh_soon(id);
+    }
+
+    /// Forgets what a plugin was asking, and the pictures drawn for it.
+    fn forget_ask(&self, id: &str) {
+        self.asks.lock().remove(id);
+        if let Some(dir) = single_component(&self.ask_dir, id) {
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
 
     /// Queue a refresh on the refresh thread.
@@ -679,22 +710,28 @@ pub(crate) fn spawn(
         .expect("spawn plugin calls thread");
     std::thread::Builder::new()
         .name("lounge-plugins".into())
-        .spawn(move || loop {
-            match refresh_rx.recv_timeout(Duration::from_secs(60)) {
-                Ok(PluginJob::Refresh(id)) => {
-                    // Taken off first, so a request while this one runs queues the next.
-                    inner.plugins.refresh_queued.lock().remove(&id);
-                    crate::guarded("a plugin refresh", || run_refresh(&inner, &id));
+        .spawn(move || {
+            let mut next_due = Instant::now() + DUE_EVERY;
+            loop {
+                match refresh_rx.recv_timeout(next_due.saturating_duration_since(Instant::now())) {
+                    Ok(PluginJob::Refresh(id)) => {
+                        // Taken off first, so a request while this one runs queues the next.
+                        inner.plugins.refresh_queued.lock().remove(&id);
+                        crate::guarded("a plugin refresh", || run_refresh(&inner, &id));
+                    }
+                    Ok(other) => {
+                        crate::guarded("a plugin call", || answer(&inner, other));
+                    }
+                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
+                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
                 }
-                Ok(other) => {
-                    crate::guarded("a plugin call", || answer(&inner, other));
-                }
-                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                // By the clock, so a run of requested refreshes cannot put the due ones off.
+                if Instant::now() >= next_due {
+                    next_due = Instant::now() + DUE_EVERY;
                     for id in due(&inner) {
                         crate::guarded("a plugin refresh", || run_refresh(&inner, &id));
                     }
                 }
-                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
             }
         })
         .expect("spawn plugin thread");
@@ -730,6 +767,9 @@ fn answer(inner: &Arc<Inner>, job: PluginJob) {
         }
     }
 }
+
+/// How often the refresh thread looks for plugins whose refresh is due.
+const DUE_EVERY: Duration = Duration::from_secs(60);
 
 /// How soon a failed refresh is tried again, when the plugin's own interval is longer. A sign-in
 /// that waits on the user fails until it is done, and its code must not expire in between.
@@ -841,25 +881,33 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
             inner.enqueue_job(worker::Job::PluginItems { plugin: id.to_string(), items });
         }
         // Recorded like a failure, so the plugin is tried again soon and a restart still has
-        // the sentence to show; the screens are given the ask itself.
+        // the sentence to show; the screens are given the ask itself. Its words are cut down like
+        // an error's, so only the link carries an address whole.
         Err(Stopped::Asks(ask)) => {
             let say = clip_bytes(&redact_urls(&ask.say), 1000).to_string();
+            let ask = Ask { say: say.clone(), after: ask.after.as_deref().map(redact_urls), ..ask };
             tracing::info!("plugin {id} waits on the person: {say}");
             push_log(&inner.plugins.logs, id, 1, &format!("waiting: {say}"));
-            record_refresh(inner, &inner.state.lock().store, id, Some(&say));
             let now = now_ms();
-            let (ask_again, changed) = {
+            let (watch, changed) = {
+                let state = inner.state.lock();
+                // Turned off while it ran, it asks nothing.
+                if !state.plugins.iter().any(|p| p.id == id && p.enabled) {
+                    return;
+                }
+                record_refresh(inner, &state.store, id, Some(&say));
                 let mut asks = inner.plugins.asks.lock();
-                // The wait is counted from when this code first showed.
-                let same = asks.get(id).filter(|p| p.ask.code == ask.code && p.ask.link == ask.link);
-                let (since_ms, already) = same.map_or((now, false), |p| (p.since_ms, p.asking_again));
-                let ask_again = ask.watch && now - since_ms < ASK_AGAIN_FOR_MS && !already;
-                let changed = same.is_none();
-                asks.insert(id.to_string(), PendingAsk { ask, since_ms, asking_again: already || ask_again });
-                (ask_again, changed)
+                let earlier = asks.get(id);
+                let changed = earlier.is_none_or(|p| p.ask != ask);
+                let (since_ms, watched) = PendingAsk::carried_on(earlier, &ask, now);
+                // One watch at a time: a new one starts only when none is sleeping.
+                let sleeping = earlier.and_then(|p| p.watch);
+                let started = (watched && sleeping.is_none()).then(|| inner.plugins.ask_watches.fetch_add(1, Ordering::Relaxed));
+                asks.insert(id.to_string(), PendingAsk { ask, since_ms, watch: if watched { sleeping.or(started) } else { None } });
+                (started, changed)
             };
-            if ask_again {
-                ask_again_soon(inner, id);
+            if let Some(watch) = watch {
+                ask_again_soon(inner, id, watch);
             }
             if changed {
                 inner.enqueue_job(worker::Job::Rebuild);
@@ -877,45 +925,64 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
 
 /// Refreshes a plugin that shows a sign-in code once more in a few seconds, so the TV notices
 /// by itself when the code has been entered.
-fn ask_again_soon(inner: &Arc<Inner>, id: &str) {
+fn ask_again_soon(inner: &Arc<Inner>, id: &str, watch: u64) {
     let (weak, id) = (Arc::downgrade(inner), id.to_string());
     std::thread::spawn(move || {
         std::thread::sleep(ASK_AGAIN_EVERY);
         let Some(inner) = weak.upgrade() else { return };
-        let waiting = inner.plugins.asks.lock().get_mut(&id).map(|p| p.asking_again = false).is_some();
-        if waiting && inner.screen_on.load(Ordering::Relaxed) {
+        // Only the watch this thread belongs to goes on; an ask made since has its own.
+        let ours = inner.plugins.asks.lock().get_mut(&id).filter(|p| p.watch == Some(watch)).map(|p| p.watch = None).is_some();
+        if ours && inner.screen_on.load(Ordering::Relaxed) {
             inner.plugins.refresh_soon(&id);
         }
     });
 }
 
+/// A plugin's link as an http or https address, with `https://` when it names no scheme. It is
+/// opened on a phone, so one of another kind, or that names no plain host, is not shown.
+fn web_link(link: &str) -> Option<String> {
+    let link = link.trim();
+    let lower = link.to_ascii_lowercase();
+    let full = if lower.starts_with("https://") || lower.starts_with("http://") { link.to_string() } else { format!("https://{link}") };
+    let authority = full.split_once("://")?.1.split(['/', '?', '#']).next()?;
+    (plain_host(authority) && !full.chars().any(|c| c.is_whitespace() || c.is_control())).then_some(full)
+}
+
+/// Whether `authority` is a host name or address literal with at most a port after it.
+fn plain_host(authority: &str) -> bool {
+    let (host, port) = match authority.rfind(':') {
+        // An IPv6 literal's own colons sit inside its brackets.
+        Some(i) if !authority[i..].contains(']') => (&authority[..i], Some(&authority[i + 1..])),
+        _ => (authority, None),
+    };
+    let named = match host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
+        Some(v6) => !v6.is_empty() && v6.chars().all(|c| c.is_ascii_hexdigit() || c == ':' || c == '.'),
+        None => !host.is_empty() && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-'),
+    };
+    named && port.is_none_or(|p| !p.is_empty() && p.len() <= 5 && p.chars().all(|c| c.is_ascii_digit()))
+}
+
 /// A plugin's ask as the screens show it: the link with its scheme, as it is read out when it is
 /// short enough to type, and a QR code of it for the TV.
-fn shown_ask(id: &str, ask: &Ask, cache_dir: &Path) -> crate::PluginAsk {
-    let link = ask.link.as_deref().map(str::trim).filter(|l| !l.is_empty()).map(|l| if l.contains("://") { l.to_string() } else { format!("https://{l}") });
+fn shown_ask(id: &str, ask: &Ask, ask_dir: &Path) -> crate::PluginAsk {
+    let link = ask.link.as_deref().and_then(web_link);
     // A long address is for scanning or tapping, not for reading out.
     let link_text = link.as_deref().map(|l| l.split_once("://").map_or(l, |(_, rest)| rest).trim_end_matches('/')).filter(|bare| bare.len() <= 40).map(str::to_string);
-    let qr_png_path = link.as_deref().and_then(|l| ask_qr(id, l, cache_dir));
+    let qr_png_path = link.as_deref().and_then(|l| ask_qr(id, l, ask_dir));
     crate::PluginAsk { say: ask.say.clone(), link, link_text, code: ask.code.clone(), after: ask.after.clone(), qr_png_path }
 }
 
-/// The QR picture for a plugin's link, drawn once per link; a plugin's earlier ones are removed.
-fn ask_qr(id: &str, link: &str, cache_dir: &Path) -> Option<String> {
+/// The QR picture for a plugin's link, in the plugin's own folder and drawn once per link; the
+/// one before it is removed.
+fn ask_qr(id: &str, link: &str, ask_dir: &Path) -> Option<String> {
     use std::hash::{Hash, Hasher};
-    if !valid_plugin_id(id) {
-        return None;
-    }
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     link.hash(&mut hasher);
-    let dir = cache_dir.join("plugin-asks");
-    let png = dir.join(format!("{id}-{:016x}.png", hasher.finish()));
+    let dir = single_component(ask_dir, id)?;
+    let png = dir.join(format!("{:016x}.png", hasher.finish()));
     if !png.exists() {
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).ok()?;
-        for stale in std::fs::read_dir(&dir).ok()?.flatten() {
-            if stale.file_name().to_string_lossy().starts_with(&format!("{id}-")) {
-                let _ = std::fs::remove_file(stale.path());
-            }
-        }
         lounge_companion::qr_png(link, &png, 10).ok()?;
     }
     Some(png.to_string_lossy().into_owned())
@@ -926,7 +993,6 @@ impl Inner {
         let state = self.state.lock();
         let rows = state.store.plugins().unwrap_or_default();
         let asks = self.plugins.asks.lock();
-        let cache_dir = PathBuf::from(&self.config.cache_dir);
         rows.iter()
             .filter_map(|row| {
                 let manifest: Manifest = serde_json::from_str(&row.manifest_json).ok()?;
@@ -936,7 +1002,7 @@ impl Inner {
                 // A plugin that waits on the person has a step to show, not a problem.
                 if let Some(pending) = asks.get(&row.id).filter(|_| row.enabled) {
                     info.last_error = None;
-                    info.ask = Some(shown_ask(&row.id, &pending.ask, &cache_dir));
+                    info.ask = Some(shown_ask(&row.id, &pending.ask, &self.plugins.ask_dir));
                 }
                 Some(info)
             })
@@ -992,6 +1058,7 @@ impl Inner {
             state.plugins = entries_from_rows(&rows);
         }
         self.plugins.remove_files(id);
+        self.plugins.forget_ask(id);
         self.enqueue_job(worker::Job::Rebuild);
         Ok(())
     }
@@ -1018,7 +1085,7 @@ impl Inner {
             let mut state = self.state.lock();
             let _ = state.store.plugin_set_enabled(id, enabled);
             if !enabled {
-                self.plugins.asks.lock().remove(id);
+                self.plugins.forget_ask(id);
                 let _ = state.store.replace_items(&format!("plugin:{id}"), &[], now_ms());
                 screensavers::clear(&state.store, id);
                 state.graph.replace_source(&format!("plugin:{id}"), Vec::new());
@@ -1190,10 +1257,38 @@ mod tests {
         assert_eq!(shown.link_text, None);
         assert!(shown.link.as_deref().is_some_and(|l| l.starts_with("https://accounts.spotify.com/authorize?client_id=aaa")));
         assert!(!Path::new(&png).exists());
-        assert_eq!(std::fs::read_dir(dir.path().join("plugin-asks")).unwrap().count(), 1);
+        // Each plugin's pictures are its own, whatever another's id begins with.
+        let other = shown_ask("tv.lounge.plex-two", &ask, dir.path()).qr_png_path.unwrap();
+        assert_eq!(std::fs::read_dir(dir.path().join("tv.lounge.plex")).unwrap().count(), 1);
+        assert!(Path::new(&other).starts_with(dir.path().join("tv.lounge.plex-two")));
         // With no link there is nothing to draw.
         let plain = shown_ask("tv.lounge.plex", &Ask { say: "Enter your server's address.".into(), ..Default::default() }, dir.path());
         assert_eq!((plain.link, plain.qr_png_path, plain.say.as_str()), (None, None, "Enter your server's address."));
+    }
+
+    #[test]
+    fn only_a_web_address_is_shown_as_an_ask_s_link() {
+        assert_eq!(web_link(" plex.tv/link ").as_deref(), Some("https://plex.tv/link"));
+        assert_eq!(web_link("HTTP://192.168.0.10:8096/web/").as_deref(), Some("HTTP://192.168.0.10:8096/web/"));
+        assert_eq!(web_link("plex.tv/link?next=https://app.plex.tv/x").as_deref(), Some("https://plex.tv/link?next=https://app.plex.tv/x"));
+        assert_eq!(web_link("https://[fd00::5]:47990/pin").as_deref(), Some("https://[fd00::5]:47990/pin"));
+        // Nothing a phone would run or that hides where it leads.
+        for bad in ["javascript:alert(1)//://plex.tv/link", "javascript:alert(1)", "data:text/html,<script>", "intent://x#Intent;end", "https://user:pw@plex.tv/link", "plex.tv/link then more", ""] {
+            assert_eq!(web_link(bad), None, "{bad}");
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let shown = shown_ask("tv.lounge.plex", &Ask { say: "Sign in".into(), link: Some("javascript:alert(1)//://plex.tv/link".into()), code: Some("25Q4".into()), ..Default::default() }, dir.path());
+        assert_eq!((shown.link, shown.link_text, shown.qr_png_path, shown.code.as_deref()), (None, None, None, Some("25Q4")));
+    }
+
+    #[test]
+    fn a_wait_is_watched_from_its_first_ask_however_the_code_changes() {
+        let ask = |code: &str, watch: bool| Ask { say: "Sign in".into(), code: Some(code.into()), watch, ..Default::default() };
+        assert_eq!(PendingAsk::carried_on(None, &ask("A", true), 1_000), (1_000, true));
+        assert_eq!(PendingAsk::carried_on(None, &ask("A", false), 1_000), (1_000, false));
+        let earlier = PendingAsk { ask: ask("A", true), since_ms: 1_000, watch: Some(7) };
+        assert_eq!(PendingAsk::carried_on(Some(&earlier), &ask("B", true), 1_000 + ASK_AGAIN_FOR_MS - 1), (1_000, true));
+        assert_eq!(PendingAsk::carried_on(Some(&earlier), &ask("B", true), 1_000 + ASK_AGAIN_FOR_MS), (1_000, false));
     }
 
     #[test]
