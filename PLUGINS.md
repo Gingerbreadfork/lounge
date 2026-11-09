@@ -45,6 +45,10 @@ different corner of the interface:
   app, for a scheme two apps on the TV may answer. Stremio signs in with a code shown on the
   plugin's page; Nuvio renews its sign-in with a refresh token and finds a self-hosted server
   through its discovery document.
+- `plugins/arr`: two servers behind one manifest, either optional, a calendar window of whole
+  days in the TV's own time, dates that are days told apart from moments, a download queue and
+  an import history folded to one tile per download or show, and tiles that open through
+  Lounge's search because the servers know titles but not players.
 
 ## Quick start
 

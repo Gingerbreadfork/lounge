@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-arr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Sonarr and Radarr: what is coming up and what was just downloaded, found through search"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
