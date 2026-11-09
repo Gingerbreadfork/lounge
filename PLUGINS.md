@@ -19,7 +19,8 @@ different corner of the interface:
   fairly between channels.
 - `plugins/jellyfin` and `plugins/emby`: sign in to a server with a password, publish resume
   points and new arrivals, answer search. Secrets, a cached token in the key-value store, and
-  in Jellyfin's case deep links into another app; Emby's app has none, so its tiles launch it.
+  in Jellyfin's case deep links into another app and a sign-in by a code approved in an app
+  that is already signed in; Emby's app has no deep links, so its tiles launch it.
 - `plugins/plex`: the same with a token instead of a password, pictures through the
   server's resizer, and a sign-in by a code entered at the service's site, which also says
   where the person's servers are so they know which address to enter.

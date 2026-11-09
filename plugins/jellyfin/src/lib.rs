@@ -1,15 +1,17 @@
-//! Jellyfin plugin: signs in with the user's credentials, publishes resume points and the next
+//! Jellyfin plugin: signs in with Quick Connect or the user's credentials, publishes resume points and the next
 //! episode of each show into Continue watching, the newest library additions and the user's
 //! favourites into rows of their own, and searches the library. Items open on their page in the
 //! Jellyfin Android TV app.
 
 use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub struct Jellyfin;
 
 const APP_PACKAGE: &str = "org.jellyfin.androidtv";
+const QUICK_KEY: &str = "quick";
+const QUICK_OFF: &str = "Quick Connect is turned off on this Jellyfin server. Turn it on in the Dashboard under General, or enter a username and password in the plugin's settings.";
 /// The client header, sent as `Authorization`, which every Jellyfin reads; newer servers ignore
 /// `X-Emby-Authorization` and `api_key` unless legacy authorization is switched on. It names this
 /// TV by an id of its own, since the server signs out an older session of the same user and id.
@@ -44,7 +46,14 @@ impl sdk::Plugin for Jellyfin {
             ],
             settings: vec![
                 SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8096".into()), default: None },
-                SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: true, help: None, default: None },
+                SettingSpec {
+                    key: "username".into(),
+                    label: "Username".into(),
+                    kind: SettingKind::Text,
+                    required: false,
+                    help: Some("Leave empty to sign in with Quick Connect: this page shows a code to enter in a Jellyfin app that is already signed in.".into()),
+                    default: None,
+                },
                 SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
             ],
             homepage: Some("https://jellyfin.org".into()),
@@ -55,7 +64,7 @@ impl sdk::Plugin for Jellyfin {
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let session = Session::connect()?;
+        let Some(session) = Session::connect(true)? else { return Err("Jellyfin is not signed in yet".into()) };
         let mut items = Vec::new();
         let resume: ItemsResponse = session.get_json(&format!(
             "/Users/{}/Items/Resume?Limit=24&Recursive=true&MediaTypes=Video&Fields=Overview,ParentId,SeriesInfo,RunTimeTicks&EnableImageTypes=Primary,Backdrop,Thumb",
@@ -101,8 +110,9 @@ impl sdk::Plugin for Jellyfin {
         Ok(items)
     }
 
+    /// A search never starts a Quick Connect sign-in; that is left to the refresh.
     fn search(query: &str, limit: u32) -> Result<Vec<Item>, String> {
-        let session = Session::connect()?;
+        let Some(session) = Session::connect(false)? else { return Ok(Vec::new()) };
         let found: ItemsResponse = session.get_json(&format!(
             "/Users/{}/Items?searchTerm={}&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Limit={}&Fields=Overview,SeriesInfo",
             session.user_id,
@@ -184,11 +194,103 @@ pub struct UserData {
     pub played: bool,
 }
 
+/// A Quick Connect request waiting to be approved in a Jellyfin app that is signed in.
+#[derive(Serialize, Deserialize)]
+struct Quick {
+    server: String,
+    secret: String,
+    code: String,
+}
+
+/// What the server says of a Quick Connect request.
+#[derive(Deserialize, Default)]
+pub struct QuickAnswer {
+    #[serde(rename = "Secret", default)]
+    pub secret: String,
+    #[serde(rename = "Code", default)]
+    pub code: String,
+    #[serde(rename = "Authenticated", default)]
+    pub authenticated: bool,
+}
+
+fn quick_request(method: &str, url: String, device_id: &str, body: Option<String>) -> HttpRequest {
+    let mut headers: std::collections::BTreeMap<String, String> = [("Authorization".to_string(), auth_header(device_id)), ("Accept".to_string(), "application/json".to_string())].into_iter().collect();
+    if body.is_some() {
+        headers.insert("Content-Type".to_string(), "application/json".to_string());
+    }
+    HttpRequest { method: method.into(), url, headers, body, timeout_ms: 0 }
+}
+
+/// The session once the code has been approved, so the refresh goes on with it, or else the
+/// sentence the plugin's page shows meanwhile. A refresh asks about the code once.
+fn quick_connect(server: &str, device_id: &str) -> Result<AuthResponse, String> {
+    let unreadable = |e: serde_json::Error| {
+        sdk::warn!("unexpected Quick Connect answer: {e}");
+        sdk::wrong_server("Jellyfin", server)
+    };
+    let pending: Option<Quick> = host::kv_get(QUICK_KEY).and_then(|v| serde_json::from_slice(&v).ok()).filter(|q: &Quick| q.server == server);
+    if let Some(quick) = pending {
+        let ask = quick_request("GET", format!("{server}/QuickConnect/Connect?secret={}", url_encode(&quick.secret)), device_id, None);
+        let r = sdk::fetch_from("Jellyfin", server, &ask)?;
+        match r.status {
+            200 => {
+                let answer: QuickAnswer = serde_json::from_str(&r.body).map_err(unreadable)?;
+                if !answer.authenticated {
+                    return Err(instruction(&quick.code));
+                }
+                let take = quick_request("POST", format!("{server}/Users/AuthenticateWithQuickConnect"), device_id, Some(serde_json::json!({ "Secret": quick.secret }).to_string()));
+                let r = sdk::fetch_from("Jellyfin", server, &take)?;
+                host::kv_delete(QUICK_KEY);
+                if !r.ok() {
+                    return Err(sdk::answered_error("Jellyfin", server, r.status));
+                }
+                return serde_json::from_str(&r.body).map_err(unreadable);
+            }
+            401 => return Err(QUICK_OFF.into()),
+            // The code has run out; a new one follows.
+            404 => host::kv_delete(QUICK_KEY),
+            s => return Err(sdk::answered_error("Jellyfin", server, s)),
+        }
+    }
+    // Servers before 10.9 start a request with GET.
+    let start = |method: &str| sdk::fetch_from("Jellyfin", server, &quick_request(method, format!("{server}/QuickConnect/Initiate"), device_id, None));
+    let mut r = start("POST")?;
+    if r.status == 405 {
+        r = start("GET")?;
+    }
+    match r.status {
+        401 => return Err(QUICK_OFF.into()),
+        404 => return Err(sdk::wrong_server("Jellyfin", server)),
+        _ if !r.ok() => return Err(sdk::answered_error("Jellyfin", server, r.status)),
+        _ => {}
+    }
+    let answer: QuickAnswer = serde_json::from_str(&r.body).map_err(unreadable)?;
+    if answer.secret.is_empty() || answer.code.is_empty() {
+        return Err(sdk::wrong_server("Jellyfin", server));
+    }
+    let quick = Quick { server: server.to_string(), secret: answer.secret, code: answer.code };
+    host::kv_set(QUICK_KEY, serde_json::to_string(&quick).unwrap_or_default().as_bytes());
+    Err(instruction(&quick.code))
+}
+
+/// The code is entered in a Jellyfin app, not on a web page, so the ask has no link.
+fn instruction(code: &str) -> String {
+    sdk::ask(sdk::Ask {
+        say: format!("Sign in: in a Jellyfin app that is already signed in, open Settings, then Quick Connect, and enter {code}, then press Refresh now here."),
+        link: None,
+        code: Some(code.to_string()),
+        after: Some("In a Jellyfin app that is already signed in, open Settings, then Quick Connect, and enter this code.".into()),
+        watch: true,
+    })
+}
+
 impl Session {
-    /// Reuse the cached token; sign in again when there is none or the server rejects it.
-    fn connect() -> Result<Session, String> {
+    /// Reuse the cached token; sign in again when there is none or the server rejects it. With
+    /// no username that is by Quick Connect, which only `may_ask` starts; without it there is
+    /// no session yet.
+    fn connect(may_ask: bool) -> Result<Option<Session>, String> {
         let server = host::server_setting("server", "Server address")?;
-        let username = host::required_setting("username", "Username")?;
+        let username = host::setting("username").map(|u| u.trim().to_string()).unwrap_or_default();
         let device_id = device_id();
         // The saved session belongs to one server and user; another of either signs in afresh.
         let owner = format!("{server}\n{username}");
@@ -198,10 +300,17 @@ impl Session {
             let s = Session { server: server.clone(), token, user_id, device_id: device_id.clone() };
             let probe = sdk::fetch_from("Jellyfin", &server, &s.request(&format!("/Users/{}", s.user_id)))?;
             if probe.ok() {
-                return Ok(s);
+                return Ok(Some(s));
             }
             host::kv_delete("token");
             host::kv_delete("user_id");
+        }
+        if username.is_empty() {
+            if !may_ask {
+                return Ok(None);
+            }
+            let auth = quick_connect(&server, &device_id)?;
+            return Ok(Some(Session::keep(server, auth, &owner, device_id)));
         }
         let password = host::secret("password").unwrap_or_default();
         let body = serde_json::json!({ "Username": username, "Pw": password }).to_string();
@@ -228,10 +337,15 @@ impl Session {
             sdk::warn!("unexpected sign-in response: {e}");
             sdk::wrong_server("Jellyfin", &server)
         })?;
+        Ok(Some(Session::keep(server, auth, &owner, device_id)))
+    }
+
+    /// Remembers a sign-in for the server and user it was made for.
+    fn keep(server: String, auth: AuthResponse, owner: &str, device_id: String) -> Session {
         host::kv_set("token", auth.access_token.as_bytes());
         host::kv_set("user_id", auth.user.id.as_bytes());
         host::kv_set("session_for", owner.as_bytes());
-        Ok(Session { server, token: auth.access_token, user_id: auth.user.id, device_id })
+        Session { server, token: auth.access_token, user_id: auth.user.id, device_id }
     }
 
     fn request(&self, path: &str) -> HttpRequest {
@@ -502,6 +616,29 @@ mod tests {
         assert_eq!(item.added_ms, parse_iso8601("2024-03-01T00:00:00Z"));
         assert_eq!(item.subtitle.as_deref(), Some("2021"));
         assert!(<Jellyfin as sdk::Plugin>::manifest().rows.iter().any(|r| r.id == "favourites"));
+    }
+
+    #[test]
+    fn quick_connect_shows_a_code_until_it_is_approved() {
+        let waiting: QuickAnswer = serde_json::from_str(
+            r#"{"Authenticated":false,"Secret":"0123abcd","Code":"482913","DeviceId":"lounge-1","DeviceName":"Android TV","AppName":"Lounge","AppVersion":"0.1","DateAdded":"2026-11-09T21:03:22Z"}"#,
+        )
+        .unwrap();
+        assert_eq!((waiting.authenticated, waiting.secret.as_str(), waiting.code.as_str()), (false, "0123abcd", "482913"));
+        assert!(serde_json::from_str::<QuickAnswer>(r#"{"Authenticated":true,"Secret":"0123abcd","Code":"482913"}"#).unwrap().authenticated);
+        assert_eq!(
+            instruction("482913"),
+            "Sign in: in a Jellyfin app that is already signed in, open Settings, then Quick Connect, and enter 482913, then press Refresh now here."
+        );
+        let request = quick_request("POST", "http://jf:8096/Users/AuthenticateWithQuickConnect".into(), "tv-1", Some(r#"{"Secret":"0123abcd"}"#.into()));
+        assert_eq!(request.headers.get("Authorization").map(String::as_str), Some(auth_header("tv-1").as_str()));
+        assert_eq!(request.headers.get("Content-Type").map(String::as_str), Some("application/json"));
+        let auth: AuthResponse = serde_json::from_str(r#"{"User":{"Name":"me","Id":"u1"},"AccessToken":"tok","ServerId":"s1"}"#).unwrap();
+        assert_eq!((auth.access_token.as_str(), auth.user.id.as_str()), ("tok", "u1"));
+        // Only the server address is needed to turn the plugin on.
+        let m = <Jellyfin as sdk::Plugin>::manifest();
+        assert!(m.validate().is_ok());
+        assert_eq!(m.settings.iter().filter(|s| s.required).map(|s| s.key.as_str()).collect::<Vec<_>>(), ["server"]);
     }
 
     #[test]

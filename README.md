@@ -193,7 +193,7 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 
 | Plugin | What it adds |
 |---|---|
-| Jellyfin | Resume points and next episodes in Continue watching, newest additions and favourites as rows, and search. Opens in the Jellyfin app. |
+| Jellyfin | Resume points and next episodes in Continue watching, newest additions and favourites as rows, and search. Opens in the Jellyfin app. Sign in with Quick Connect or a username and password. |
 | Emby | The same from an Emby server. Tiles open the Emby app. |
 | Plex | On Deck in Continue watching, newest additions as a row, and search. Sign in with a code at plex.tv/link or paste a token. |
 | Kodi | Resume points, next episodes, recent additions and Live TV from a Kodi library, played on whichever Kodi you choose. |
