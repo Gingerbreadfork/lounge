@@ -198,7 +198,7 @@ dismiss it.
 |---|---|
 | Jellyfin | Your server's resume points and next episodes in Continue watching, its newest additions and your favourites as rows, and search, each opening on its page in the Jellyfin app |
 | Emby | Your server's resume points and next episodes in Continue watching, its newest additions and your favourites as rows, and search |
-| Plex | Your server's On Deck in Continue watching, its newest additions as a row, and search |
+| Plex | Your server's On Deck in Continue watching, its newest additions as a row, and search, after a sign-in with a code at plex.tv/link or with a token you paste |
 | Kodi | A Kodi library: resume points, the next episodes, recent additions and Live TV, played on whichever Kodi you choose |
 | Trakt | What you paused, what is next and your watchlist, whichever service they live on |
 | Simkl | What you paused, what is next, what you plan to watch and what airs this week, for shows, anime and films, whichever service they live on |

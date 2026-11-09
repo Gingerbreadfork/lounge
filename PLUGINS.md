@@ -20,8 +20,9 @@ different corner of the interface:
 - `plugins/jellyfin` and `plugins/emby`: sign in to a server with a password, publish resume
   points and new arrivals, answer search. Secrets, a cached token in the key-value store, and
   in Jellyfin's case deep links into another app; Emby's app has none, so its tiles launch it.
-- `plugins/plex`: the same with a token instead of a password, and pictures through the
-  server's resizer.
+- `plugins/plex`: the same with a token instead of a password, pictures through the
+  server's resizer, and a sign-in by a code entered at the service's site, which also says
+  where the person's servers are so they know which address to enter.
 - `plugins/youtube`: a list setting parsed into sources, an Atom feed read with `quick-xml`,
   partial failure reported without giving up, and an optional Google sign-in by a code on the
   phone, after which the subscriptions' feeds are read a few per refresh within the fetch budget
