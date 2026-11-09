@@ -886,8 +886,6 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
         Err(Stopped::Asks(ask)) => {
             let say = clip_bytes(&redact_urls(&ask.say), 1000).to_string();
             let ask = Ask { say: say.clone(), after: ask.after.as_deref().map(redact_urls), ..ask };
-            tracing::info!("plugin {id} waits on the person: {say}");
-            push_log(&inner.plugins.logs, id, 1, &format!("waiting: {say}"));
             let now = now_ms();
             let (watch, changed) = {
                 let state = inner.state.lock();
@@ -909,7 +907,10 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
             if let Some(watch) = watch {
                 ask_again_soon(inner, id, watch);
             }
+            // A watched ask comes round every few seconds; it is written down once.
             if changed {
+                tracing::info!("plugin {id} waits on the person: {say}");
+                push_log(&inner.plugins.logs, id, 1, &format!("waiting: {say}"));
                 inner.enqueue_job(worker::Job::Rebuild);
             }
         }
