@@ -48,6 +48,7 @@ impl sdk::Plugin for Arr {
             ],
             homepage: None,
             self_signed_servers: false,
+            for_apps: Vec::new(),
         }
     }
 

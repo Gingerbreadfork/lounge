@@ -190,7 +190,9 @@ itself. Any language that targets core WebAssembly will do: the interface is eig
 and six exports with JSON in between.
 
 Twenty-two ship in the APK, written against the same SDK as anyone else's. Turn on the ones you use
-from the phone or the TV's settings.
+from the phone or the TV's settings. When an app such as Plex or Jellyfin is on the TV and its
+plugin is off, the home offers to set the plugin up, under Continue watching, until you do or
+dismiss it.
 
 | Plugin | What it adds |
 |---|---|

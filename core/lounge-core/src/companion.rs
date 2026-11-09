@@ -214,8 +214,8 @@ impl CompanionActions for CoreActions {
     fn plugin_command(&self, id: &str, command: &str) -> Result<(), String> {
         let inner = self.inner()?;
         match command {
-            "enable" => inner.plugin_set_enabled(id, true),
-            "disable" => inner.plugin_set_enabled(id, false),
+            "enable" => inner.plugin_switch(id, true),
+            "disable" => inner.plugin_switch(id, false),
             "refresh" => {
                 if !inner.state.lock().plugins.iter().any(|p| p.id == id) {
                     return Err("plugin is not installed".into());
@@ -510,6 +510,56 @@ mod tests {
         let doc = actions.set_layout(LayoutPatch { muted_providers: Some(Vec::new()), ..LayoutPatch::default() }).unwrap();
         assert!(doc.muted_providers.is_empty());
         assert_eq!(tiles_when(2).len(), 2);
+    }
+
+    #[test]
+    fn a_plugin_is_suggested_while_its_app_is_on_the_tv_and_it_is_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        let manifest = lounge_plugin_api::Manifest { id: "tv.example.plex".into(), name: "Plex".into(), version: "1".into(), for_apps: vec!["tv.plex".into()], ..Default::default() };
+        {
+            let mut state = core.inner.state.lock();
+            let row = lounge_store::PluginRow {
+                id: manifest.id.clone(),
+                manifest_json: serde_json::to_string(&manifest).unwrap(),
+                publisher: String::new(),
+                enabled: false,
+                built_in: true,
+                installed_ms: 0,
+                last_refresh_ms: None,
+                last_error: None,
+                last_success_ms: None,
+            };
+            state.store.plugin_upsert(&row).unwrap();
+            let rows = state.store.plugins().unwrap();
+            state.plugins = plugins::entries_from_rows(&rows);
+        }
+        let suggested = |ids: &[String]| ids.iter().any(|r| r == "notice:plugins");
+        // Nothing is suggested while the app is not on the TV.
+        put_apps(&core, &[("tv.other", true)]);
+        assert!(!suggested(&rows_when(&core, |ids| ids.iter().any(|r| r == "apps"))));
+
+        put_apps(&core, &[("tv.other", true), ("tv.plex", true)]);
+        assert!(suggested(&rows_when(&core, suggested)));
+        let tile = core.snapshot().rows.iter().find(|r| r.id == "notice:plugins").unwrap().tiles[0].clone();
+        assert_eq!((tile.id.as_str(), tile.title.as_str(), tile.action.as_str()), ("notice:plugin:tv.example.plex", "Set up the Plex plugin", "control:plugin:tv.example.plex"));
+        assert_eq!(tile.subtitle.as_deref(), Some("See what you were watching in TV.PLEX"));
+
+        // Dismissed, it stays away; so does one the person turns off themselves.
+        core.command(crate::LayoutCommand::DismissNotice { id: tile.id.clone() });
+        assert!(!suggested(&rows_when(&core, |ids| !suggested(ids))));
+        core.command(crate::LayoutCommand::ResetLayout);
+        assert!(suggested(&rows_when(&core, suggested)));
+        core.set_plugin_enabled("tv.example.plex".into(), false);
+        assert!(!suggested(&rows_when(&core, |ids| !suggested(ids))));
+        assert!(core.inner.state.lock().graph.layout.dismissed_notices.contains("notice:plugin:tv.example.plex"));
+
+        // Turned on, it needs no suggesting.
+        core.command(crate::LayoutCommand::ResetLayout);
+        assert!(suggested(&rows_when(&core, suggested)));
+        core.inner.state.lock().plugins[0].enabled = true;
+        core.inner.enqueue_job(worker::Job::Rebuild);
+        assert!(!suggested(&rows_when(&core, |ids| !suggested(ids))));
     }
 
     #[test]

@@ -1006,7 +1006,7 @@ impl Core {
 
     pub fn set_plugin_enabled(&self, id: String, enabled: bool) {
         self.count();
-        self.inner.plugin_set_enabled(&id, enabled);
+        self.inner.plugin_switch(&id, enabled);
     }
 
     /// Set (or clear with None) one setting; an enabled plugin refreshes with the new value.

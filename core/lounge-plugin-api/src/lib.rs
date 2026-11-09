@@ -146,6 +146,10 @@ pub struct Manifest {
     /// is always verified.
     #[serde(default, skip_serializing_if = "is_false")]
     pub self_signed_servers: bool,
+    /// Packages of the apps whose watching this plugin brings to the home. While one is on the
+    /// TV and the plugin is off, the home suggests setting the plugin up.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub for_apps: Vec<String>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -206,6 +210,11 @@ impl Manifest {
         for r in &self.rows {
             if r.id.is_empty() || !rows.insert(&r.id) {
                 return Err(format!("duplicate or empty row id {:?}", r.id));
+            }
+        }
+        for app in &self.for_apps {
+            if !app.contains('.') || !app.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_') {
+                return Err(format!("{app:?} is not an app's package name"));
             }
         }
         for h in &self.fetch_hosts {
@@ -707,6 +716,11 @@ mod tests {
         assert!(m.validate().is_err());
         let unknown = Manifest { id: "tv.lounge.iptv".into(), name: "IPTV".into(), version: "1.0".into(), fetch_hosts: vec!["$server".into()], ..Default::default() };
         assert!(unknown.validate().is_err());
+        // An app is named by its package.
+        let with_apps = |apps: &[&str]| Manifest { id: "tv.lounge.plex".into(), name: "Plex".into(), version: "1.0".into(), for_apps: apps.iter().map(|a| a.to_string()).collect(), ..Default::default() };
+        assert!(with_apps(&["com.plexapp.android", "tv.emby_two.app"]).validate().is_ok());
+        assert!(with_apps(&["Plex"]).validate().is_err());
+        assert!(with_apps(&["com.plex app"]).validate().is_err());
     }
 }
 

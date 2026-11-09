@@ -273,6 +273,11 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
             openOverlay(Overlay.AllApps)
             return
         }
+        // So does a suggested plugin: its page is where it is turned on and set up.
+        if (tile.action.startsWith("control:plugin:")) {
+            openOverlay(Overlay.PluginDetail(tile.action.removePrefix("control:plugin:")))
+            return
+        }
         perform(tile.action, tile.title)
     }
 
@@ -287,6 +292,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 UiCommand.OpenTvControls -> openOverlay(Overlay.TvControls)
                 // From the phone: only while Lounge is in front with nothing open, or the screen would wait behind another app.
                 UiCommand.OpenAllApps -> if (state.overlay == Overlay.None && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { uiSounds?.open(); openOverlay(Overlay.AllApps) }
+                is UiCommand.OpenPlugin -> if (state.overlay == Overlay.None && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { uiSounds?.open(); openOverlay(Overlay.PluginDetail(cmd.id)) }
                 is UiCommand.RequestPermission, is UiCommand.Key -> Unit
                 is UiCommand.TypeText -> if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) phoneText.tryEmit(cmd.text)
                 is UiCommand.Search -> {

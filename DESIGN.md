@@ -341,6 +341,7 @@ Bottom-left (x 96, 54 from the bottom), `curtain` card, 1 px hairline, radius 16
 - **Empty home** (first run, nothing configured): the Stage shows the house light, the title "Let's set up your home screen", one primary button "Start", and the strip shows the setup steps as tiles.
 - **Offline**: rows that need the network show their cached content with a `dust` "Offline, showing what we have" meta line under the header. Nothing else changes; apps, inputs and live TV work.
 - **Permission missing**: Continue watching, without TV listings, shows one compact tile in the row's place: "Turn on TV listings to see what you were watching", primary action opens the system prompt. Dismissible; stays dismissed. Live now and Now playing stay away until their access is given; Settings has the switches.
+- **A plugin for an app on the TV**: while an app a plugin is for is installed and the plugin is off, a "Plugins for your apps" row under Continue watching carries one compact tile per plugin with the app's icon: "Set up the Plex plugin", "See what you were watching in Plex". OK opens the plugin's page. Dismissible; stays dismissed, and a plugin the person turns off is not offered again.
 - **Error**: toasts explain and offer the fix in the same sentence. Never "Something went wrong".
 
 ## 9. Sound

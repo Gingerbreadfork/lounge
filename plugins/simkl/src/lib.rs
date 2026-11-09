@@ -97,6 +97,7 @@ impl sdk::Plugin for Simkl {
             ],
             homepage: Some("https://simkl.com".into()),
             self_signed_servers: false,
+            for_apps: Vec::new(),
         }
     }
 

@@ -32,6 +32,8 @@ sealed interface UiCommand {
     data object InstallUpdate : UiCommand
     /** The All apps tile at the end of Your apps was pressed. */
     data object OpenAllApps : UiCommand
+    /** Open a plugin's page, to turn it on and set it up. */
+    data class OpenPlugin(val id: String) : UiCommand
 }
 
 /**
@@ -153,6 +155,7 @@ class AndroidPlatform(private val context: Context) : Platform {
             command == "tv:open" -> _commands.tryEmit(UiCommand.OpenTvControls)
             command == "update" -> _commands.tryEmit(UiCommand.InstallUpdate)
             command == "allapps" -> _commands.tryEmit(UiCommand.OpenAllApps)
+            command.startsWith("plugin:") -> _commands.tryEmit(UiCommand.OpenPlugin(command.removePrefix("plugin:")))
             command.startsWith("search:") -> _commands.tryEmit(UiCommand.Search(command.removePrefix("search:")))
             else -> throw PlatformException.Failed("Unknown control: $command")
         }

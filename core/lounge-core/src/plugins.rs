@@ -878,6 +878,20 @@ impl Inner {
         Ok(())
     }
 
+    /// The person turning a plugin on or off themselves. One they turned off is not suggested
+    /// to them again.
+    pub(crate) fn plugin_switch(&self, id: &str, enabled: bool) {
+        if !enabled && self.installed(id) {
+            let mut state = self.state.lock();
+            state.graph.layout.dismissed_notices.insert(crate::engine::plugin_notice(id));
+            let layout = state.graph.layout.clone();
+            if let Err(e) = state.store.save_layout(&layout) {
+                tracing::error!("could not store the layout: {e}");
+            }
+        }
+        self.plugin_set_enabled(id, enabled);
+    }
+
     pub(crate) fn plugin_set_enabled(&self, id: &str, enabled: bool) {
         if !self.installed(id) {
             return;

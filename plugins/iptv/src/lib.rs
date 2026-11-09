@@ -38,6 +38,7 @@ impl sdk::Plugin for Iptv {
             ],
             homepage: None,
             self_signed_servers: false,
+            for_apps: Vec::new(),
         }
     }
 

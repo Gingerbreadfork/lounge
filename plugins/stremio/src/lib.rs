@@ -69,6 +69,7 @@ impl sdk::Plugin for Stremio {
             ],
             homepage: Some("https://www.stremio.com".into()),
             self_signed_servers: false,
+            for_apps: vec![APP_PACKAGE.into()],
         }
     }
 

@@ -37,6 +37,13 @@ impl<'a> BuildIndex<'a> {
 
 pub(crate) const STAGE_CAP: usize = 6;
 const NOTICE_TV_LISTINGS: &str = "notice:tv_listings";
+/// The row of plugins suggested for the apps on the TV.
+const NOTICE_PLUGINS: &str = "notice:plugins";
+
+/// The notice that suggests setting a plugin up.
+pub(crate) fn plugin_notice(plugin: &str) -> String {
+    format!("notice:plugin:{plugin}")
+}
 
 /// The core rows and their titles, in default order. Every app is reachable from the All apps
 /// screen, which Your apps ends with, so there is no row of them all.
@@ -255,6 +262,12 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
             }
         }
     }
+    let suggested = plugin_suggestions(state);
+    if !suggested.is_empty() {
+        // Under Continue watching, which is where what they bring would show.
+        let at = rows.iter().position(|r| r.id == "continue" || r.id == NOTICE_TV_LISTINGS).map_or(0, |i| i + 1);
+        rows.insert(at, Row { id: NOTICE_PLUGINS.to_string(), title: "Plugins for your apps".to_string(), kind: TileKind::Compact, size: RowSize::L, badge: None, tiles: suggested });
+    }
     if let Some(version) = &state.update {
         let id = format!("notice:update:{version}");
         if !graph.layout.dismissed_notices.contains(&id) {
@@ -411,6 +424,44 @@ fn channel_row(graph: &Graph, index: &BuildIndex, channel_id: i64) -> Option<Row
         badge: None,
         tiles: items.iter().take(ROW_TILES).map(|it| tile_for(graph, it, kind)).collect(),
     })
+}
+
+/// A notice tile for each plugin that is off while an app it is for is on the TV, until the
+/// plugin is turned on or the notice dismissed. Pressing one opens the plugin's page.
+fn plugin_suggestions(state: &State) -> Vec<Tile> {
+    let graph = &state.graph;
+    state
+        .plugins
+        .iter()
+        .filter(|p| !p.enabled)
+        .filter_map(|p| {
+            let id = plugin_notice(&p.id);
+            if graph.layout.dismissed_notices.contains(&id) {
+                return None;
+            }
+            // An app the person hid is one they do not want to hear about.
+            let app = p.manifest.for_apps.iter().find_map(|package| graph.get(&format!("app:{package}"))).filter(|app| !graph.is_hidden(&app.id))?;
+            Some(Tile {
+                id,
+                kind: TileKind::Compact,
+                title: format!("Set up the {} plugin", p.manifest.name),
+                subtitle: Some(format!("See what you were watching in {}", app.title)),
+                artwork_path: None,
+                icon_path: app.artwork.logo.clone(),
+                light_argb: lounge_graph::color::HOUSELIGHT,
+                progress: None,
+                badge: None,
+                action: format!("control:plugin:{}", p.id),
+                pinned: false,
+                stage_pinned: false,
+                borrowed_art: false,
+                opened_rank: None,
+                installed_rank: None,
+                provider: None,
+                provider_name: None,
+            })
+        })
+        .collect()
 }
 
 fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &str) -> Row {

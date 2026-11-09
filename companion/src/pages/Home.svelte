@@ -2,7 +2,7 @@
   import { api, argb, art, tag, type Tile } from '../lib/api';
   import { hold } from '../lib/hold';
   import Icon from '../lib/Icon.svelte';
-  import { act, app, connectionLabel, dismissShare, openShare } from '../lib/state.svelte';
+  import { act, app, connectionLabel, dismissShare, go, openShare } from '../lib/state.svelte';
   import TileSheet from '../lib/TileSheet.svelte';
 
   let snapshot = $derived(app.state?.snapshot ?? null);
@@ -17,6 +17,8 @@
     try { return localStorage.getItem(key) === '1'; } catch { return false; }
   }
   function open(t: Tile) {
+    // A suggested plugin is set up here on the phone, where its settings are easy to type.
+    if (t.action.startsWith('control:plugin:')) return go('plugins', t.action.slice('control:plugin:'.length));
     act(`Opening ${t.title} on the TV`, () => api.open(t.action));
   }
   function menu(t: Tile, rowId: string | null, rowTitle: string | null) {

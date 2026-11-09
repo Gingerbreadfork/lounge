@@ -58,6 +58,7 @@ impl sdk::Plugin for Kodi {
             ],
             homepage: Some("https://kodi.tv".into()),
             self_signed_servers: false,
+            for_apps: vec![DEFAULT_APP.into()],
         }
     }
 

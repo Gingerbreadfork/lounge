@@ -28,6 +28,7 @@ impl sdk::Plugin for HdHomeRun {
             ],
             homepage: Some("https://www.hdhomerun.com".into()),
             self_signed_servers: false,
+            for_apps: Vec::new(),
         }
     }
 

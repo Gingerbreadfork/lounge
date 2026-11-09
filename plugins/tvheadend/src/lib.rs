@@ -42,6 +42,7 @@ impl sdk::Plugin for Tvheadend {
             ],
             homepage: Some("https://tvheadend.org".into()),
             self_signed_servers: false,
+            for_apps: Vec::new(),
         }
     }
 

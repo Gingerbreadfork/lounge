@@ -59,6 +59,7 @@ impl sdk::Plugin for Trakt {
             ],
             homepage: Some("https://trakt.tv".into()),
             self_signed_servers: false,
+            for_apps: Vec::new(),
         }
     }
 
