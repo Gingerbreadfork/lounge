@@ -3,7 +3,7 @@ name = "lounge-plugin-youtube"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "YouTube channels: new videos from the channels and playlists you follow, opened in the YouTube app"
+description = "YouTube: new videos from the channels you follow, and with a Google sign-in your subscriptions, playlists and liked videos, opened in the YouTube app"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -11,4 +11,5 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 lounge-plugin-sdk.workspace = true
 quick-xml.workspace = true
+serde.workspace = true
 serde_json.workspace = true

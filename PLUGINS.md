@@ -23,7 +23,9 @@ different corner of the interface:
 - `plugins/plex`: the same with a token instead of a password, and pictures through the
   server's resizer.
 - `plugins/youtube`: a list setting parsed into sources, an Atom feed read with `quick-xml`,
-  partial failure reported without giving up.
+  partial failure reported without giving up, and an optional Google sign-in by a code on the
+  phone, after which the subscriptions' feeds are read a few per refresh within the fetch budget
+  and kept between refreshes.
 - `plugins/archive`: rows from a search API, and `resolve`, which looks up the file to play only
   when something is selected.
 - `plugins/immich`: `Kind::Wallpaper` items that feed the screensaver instead of a row, read

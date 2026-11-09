@@ -201,7 +201,7 @@ from the phone or the TV's settings.
 | HDHomeRun | The tuner's channels and guide, played in the TV's own player |
 | Tvheadend, Channels DVR, NextPVR | A DVR's channels, guide and recordings |
 | Twitch | The channels you follow that are live, in Live now and the guide |
-| YouTube channels | Channels and playlists through their public feeds, no account needed |
+| YouTube | New videos from channels and playlists through their public feeds, and with a Google sign-in your subscriptions, playlists and liked videos |
 | Internet Archive | Free films, cartoons and television from archive.org, with search |
 | Immich photos | A shared Immich album as the screensaver |
 | Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art on the screensaver |
