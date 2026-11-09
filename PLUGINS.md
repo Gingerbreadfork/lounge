@@ -54,6 +54,24 @@ different corner of the interface:
   ends it, lists that may hold `null` entries, plays folded into the playlists, albums and
   artists they came from, named through a cache of lookups with a public card as the fallback,
   and a tier that needs no account at all.
+- `plugins/podcasts`: RSS with CDATA and namespaced tags read with `quick-xml`, RFC 2822 dates
+  without a calendar crate, episodes handed to the TV's player with `play`, feeds asked only
+  for what changed with `If-None-Match`, a feed too big for the 8 MB cap read from its start
+  with a `Range` header, a byte count kept inside the fuel budget, and `resolve` so a podcast
+  found through search plays its latest episode.
+- `plugins/moonlight`: several home servers from one setting through `local-network`, a status
+  read over plain HTTP and an app list over the server's own certificate with
+  `self_signed_servers`, pictures with a sign-in in their address for the TV to use, an
+  `intent:` that names an exported activity and its extras, a Resume item for what is running,
+  ids worked out the way the server derives them, and search answered from the last refresh
+  without a request.
+- `plugins/simkl`: a sign-in by device code with a token renewed weekly from a refresh token,
+  lists read only when the service's activity timestamps say they changed and kept in the
+  key-value store between refreshes, two public calendar files of up to 2.6 MB read with
+  `If-None-Match` and filtered to the coming week of what the person follows, with their
+  metadata parsed lazily through `RawValue`, a store trimmed to fit a key-value entry, a
+  search answered from the stored lists, and artwork looked up from a cached catalogue a few
+  titles per refresh.
 
 ## Quick start
 

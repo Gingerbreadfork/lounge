@@ -453,6 +453,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-moonlight"
+version = "0.5.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "lounge-plugin-nextpvr"
 version = "0.5.0"
 dependencies = [
@@ -481,6 +491,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-podcasts"
+version = "0.5.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "quick-xml",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-sample"
 version = "0.5.0"
 dependencies = [
@@ -492,6 +512,15 @@ name = "lounge-plugin-sdk"
 version = "0.5.0"
 dependencies = [
  "lounge-plugin-api",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "lounge-plugin-simkl"
+version = "0.5.0"
+dependencies = [
+ "lounge-plugin-sdk",
  "serde",
  "serde_json",
 ]

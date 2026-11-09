@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-simkl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Simkl: continue watching, up next, plan to watch and coming up, for shows, anime and films"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }

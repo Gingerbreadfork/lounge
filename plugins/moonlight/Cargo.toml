@@ -1,0 +1,15 @@
+[package]
+name = "lounge-plugin-moonlight"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Moonlight: your gaming PCs and the games on them, streamed with Moonlight"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"

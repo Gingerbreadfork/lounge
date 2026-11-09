@@ -847,6 +847,27 @@ mod tests {
     }
 
     #[test]
+    fn a_fragment_tells_two_pictures_at_one_address_apart_and_is_never_sent() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for mut s in listener.incoming().flatten() {
+                let (line, _) = read_request(&mut s);
+                let reply = format!("HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{line}", line.len());
+                let _ = std::io::Write::write_all(&mut s, reply.as_bytes());
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let fetcher = Fetcher::new();
+        let get = |fragment: &str| fetcher.download(&format!("http://me:pw@127.0.0.1:{port}/api/covers/1#{fragment}"), dir.path(), 1024, Duration::from_secs(5), &|_| true).unwrap();
+        let (one, other) = (get("1a2b"), get("3c4d"));
+        assert_ne!(one.path, other.path);
+        for path in [one.path, other.path] {
+            assert_eq!(std::fs::read_to_string(path).unwrap(), "GET /api/covers/1 HTTP/1.1");
+        }
+    }
+
+    #[test]
     fn a_compressed_body_is_capped_at_its_unpacked_size() {
         // Zeros pack down to far less than the cap, so only the unpacked size can exceed it.
         let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());

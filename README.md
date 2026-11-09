@@ -76,7 +76,7 @@ Your artwork or nine abstract scenes, which can also run live behind the home sc
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/plugin.svg" width="28" height="28" alt=""><br>
-<b>Fifteen plugins</b><br>
+<b>Twenty-two plugins</b><br>
 Jellyfin, Plex, Kodi, Stremio, Nuvio, IPTV, Trakt, Twitch and more, each sandboxed WebAssembly in a signed bundle.
 </td>
 </tr>
@@ -185,7 +185,7 @@ update signed by anyone else; the plugins built into the APK are vouched for by 
 itself. Any language that targets core WebAssembly will do: the interface is eight imports
 and six exports with JSON in between.
 
-Nineteen ship in the APK, written against the same SDK as anyone else's. Turn on the ones you use
+Twenty-two ship in the APK, written against the same SDK as anyone else's. Turn on the ones you use
 from the phone or the TV's settings.
 
 | Plugin | What it adds |
@@ -195,6 +195,7 @@ from the phone or the TV's settings.
 | Plex | Your server's On Deck in Continue watching, its newest additions as a row, and search |
 | Kodi | A Kodi library: resume points, the next episodes, recent additions and Live TV, played on whichever Kodi you choose |
 | Trakt | What you paused, what is next and your watchlist, whichever service they live on |
+| Simkl | What you paused, what is next, what you plan to watch and what airs this week, for shows, anime and films, whichever service they live on |
 | Stremio | Your Stremio account's paused titles, next episodes and newly released episodes in Continue watching, its library as a row, and search, each opening in the Stremio app |
 | Nuvio | Your Nuvio account's paused titles and next episodes in Continue watching, its library as a row, and search, each opening in the Nuvio TV app |
 | Sonarr and Radarr | The week's upcoming episodes and releases, what is downloading now and what has just arrived, each found through search in whichever app has it |
@@ -204,11 +205,13 @@ from the phone or the TV's settings.
 | Tvheadend, Channels DVR, NextPVR | A DVR's channels, guide and recordings |
 | Twitch | The channels you follow that are live, in Live now and the guide |
 | YouTube | New videos from channels and playlists through their public feeds, and with a Google sign-in your subscriptions, playlists and liked videos |
+| Podcasts | New episodes from the feeds you follow, Apple Podcasts links or an OPML export, played in a player app, with search through Apple's directory |
+| Moonlight | Your gaming PCs and the games on them from Sunshine, as tiles that start a stream in Moonlight; a game left running comes back in Continue watching |
 | Internet Archive | Free films, cartoons and television from archive.org, with search |
 | Immich photos | A shared Immich album as the screensaver |
 | Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art on the screensaver |
 
-A twentieth, **Sample library**, lives in the repository but not the APK: eighteen public-domain
+A twenty-third, **Sample library**, lives in the repository but not the APK: eighteen public-domain
 films with their posters, so you can see Lounge with something on it. The pictures in this file
 show a made-up horror library instead: every title, poster and name in them is invented.
 [PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin on your TV.
