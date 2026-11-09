@@ -475,12 +475,14 @@ fn flag(v: &Value) -> bool {
     }
 }
 
-/// The address to enter for a server: the plain one on the home network when the server takes
-/// it, else its `plex.direct` name, with a relay only as the last resort.
+/// The address to enter for a server: the plain one on the home network when the server is
+/// the account's own and takes it, else its `plex.direct` name, with a relay only as the last
+/// resort. Someone else's server is on their network, not this one, so it is named from outside.
 pub fn address_to_enter(server: &Found) -> Option<String> {
     let direct = |local: bool| server.connections.iter().find(move |c| c.local == local && !c.relay);
-    let plain = direct(true).filter(|c| !server.https_required && !c.address.is_empty() && !c.address.contains(':')).map(|c| format!("http://{}:{}", c.address, c.port));
-    let named = || [direct(true), direct(false), server.connections.iter().find(|c| c.relay)].into_iter().flatten().map(|c| c.uri.clone()).find(|uri| !uri.is_empty());
+    let at_home = direct(true).filter(|_| server.owned);
+    let plain = at_home.filter(|c| !server.https_required && !c.address.is_empty() && !c.address.contains(':')).map(|c| format!("http://{}:{}", c.address, c.port));
+    let named = || [at_home, direct(false), server.connections.iter().find(|c| c.relay)].into_iter().flatten().map(|c| c.uri.clone()).find(|uri| !uri.is_empty());
     plain.or_else(named)
 }
 
@@ -506,12 +508,34 @@ fn unknown_address(servers: &[Found], base: &str) -> String {
     format!("Plex knows no server of yours at {}. Check the server address in the plugin's settings, or paste a Plex token to use this one.{yours}", sdk::address(base))
 }
 
-/// The token for the server at `base`: that of the server plex.tv lists at the same host. A
-/// relay's bare address is shared between servers, so a relay counts by its name alone.
+/// The token for the server at `base`: that of the server plex.tv lists at the same host and
+/// port. A `plex.direct` name is one server's alone. A bare address counts only where it can
+/// be no one else's: never a relay's, which servers share, and a home-network one only for the
+/// account's own server, since another home has the same addresses.
 pub fn token_for(servers: &[Found], base: &str) -> Option<String> {
-    let host = sdk::host_of(base)?;
-    let leads_there = |c: &Connection| (!c.relay && c.address.eq_ignore_ascii_case(&host)) || sdk::host_of(&c.uri).as_deref() == Some(host.as_str());
-    servers.iter().find(|s| s.connections.iter().any(leads_there)).map(|s| s.token.clone())
+    let (host, port) = (sdk::host_of(base)?, port_of(base));
+    servers
+        .iter()
+        .find(|s| {
+            s.connections.iter().any(|c| {
+                let by_name = sdk::host_of(&c.uri).as_deref() == Some(host.as_str()) && port_of(&c.uri) == port;
+                let by_address = !c.relay && (s.owned || !c.local) && c.address.eq_ignore_ascii_case(&host) && Some(c.port) == port;
+                by_name || by_address
+            })
+        })
+        .map(|s| s.token.clone())
+}
+
+/// The port an address names, or the one its scheme implies.
+fn port_of(url: &str) -> Option<u16> {
+    let (scheme, rest) = url.split_once("://")?;
+    let authority = rest.split(['/', '?', '#']).next()?.rsplit('@').next()?;
+    // An IPv6 literal's own colons sit inside its brackets.
+    let after_host = authority.rsplit_once(']').map_or(authority, |(_, after)| after);
+    match after_host.rsplit_once(':') {
+        Some((_, port)) => port.parse().ok(),
+        None => Some(if scheme.eq_ignore_ascii_case("https") { 443 } else { 80 }),
+    }
 }
 
 impl Server {
@@ -723,9 +747,20 @@ mod tests {
         assert_eq!(token_for(&servers, "http://192.168.0.10:32400").as_deref(), Some("nas-token"));
         assert_eq!(token_for(&servers, "https://192-168-0-10.0123ABCD.plex.direct:32400").as_deref(), Some("nas-token"));
         assert_eq!(token_for(&servers, "https://203-0-113-20.ffee0011.plex.direct:32400").as_deref(), Some("cabin-token"));
-        // Another address gets nothing, and neither does a relay by its bare address.
+        // Another address or port gets nothing, and neither does a relay by its bare address.
         assert_eq!(token_for(&servers, "http://192.168.0.11:32400"), None);
+        assert_eq!(token_for(&servers, "http://192.168.0.10:8080"), None);
+        assert_eq!(token_for(&servers, "http://192.168.0.10"), None);
+        assert_eq!(token_for(&servers, "https://192-168-0-10.0123abcd.plex.direct:8080"), None);
         assert_eq!(token_for(&servers, "http://198.51.100.9:8443"), None);
+        // Someone else's server is known by its public address or its name, never by an address
+        // on their home network, which this home has too.
+        assert_eq!(token_for(&servers, "http://203.0.113.20:32400").as_deref(), Some("cabin-token"));
+        let friend = Found { name: "Friend".into(), token: "friend-token".into(), owned: false, https_required: false, connections: vec![Connection { address: "192.168.1.10".into(), port: 32400, uri: "https://192-168-1-10.aa11.plex.direct:32400".into(), local: true, relay: false }] };
+        assert_eq!(token_for(std::slice::from_ref(&friend), "http://192.168.1.10:32400"), None);
+        assert_eq!(token_for(std::slice::from_ref(&friend), "https://192-168-1-10.aa11.plex.direct:32400").as_deref(), Some("friend-token"));
+        assert_eq!(address_to_enter(&friend), None);
+        assert_eq!((port_of("http://[fd00::5]/x"), port_of("https://[fd00::5]:32400"), port_of("https://plex.example"), port_of("plex.example")), (Some(80), Some(32400), Some(443), None));
         assert_eq!(token_for(&servers, "https://198-51-100-9.0123abcd.plex.direct:8443").as_deref(), Some("nas-token"));
         let said = unknown_address(&servers, "http://192.168.0.11:32400");
         assert!(said.starts_with("Plex knows no server of yours at 192.168.0.11:32400."), "{said}");
