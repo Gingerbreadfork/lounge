@@ -123,18 +123,22 @@ impl sdk::Plugin for YouTube {
         let mut subscribed = 0;
         if let Some(client) = &account {
             if toggle("subscriptions", true) {
+                let mut cache = SubsCache::load();
                 match client.subscriptions(&mut budget) {
                     Ok(subs) => {
                         subscribed = subs.len();
-                        let mut cache = SubsCache::load();
                         cache.refresh(&subs, ctx.now_ms, &mut budget);
                         cache.save();
-                        for channel in cache.channels.values() {
-                            let mut from_channel: Vec<Video> = channel.videos.iter().filter(|v| wanted(v)).take(per_source).cloned().collect();
-                            videos.append(&mut from_channel);
-                        }
                     }
-                    Err(e) => failures.push(("subscriptions".into(), e)),
+                    // The channels read last time stand in until the list can be read again.
+                    Err(e) => {
+                        subscribed = cache.channels.len();
+                        failures.push(("subscriptions".into(), e));
+                    }
+                }
+                for channel in cache.channels.values() {
+                    let mut from_channel: Vec<Video> = channel.videos.iter().filter(|v| wanted(v)).take(per_source).cloned().collect();
+                    videos.append(&mut from_channel);
                 }
             }
             if toggle("playlists", true) {
@@ -711,6 +715,9 @@ impl Client {
 struct CachedChannel {
     title: String,
     fetched_ms: i64,
+    /// When the feed was last asked for, whether or not it came.
+    #[serde(default)]
+    attempted_ms: i64,
     #[serde(default)]
     videos: Vec<Video>,
 }
@@ -745,12 +752,12 @@ impl SubsCache {
         host::kv_delete(SUBS_KEY);
     }
 
-    /// Reads the feeds due, channels not read for longest first, keeping `ART_RESERVE` fetches
+    /// Reads the feeds due, channels not asked for longest first, keeping `ART_RESERVE` fetches
     /// back, and forgets channels no longer subscribed to.
     fn refresh(&mut self, subs: &[Subscribed], now_ms: i64, budget: &mut Budget) {
         self.channels.retain(|id, _| subs.iter().any(|s| &s.channel_id == id));
         let mut due: Vec<&Subscribed> = subs.iter().collect();
-        due.sort_by_key(|s| self.channels.get(&s.channel_id).map_or(0, |c| c.fetched_ms));
+        due.sort_by_key(|s| self.channels.get(&s.channel_id).map_or(0, |c| c.attempted_ms.max(c.fetched_ms)));
         let mut read = 0;
         for s in due {
             if budget.left() <= ART_RESERVE || !budget.spend() {
@@ -759,6 +766,7 @@ impl SubsCache {
             read += 1;
             let entry = self.channels.entry(s.channel_id.clone()).or_default();
             entry.title = s.title.clone();
+            entry.attempted_ms = now_ms;
             match feed(&Source::Channel(s.channel_id.clone())) {
                 Ok(xml) => {
                     let mut videos = parse_feed(&xml);
@@ -766,7 +774,7 @@ impl SubsCache {
                     entry.videos = videos;
                     entry.fetched_ms = now_ms;
                 }
-                // A feed that did not come keeps last time's videos and is due again first.
+                // A feed that did not come keeps last time's videos and waits its turn again.
                 Err(e) => sdk::warn!("{}: {e}", s.title),
             }
         }
@@ -1201,9 +1209,9 @@ mod tests {
     fn subscriptions_are_read_longest_ago_first_within_the_budget() {
         let subs: Vec<Subscribed> = (1..=5).map(|i| Subscribed { channel_id: format!("UC{i}"), title: format!("Channel {i}") }).collect();
         let mut cache = SubsCache::default();
-        cache.channels.insert("UC1".into(), CachedChannel { title: "Channel 1".into(), fetched_ms: 500, videos: vec![] });
-        cache.channels.insert("UC2".into(), CachedChannel { title: "Channel 2".into(), fetched_ms: 100, videos: vec![] });
-        cache.channels.insert("UCgone".into(), CachedChannel { title: "Unsubscribed".into(), fetched_ms: 900, videos: vec![] });
+        cache.channels.insert("UC1".into(), CachedChannel { title: "Channel 1".into(), fetched_ms: 500, ..Default::default() });
+        cache.channels.insert("UC2".into(), CachedChannel { title: "Channel 2".into(), fetched_ms: 100, ..Default::default() });
+        cache.channels.insert("UCgone".into(), CachedChannel { title: "Unsubscribed".into(), fetched_ms: 900, ..Default::default() });
         // Two fetches above the reserve: the three never-read channels come before the two read ones.
         let mut budget = Budget::new(ART_RESERVE + 2);
         cache.refresh(&subs, 1_000, &mut budget);
@@ -1214,6 +1222,12 @@ mod tests {
         assert_eq!(read.len(), 2);
         assert!(read.iter().all(|id| ["UC3", "UC4", "UC5"].contains(id)));
         assert_eq!(cache.channels["UC2"].fetched_ms, 100);
+        // A feed that did not come waits its turn: next the channel never asked, then the oldest read.
+        let mut budget = Budget::new(ART_RESERVE + 2);
+        cache.refresh(&subs, 2_000, &mut budget);
+        assert_eq!(cache.channels.values().filter(|c| c.attempted_ms == 1_000).count(), 2);
+        assert_eq!(cache.channels["UC2"].attempted_ms, 2_000);
+        assert_eq!(cache.channels["UC1"].attempted_ms, 0);
     }
 
     #[test]
