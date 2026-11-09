@@ -1,0 +1,15 @@
+[package]
+name = "lounge-plugin-spotify"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Spotify: recently played, playlists, saved albums and podcasts from an account, or pasted links, opened in the Spotify app"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"

@@ -49,6 +49,11 @@ different corner of the interface:
   days in the TV's own time, dates that are days told apart from moments, a download queue and
   an import history folded to one tile per download or show, and tiles that open through
   Lounge's search because the servers know titles but not players.
+- `plugins/spotify`: a sign-in with no code flow, done with PKCE as a link opened on the phone
+  and the address it lands on pasted into a setting, a refresh token kept until the service
+  ends it, lists that may hold `null` entries, plays folded into the playlists, albums and
+  artists they came from, named through a cache of lookups with a public card as the fallback,
+  and a tier that needs no account at all.
 
 ## Quick start
 

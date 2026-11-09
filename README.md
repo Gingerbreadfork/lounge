@@ -185,7 +185,7 @@ update signed by anyone else; the plugins built into the APK are vouched for by 
 itself. Any language that targets core WebAssembly will do: the interface is eight imports
 and six exports with JSON in between.
 
-Eighteen ship in the APK, written against the same SDK as anyone else's. Turn on the ones you use
+Nineteen ship in the APK, written against the same SDK as anyone else's. Turn on the ones you use
 from the phone or the TV's settings.
 
 | Plugin | What it adds |
@@ -198,6 +198,7 @@ from the phone or the TV's settings.
 | Stremio | Your Stremio account's paused titles, next episodes and newly released episodes in Continue watching, its library as a row, and search, each opening in the Stremio app |
 | Nuvio | Your Nuvio account's paused titles and next episodes in Continue watching, its library as a row, and search, each opening in the Nuvio TV app |
 | Sonarr and Radarr | The week's upcoming episodes and releases, what is downloading now and what has just arrived, each found through search in whichever app has it |
+| Spotify | What you listened to lately, your playlists, saved albums and podcasts with a Spotify developer app, or any Spotify links you paste without one, each opening in the Spotify app |
 | IPTV | An M3U playlist as channels, with a guide from XMLTV |
 | HDHomeRun | The tuner's channels and guide, played in the TV's own player |
 | Tvheadend, Channels DVR, NextPVR | A DVR's channels, guide and recordings |
@@ -207,7 +208,7 @@ from the phone or the TV's settings.
 | Immich photos | A shared Immich album as the screensaver |
 | Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art on the screensaver |
 
-A nineteenth, **Sample library**, lives in the repository but not the APK: eighteen public-domain
+A twentieth, **Sample library**, lives in the repository but not the APK: eighteen public-domain
 films with their posters, so you can see Lounge with something on it. The pictures in this file
 show a made-up horror library instead: every title, poster and name in them is invented.
 [PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin on your TV.

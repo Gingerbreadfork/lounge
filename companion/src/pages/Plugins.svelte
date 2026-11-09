@@ -51,6 +51,25 @@
     const p = await act('Installed', () => api.installPluginUrl(url.trim()));
     if (p) { url = ''; go('plugins', p.id); }
   }
+  /** A plugin's text split into words and the links in it, so a sign-in address can be tapped. A
+   *  bare name counts only with a path after it, so a file name such as guide.xml stays text. */
+  function linked(text: string): { text: string; href?: string }[] {
+    const parts: { text: string; href?: string }[] = [];
+    const link = /https?:\/\/[^\s]+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s]*/gi;
+    let last = 0;
+    for (const m of text.matchAll(link)) {
+      let found = m[0];
+      // Punctuation that ends the sentence is not part of the address.
+      while (/[.,;:)!?]$/.test(found)) found = found.slice(0, -1);
+      if (!found) continue;
+      const start = m.index ?? 0;
+      if (start > last) parts.push({ text: text.slice(last, start) });
+      parts.push({ text: found, href: /^https?:\/\//i.test(found) ? found : `https://${found}` });
+      last = start + found.length;
+    }
+    if (last < text.length) parts.push({ text: text.slice(last) });
+    return parts;
+  }
   function status(p: Plugin) {
     if (p.enabled && p.lastError) return { text: 'Problem', cls: 'bad' };
     if (p.enabled) return { text: 'On', cls: 'on' };
@@ -96,7 +115,7 @@
 
     <section class="card status">
       {#if current.enabled && current.lastError}
-        <p class="ember">{current.lastError}</p>
+        <p class="ember">{#each linked(current.lastError) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>
       {:else if current.enabled && current.lastRefreshMs}
         <p class="signal">{current.items} items · refreshed {ago(current.lastRefreshMs)}</p>
       {:else if current.enabled}
@@ -134,7 +153,7 @@
                 onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                 autocapitalize="off" autocorrect="off" spellcheck="false"
               />
-              {#if st.help}<p class="caption">{st.help}</p>{/if}
+              {#if st.help}<p class="caption">{#each linked(st.help) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
             {/if}
           </div>
         {/each}
@@ -180,6 +199,7 @@
 </main>
 
 <style>
+  .ember a, .caption a { text-decoration: underline; text-underline-offset: 3px; word-break: break-all; }
   .back { padding: 0; min-height: 0; margin-bottom: 8px; }
   .status { display: flex; flex-direction: column; gap: 12px; }
   .status-actions { display: flex; gap: 10px; }
