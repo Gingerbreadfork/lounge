@@ -170,8 +170,17 @@ limit, so a runaway loop or a leak ends that call and nothing else. Host functio
 too, so a loop of `kv_set` runs out like a loop of arithmetic. There is no state between calls
 apart from the key-value store. `refresh` runs when the plugin is turned on, every
 `refresh_minutes` while the screen is on, when a setting changes, and when someone asks for it
-on the phone. A refresh that fails, such as a sign-in still waiting for the user, is tried again
-after 5 minutes when `refresh_minutes` is longer. Refreshes run one after another on their own thread; `resolve` and `search` run on
+on the phone. A refresh that fails is tried again after 5 minutes when `refresh_minutes` is
+longer.
+
+A refresh that cannot go on until the person does something says so instead of failing:
+`return Err(sdk::sign_in("https://example.com/activate", &code))` for a sign-in with a code, or
+`Err(sdk::ask(Ask { .. }))` for anything else, such as a link with no code or a setting still to
+fill in. The plugin's page then shows a step to take rather than a problem: a QR code of the
+link on the TV, a button on the phone, and the code in large type. With `watch` set, as
+`sign_in` sets it, the TV refreshes the plugin every 5 seconds for 5 minutes, so it carries on
+by itself once the code is entered. `say` is the whole instruction as a sentence, for the log
+and for anything that shows only text. Refreshes run one after another on their own thread; `resolve` and `search` run on
 another, so pressing a tile never waits for someone's refresh.
 
 `search` runs as the user types on the TV's search screen, for plugins whose manifest lists the
@@ -467,7 +476,7 @@ boundary as UTF-8 JSON in linear memory, and a `(ptr, len)` pair is packed into 
 | `lg_alloc(len) -> ptr` | `i32 -> i32` | allocate `len` bytes the host may write into |
 | `lg_free(ptr, len)` | `i32, i32` | free memory the plugin returned |
 | `lg_manifest() -> packed` | `-> i64` | `{"ok": Manifest}` |
-| `lg_refresh(ptr, len) -> packed` | `i32, i32 -> i64` | `RefreshContext` in; `{"ok": [Item]}` or `{"err": "…"}` out |
+| `lg_refresh(ptr, len) -> packed` | `i32, i32 -> i64` | `RefreshContext` in; `{"ok": [Item]}`, `{"err": "…"}` or `{"ask": {"say": "…", "link": "…", "code": "…", "after": "…", "watch": true}}` out, where only `say` is required |
 | `lg_search(ptr, len) -> packed` | optional | `SearchQuery` (`query`, `limit`) in; items out |
 | `lg_resolve(ptr, len) -> packed` | optional | action string in; `Action` out |
 

@@ -593,13 +593,37 @@ impl HttpResponse {
     }
 }
 
-/// Result of a plugin call, as JSON: `{"ok": ...}` or `{"err": "..."}`.
+/// Something a plugin waits on the person for before it can go on, such as a sign-in on their
+/// phone. The TV shows it as a step to take, not as a failure.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Ask {
+    /// The whole instruction as one sentence, for the log and for a surface that shows only text.
+    pub say: String,
+    /// The address to open on a phone, with or without its scheme.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<String>,
+    /// The code to enter there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    /// What to do once the page is open, when it is more than entering the code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    /// Whether the step finishes somewhere else, as a sign-in does. The TV then refreshes the
+    /// plugin every few seconds for a while, to notice by itself when it is done.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub watch: bool,
+}
+
+/// Result of a plugin call, as JSON: `{"ok": ...}`, `{"err": "..."}`, or from a refresh
+/// `{"ask": {...}}`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Outcome<T> {
     #[serde(rename = "ok")]
     Ok(T),
     #[serde(rename = "err")]
     Err(String),
+    #[serde(rename = "ask")]
+    Ask(Ask),
 }
 
 const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

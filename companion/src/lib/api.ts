@@ -45,10 +45,12 @@ export type Layout = {
   dismissedNotices: string[];
 };
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
+/** A step a plugin waits on the person for, such as a sign-in. */
+export type PluginAsk = { say: string; link?: string | null; linkText?: string | null; code?: string | null; after?: string | null };
 export type Plugin = {
   id: string; name: string; version: string; description: string; publisher: string; publisherName: string; kinds: string[];
   fetchHosts: string[]; selfSignedServers: boolean; enabled: boolean; builtIn: boolean; configured: boolean; refreshMinutes: number;
-  lastRefreshMs?: number | null; lastError?: string | null; items: number; settings: PluginSetting[];
+  lastRefreshMs?: number | null; lastError?: string | null; ask?: PluginAsk | null; items: number; settings: PluginSetting[];
 };
 export type Diagnostics = Record<string, string | number>;
 export type Device = { id: string; name: string; createdMs: number; lastSeenMs: number; current: boolean };

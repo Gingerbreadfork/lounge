@@ -27,6 +27,9 @@ pub enum PluginError {
     Trap(String),
     #[error("plugin failed: {0}")]
     Failed(String),
+    /// The plugin waits on the person; not a failure.
+    #[error("{}", .0.say)]
+    Asks(lounge_plugin_api::Ask),
     #[error("denied: {0}")]
     Denied(String),
     #[error("fetch: {0}")]

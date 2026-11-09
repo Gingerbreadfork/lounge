@@ -174,6 +174,7 @@ impl Host {
         self.call_json_with(&silent, plugin, exports::MANIFEST, None::<&()>, self.limits.call_time, self.limits.call_result_bytes).map(|o| match o {
             Outcome::Ok(m) => Ok(m),
             Outcome::Err(e) => Err(PluginError::Failed(e)),
+            Outcome::Ask(ask) => Err(PluginError::Failed(ask.say)),
         })?
     }
 
@@ -212,6 +213,7 @@ impl Host {
         match o {
             Outcome::Ok(v) => Ok(v),
             Outcome::Err(e) => Err(PluginError::Failed(e)),
+            Outcome::Ask(ask) => Err(PluginError::Asks(ask)),
         }
     }
 
@@ -738,6 +740,11 @@ mod tests {
     /// constant JSON, and `lg_refresh` first calls `now`, `log`, `kv_set`/`kv_get`, `setting` and
     /// `fetch` so every host function is exercised.
     fn wat() -> String {
+        wat_answering(ITEMS_JSON)
+    }
+
+    /// The same module with `refresh` as what `lg_refresh` returns.
+    fn wat_answering(refresh: &str) -> String {
         let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
         format!(
             r#"
@@ -773,10 +780,10 @@ mod tests {
         (i64.or (i64.shl (i64.const 512) (i64.const 32)) (i64.const {il})))
     )"#,
             m = esc(MANIFEST_JSON),
-            i = esc(ITEMS_JSON),
+            i = esc(refresh),
             r = esc(REQUEST_JSON),
             ml = MANIFEST_JSON.len(),
-            il = ITEMS_JSON.len(),
+            il = refresh.len(),
             rl = REQUEST_JSON.len(),
         )
     }
@@ -813,6 +820,22 @@ mod tests {
         assert_eq!(items[0].title, "Alpha");
         assert_eq!(services.logs.lock().as_slice(), ["hello"]);
         assert_eq!(services.kv.lock().get("hello").map(|v| v.as_slice()), Some(&b"server"[..]));
+    }
+
+    #[test]
+    fn a_refresh_may_ask_something_of_the_person_instead() {
+        let (host, _) = host();
+        let asks = r#"{"ask":{"say":"Sign in: on your phone open plex.tv/link and enter 25Q4, then press Refresh now here.","link":"plex.tv/link","code":"25Q4"}}"#;
+        let wasm = wat::parse_str(wat_answering(asks)).unwrap();
+        let manifest = Manifest { id: "tv.lounge.test".into(), name: "Test".into(), version: "1".into(), fetch_hosts: vec!["*".into()], ..Default::default() };
+        let plugin = host.load("tv.lounge.test", manifest, &wasm).unwrap();
+        match host.refresh(&plugin, &RefreshContext::default()) {
+            Err(PluginError::Asks(ask)) => {
+                assert!(ask.say.starts_with("Sign in: on your phone open plex.tv/link"));
+                assert_eq!((ask.link.as_deref(), ask.code.as_deref(), ask.after), (Some("plex.tv/link"), Some("25Q4"), None));
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

@@ -187,7 +187,8 @@ targets core WebAssembly will do: the interface is eight imports and six exports
 between.
 
 Twenty-two ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
-use from the phone or the TV's settings. If an app such as Plex or Jellyfin is on the TV and its
+use from the phone or the TV's settings. One that needs a sign-in shows a code and a QR code on
+its page, and carries on by itself once you have entered the code on your phone. If an app such as Plex or Jellyfin is on the TV and its
 plugin is off, the home offers to set it up until you do or dismiss the offer.
 
 | Plugin | What it adds |

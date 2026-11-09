@@ -600,7 +600,7 @@ fn device_step(client_id: &str, now_ms: i64) -> Result<Token, String> {
 }
 
 fn instruction(d: &Device) -> String {
-    format!("Sign in: on your phone open {} and enter {}, then press Refresh now here.", d.verification_uri.trim_start_matches("https://").trim_end_matches('/'), d.user_code)
+    sdk::sign_in(&d.verification_uri, &d.user_code)
 }
 
 /// The error for a sign-in answer that cannot be read; the cause goes to the log.

@@ -108,6 +108,7 @@ p { margin: 0; }
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: var(--curtain-edge); color: var(--dust); }
 .pill.on { color: var(--signal); }
 .pill.bad { color: var(--ember); }
+.pill.ask { color: var(--houselight); }
 .empty { padding: 32px 16px; text-align: center; color: var(--dust); }
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 92px); transform: translateX(-50%); background: var(--curtain); border: 1px solid var(--curtain-edge); border-radius: 14px; padding: 12px 18px; font-weight: 600; max-width: calc(100vw - 32px); z-index: 30; }
 

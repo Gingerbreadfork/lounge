@@ -517,6 +517,52 @@ mod tests {
     }
 
     #[test]
+    fn a_plugin_waiting_on_the_person_shows_its_ask_not_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        let manifest = lounge_plugin_api::Manifest { id: "tv.example.plex".into(), name: "Plex".into(), version: "1".into(), ..Default::default() };
+        let said = "Sign in: on your phone open plex.tv/link and enter 25Q4, then press Refresh now here.";
+        {
+            let mut state = core.inner.state.lock();
+            let row = lounge_store::PluginRow {
+                id: manifest.id.clone(),
+                manifest_json: serde_json::to_string(&manifest).unwrap(),
+                publisher: String::new(),
+                enabled: true,
+                built_in: true,
+                installed_ms: 0,
+                last_refresh_ms: Some(1),
+                last_error: Some(said.into()),
+                last_success_ms: None,
+            };
+            state.store.plugin_upsert(&row).unwrap();
+            // Refreshed just now, so the refresh thread leaves it alone for the length of the test.
+            state.store.plugin_set_refresh(&row.id, now_ms(), Some(said)).unwrap();
+            let rows = state.store.plugins().unwrap();
+            state.plugins = plugins::entries_from_rows(&rows);
+        }
+        // After a restart only the sentence is left, until the next refresh.
+        let info = core.plugins().remove(0);
+        assert_eq!((info.last_error.as_deref(), info.ask), (Some(said), None));
+
+        let ask = lounge_plugin_api::Ask { say: said.into(), link: Some("plex.tv/link".into()), code: Some("25Q4".into()), after: None, watch: true };
+        core.inner.plugins.asks.lock().insert(manifest.id.clone(), plugins::PendingAsk { ask, since_ms: 0, asking_again: false });
+        let info = core.plugins().remove(0);
+        assert_eq!(info.last_error, None);
+        let shown = info.ask.unwrap();
+        assert_eq!((shown.link.as_deref(), shown.code.as_deref()), (Some("https://plex.tv/link"), Some("25Q4")));
+        assert!(shown.qr_png_path.is_some_and(|p| std::path::Path::new(&p).exists()));
+        // The phone is told the same, under the names its page reads.
+        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
+        let sent = actions.plugins_json();
+        assert!(sent.contains(r#""ask":{"say":"Sign in: on your phone open plex.tv/link"#) && sent.contains(r#""linkText":"plex.tv/link","code":"25Q4""#), "{sent}");
+
+        // Turned off, it waits on no one.
+        core.set_plugin_enabled(manifest.id.clone(), false);
+        assert_eq!(core.plugins().remove(0).ask, None);
+    }
+
+    #[test]
     fn a_plugin_is_suggested_while_its_app_is_on_the_tv_and_it_is_off() {
         let dir = tempfile::tempdir().unwrap();
         let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();

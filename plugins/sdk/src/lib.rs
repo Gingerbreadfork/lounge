@@ -29,6 +29,28 @@ pub trait Plugin {
     }
 }
 
+thread_local! {
+    /// What the call in progress asks of the person, if anything.
+    static ASKED: std::cell::RefCell<Option<Ask>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The error for `refresh` to return while it waits on the person: `Err(sdk::ask(...))`. The TV
+/// shows the ask as a step to take; its `say` is what a plain-text surface shows.
+pub fn ask(ask: Ask) -> String {
+    let say = ask.say.clone();
+    ASKED.with(|a| *a.borrow_mut() = Some(ask));
+    say
+}
+
+/// [`ask`] for a sign-in with a code: the person opens `link` on their phone and enters `code`.
+/// The TV shows both with a QR code and refreshes by itself until the code is taken. The
+/// sentence names the page without its scheme or query, as people read it out.
+pub fn sign_in(link: &str, code: &str) -> String {
+    let shown = link.trim_start_matches("https://").split(['?', '#']).next().unwrap_or(link).trim_end_matches('/');
+    let say = format!("Sign in: on your phone open {shown} and enter {code}, then press Refresh now here.");
+    ask(Ask { say, link: Some(link.to_string()), code: Some(code.to_string()), after: None, watch: true })
+}
+
 /// Memory handed across the boundary: exact-length boxed slices, allocated and freed on this side.
 #[doc(hidden)]
 pub fn __alloc(len: i32) -> i32 {
@@ -73,14 +95,24 @@ pub fn __return_json<T: serde::Serialize>(value: &T) -> i64 {
 #[doc(hidden)]
 pub fn __call<I: serde::de::DeserializeOwned, O: serde::Serialize>(ptr: i32, len: i32, f: impl FnOnce(I) -> Result<O, String>) -> i64 {
     let input = __take(ptr, len);
+    ASKED.with(|a| a.borrow_mut().take());
     let outcome: Outcome<O> = match serde_json::from_slice::<I>(&input) {
         Ok(i) => match f(i) {
             Ok(o) => Outcome::Ok(o),
-            Err(e) => Outcome::Err(e),
+            Err(e) => asked_or_failed(e, ASKED.with(|a| a.borrow_mut().take())),
         },
         Err(e) => Outcome::Err(format!("bad input: {e}")),
     };
     __return_json(&outcome)
+}
+
+/// An error that carries what [`ask`] made is the ask, with whatever the plugin said around it;
+/// any other error is a failure.
+fn asked_or_failed<O>(error: String, asked: Option<Ask>) -> Outcome<O> {
+    match asked {
+        Some(ask) if error.contains(&ask.say) => Outcome::Ask(Ask { say: error, ..ask }),
+        _ => Outcome::Err(error),
+    }
 }
 
 /// Exports the ABI entry points for a [`Plugin`] implementation.
@@ -262,6 +294,25 @@ pub fn epoch_ms(year: i64, month: u32, day: u32, hour: u32, minute: u32, second:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_ask_travels_as_itself_and_any_other_error_as_a_failure() {
+        let said = sign_in("https://plex.tv/link", "25Q4");
+        assert_eq!(said, "Sign in: on your phone open plex.tv/link and enter 25Q4, then press Refresh now here.");
+        let asked = ASKED.with(|a| a.borrow_mut().take());
+        // The plugin may say more around the sentence.
+        let Outcome::Ask(ask) = asked_or_failed::<()>(format!("That code ran out. {said}"), asked.clone()) else { panic!("not an ask") };
+        assert_eq!(ask.say, format!("That code ran out. {said}"));
+        assert_eq!((ask.link.as_deref(), ask.code.as_deref(), ask.after), (Some("https://plex.tv/link"), Some("25Q4"), None));
+        assert_eq!(asked_or_failed::<()>("Something else broke".into(), asked), Outcome::Err("Something else broke".into()));
+        assert_eq!(asked_or_failed::<()>("plain".into(), None), Outcome::Err("plain".into()));
+        assert_eq!(serde_json::to_string(&Outcome::<()>::Ask(Ask { say: "Wait".into(), ..Default::default() })).unwrap(), r#"{"ask":{"say":"Wait"}}"#);
+        // The sentence names the page as it is read out; the link keeps what it carries.
+        assert_eq!(sign_in("https://www.twitch.tv/activate?device-code=ABCD", "ABCD"), "Sign in: on your phone open www.twitch.tv/activate and enter ABCD, then press Refresh now here.");
+        assert_eq!(sign_in("https://simkl.com/pin/", "B-1"), "Sign in: on your phone open simkl.com/pin and enter B-1, then press Refresh now here.");
+        let twitch = ASKED.with(|a| a.borrow_mut().take()).unwrap();
+        assert!(twitch.watch && twitch.link.as_deref() == Some("https://simkl.com/pin/"));
+    }
 
     #[test]
     fn epoch_matches_known_dates() {

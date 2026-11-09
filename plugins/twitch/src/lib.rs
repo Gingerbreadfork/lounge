@@ -275,10 +275,9 @@ fn device_step(client_id: &str, now_ms: i64) -> Result<Token, String> {
     Err(instruction(&d))
 }
 
+/// The address Twitch gives already carries the code, so a phone that scans it has nothing to type.
 fn instruction(d: &Device) -> String {
-    // The address Twitch gives already carries the code; the short form is what people read out.
-    let page = d.verification_uri.trim_start_matches("https://").split('?').next().unwrap_or("twitch.tv/activate");
-    format!("Sign in: on your phone open {page} and enter {}, then press Refresh now here.", d.user_code)
+    sdk::sign_in(&d.verification_uri, &d.user_code)
 }
 
 fn renew(client_id: &str, old: &Token, now_ms: i64) -> Result<Token, RenewError> {

@@ -392,8 +392,15 @@ fn link_step(now_ms: i64) -> Result<String, String> {
     }
 }
 
+/// Stremio's link carries the code, so there is none to enter: the person signs in on the page.
 fn instruction(code: &str) -> String {
-    format!("Sign in: on your phone open link.stremio.com/{code} and sign in to Stremio, then press Refresh now here.")
+    sdk::ask(sdk::Ask {
+        say: format!("Sign in: on your phone open link.stremio.com/{code} and sign in to Stremio, then press Refresh now here."),
+        link: Some(format!("https://link.stremio.com/{code}")),
+        code: None,
+        after: Some("Sign in to Stremio on that page.".into()),
+        watch: true,
+    })
 }
 
 /// Every item of the account's library. A sign-in Stremio has forgotten is made again once.

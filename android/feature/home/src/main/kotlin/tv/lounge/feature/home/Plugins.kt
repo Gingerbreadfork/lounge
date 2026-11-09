@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -41,11 +42,13 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tv.lounge.core.CoreClient
+import tv.lounge.core.PluginAsk
 import tv.lounge.core.PluginInfo
 import tv.lounge.core.PluginSettingInfo
 import tv.lounge.design.Hairline
@@ -85,7 +88,12 @@ fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRe
                     icon = LoungeIcons.Apps,
                     title = p.name,
                     value = statusWord(p),
-                    accent = if (p.enabled && p.lastError == null) colors.signal else if (p.lastError != null) colors.ember else colors.dust,
+                    accent = when {
+                        p.enabled && p.ask != null -> colors.houselight
+                        p.enabled && p.lastError == null -> colors.signal
+                        p.lastError != null -> colors.ember
+                        else -> colors.dust
+                    },
                     onClick = { onOpen(p.id) },
                     focusRequester = if (p.id == returnTo || (returnTo == null && i == 0)) firstFocus else null,
                 )
@@ -96,6 +104,8 @@ fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRe
 }
 
 private fun statusWord(p: PluginInfo): String = when {
+    // A plugin waiting on the person is not a problem: a sign-in when there is a page or a code.
+    p.enabled && p.ask != null -> if (p.ask?.link != null || p.ask?.code != null) "Sign in" else "Needs setup"
     p.lastError != null && p.enabled -> "Problem"
     p.enabled -> "On"
     !p.configured -> "Needs setup"
@@ -139,7 +149,8 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
         Text(p.description, style = LoungeTheme.typography.meta, color = colors.dust)
         Spacer(Modifier.height(20.dp))
     }
-    StatusLine(p)
+    val ask = p.ask?.takeIf { p.enabled }
+    if (ask != null) AskCard(ask) else StatusLine(p)
     Spacer(Modifier.height(20.dp))
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -245,6 +256,38 @@ private fun reachText(p: PluginInfo): String {
         else -> list.dropLast(1).joinToString(", ") + " and " + list.last()
     }
     return if (p.selfSignedServers && list.isNotEmpty()) "$reach, accepting a home server's own certificate" else reach
+}
+
+/**
+ * What the plugin waits on the person for. A sign-in shows a QR code of its page when it has one,
+ * where to go and the code to enter, large enough to read from the sofa; any other step is said
+ * in words.
+ */
+@Composable
+private fun AskCard(ask: PluginAsk) {
+    val colors = LoungeTheme.colors
+    val link = ask.link
+    if (link == null && ask.code == null) {
+        Text(ask.say, style = LoungeTheme.typography.meta, color = colors.houselight)
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+        ask.qrPngPath?.let { path ->
+            AsyncImage(model = path, contentDescription = null, modifier = Modifier.size(200.dp).clip(RoundedCornerShape(12.dp)))
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(if (link != null) "Sign in on your phone" else "Sign in", style = LoungeTheme.typography.title, color = colors.houselight)
+            // With a page to open, the code follows it; without one, the plugin says where the code goes.
+            val where = when {
+                link == null -> ask.after
+                ask.linkText != null -> "Scan this with its camera, or open ${ask.linkText}" + if (ask.code != null) " and enter" else ""
+                else -> "Scan this with its camera, or tap the link in Lounge on your phone" + if (ask.code != null) " and enter" else ""
+            }
+            where?.let { Text(it, style = LoungeTheme.typography.meta, color = colors.dust) }
+            ask.code?.let { Text(it, style = LoungeTheme.typography.displayL, color = colors.limelight, maxLines = 1) }
+            if (link != null) ask.after?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust) }
+        }
+    }
 }
 
 @Composable

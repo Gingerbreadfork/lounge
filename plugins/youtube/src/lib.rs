@@ -451,7 +451,7 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, Stri
 }
 
 fn instruction(d: &Device) -> String {
-    format!("Sign in: on your phone open {} and enter {}, then press Refresh now here.", d.verification_url.trim_start_matches("https://").trim_end_matches('/'), d.user_code)
+    sdk::sign_in(&d.verification_url, &d.user_code)
 }
 
 fn renew(client_id: &str, secret: &str, old: &Token, now_ms: i64) -> Result<Token, Refusal> {

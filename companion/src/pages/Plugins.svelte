@@ -71,6 +71,8 @@
     return parts;
   }
   function status(p: Plugin) {
+    // A plugin waiting on you is not a problem: a sign-in when there is a page or a code.
+    if (p.enabled && p.ask) return { text: p.ask.link || p.ask.code ? 'Sign in' : 'Needs setup', cls: 'ask' };
     if (p.enabled && p.lastError) return { text: 'Problem', cls: 'bad' };
     if (p.enabled) return { text: 'On', cls: 'on' };
     if (!p.configured) return { text: 'Needs setup', cls: '' };
@@ -115,7 +117,22 @@
     {#if current.description}<p class="dust">{current.description}</p>{/if}
 
     <section class="card status">
-      {#if current.enabled && current.lastError}
+      {#if current.enabled && current.ask}
+        {@const ask = current.ask}
+        {#if ask.link || ask.code}
+          <p class="houselight">Sign in</p>
+          {#if ask.link}
+            <a class="btn primary" href={ask.link} target="_blank" rel="noopener">Open {ask.linkText ?? new URL(ask.link).host}</a>
+            {#if ask.code}<p class="dust">and enter</p>{/if}
+          {:else if ask.after}
+            <p class="dust">{ask.after}</p>
+          {/if}
+          {#if ask.code}<p class="code">{ask.code}</p>{/if}
+          {#if ask.link && ask.after}<p class="dust">{ask.after}</p>{/if}
+        {:else}
+          <p class="houselight">{#each linked(ask.say) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>
+        {/if}
+      {:else if current.enabled && current.lastError}
         <p class="ember">{#each linked(current.lastError) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>
       {:else if current.enabled && current.lastRefreshMs}
         <p class="signal">{current.items} items · refreshed {ago(current.lastRefreshMs)}</p>
@@ -211,7 +228,9 @@
 </main>
 
 <style>
-  .ember a, .caption a { text-decoration: underline; text-underline-offset: 3px; word-break: break-all; }
+  .ember a, .houselight a, .caption a { text-decoration: underline; text-underline-offset: 3px; word-break: break-all; }
+  .code { font: 600 32px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; color: var(--limelight); user-select: all; }
+  .status .btn.primary { align-self: flex-start; }
   .back { padding: 0; min-height: 0; margin-bottom: 8px; }
   .status { display: flex; flex-direction: column; gap: 12px; }
   .status-actions { display: flex; gap: 10px; }

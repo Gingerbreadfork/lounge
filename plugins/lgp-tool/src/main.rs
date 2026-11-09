@@ -183,7 +183,14 @@ fn run(args: &[String]) -> Result<(), String> {
     if let Some(file) = &state {
         save_state(file, &services.kv.lock())?;
     }
-    let items = items.map_err(|e| e.to_string())?;
+    let items = items.map_err(|e| match e {
+        // What the TV would show as a step to take, with the parts it shows apart from the sentence.
+        lounge_plugins::PluginError::Asks(ask) => {
+            let part = |name: &str, value: &Option<String>| value.as_ref().map(|v| format!("\n  {name}: {v}")).unwrap_or_default();
+            format!("plugin asks: {}{}{}{}", ask.say, part("link", &ask.link), part("code", &ask.code), part("after", &ask.after))
+        }
+        e => e.to_string(),
+    })?;
     let elapsed = started.elapsed();
     let manifest = services.manifest.get().cloned().unwrap_or_default();
     let artwork = check_artwork(&items, &manifest, &services, args.iter().any(|a| a == "--artwork"));

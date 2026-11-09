@@ -267,8 +267,28 @@ pub struct PluginInfo {
     pub refresh_minutes: u32,
     pub last_refresh_ms: Option<i64>,
     pub last_error: Option<String>,
+    /// What the plugin waits on the person for, in place of an error.
+    pub ask: Option<PluginAsk>,
     pub items: u32,
     pub settings: Vec<PluginSettingInfo>,
+}
+
+/// A step a plugin waits on the person for, such as a sign-in on their phone.
+#[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginAsk {
+    /// The whole instruction as one sentence.
+    pub say: String,
+    /// The address to open, with its scheme.
+    pub link: Option<String>,
+    /// The same as it is read out, without the scheme, when it is short enough to type.
+    pub link_text: Option<String>,
+    /// The code to enter there.
+    pub code: Option<String>,
+    /// What to do once the page is open, when it is more than entering the code.
+    pub after: Option<String>,
+    /// A QR code of the link as a picture on the TV, for the TV's own screen.
+    pub qr_png_path: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]

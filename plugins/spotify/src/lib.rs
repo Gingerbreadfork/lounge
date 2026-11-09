@@ -298,15 +298,17 @@ pub fn authorize_url(client_id: &str, verifier: &str) -> String {
     )
 }
 
-/// What to do to sign in. The link goes without its scheme, since the host cuts an address
-/// written with one down to its path.
+/// What to do to sign in. The sentence names the link without its scheme, since the host cuts
+/// an address written with one down to its path; the ask carries the link whole.
 fn instruction(client_id: &str, verifier: &str, again: bool) -> String {
     let why = if again { "Spotify ends every sign-in after six months, so it is time to sign in again. " } else { "" };
+    let after = "After you agree, copy the whole address of the page that can't be reached into the Sign-in address setting.";
     let link = authorize_url(client_id, verifier);
-    format!(
-        "{why}Sign in on your phone: in Lounge's companion app open Plugins, then Spotify, and tap the link there, or open {}. After you agree, copy the whole address of the page that can't be reached into the Sign-in address setting.",
+    let say = format!(
+        "{why}Sign in on your phone: in Lounge's companion app open Plugins, then Spotify, and tap the link there, or open {}. {after}",
         link.strip_prefix("https://").unwrap_or(&link)
-    )
+    );
+    sdk::ask(sdk::Ask { say, link: Some(link), code: None, after: Some(after.into()), watch: false })
 }
 
 struct Client {

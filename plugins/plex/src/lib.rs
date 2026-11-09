@@ -268,7 +268,10 @@ impl Access {
         if let Some(token) = pasted_token() {
             return Ok(Access { base: host::server_setting("server", "Server address")?, token, by_code: false });
         }
-        let Some(base) = typed_server() else { return Err(where_servers_are(&list_servers(now_ms)?)) };
+        // With no address yet, the page says which to enter; that is a step to take, not a failure.
+        let Some(base) = typed_server() else {
+            return Err(sdk::ask(sdk::Ask { say: where_servers_are(&list_servers(now_ms)?), ..Default::default() }));
+        };
         let kept = kept_servers().and_then(|servers| token_for(&servers, &base));
         let token = match kept {
             Some(token) => token,
@@ -397,7 +400,7 @@ fn pin_step(now_ms: i64) -> Result<String, String> {
 }
 
 fn instruction(pin: &Pin) -> String {
-    format!("Sign in: on your phone open plex.tv/link and enter {}, then press Refresh now here.", pin.code)
+    sdk::sign_in("https://plex.tv/link", &pin.code)
 }
 
 /// The account's servers from plex.tv, kept for later refreshes. Signs in first when no one

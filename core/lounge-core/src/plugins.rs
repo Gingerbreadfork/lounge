@@ -3,7 +3,7 @@
 //! to the worker; another answers tile presses and searches, so neither waits on the other.
 
 use crate::{now_ms, screensavers, worker, Inner, PluginInfo, PluginSettingInfo};
-use lounge_plugin_api::{valid_plugin_id, Action, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext};
+use lounge_plugin_api::{valid_plugin_id, Action, Ask, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
 use lounge_plugins::host::{kept, kept_results, Host, Limits, LoadedPlugin, Services, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
 use lounge_plugins::http::{host_permitted, reach, redact, Fetcher, Reach};
@@ -111,6 +111,27 @@ pub(crate) struct PluginManager {
     refresh_queued: Mutex<HashSet<String>>,
     /// When refreshes ran that the store could not record, so those plugins are not due at once.
     unrecorded_refresh: Mutex<HashMap<String, i64>>,
+    /// What each plugin waits on the person for, from its last refresh.
+    pub(crate) asks: Mutex<HashMap<String, PendingAsk>>,
+}
+
+/// A plugin's ask, with when it was first made and whether it is being asked again by itself.
+pub(crate) struct PendingAsk {
+    pub ask: Ask,
+    pub since_ms: i64,
+    pub asking_again: bool,
+}
+
+/// Why a refresh brought no items: it failed, or the plugin waits on the person.
+enum Stopped {
+    Failed(String),
+    Asks(Ask),
+}
+
+impl From<String> for Stopped {
+    fn from(e: String) -> Stopped {
+        Stopped::Failed(e)
+    }
 }
 
 /// The host's view of storage, backed by the core's store once it exists.
@@ -275,6 +296,7 @@ impl PluginManager {
             installing: Mutex::new(()),
             refresh_queued: Mutex::new(HashSet::new()),
             unrecorded_refresh: Mutex::new(HashMap::new()),
+            asks: Mutex::new(HashMap::new()),
         });
         (manager, refresh_rx, calls_rx, services)
     }
@@ -400,12 +422,15 @@ impl PluginManager {
 
     /// Run a refresh now and download its artwork; returns items ready for the worker and
     /// sentences worth putting in the plugin's log.
-    fn refresh(&self, entry: &PluginEntry, ctx: &RefreshContext) -> Result<(Vec<ReadyItem>, Vec<String>), String> {
+    fn refresh(&self, entry: &PluginEntry, ctx: &RefreshContext) -> Result<(Vec<ReadyItem>, Vec<String>), Stopped> {
         let started = std::time::SystemTime::now();
         let plugin = self.loaded(&entry.id, &entry.manifest)?;
-        let (items, sent) = self.host.refresh_counted(&plugin, ctx).map_err(|e| e.to_string())?;
+        let (items, sent) = self.host.refresh_counted(&plugin, ctx).map_err(|e| match e {
+            lounge_plugins::PluginError::Asks(ask) => Stopped::Asks(ask),
+            e => Stopped::Failed(e.to_string()),
+        })?;
         let (items, mut notes) = kept(items, sent);
-        let dir = self.plugin_art_dir(&entry.id).ok_or_else(|| format!("invalid plugin id {:?}", entry.id))?;
+        let dir = self.plugin_art_dir(&entry.id).ok_or_else(|| Stopped::Failed(format!("invalid plugin id {:?}", entry.id)))?;
         let settings = self.settings_of(&entry.id);
         let setting = |key: &str| settings.get(key).cloned();
         let fetcher = self.fetchers.for_plugin(&entry.id, &entry.manifest, &setting);
@@ -624,6 +649,7 @@ pub(crate) fn info_for(row: &PluginRow, manifest: &Manifest, settings: &[(String
         refresh_minutes: manifest.refresh_minutes_or_default(),
         last_refresh_ms: row.last_refresh_ms,
         last_error: row.last_error.clone(),
+        ask: None,
         items,
         settings: setting_infos,
     }
@@ -709,6 +735,12 @@ fn answer(inner: &Arc<Inner>, job: PluginJob) {
 /// that waits on the user fails until it is done, and its code must not expire in between.
 const RETRY_AFTER_FAILURE_MS: i64 = 5 * 60_000;
 
+/// How often a plugin whose ask finishes elsewhere, such as a sign-in code, is refreshed to see
+/// whether it has, and for how long after the ask first showed. After that it waits like any
+/// failed refresh.
+const ASK_AGAIN_EVERY: Duration = Duration::from_secs(5);
+const ASK_AGAIN_FOR_MS: i64 = 5 * 60_000;
+
 /// Whether a plugin last refreshed at `last_ms` is due again at `now`.
 fn refresh_due(last_ms: Option<i64>, failed: bool, interval_minutes: u32, now: i64) -> bool {
     let Some(last) = last_ms else { return true };
@@ -781,7 +813,10 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
     // A panic while running the plugin or fetching its pictures is that refresh's error, so the
     // plugin waits its interval rather than failing again every minute.
     let outcome = crate::guarded("a plugin refresh", || inner.plugins.refresh(&entry, &ctx))
-        .unwrap_or_else(|| Err("the refresh stopped on an error inside Lounge".into()));
+        .unwrap_or_else(|| Err(Stopped::Failed("the refresh stopped on an error inside Lounge".into())));
+    if !matches!(outcome, Err(Stopped::Asks(_))) {
+        inner.plugins.asks.lock().remove(id);
+    }
     match outcome {
         Ok((items, notes)) => {
             tracing::info!("plugin {id}: {} items in {} ms", items.len(), started.elapsed().as_millis());
@@ -805,7 +840,32 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
             }
             inner.enqueue_job(worker::Job::PluginItems { plugin: id.to_string(), items });
         }
-        Err(e) => {
+        // Recorded like a failure, so the plugin is tried again soon and a restart still has
+        // the sentence to show; the screens are given the ask itself.
+        Err(Stopped::Asks(ask)) => {
+            let say = clip_bytes(&redact_urls(&ask.say), 1000).to_string();
+            tracing::info!("plugin {id} waits on the person: {say}");
+            push_log(&inner.plugins.logs, id, 1, &format!("waiting: {say}"));
+            record_refresh(inner, &inner.state.lock().store, id, Some(&say));
+            let now = now_ms();
+            let (ask_again, changed) = {
+                let mut asks = inner.plugins.asks.lock();
+                // The wait is counted from when this code first showed.
+                let same = asks.get(id).filter(|p| p.ask.code == ask.code && p.ask.link == ask.link);
+                let (since_ms, already) = same.map_or((now, false), |p| (p.since_ms, p.asking_again));
+                let ask_again = ask.watch && now - since_ms < ASK_AGAIN_FOR_MS && !already;
+                let changed = same.is_none();
+                asks.insert(id.to_string(), PendingAsk { ask, since_ms, asking_again: already || ask_again });
+                (ask_again, changed)
+            };
+            if ask_again {
+                ask_again_soon(inner, id);
+            }
+            if changed {
+                inner.enqueue_job(worker::Job::Rebuild);
+            }
+        }
+        Err(Stopped::Failed(e)) => {
             let e = clip_bytes(&redact_urls(&e), 1000).to_string();
             tracing::warn!("plugin {id}: {e}");
             push_log(&inner.plugins.logs, id, 3, &e);
@@ -815,16 +875,70 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
     }
 }
 
+/// Refreshes a plugin that shows a sign-in code once more in a few seconds, so the TV notices
+/// by itself when the code has been entered.
+fn ask_again_soon(inner: &Arc<Inner>, id: &str) {
+    let (weak, id) = (Arc::downgrade(inner), id.to_string());
+    std::thread::spawn(move || {
+        std::thread::sleep(ASK_AGAIN_EVERY);
+        let Some(inner) = weak.upgrade() else { return };
+        let waiting = inner.plugins.asks.lock().get_mut(&id).map(|p| p.asking_again = false).is_some();
+        if waiting && inner.screen_on.load(Ordering::Relaxed) {
+            inner.plugins.refresh_soon(&id);
+        }
+    });
+}
+
+/// A plugin's ask as the screens show it: the link with its scheme, as it is read out when it is
+/// short enough to type, and a QR code of it for the TV.
+fn shown_ask(id: &str, ask: &Ask, cache_dir: &Path) -> crate::PluginAsk {
+    let link = ask.link.as_deref().map(str::trim).filter(|l| !l.is_empty()).map(|l| if l.contains("://") { l.to_string() } else { format!("https://{l}") });
+    // A long address is for scanning or tapping, not for reading out.
+    let link_text = link.as_deref().map(|l| l.split_once("://").map_or(l, |(_, rest)| rest).trim_end_matches('/')).filter(|bare| bare.len() <= 40).map(str::to_string);
+    let qr_png_path = link.as_deref().and_then(|l| ask_qr(id, l, cache_dir));
+    crate::PluginAsk { say: ask.say.clone(), link, link_text, code: ask.code.clone(), after: ask.after.clone(), qr_png_path }
+}
+
+/// The QR picture for a plugin's link, drawn once per link; a plugin's earlier ones are removed.
+fn ask_qr(id: &str, link: &str, cache_dir: &Path) -> Option<String> {
+    use std::hash::{Hash, Hasher};
+    if !valid_plugin_id(id) {
+        return None;
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    link.hash(&mut hasher);
+    let dir = cache_dir.join("plugin-asks");
+    let png = dir.join(format!("{id}-{:016x}.png", hasher.finish()));
+    if !png.exists() {
+        std::fs::create_dir_all(&dir).ok()?;
+        for stale in std::fs::read_dir(&dir).ok()?.flatten() {
+            if stale.file_name().to_string_lossy().starts_with(&format!("{id}-")) {
+                let _ = std::fs::remove_file(stale.path());
+            }
+        }
+        lounge_companion::qr_png(link, &png, 10).ok()?;
+    }
+    Some(png.to_string_lossy().into_owned())
+}
+
 impl Inner {
     pub(crate) fn plugins_info(&self) -> Vec<PluginInfo> {
         let state = self.state.lock();
         let rows = state.store.plugins().unwrap_or_default();
+        let asks = self.plugins.asks.lock();
+        let cache_dir = PathBuf::from(&self.config.cache_dir);
         rows.iter()
             .filter_map(|row| {
                 let manifest: Manifest = serde_json::from_str(&row.manifest_json).ok()?;
                 let settings = state.store.plugin_settings(&row.id).unwrap_or_default();
                 let items = state.graph.count_source(&format!("plugin:{}", row.id)) as u32;
-                Some(info_for(row, &manifest, &settings, items))
+                let mut info = info_for(row, &manifest, &settings, items);
+                // A plugin that waits on the person has a step to show, not a problem.
+                if let Some(pending) = asks.get(&row.id).filter(|_| row.enabled) {
+                    info.last_error = None;
+                    info.ask = Some(shown_ask(&row.id, &pending.ask, &cache_dir));
+                }
+                Some(info)
             })
             .collect()
     }
@@ -904,6 +1018,7 @@ impl Inner {
             let mut state = self.state.lock();
             let _ = state.store.plugin_set_enabled(id, enabled);
             if !enabled {
+                self.plugins.asks.lock().remove(id);
                 let _ = state.store.replace_items(&format!("plugin:{id}"), &[], now_ms());
                 screensavers::clear(&state.store, id);
                 state.graph.replace_source(&format!("plugin:{id}"), Vec::new());
@@ -1058,6 +1173,27 @@ mod tests {
         store_setting(&store, &m, "p", "epg_url", Some("https://guide.example/epg.xml.gz"));
         assert_eq!(store.plugin_setting("p", "playlist_url").unwrap().as_deref(), Some("http://iptv.example/get.php?username=u&password=p"));
         assert_eq!(store.plugin_setting("p", "epg_url").unwrap().as_deref(), Some("https://guide.example/epg.xml.gz"));
+    }
+
+    #[test]
+    fn an_ask_is_shown_with_its_link_whole_and_a_picture_of_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let ask = Ask { say: "Sign in: on your phone open plex.tv/link and enter 25Q4, then press Refresh now here.".into(), link: Some("plex.tv/link".into()), code: Some("25Q4".into()), after: None, watch: true };
+        let shown = shown_ask("tv.lounge.plex", &ask, dir.path());
+        assert_eq!((shown.link.as_deref(), shown.link_text.as_deref(), shown.code.as_deref()), (Some("https://plex.tv/link"), Some("plex.tv/link"), Some("25Q4")));
+        let png = shown.qr_png_path.unwrap();
+        assert!(std::fs::metadata(&png).unwrap().len() > 0);
+        // The same link keeps its picture; another link's takes its place.
+        assert_eq!(shown_ask("tv.lounge.plex", &ask, dir.path()).qr_png_path.as_deref(), Some(png.as_str()));
+        let long = Ask { link: Some(format!("https://accounts.spotify.com/authorize?client_id={}", "a".repeat(60))), code: None, ..ask.clone() };
+        let shown = shown_ask("tv.lounge.plex", &long, dir.path());
+        assert_eq!(shown.link_text, None);
+        assert!(shown.link.as_deref().is_some_and(|l| l.starts_with("https://accounts.spotify.com/authorize?client_id=aaa")));
+        assert!(!Path::new(&png).exists());
+        assert_eq!(std::fs::read_dir(dir.path().join("plugin-asks")).unwrap().count(), 1);
+        // With no link there is nothing to draw.
+        let plain = shown_ask("tv.lounge.plex", &Ask { say: "Enter your server's address.".into(), ..Default::default() }, dir.path());
+        assert_eq!((plain.link, plain.qr_png_path, plain.say.as_str()), (None, None, "Enter your server's address."));
     }
 
     #[test]
