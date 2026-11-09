@@ -32,6 +32,8 @@ const KEPT_DAYS_MS: i64 = 60 * 86_400_000;
 /// The key-value store takes 256 KB a key; the cache stays well under it.
 const CACHE_BYTES: usize = 200 * 1024;
 const MINUTE_MS: i64 = 60_000;
+/// How long "nothing out yet" stands before a show is asked about again.
+const NOTHING_NEXT_FOR_MS: i64 = 6 * 3_600_000;
 const REJECTED: &str = "Nuvio rejected the email or password. Check them in the plugin's settings.";
 
 impl sdk::Plugin for Nuvio {
@@ -137,7 +139,7 @@ impl sdk::Plugin for Nuvio {
         let mut up_next = 0;
         for w in &finished {
             let after = (w.season.unwrap_or(0) as u32, w.episode.unwrap_or(0) as u32);
-            if lookups < LOOKUPS && meta.needs_next(&w.content_id, after) {
+            if lookups < LOOKUPS && meta.needs_next(&w.content_id, after, ctx.now_ms) {
                 lookups += meta.fetch_next(w, after, ctx.now_ms, tmdb_key.as_deref());
             }
             if let Some(item) = up_next_item(w, by_id.get(w.content_id.as_str()).copied(), meta.get(&w.content_id), &package) {
@@ -868,6 +870,9 @@ struct NextEpisode {
     after: String,
     /// None when the show has nothing out past that episode.
     episode: Option<NextKnown>,
+    /// When this was asked.
+    #[serde(default)]
+    asked_ms: i64,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -938,9 +943,13 @@ impl MetaCache {
         }
     }
 
-    /// Whether what follows `after` is still to be asked.
-    fn needs_next(&self, id: &str, after: (u32, u32)) -> bool {
-        !self.known.get(id).and_then(|m| m.next.as_ref()).is_some_and(|n| n.after == episode_key(after.0, after.1))
+    /// Whether what follows `after` is still to be asked, or to be asked again because nothing
+    /// was out yet the last time.
+    fn needs_next(&self, id: &str, after: (u32, u32), now_ms: i64) -> bool {
+        match self.known.get(id).and_then(|m| m.next.as_ref()) {
+            Some(n) if n.after == episode_key(after.0, after.1) => n.episode.is_none() && now_ms - n.asked_ms >= NOTHING_NEXT_FOR_MS,
+            _ => true,
+        }
     }
 
     /// Asks about one title, and about its episode when there is one; returns how many fetches
@@ -1007,7 +1016,7 @@ impl MetaCache {
                     let next = later.first().map(|v| NextKnown { season: v.season.unwrap_or_default(), episode: v.episode.unwrap_or_default(), title: v.title(), thumbnail: v.thumbnail.clone() });
                     let entry = self.known.entry(id.to_string()).or_default();
                     entry.take_cinemeta(&meta);
-                    entry.next = Some(NextEpisode { after: episode_key(after.0, after.1), episode: next });
+                    entry.next = Some(NextEpisode { after: episode_key(after.0, after.1), episode: next, asked_ms: now_ms });
                     1
                 }
                 Err(e) => {
@@ -1028,7 +1037,7 @@ impl MetaCache {
                 let entry = self.known.entry(id.to_string()).or_default();
                 entry.take_tmdb(&title);
                 let Some((s, e)) = next else {
-                    entry.next = Some(NextEpisode { after: episode_key(after.0, after.1), episode: None });
+                    entry.next = Some(NextEpisode { after: episode_key(after.0, after.1), episode: None, asked_ms: now_ms });
                     return 1;
                 };
                 match tmdb_get::<TmdbEpisode>(&format!("tv/{}/season/{s}/episode/{e}", encode_segment(num)), key) {
@@ -1037,6 +1046,7 @@ impl MetaCache {
                         entry.next = Some(NextEpisode {
                             after: episode_key(after.0, after.1),
                             episode: Some(NextKnown { season: s, episode: e, title: ep.name.unwrap_or_default(), thumbnail: ep.still_path.map(|p| format!("{TMDB_IMAGES}/w780{p}")) }),
+                            asked_ms: now_ms,
                         });
                     }
                     Err(err) => sdk::warn!("TMDB has no episode {s}:{e} for {id}: {err}"),
@@ -1045,7 +1055,7 @@ impl MetaCache {
             }
             IdKind::Unknown => {
                 let entry = self.known.entry(id.to_string()).or_default();
-                entry.next = Some(NextEpisode { after: episode_key(after.0, after.1), episode: None });
+                entry.next = Some(NextEpisode { after: episode_key(after.0, after.1), episode: None, asked_ms: now_ms });
                 0
             }
         }
@@ -1240,10 +1250,14 @@ mod tests {
         assert!(!cache.needs("tt1", Some((1, 1)), false));
         assert!(cache.needs("tt1", Some((1, 2)), false));
         assert!(!cache.needs("tt1", None, false));
-        assert!(cache.needs_next("tt1", (1, 1)));
-        cache.known.get_mut("tt1").unwrap().next = Some(NextEpisode { after: "1:1".into(), episode: None });
-        assert!(!cache.needs_next("tt1", (1, 1)));
-        assert!(cache.needs_next("tt1", (1, 2)));
+        assert!(cache.needs_next("tt1", (1, 1), 1_000));
+        cache.known.get_mut("tt1").unwrap().next = Some(NextEpisode { after: "1:1".into(), episode: None, asked_ms: 1_000 });
+        assert!(!cache.needs_next("tt1", (1, 1), 1_000 + NOTHING_NEXT_FOR_MS - 1));
+        assert!(cache.needs_next("tt1", (1, 2), 1_000));
+        // Nothing out yet is asked again later, for when the next episode comes; an answer is not.
+        assert!(cache.needs_next("tt1", (1, 1), 1_000 + NOTHING_NEXT_FOR_MS));
+        cache.known.get_mut("tt1").unwrap().next = Some(NextEpisode { after: "1:1".into(), episode: Some(NextKnown::default()), asked_ms: 1_000 });
+        assert!(!cache.needs_next("tt1", (1, 1), 1_000 + NOTHING_NEXT_FOR_MS));
         cache.known.insert("tt2".into(), KnownMeta::default());
         cache.keep(["tt1"].into_iter());
         assert!(cache.get("tt2").is_none() && cache.get("tt1").is_some());
@@ -1284,7 +1298,7 @@ mod tests {
         let known = KnownMeta {
             name: Some("Show".into()),
             poster: Some("https://p/1.jpg".into()),
-            next: Some(NextEpisode { after: "1:2".into(), episode: Some(NextKnown { season: 1, episode: 3, title: "Third".into(), thumbnail: Some("https://t/3.jpg".into()) }) }),
+            next: Some(NextEpisode { after: "1:2".into(), episode: Some(NextKnown { season: 1, episode: 3, title: "Third".into(), thumbnail: Some("https://t/3.jpg".into()) }), asked_ms: 0 }),
             ..Default::default()
         };
         let item = up_next_item(w, None, Some(&known), GITHUB_PACKAGE).unwrap();
@@ -1296,9 +1310,9 @@ mod tests {
         assert_eq!((item.position_ms, item.progress), (None, None));
         assert_eq!(item.last_used_ms, Some(300));
         assert_eq!(item.thumbnail.as_deref(), Some("https://t/3.jpg"));
-        let stale = KnownMeta { next: Some(NextEpisode { after: "1:1".into(), episode: Some(NextKnown::default()) }), ..Default::default() };
+        let stale = KnownMeta { next: Some(NextEpisode { after: "1:1".into(), episode: Some(NextKnown::default()), asked_ms: 0 }), ..Default::default() };
         assert!(up_next_item(w, None, Some(&stale), GITHUB_PACKAGE).is_none());
-        let nothing_more = KnownMeta { next: Some(NextEpisode { after: "1:2".into(), episode: None }), ..Default::default() };
+        let nothing_more = KnownMeta { next: Some(NextEpisode { after: "1:2".into(), episode: None, asked_ms: 0 }), ..Default::default() };
         assert!(up_next_item(w, None, Some(&nothing_more), GITHUB_PACKAGE).is_none());
         let unnamed = KnownMeta { next: known.next.clone(), ..Default::default() };
         assert_eq!(up_next_item(w, None, Some(&unnamed), GITHUB_PACKAGE).unwrap().title, "Show");
