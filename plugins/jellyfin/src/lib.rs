@@ -51,7 +51,7 @@ impl sdk::Plugin for Jellyfin {
                     label: "Username".into(),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("Leave empty to sign in with Quick Connect: this page shows a code to enter in a Jellyfin app that is already signed in.".into()),
+                    help: Some("Leave empty to sign in with Quick Connect: this page shows a code to enter in Jellyfin on a phone or computer that is already signed in.".into()),
                     default: None,
                 },
                 SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
@@ -194,7 +194,7 @@ pub struct UserData {
     pub played: bool,
 }
 
-/// A Quick Connect request waiting to be approved in a Jellyfin app that is signed in.
+/// A Quick Connect request waiting to be approved where the person is signed in.
 #[derive(Serialize, Deserialize)]
 struct Quick {
     server: String,
@@ -283,13 +283,14 @@ fn quick_connect(server: &str, device_id: &str) -> Result<AuthResponse, String> 
     Err(instruction(&quick.code))
 }
 
-/// The code is entered in a Jellyfin app, not on a web page, so the ask has no link.
+/// The code is entered in Jellyfin's own settings, which the server's address does not lead
+/// to, so the ask has no link. Jellyfin's TV app has no place to enter one.
 fn instruction(code: &str) -> String {
     sdk::ask(sdk::Ask {
-        say: format!("Sign in: in a Jellyfin app that is already signed in, open Settings, then Quick Connect, and enter {code}, then press Refresh now here."),
+        say: format!("Sign in: on a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter {code}, then press Refresh now here."),
         link: None,
         code: Some(code.to_string()),
-        after: Some("In a Jellyfin app that is already signed in, open Settings, then Quick Connect, and enter this code.".into()),
+        after: Some("On a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter this code.".into()),
         watch: true,
     })
 }
@@ -643,7 +644,7 @@ mod tests {
         assert!(serde_json::from_str::<QuickAnswer>(r#"{"Authenticated":true,"Secret":"0123abcd","Code":"482913"}"#).unwrap().authenticated);
         assert_eq!(
             instruction("482913"),
-            "Sign in: in a Jellyfin app that is already signed in, open Settings, then Quick Connect, and enter 482913, then press Refresh now here."
+            "Sign in: on a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter 482913, then press Refresh now here."
         );
         let request = quick_request("POST", "http://jf:8096/Users/AuthenticateWithQuickConnect".into(), "tv-1", Some(r#"{"Secret":"0123abcd"}"#.into()));
         assert_eq!(request.headers.get("Authorization").map(String::as_str), Some(auth_header("tv-1").as_str()));
