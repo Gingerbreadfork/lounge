@@ -106,7 +106,9 @@ move back up and it opens again.
 and plugins. Your apps holds the apps you pin, in your order, then the five you opened last
 (Settings changes that to ten, fifteen or none). Games get a row of their own, marked when a
 controller is connected. Settings, Rows lists every row the home could show: OK shows or hides
-one, and holding OK picks it up to move. Empty rows stay off the screen.
+one, and holding OK picks it up to move. Empty rows stay off the screen. The same sheet lists
+every app and plugin that Continue watching draws on, with how many titles each brings. All of
+them are shown unless you hide one.
 
 Streaming apps such as Netflix only appear in Continue watching if they publish Watch Next
 entries Lounge is allowed to read, so turn on TV listings in Settings.
@@ -115,7 +117,7 @@ entries Lounge is allowed to read, so turn on TV listings in Settings.
 **The hold-OK menu.** Hold OK on any tile to pin it to the Stage, hide it, or hide its whole
 row. An app can also be pinned to the front of Your apps and moved, and gets app info, the store
 page and uninstall. On something in Continue watching you can hide everything from its app,
-which keeps that app out of the row and off the Stage until you bring it back.
+which keeps that app out of the row and off the Stage until you show it again in Settings, Rows.
 
 **All apps.** The last tile in Your apps opens every app on the TV as one grid, sorted A to Z,
 by last opened or by when it was installed. An alphabet down the side jumps through it, and
@@ -168,7 +170,8 @@ app. The TV serves it itself, with no account, and remembers the phone until you
   the TV has focused, and a place to paste a link that opens on the TV. With Power Setup
   connected, the keys reach whatever app is in front.
 - **Layout** shows, hides and reorders rows, pins and orders the apps at the front of Your apps,
-  unpins things from the Stage, and brings back anything you hid.
+  unpins things from the Stage, shows or hides each source of Continue watching, and brings back
+  anything you hid.
 - **Plugins** sets up the installed plugins and installs new ones from a file or a link.
 - **More** backs up your layout and settings to one file and restores it, lists the paired
   phones, and shows the TV's diagnostics.

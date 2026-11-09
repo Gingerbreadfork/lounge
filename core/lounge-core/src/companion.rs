@@ -1,7 +1,7 @@
 //! The companion server's view of the core: snapshots, actions, layout, plugins, backup.
 
 use crate::{engine, now_ms, plugins, worker, CompanionStatus, Inner, PairingInfo};
-use lounge_companion::{AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, NamedRef, RowRef};
+use lounge_companion::{AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, NamedRef, RowRef, SourceRef};
 use lounge_graph::Layout;
 use lounge_plugins::http::{Fetcher, Reach};
 use serde::{Deserialize, Serialize};
@@ -99,7 +99,7 @@ fn layout_doc(inner: &Inner) -> LayoutDoc {
         stage_items: l.stage_pins.iter().map(|id| named(engine::item_ref(graph, id))).collect(),
         recent_apps: l.recent_apps,
         muted_providers: l.muted_providers.iter().cloned().collect(),
-        muted_provider_items: engine::muted_providers(&state).into_iter().map(named).collect(),
+        continue_sources: engine::continue_sources(&state).into_iter().map(|s| SourceRef { id: s.id, title: s.title, icon_path: s.icon_path, count: s.count, shown: s.shown }).collect(),
         dismissed_notices: l.dismissed_notices.iter().cloned().collect(),
     }
 }
@@ -498,22 +498,32 @@ mod tests {
         core.command(crate::LayoutCommand::MuteProvider { provider: "tv.canal".into() });
         assert_eq!(tiles_when(1).iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["wn:2"]);
         assert!(core.snapshot().stage.strip.iter().all(|t| t.provider.as_deref() != Some("tv.canal")));
-        let muted: Vec<(String, String)> = core.muted_providers().into_iter().map(|m| (m.id, m.title)).collect();
-        assert_eq!(muted, [("tv.canal".to_string(), "TV.CANAL".to_string())]);
+        // Both stay listed, with what each brings and which is shown.
+        let listed = |core: &crate::Core| core.continue_sources().into_iter().map(|s| (s.title, s.count, s.shown)).collect::<Vec<_>>();
+        assert_eq!(listed(&core), [("plex".to_string(), 1, true), ("TV.CANAL".to_string(), 1, false)]);
 
         // The phone reads the same list and can empty it.
         let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
         let doc = actions.layout();
         assert_eq!(doc.muted_providers, ["tv.canal"]);
-        assert_eq!(doc.muted_provider_items.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), ["TV.CANAL"]);
+        assert_eq!(doc.continue_sources.iter().map(|s| (s.title.as_str(), s.shown)).collect::<Vec<_>>(), [("plex", true), ("TV.CANAL", false)]);
         // By the names the phone's page reads them under.
         let sent = serde_json::to_string(&doc).unwrap();
-        assert!(sent.contains(r#""mutedProviders":["tv.canal"]"#) && sent.contains(r#""mutedProviderItems":[{"id":"tv.canal""#), "{sent}");
+        assert!(sent.contains(r#""mutedProviders":["tv.canal"]"#) && sent.contains(r#""continueSources":[{"id":"tv.plex","title":"plex","iconPath":null,"count":1,"shown":true}"#), "{sent}");
         let tile = serde_json::to_string(&tiles_when(1)[0]).unwrap();
         assert!(tile.contains(r#""provider":"tv.plex","providerName":"plex""#), "{tile}");
         let doc = actions.set_layout(LayoutPatch { muted_providers: Some(Vec::new()), ..LayoutPatch::default() }).unwrap();
         assert!(doc.muted_providers.is_empty());
         assert_eq!(tiles_when(2).len(), 2);
+        assert_eq!(listed(&core), [("plex".to_string(), 1, true), ("TV.CANAL".to_string(), 1, true)]);
+
+        // An app left out stays listed while it brings nothing, so it can be shown again.
+        core.command(crate::LayoutCommand::MuteProvider { provider: "tv.gone".into() });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while core.continue_sources().len() < 3 && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+        assert!(core.continue_sources().contains(&crate::SourceInfo { id: "tv.gone".into(), title: "gone".into(), icon_path: None, count: 0, shown: false }));
     }
 
     #[test]

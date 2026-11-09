@@ -928,17 +928,17 @@ private fun SheetContent(
         Overlay.Rows -> {
             var rows by remember { mutableStateOf<List<tv.lounge.core.RowInfo>?>(null) }
             var hidden by remember { mutableStateOf<List<tv.lounge.core.ItemRef>?>(null) }
-            var muted by remember { mutableStateOf<List<tv.lounge.core.ItemRef>?>(null) }
+            var sources by remember { mutableStateOf<List<tv.lounge.core.SourceInfo>?>(null) }
             // Each change is shown at once; a read that began before a later change is thrown away,
             // so it cannot put the older state back on screen.
             val edits = remember { intArrayOf(0) }
             suspend fun reload() {
                 val began = edits[0]
-                val (r, h, m) = withContext(Dispatchers.IO) { Triple(core.homeRows(), core.hiddenItems(), core.mutedProviders()) }
+                val (r, h, s) = withContext(Dispatchers.IO) { Triple(core.homeRows(), core.hiddenItems(), core.continueSources()) }
                 if (edits[0] == began) {
                     rows = r
                     hidden = h
-                    muted = m
+                    sources = s
                 }
             }
             // A change that alters nothing on screen publishes no snapshot, so the list is also
@@ -951,7 +951,7 @@ private fun SheetContent(
             RowsSheet(
                 rows = rows,
                 hidden = hidden,
-                muted = muted,
+                sources = sources,
                 onToggle = { row ->
                     val shown = rows?.firstOrNull { it.id == row.id }?.shown ?: row.shown
                     edited()
@@ -976,10 +976,12 @@ private fun SheetContent(
                     core.command(LayoutCommand.UnhideItem(item.id))
                     hidden = hidden?.filter { it.id != item.id }
                 },
-                onShowProvider = { item ->
+                onToggleSource = { source ->
+                    val shown = sources?.firstOrNull { it.id == source.id }?.shown ?: source.shown
                     edited()
-                    core.command(LayoutCommand.UnmuteProvider(item.id))
-                    muted = muted?.filter { it.id != item.id }
+                    core.command(if (shown) LayoutCommand.MuteProvider(source.id) else LayoutCommand.UnmuteProvider(source.id))
+                    // One that brings nothing is only listed while it is hidden.
+                    sources = sources?.filter { it.id != source.id || shown || it.count > 0u }?.map { if (it.id == source.id) it.copy(shown = !shown) else it }
                 },
                 firstFocus = first,
             )

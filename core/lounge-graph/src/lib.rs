@@ -478,6 +478,18 @@ impl Graph {
         v
     }
 
+    /// The apps and plugins with something to continue, left out or not, each with how many
+    /// titles it brings and one of them.
+    pub fn continue_providers(&self) -> Vec<(&str, usize, &Item)> {
+        let mut by_provider: HashMap<&str, (usize, &Item)> = HashMap::new();
+        for it in self.items.values().filter(|it| it.continues() && !self.is_hidden(&it.id)) {
+            if let Some(provider) = it.provider() {
+                by_provider.entry(provider).or_insert((0, it)).0 += 1;
+            }
+        }
+        by_provider.into_iter().map(|(provider, (count, sample))| (provider, count, sample)).collect()
+    }
+
     /// Resume points and Watch Next entries, newest first, one per title, without those from
     /// apps and plugins the user left out.
     pub fn continue_watching(&self) -> Vec<&Item> {
@@ -921,6 +933,10 @@ mod tests {
         // A pin is the user's own choice, muted or not.
         g.layout.stage_pins = vec!["wn:c1".into()];
         assert_eq!(g.stage_candidates(6).iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["wn:c1", "wn:p1"]);
+        // What each app brings is counted whether it is left out or not.
+        let mut bringing: Vec<(&str, usize)> = g.continue_providers().into_iter().map(|(provider, count, _)| (provider, count)).collect();
+        bringing.sort();
+        assert_eq!(bringing, [("tv.canal", 2), ("tv.plex", 1)]);
         g.unmute_provider("tv.canal");
         assert_eq!(ids(&g), ["wn:c1", "wn:c2"]);
     }

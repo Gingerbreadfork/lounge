@@ -1,7 +1,7 @@
 //! Turns the graph into a `HomeSnapshot` and resolves actions back into platform calls.
 
 use crate::{
-    now_ms, Badge, CoreConfig, CoreError, HomeSnapshot, Inner, ItemRef, Row, RowInfo, RowSize, Stage, StageAction,
+    now_ms, Badge, CoreConfig, CoreError, HomeSnapshot, Inner, ItemRef, Row, RowInfo, RowSize, SourceInfo, Stage, StageAction,
     StageSpotlight, State, Tile, TileKind,
 };
 use lounge_graph::{DeepLink, Graph, Item, ItemKind};
@@ -213,12 +213,21 @@ fn provider_ref(graph: &Graph, plugin_name: &dyn Fn(&str) -> String, provider: &
     }
 }
 
-/// The apps and plugins the user left out of Continue watching, by name.
-pub(crate) fn muted_providers(state: &State) -> Vec<ItemRef> {
+/// Every app and plugin Continue watching draws on, by name, with what each brings and whether
+/// it is shown. One left out stays listed while it brings nothing, so it can be shown again.
+pub(crate) fn continue_sources(state: &State) -> Vec<SourceInfo> {
+    let graph = &state.graph;
+    let muted = &graph.layout.muted_providers;
     let plugin_name = |id: &str| state.plugins.iter().find(|p| p.id == id).map(|p| p.manifest.name.clone()).unwrap_or_else(|| id.to_string());
-    let mut v: Vec<ItemRef> = state.graph.layout.muted_providers.iter().map(|p| provider_ref(&state.graph, &plugin_name, p, None)).collect();
-    v.sort_by_key(|r| r.title.to_lowercase());
-    v
+    let source = |provider: &str, count: usize, from: Option<&Item>| {
+        let named = provider_ref(graph, &plugin_name, provider, from);
+        SourceInfo { id: named.id, title: named.title, icon_path: named.icon_path, count: count as u32, shown: !muted.contains(provider) }
+    };
+    let mut sources: Vec<SourceInfo> = graph.continue_providers().into_iter().map(|(provider, count, from)| source(provider, count, Some(from))).collect();
+    let idle: Vec<SourceInfo> = muted.iter().filter(|p| !sources.iter().any(|s| &s.id == *p)).map(|p| source(p, 0, None)).collect();
+    sources.extend(idle);
+    sources.sort_by_key(|s| (s.title.to_lowercase(), s.id.clone()));
+    sources
 }
 
 /// The tile for something to continue, saying which app or plugin it comes from.

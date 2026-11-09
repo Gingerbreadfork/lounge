@@ -53,6 +53,17 @@ pub struct NamedRef {
     pub icon_path: Option<String>,
 }
 
+/// An app or plugin Continue watching draws on, for showing and hiding from the phone.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceRef {
+    pub id: String,
+    pub title: String,
+    pub icon_path: Option<String>,
+    pub count: u32,
+    pub shown: bool,
+}
+
 /// An installed app, for pinning from the phone.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -90,9 +101,10 @@ pub struct LayoutDoc {
     /// Apps and plugins left out of Continue watching, each as a tile's `provider`.
     #[serde(default)]
     pub muted_providers: Vec<String>,
-    /// The same with their names, by title; each id is the provider.
+    /// Every app and plugin Continue watching draws on, by name, with what each brings and
+    /// whether it is shown; each id is the provider.
     #[serde(default)]
-    pub muted_provider_items: Vec<NamedRef>,
+    pub continue_sources: Vec<SourceRef>,
     /// Notice tiles the person chose not to see again, by id.
     #[serde(default)]
     pub dismissed_notices: Vec<String>,

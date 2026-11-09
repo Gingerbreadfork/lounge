@@ -33,6 +33,7 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import tv.lounge.core.ItemRef
 import tv.lounge.core.RowInfo
+import tv.lounge.core.SourceInfo
 import tv.lounge.design.Hairline
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
@@ -40,20 +41,20 @@ import tv.lounge.design.sounds
 
 /**
  * The row editor: every row the home could show, top to bottom, with what each holds, and under
- * them the tiles hidden from every row and the apps left out of Continue watching. OK shows or
- * hides a row; holding OK picks it up, Up and Down move it, OK sets it down. [rows], [hidden] and
- * [muted] are null until read.
+ * them the tiles hidden from every row and where Continue watching comes from. OK shows or hides
+ * a row or a source; holding OK picks a row up, Up and Down move it, OK sets it down. [rows],
+ * [hidden] and [sources] are null until read.
  */
 @Composable
 fun RowsSheet(
     rows: List<RowInfo>?,
     hidden: List<ItemRef>?,
-    muted: List<ItemRef>?,
+    sources: List<SourceInfo>?,
     onToggle: (RowInfo) -> Unit,
     onMove: (RowInfo, Int) -> Unit,
     onResetOrder: () -> Unit,
     onShowItem: (ItemRef) -> Unit,
-    onShowProvider: (ItemRef) -> Unit,
+    onToggleSource: (SourceInfo) -> Unit,
     firstFocus: FocusRequester,
 ) {
     val colors = LoungeTheme.colors
@@ -183,30 +184,42 @@ fun RowsSheet(
         }
     }
     Spacer(Modifier.height(24.dp))
-    SheetGroup("Hidden from Continue watching")
+    SheetGroup("Continue watching comes from")
     when {
-        muted == null -> Unit
-        muted.isEmpty() -> Text("No app is hidden. Hold OK on a tile there to hide everything from its app.", style = LoungeTheme.typography.meta, color = colors.dust)
+        sources == null -> Unit
+        sources.isEmpty() -> Text("Nothing to continue yet. Apps and plugins are listed here once they bring something.", style = LoungeTheme.typography.meta, color = colors.dust)
         else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            muted.forEachIndexed { i, item ->
-                key(item.id) {
+            sources.forEachIndexed { i, source ->
+                key(source.id) {
                     SheetRow(
-                        icon = if (item.iconPath == null) LoungeIcons.Hide else null,
-                        leading = item.iconPath?.let { path ->
+                        icon = if (source.iconPath == null) LoungeIcons.Play else null,
+                        leading = source.iconPath?.let { path ->
                             { AsyncImage(model = path, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(7.dp))) }
                         },
-                        title = item.title,
-                        value = "Show",
+                        title = source.title,
+                        subtitle = when (source.count) {
+                            0u -> "Nothing to continue now"
+                            1u -> "1 title"
+                            else -> "${source.count} titles"
+                        },
+                        value = if (source.shown) "Shown" else "Hidden",
+                        accent = if (source.shown && source.count > 0u) colors.signal else colors.dust,
                         onClick = {
                             sounds?.tick()
-                            val next = muted.getOrNull(i + 1) ?: muted.getOrNull(i - 1)
-                            onShowProvider(item)
-                            scope.launch {
-                                withFrameNanos { }
-                                (next?.let { requesterFor("from:${it.id}") } ?: resetFocus).requestWhenReady()
+                            // One that brings nothing leaves the list once it is shown again, so
+                            // focus moves to its neighbour, or back up to the reset row.
+                            val leaving = !source.shown && source.count == 0u
+                            val next = sources.getOrNull(i + 1) ?: sources.getOrNull(i - 1)
+                            onToggleSource(source)
+                            if (leaving) {
+                                scope.launch {
+                                    withFrameNanos { }
+                                    (next?.let { requesterFor("from:${it.id}") } ?: resetFocus).requestWhenReady()
+                                }
                             }
                         },
-                        focusRequester = requesterFor("from:${item.id}"),
+                        onCycle = if (!source.shown && source.count == 0u) null else { _ -> sounds?.tick(); onToggleSource(source) },
+                        focusRequester = requesterFor("from:${source.id}"),
                     )
                 }
             }

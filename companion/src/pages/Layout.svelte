@@ -2,7 +2,7 @@
   // The home screen's shape, from the phone: which rows show and in what order, what sits on
   // the Stage, which apps stay at the front, and everything that is hidden.
   import { untrack } from 'svelte';
-  import { api, art, type AppRef, type Layout, type NamedRef, type RowRef } from '../lib/api';
+  import { api, art, type AppRef, type Layout, type NamedRef, type RowRef, type SourceRef } from '../lib/api';
   import Icon from '../lib/Icon.svelte';
   import Reorder from '../lib/Reorder.svelte';
   import { act, app, quiet } from '../lib/state.svelte';
@@ -132,13 +132,20 @@
     if (!layout) return;
     change({ hidden: layout.hidden.filter((h) => h !== item.id) }, `${item.title} is back on the TV`, { hiddenItems: layout.hiddenItems.filter((i) => i.id !== item.id) });
   }
-  function showProvider(item: NamedRef) {
+  // Continue watching's sources: everything is shown unless it is hidden here or from a tile.
+  function toggleSource(source: SourceRef) {
     if (!layout) return;
+    const shown = !source.shown;
+    const others = layout.mutedProviders.filter((p) => p !== source.id);
     change(
-      { mutedProviders: layout.mutedProviders.filter((p) => p !== item.id) },
-      `${item.title} is back in Continue watching`,
-      { mutedProviderItems: layout.mutedProviderItems.filter((i) => i.id !== item.id) },
+      { mutedProviders: shown ? others : [...others, source.id] },
+      shown ? `${source.title} is back in Continue watching` : `${source.title} hidden from Continue watching`,
+      // One that brings nothing is only listed while it is hidden.
+      { continueSources: layout.continueSources.filter((s) => s.id !== source.id || !shown || s.count > 0).map((s) => (s.id === source.id ? { ...s, shown } : s)) },
     );
+  }
+  function titles(n: number) {
+    return n === 0 ? 'Nothing to continue now' : n === 1 ? '1 title' : `${n} titles`;
   }
 </script>
 
@@ -236,16 +243,22 @@
     </section>
 
     <section class="section">
-      <div class="section-head"><h3>Hidden from Continue watching</h3></div>
-      {#if layout.mutedProviderItems.length === 0}
-        <p class="caption">No app is hidden. Hold a tile in Continue watching and choose to hide everything from its app.</p>
+      <div class="section-head"><h3>Continue watching comes from</h3></div>
+      {#if layout.continueSources.length === 0}
+        <p class="caption">Nothing to continue yet. Apps and plugins are listed here once they bring something.</p>
       {:else}
+        <p class="caption">Everything is shown unless you hide it here, or hold a tile and hide everything from its app.</p>
         <div class="list">
-          {#each layout.mutedProviderItems as item (item.id)}
+          {#each layout.continueSources as source (source.id)}
             <div class="list-row">
-              {#if item.iconPath}<img class="row-icon" src={art(item.iconPath)} alt="" />{:else}<span class="glyph"><Icon name="hide" size={24} /></span>{/if}
-              <div class="grow title">{item.title}</div>
-              <button class="btn ghost" onclick={() => showProvider(item)}>Show</button>
+              {#if source.iconPath}<img class="row-icon" src={art(source.iconPath)} alt="" />{:else}<span class="glyph"><Icon name="play" size={22} /></span>{/if}
+              <div class="grow" class:dim={!source.shown}>
+                <div class="title">{source.title}</div>
+                <div class="caption one-line">{source.shown ? titles(source.count) : `Hidden · ${titles(source.count)}`}</div>
+              </div>
+              <button class="icon-btn" class:quiet={source.shown} onclick={() => toggleSource(source)} aria-label={source.shown ? `Hide ${source.title}` : `Show ${source.title}`}>
+                <Icon name={source.shown ? 'show' : 'hide'} size={22} />
+              </button>
             </div>
           {/each}
         </div>

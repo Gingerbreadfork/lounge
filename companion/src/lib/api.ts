@@ -32,6 +32,8 @@ export type State = { device: { name: string; model: string; version: string; ti
 export type RowRef = { id: string; title: string; shown: boolean; chosen: boolean; count: number; detail: string };
 export type NamedRef = { id: string; title: string; iconPath?: string | null };
 export type AppRef = { package: string; title: string; iconPath?: string | null; pinned: boolean };
+/** An app or plugin Continue watching draws on: how many titles it brings and whether it is shown. */
+export type SourceRef = { id: string; title: string; iconPath?: string | null; count: number; shown: boolean };
 export type Layout = {
   rowOrder: string[]; availableRows: RowRef[]; hidden: string[]; pinnedApps: string[]; stagePins: string[]; enabledChannels: number[];
   /** Rows shown or hidden by hand; a row not listed follows its default. */
@@ -39,8 +41,8 @@ export type Layout = {
   apps: AppRef[]; hiddenItems: NamedRef[]; stageItems: NamedRef[];
   /** How many recently opened apps follow the pins in Your apps; zero keeps the row to pins. */
   recentApps: number;
-  /** Apps and plugins left out of Continue watching, each as a tile's `provider`, and the same with their names. */
-  mutedProviders: string[]; mutedProviderItems: NamedRef[];
+  /** Apps and plugins left out of Continue watching, each as a tile's `provider`, and everything it draws on. */
+  mutedProviders: string[]; continueSources: SourceRef[];
   /** Notice tiles the person chose not to see again, by id. */
   dismissedNotices: string[];
 };

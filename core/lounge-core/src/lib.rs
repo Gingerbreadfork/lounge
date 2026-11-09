@@ -334,6 +334,20 @@ pub struct RowInfo {
     pub detail: String,
 }
 
+/// An app or plugin that Continue watching draws on, for the editors: how much it brings and
+/// whether it is shown.
+#[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceInfo {
+    /// What the layout knows it by: a tile's `provider`.
+    pub id: String,
+    pub title: String,
+    pub icon_path: Option<String>,
+    /// Titles it has to continue now.
+    pub count: u32,
+    pub shown: bool,
+}
+
 /// An item named for an editor list: something hidden or pinned.
 #[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -939,12 +953,12 @@ impl Core {
         engine::hidden_items(&state)
     }
 
-    /// The apps and plugins left out of Continue watching, by name; each id is the provider.
-    pub fn muted_providers(&self) -> Vec<ItemRef> {
+    /// Every app and plugin Continue watching draws on, by name, with those left out of it.
+    pub fn continue_sources(&self) -> Vec<SourceInfo> {
         self.count();
         engine::wait_for_graph(&self.inner);
         let state = self.inner.state.lock();
-        engine::muted_providers(&state)
+        engine::continue_sources(&state)
     }
 
     /// Preview channels other apps publish, with whether each is shown as a row.
