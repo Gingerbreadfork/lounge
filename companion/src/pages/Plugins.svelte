@@ -52,16 +52,17 @@
     if (p) { url = ''; go('plugins', p.id); }
   }
   /** A plugin's text split into words and the links in it, so a sign-in address can be tapped. A
-   *  bare name counts only with a path after it, so a file name such as guide.xml stays text. */
-  function linked(text: string): { text: string; href?: string }[] {
+   *  bare name counts only with a path after it, so a file name such as guide.xml stays text. In
+   *  `help`, an address that only shows what one looks like stays text too. */
+  function linked(text: string, help = false): { text: string; href?: string }[] {
     const parts: { text: string; href?: string }[] = [];
     const link = /https?:\/\/[^\s]+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s]*/gi;
     let last = 0;
     for (const m of text.matchAll(link)) {
       let found = m[0];
       // Punctuation that ends the sentence is not part of the address.
-      while (/[.,;:)!?]$/.test(found)) found = found.slice(0, -1);
-      if (!found) continue;
+      while (/[.,;:)!?…]$/.test(found)) found = found.slice(0, -1);
+      if (!found || (help && example(found))) continue;
       const start = m.index ?? 0;
       if (start > last) parts.push({ text: text.slice(last, start) });
       parts.push({ text: found, href: /^https?:\/\//i.test(found) ? found : `https://${found}` });
@@ -69,6 +70,11 @@
     }
     if (last < text.length) parts.push({ text: text.slice(last) });
     return parts;
+  }
+  /** Whether an address only shows what one looks like: a made-up home address or name. */
+  function example(address: string) {
+    const name = host(/^https?:\/\//i.test(address) ? address : `https://${address}`).replace(/:\d+$/, '');
+    return /^(localhost|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|(.+\.)?example(\.[a-z]+)?)$/i.test(name);
   }
   /** Where a link leads, for its button, or the link itself when it cannot be read. */
   function host(link: string) {
@@ -174,19 +180,19 @@
                 onblur={() => commit(current!, st.key)}
                 autocapitalize="off" spellcheck="false"
               ></textarea>
-              {#if st.help}<p class="caption">{#each linked(st.help) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
+              {#if st.help}<p class="caption">{#each linked(st.help, true) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
             {:else}
               <input
                 id={st.key}
                 type={st.kind === 'password' ? 'password' : st.kind === 'url' || st.kind === 'secret_url' ? 'url' : st.kind === 'number' ? 'number' : 'text'}
-                placeholder={(st.kind === 'password' || st.kind === 'secret_url') && st.hasValue ? '•••••••• (saved)' : (st.defaultValue ?? st.help ?? '')}
+                placeholder={(st.kind === 'password' || st.kind === 'secret_url') && st.hasValue ? '•••••••• (saved)' : (st.defaultValue ?? '')}
                 value={drafts[st.key] ?? st.value ?? ''}
                 oninput={(e) => (drafts[st.key] = (e.target as HTMLInputElement).value)}
                 onblur={() => commit(current!, st.key)}
                 onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                 autocapitalize="off" autocorrect="off" spellcheck="false"
               />
-              {#if st.help}<p class="caption">{#each linked(st.help) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
+              {#if st.help}<p class="caption">{#each linked(st.help, true) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
             {/if}
           </div>
         {/each}
