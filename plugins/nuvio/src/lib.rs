@@ -543,13 +543,14 @@ pub struct Saved {
     pub added_at: i64,
 }
 
-/// The newest position of each title still being watched, most recent first.
+/// The newest position of each title, where that one is still being watched, most recent first.
+/// A title whose newest position is finished is not being watched, whatever it left earlier.
 fn continue_watching(progress: &[Progress]) -> Vec<&Progress> {
     let mut newest: HashMap<&str, &Progress> = HashMap::new();
-    for p in progress.iter().filter(|p| p.in_progress()) {
+    for p in progress.iter().filter(|p| !p.content_id.is_empty() && p.position > 0) {
         newest.entry(p.content_id.as_str()).and_modify(|n| if p.last_watched > n.last_watched { *n = p }).or_insert(p);
     }
-    let mut watching: Vec<&Progress> = newest.into_values().collect();
+    let mut watching: Vec<&Progress> = newest.into_values().filter(|p| p.in_progress()).collect();
     watching.sort_by_key(|p| std::cmp::Reverse((p.last_watched, p.content_id.clone())));
     watching.truncate(RESUME_ITEMS);
     watching
@@ -1152,6 +1153,18 @@ mod tests {
         assert_eq!(watching, [("tt5", "tt5"), ("tt3", "tt3:1:2"), ("tt1", "tt1"), ("tt6", "tt6")]);
         let unknown_length = resume_item(&rows[6], None, None, GITHUB_PACKAGE);
         assert_eq!((unknown_length.duration_ms, unknown_length.progress, unknown_length.position_ms), (None, None, Some(120_000)));
+    }
+
+    #[test]
+    fn an_episode_left_before_later_ones_were_finished_is_not_continued() {
+        let rows = progress(
+            r#"[{"content_id":"tt1","content_type":"series","video_id":"tt1:1:2","season":1,"episode":2,"position":1500000,"duration":1800000,"last_watched":100},
+                {"content_id":"tt1","content_type":"series","video_id":"tt1:1:4","season":1,"episode":4,"position":1790000,"duration":1800000,"last_watched":300}]"#,
+        );
+        let watching = continue_watching(&rows);
+        assert!(watching.is_empty());
+        let seen = watched(r#"[{"content_id":"tt1","content_type":"series","title":"Show","season":1,"episode":4,"watched_at":300}]"#);
+        assert_eq!(last_finished(&seen, &watching).len(), 1);
     }
 
     #[test]
