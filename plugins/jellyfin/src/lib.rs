@@ -240,6 +240,10 @@ fn quick_connect(server: &str, device_id: &str) -> Result<AuthResponse, String> 
                 }
                 let take = quick_request("POST", format!("{server}/Users/AuthenticateWithQuickConnect"), device_id, Some(serde_json::json!({ "Secret": quick.secret }).to_string()));
                 let r = sdk::fetch_from("Jellyfin", server, &take)?;
+                // An approved request is kept until it has been taken, or the server refuses it.
+                if r.status >= 500 {
+                    return Err(sdk::answered_error("Jellyfin", server, r.status));
+                }
                 host::kv_delete(QUICK_KEY);
                 if !r.ok() {
                     return Err(sdk::answered_error("Jellyfin", server, r.status));
@@ -299,11 +303,16 @@ impl Session {
         {
             let s = Session { server: server.clone(), token, user_id, device_id: device_id.clone() };
             let probe = sdk::fetch_from("Jellyfin", &server, &s.request(&format!("/Users/{}", s.user_id)))?;
-            if probe.ok() {
-                return Ok(Some(s));
+            match probe.status {
+                _ if probe.ok() => return Ok(Some(s)),
+                // The server no longer takes the token, or no longer has the user. Anything else
+                // is the server having a bad moment, which is no reason to sign in again.
+                401 | 403 | 404 => {
+                    host::kv_delete("token");
+                    host::kv_delete("user_id");
+                }
+                status => return Err(sdk::answered_error("Jellyfin", &server, status)),
             }
-            host::kv_delete("token");
-            host::kv_delete("user_id");
         }
         if username.is_empty() {
             if !may_ask {
