@@ -320,12 +320,22 @@ impl PluginManager {
         self.logs.lock().get(plugin).map(|q| q.iter().cloned().collect()).unwrap_or_default()
     }
 
-    /// A refresh the person asked for. A plugin that waits on them is watched afresh.
+    /// A refresh that follows something the person did. A plugin that waits on them is watched
+    /// afresh.
     pub fn refresh_now(&self, id: &str) {
         if let Some(pending) = self.asks.lock().get_mut(id) {
             pending.since_ms = now_ms();
         }
         self.refresh_soon(id);
+    }
+
+    /// Asks again each plugin that waits on the person. They are back at the screen, and may
+    /// have done what it asked while the TV showed something else.
+    pub fn refresh_asking(&self) {
+        let asking: Vec<String> = self.asks.lock().keys().cloned().collect();
+        for id in asking {
+            self.refresh_now(&id);
+        }
     }
 
     /// Forgets what a plugin was asking, and the pictures drawn for it.
@@ -1030,7 +1040,7 @@ impl Inner {
             info_for(&stored, &manifest, &settings, 0)
         };
         if info.enabled {
-            self.plugins.refresh_soon(&info.id);
+            self.plugins.refresh_now(&info.id);
         }
         self.enqueue_job(worker::Job::Rebuild);
         Ok(info)
@@ -1095,7 +1105,7 @@ impl Inner {
             state.plugins = entries_from_rows(&rows);
         }
         if enabled {
-            self.plugins.refresh_soon(id);
+            self.plugins.refresh_now(id);
         }
         self.enqueue_job(worker::Job::Rebuild);
     }
@@ -1111,7 +1121,7 @@ impl Inner {
             entry.enabled
         };
         if enabled {
-            self.plugins.refresh_soon(id);
+            self.plugins.refresh_now(id);
         }
     }
 }
@@ -1280,6 +1290,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let shown = shown_ask("tv.lounge.plex", &Ask { say: "Sign in".into(), link: Some("javascript:alert(1)//://plex.tv/link".into()), code: Some("25Q4".into()), ..Default::default() }, dir.path());
         assert_eq!((shown.link, shown.link_text, shown.qr_png_path, shown.code.as_deref()), (None, None, None, Some("25Q4")));
+    }
+
+    #[test]
+    fn the_person_s_own_refresh_starts_the_watch_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let (plugins, _refresh, _calls, _services) = PluginManager::new(&dir.path().join("data"), &dir.path().join("cache"));
+        let ask = Ask { say: "Sign in".into(), code: Some("25Q4".into()), watch: true, ..Default::default() };
+        plugins.asks.lock().insert("p".into(), PendingAsk { ask: ask.clone(), since_ms: 0, watch: None });
+        assert!(!PendingAsk::carried_on(plugins.asks.lock().get("p"), &ask, now_ms()).1);
+        plugins.refresh_asking();
+        assert!(PendingAsk::carried_on(plugins.asks.lock().get("p"), &ask, now_ms()).1);
+        assert!(plugins.refresh_queued.lock().contains("p"));
     }
 
     #[test]

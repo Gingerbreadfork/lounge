@@ -1000,6 +1000,7 @@ impl Core {
             if let Some(plugin) = self.inner.opened_plugin.lock().take() {
                 self.inner.plugins.refresh_soon(&plugin);
             }
+            self.inner.plugins.refresh_asking();
             self.enqueue(worker::Job::Tick);
         }
     }
