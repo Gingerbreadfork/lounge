@@ -20,7 +20,8 @@ const DEVICE_KEY: &str = "device";
 const SUBS_KEY: &str = "subscriptions";
 const ART_KEY: &str = "hd_art";
 const HANDLES_KEY: &str = "handles";
-/// Feeds from the channels setting; subscriptions take what is left.
+/// Feeds from the channels setting read on every refresh. The rest of that list takes turns
+/// with the subscriptions for what is left.
 const MAX_FEEDS: usize = 40;
 /// Fetches spent in one refresh, inside the host's 64.
 const FETCH_BUDGET: usize = 60;
@@ -105,10 +106,8 @@ impl sdk::Plugin for YouTube {
         let mut videos = Vec::new();
         let mut failures = Vec::new();
         let sources = resolve_named(sources, &mut budget, &mut failures);
-        if sources.len() > MAX_FEEDS {
-            sdk::warn!("{} channels and playlists are listed; only the first {MAX_FEEDS} are read", sources.len());
-        }
-        for source in sources.iter().take(MAX_FEEDS) {
+        let (first, rest) = sources.split_at(sources.len().min(MAX_FEEDS));
+        for source in first {
             budget.spend();
             match feed(source) {
                 Ok(xml) => {
@@ -121,28 +120,38 @@ impl sdk::Plugin for YouTube {
             }
         }
 
+        // A long list's later entries and the account's subscriptions are read a few at a time.
         let mut items = Vec::new();
+        let mut followed: Vec<Followed> = rest.iter().filter_map(Followed::listed).collect();
+        let mut cache = SubsCache::load();
         let mut subscribed = 0;
-        if let Some(client) = &account {
-            if toggle("subscriptions", true) {
-                let mut cache = SubsCache::load();
-                match client.subscriptions(&mut budget) {
-                    Ok(subs) => {
-                        subscribed = subs.len();
-                        cache.refresh(&subs, ctx.now_ms, &mut budget);
-                        cache.save();
-                    }
-                    // The channels read last time stand in until the list can be read again.
-                    Err(e) => {
-                        subscribed = cache.channels.len();
-                        failures.push(("subscriptions".into(), e));
-                    }
+        if let Some(client) = account.as_ref().filter(|_| toggle("subscriptions", true)) {
+            match client.subscriptions(&mut budget) {
+                Ok(subs) => {
+                    subscribed = subs.len();
+                    followed.extend(subs.into_iter().map(Followed::subscribed));
                 }
-                for channel in cache.channels.values() {
-                    let mut from_channel: Vec<Video> = channel.videos.iter().filter(|v| wanted(v)).take(per_source).cloned().collect();
-                    videos.append(&mut from_channel);
+                // The channels read last time stand in until the list can be read again.
+                Err(e) => {
+                    let kept = cache.others(&followed);
+                    subscribed = kept.len();
+                    followed.extend(kept);
+                    failures.push(("subscriptions".into(), e));
                 }
             }
+        }
+        // A channel named twice, or already read above, is read once.
+        let mut seen: std::collections::HashSet<String> = first.iter().filter_map(Followed::listed).map(|f| f.key).collect();
+        followed.retain(|f| seen.insert(f.key.clone()));
+        if !followed.is_empty() || !cache.channels.is_empty() {
+            cache.refresh(&followed, ctx.now_ms, &mut budget);
+            cache.save();
+        }
+        for channel in cache.channels.values() {
+            let mut from_channel: Vec<Video> = channel.videos.iter().filter(|v| wanted(v)).take(per_source).cloned().collect();
+            videos.append(&mut from_channel);
+        }
+        if let Some(client) = &account {
             if toggle("playlists", true) {
                 match client.playlists(&mut budget) {
                     Ok(playlists) => items.extend(playlists),
@@ -172,7 +181,7 @@ impl sdk::Plugin for YouTube {
         let recent = ctx.now_ms - 3 * 86_400_000;
         let count = videos.len();
         let hd = hd_art(&videos, budget.left().min(ART_CHECKS));
-        sdk::info!("{count} videos from {} feeds and {subscribed} subscriptions, {} with large pictures, {} other tiles", sources.len().min(MAX_FEEDS), hd.values().filter(|v| **v).count(), items.len());
+        sdk::info!("{count} videos from {} feeds and {subscribed} subscriptions, {} with large pictures, {} other tiles", sources.len(), hd.values().filter(|v| **v).count(), items.len());
         items.extend(videos.into_iter().enumerate().map(|(i, v)| Item {
             id: format!("video:{}", v.id),
             title: v.title,
@@ -724,9 +733,40 @@ struct CachedChannel {
     videos: Vec<Video>,
 }
 
-/// The newest videos of each subscribed channel, from the public feeds. A refresh reads the
-/// channels not read for longest, as many as the budget allows, and keeps the rest from last
-/// time, so a long list of subscriptions still fits the host's fetches.
+/// A feed read in turn: a subscribed channel, or an entry far down the channels setting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Followed {
+    /// What the cache knows it by: a channel's id, or `list:` and a playlist's.
+    key: String,
+    title: String,
+}
+
+impl Followed {
+    fn subscribed(s: Subscribed) -> Followed {
+        Followed { key: s.channel_id, title: s.title }
+    }
+
+    /// An entry of the channels setting; a handle that could not be looked up names no feed.
+    fn listed(source: &Source) -> Option<Followed> {
+        let key = match source {
+            Source::Channel(id) => id.clone(),
+            Source::Playlist(id) => format!("list:{id}"),
+            Source::Named(_) => return None,
+        };
+        Some(Followed { key, title: source.label() })
+    }
+
+    fn source(&self) -> Source {
+        match self.key.strip_prefix("list:") {
+            Some(id) => Source::Playlist(id.to_string()),
+            None => Source::Channel(self.key.clone()),
+        }
+    }
+}
+
+/// The newest videos of each followed feed, from the public feeds. A refresh reads the feeds
+/// not asked for longest, as many as the budget allows, and keeps the rest from last time, so
+/// a long list still fits the host's fetches.
 #[derive(Serialize, Deserialize, Default)]
 struct SubsCache {
     channels: BTreeMap<String, CachedChannel>,
@@ -750,26 +790,31 @@ impl SubsCache {
                 return;
             }
         }
-        sdk::warn!("too many subscriptions to remember between refreshes; starting over");
+        sdk::warn!("too many channels to remember between refreshes; starting over");
         host::kv_delete(SUBS_KEY);
     }
 
-    /// Reads the feeds due, channels not asked for longest first, keeping `ART_RESERVE` fetches
-    /// back, and forgets channels no longer subscribed to.
-    fn refresh(&mut self, subs: &[Subscribed], now_ms: i64, budget: &mut Budget) {
-        self.channels.retain(|id, _| subs.iter().any(|s| &s.channel_id == id));
-        let mut due: Vec<&Subscribed> = subs.iter().collect();
-        due.sort_by_key(|s| self.channels.get(&s.channel_id).map_or(0, |c| c.attempted_ms.max(c.fetched_ms)));
+    /// The feeds kept from earlier that `followed` does not name.
+    fn others(&self, followed: &[Followed]) -> Vec<Followed> {
+        self.channels.iter().filter(|(key, _)| !followed.iter().any(|f| &f.key == *key)).map(|(key, c)| Followed { key: key.clone(), title: c.title.clone() }).collect()
+    }
+
+    /// Reads the feeds due, those not asked for longest first, keeping `ART_RESERVE` fetches
+    /// back, and forgets feeds no longer followed.
+    fn refresh(&mut self, followed: &[Followed], now_ms: i64, budget: &mut Budget) {
+        self.channels.retain(|key, _| followed.iter().any(|f| &f.key == key));
+        let mut due: Vec<&Followed> = followed.iter().collect();
+        due.sort_by_key(|f| self.channels.get(&f.key).map_or(0, |c| c.attempted_ms.max(c.fetched_ms)));
         let mut read = 0;
         for s in due {
             if budget.left() <= ART_RESERVE || !budget.spend() {
                 break;
             }
             read += 1;
-            let entry = self.channels.entry(s.channel_id.clone()).or_default();
+            let entry = self.channels.entry(s.key.clone()).or_default();
             entry.title = s.title.clone();
             entry.attempted_ms = now_ms;
-            match feed(&Source::Channel(s.channel_id.clone())) {
+            match feed(&s.source()) {
                 Ok(xml) => {
                     let mut videos = parse_feed(&xml);
                     videos.truncate(STORED_PER_CHANNEL);
@@ -780,7 +825,7 @@ impl SubsCache {
                 Err(e) => sdk::warn!("{}: {e}", s.title),
             }
         }
-        sdk::info!("{read} of {} subscriptions' feeds read this time", subs.len());
+        sdk::info!("{read} of {} followed feeds read this time", followed.len());
     }
 }
 
@@ -1209,7 +1254,7 @@ mod tests {
 
     #[test]
     fn subscriptions_are_read_longest_ago_first_within_the_budget() {
-        let subs: Vec<Subscribed> = (1..=5).map(|i| Subscribed { channel_id: format!("UC{i}"), title: format!("Channel {i}") }).collect();
+        let subs: Vec<Followed> = (1..=5).map(|i| Followed::subscribed(Subscribed { channel_id: format!("UC{i}"), title: format!("Channel {i}") })).collect();
         let mut cache = SubsCache::default();
         cache.channels.insert("UC1".into(), CachedChannel { title: "Channel 1".into(), fetched_ms: 500, ..Default::default() });
         cache.channels.insert("UC2".into(), CachedChannel { title: "Channel 2".into(), fetched_ms: 100, ..Default::default() });
@@ -1230,6 +1275,26 @@ mod tests {
         assert_eq!(cache.channels.values().filter(|c| c.attempted_ms == 1_000).count(), 2);
         assert_eq!(cache.channels["UC2"].attempted_ms, 2_000);
         assert_eq!(cache.channels["UC1"].attempted_ms, 0);
+    }
+
+    #[test]
+    fn a_long_list_s_later_entries_take_turns_like_subscriptions() {
+        let listed: Vec<Followed> = [Source::Channel("UCa".into()), Source::Playlist("PLb".into()), Source::Named("@gone".into())].iter().filter_map(Followed::listed).collect();
+        assert_eq!(listed.iter().map(|f| (f.key.as_str(), f.title.as_str())).collect::<Vec<_>>(), [("UCa", "channel UCa"), ("list:PLb", "playlist PLb")]);
+        assert_eq!(listed[0].source(), Source::Channel("UCa".into()));
+        assert_eq!(listed[1].source(), Source::Playlist("PLb".into()));
+
+        // What was kept for subscriptions stands in when their list cannot be read.
+        let mut cache = SubsCache::default();
+        cache.channels.insert("UCa".into(), CachedChannel { title: "channel UCa".into(), ..Default::default() });
+        cache.channels.insert("UCsub".into(), CachedChannel { title: "Subscribed".into(), ..Default::default() });
+        let kept = cache.others(&listed);
+        assert_eq!(kept, [Followed { key: "UCsub".into(), title: "Subscribed".into() }]);
+
+        // A feed dropped from both lists is forgotten.
+        let mut budget = Budget::new(ART_RESERVE);
+        cache.refresh(&listed, 1_000, &mut budget);
+        assert_eq!(cache.channels.keys().map(String::as_str).collect::<Vec<_>>(), ["UCa"]);
     }
 
     #[test]
