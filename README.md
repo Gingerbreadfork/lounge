@@ -5,7 +5,7 @@
 <h1 align="center">Lounge</h1>
 
 <p align="center">
-  A free, open-source launcher for Android TV and Google TV, laid out around what you actually watch.<br>
+  A free, open-source launcher for Android TV and Google TV, laid out around what you're watching.<br>
   Quick on the remote, calm to look at, and nothing leaves the house.
 </p>
 
@@ -20,7 +20,7 @@
   <a href="../../releases/latest"><img src="https://img.shields.io/badge/Download-Android_TV_9%2B-FFA86B?style=for-the-badge&labelColor=412399&logo=android&logoColor=FFFFFF" alt="Download the latest APK"></a>
 </p>
 
-<p align="center"><sub>One APK, no account: copy it to a USB stick, open it on the TV, and you are about five minutes from a new home screen. <a href="#installing-on-a-tv">Full steps</a>.</sub></p>
+<p align="center"><sub>One APK, no account. Copy it to a USB stick, open it on the TV, and you're about five minutes from a new home screen. <a href="#installing-on-a-tv">Full steps</a>.</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/home.png" width="920" alt="The Lounge home screen: a still from Static Bloom large on the right, its magenta light on the wall and the Continue button, the title, year and director on the left, and a strip of what to watch next along the bottom">
@@ -33,116 +33,113 @@
 <td width="33%" valign="top">
 <img src="docs/icons/play.svg" width="28" height="28" alt=""><br>
 <b>The Stage</b><br>
-One thing at a time: the episode to continue, the channel that is on, the app you open at this hour.
+The top of the screen shows one thing: the episode you were on, the channel that's live, or the app you usually open at this hour.
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/tv.svg" width="28" height="28" alt=""><br>
 <b>The whole TV</b><br>
-Inputs named by their devices and, on a streamer, the TV's power, input and sound.
+HDMI inputs named after what's plugged in. On a streamer, the TV's power, input and sound as well.
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/apps.svg" width="28" height="28" alt=""><br>
-<b>Rows you own</b><br>
-Pin, reorder and hide. Your apps in your order, and games with a badge when a controller is in.
+<b>Your rows</b><br>
+Pin, reorder and hide. Your apps in your order, and games in a row of their own.
 </td>
 </tr>
 <tr>
 <td width="33%" valign="top">
 <img src="docs/icons/resume.svg" width="28" height="28" alt=""><br>
 <b>Continue watching</b><br>
-Every app that publishes Watch Next, the TV's own listings and your media server, one entry per title.
+One list from every app that publishes Watch Next, the TV's own listings and your media server.
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/theme.svg" width="28" height="28" alt=""><br>
-<b>Light, not chrome</b><br>
-The focused tile's own colour spills onto the wall. Ten themes, Blackout and High contrast among them.
+<b>Lit by the artwork</b><br>
+The focused tile's colour spills onto the wall behind it. Ten themes, including Blackout and High contrast.
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/phone.svg" width="28" height="28" alt=""><br>
 <b>Your phone as a remote</b><br>
-A page the TV serves, with no account: it types, arranges the home screen and installs plugins.
+A web page the TV serves. It types, rearranges the home screen and installs plugins.
 </td>
 </tr>
 <tr>
 <td width="33%" valign="top">
 <img src="docs/icons/guide.svg" width="28" height="28" alt=""><br>
 <b>Live TV and a guide</b><br>
-Tuner and plugin channels in Live now, and a guide laid out to the minute.
+Channels from the tuner and from plugins, with a programme guide.
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/frame.svg" width="28" height="28" alt=""><br>
-<b>A screensaver of its own</b><br>
-Your artwork or nine abstract scenes, which can also run live behind the home screen.
+<b>Screensaver</b><br>
+Your artwork or nine abstract scenes, which can also play behind the home screen.
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/plugin.svg" width="28" height="28" alt=""><br>
 <b>Twenty-two plugins</b><br>
-Jellyfin, Plex, Kodi, Stremio, Nuvio, IPTV, Trakt, Twitch and more, each sandboxed WebAssembly in a signed bundle.
+Jellyfin, Plex, Kodi, Stremio, IPTV, Trakt, Twitch and more. Each is sandboxed WebAssembly in a signed bundle.
 </td>
 </tr>
 </table>
 
-<p align="center"><sub>Keeps itself current from this repository's releases &nbsp;·&nbsp; Android 9 and up, arm64 and 32-bit ARM</sub></p>
+<p align="center"><sub>Updates itself from this repository's releases. Android 9 and up, arm64 and 32-bit ARM.</sub></p>
 
 ## Why
 
-The home screen that comes with a TV works for the company that made it. It is slow on the
-hardware it ships on, it fills the rows with things to buy, it plays trailers you did not ask
+The home screen that comes with a TV works for the company that made it. It's slow on the
+hardware it ships on, it fills the rows with things to buy, it plays trailers you didn't ask
 for, and it phones home about all of it. The thing you were in the middle of watching is in
 there somewhere.
 
-Lounge starts from that thing. One picture, the title, how much is left, and a button. Under it,
-rows you arrange yourself: what you are watching, your apps in your order, live channels with a
-guide, the inputs on the back of the TV. It reads what the apps on the TV already publish, what
-your media server knows, and what you tell it, and it keeps all of that on the TV.
+Lounge starts from that thing: one picture, the title, how much is left, and a button. Under it
+are rows you arrange yourself. It reads what the apps on the TV already publish, what your media
+server knows and what you tell it, and it keeps all of that on the TV.
 
 ## What it does
 
-**The Stage.** The top of the screen is given to one thing at a time: the episode to continue,
-the channel that is on, the app you open every evening at this hour. A strip under it holds the
-next few, and no one app takes more than half of them while another has something to continue.
-Move down into the rows and the Stage lowers to a band with the title still on it; move back up
-and it rises again, one continuous picture, nothing squeezed.
+**The Stage.** The top of the screen shows one thing at a time, with a strip of the next few
+under it. No single app gets more than half of those places while another has something to
+continue. Move down into the rows and the Stage shrinks to a band with the title still on it;
+move back up and it opens again.
 
-**Rows you own.** Continue watching comes from every app that publishes it, from the TV's own
-listings, and from plugins. Your apps holds the apps you pin, in your order, then the five you
-opened last; Settings turns that five into ten, fifteen or none, and the rest wait in All apps. Games get a row of their own, marked when a controller is connected.
-Hold OK on any tile for a menu: pin it to the front of Your apps, pin it to the Stage so it stays
-among the big pictures at the top, move it, hide it, hide the whole row, app info, the store page,
-uninstall. On something to continue the menu can also hide everything from its app, which keeps
-that app out of Continue watching and off the Stage until you show it again. Each choice says what it does, and a pinned tile wears a small pin. Settings, Rows
-lists every row the home could show, with what each holds: OK shows or hides one, holding OK
-picks it up to move. Rows with nothing in them stay out of the way.
+**Rows.** Continue watching draws on every app that publishes Watch Next, the TV's own listings
+and plugins. Your apps holds the apps you pin, in your order, then the five you opened last
+(Settings changes that to ten, fifteen or none). Games get a row of their own, marked when a
+controller is connected. Settings, Rows lists every row the home could show: OK shows or hides
+one, and holding OK picks it up to move. Empty rows stay off the screen.
 
-**All apps.** Your apps ends with a tile that opens every app on the TV as one screen: a grid of
-banners with the alphabet down the side to jump by, sorted A to Z, by when you last opened them
-or by when they arrived, and narrowed as you type a name on the remote or the phone. A hundred
-apps are a few presses away rather than a long scroll, and the same hold-OK menu works there.
+Streaming apps such as Netflix only appear in Continue watching if they publish Watch Next
+entries Lounge is allowed to read, so turn on TV listings in Settings.
+[TV listings troubleshooting](docs/TV_LISTINGS.md) shows how to check what an app publishes.
 
-Streaming apps, including Netflix, appear in Continue watching when they publish readable
-Watch Next entries on your TV. Enable TV listings in Settings; Lounge refreshes them when
-you return from a player. [TV listings troubleshooting](docs/TV_LISTINGS.md) explains how to
-check what an app actually publishes.
+**The hold-OK menu.** Hold OK on any tile to pin it to the Stage, hide it, or hide its whole
+row. An app can also be pinned to the front of Your apps and moved, and gets app info, the store
+page and uninstall. On something in Continue watching you can hide everything from its app,
+which keeps that app out of the row and off the Stage until you bring it back.
 
-**Live TV with a guide.** Channels from the TV's tuner and from plugins show what is on now, and
-a guide lays the schedule out as a grid of channels and time.
+**All apps.** The last tile in Your apps opens every app on the TV as one grid, sorted A to Z,
+by last opened or by when it was installed. An alphabet down the side jumps through it, and
+typing a name on the remote or the phone narrows it.
 
-**The TV itself.** HDMI inputs with the names their devices announce over CEC and whether
-anything is plugged in. On a streamer, a TV controls card turns the TV on and switches to the
-right input, sends sound to a soundbar, changes the volume, or turns everything off.
+**Live TV.** Channels from the tuner and from plugins show what's on now, and a guide lays the
+schedule out by channel and time.
 
-**Now playing.** Music or a podcast playing in the background shows as a chip in the top bar and
-a card with play, pause and skip.
+**The TV itself.** HDMI inputs carry the names their devices announce over CEC and show whether
+anything is plugged in. On a streamer, a TV controls card turns the TV on, switches input, sends
+sound to a soundbar, changes the volume or turns everything off.
 
-**Search.** Apps, what you have been watching, and whatever the plugins can find, from one box.
+**Now playing.** Music or a podcast playing in the background gets a chip in the top bar and a
+card with play, pause and skip.
 
-**Screensaver and live backgrounds.** The screensaver shows the artwork from the Stage and the
-rows with a slow push-in, or one of nine abstract scenes drawn on the TV's graphics chip in your
-theme's colours. Plugins can add scenes ([PLUGINS.md](PLUGINS.md#screensavers)). Any scene can
-also run behind the home screen, dimmed so the tiles stay the brightest thing in the room.
+**Search.** One box for apps, what you've been watching and whatever the plugins can find.
 
-**Set up once.** Five screens on first run: how it should look, which accesses to allow, making
-it the home screen, pairing a phone, done. Every one is reachable again from Settings.
+**Screensaver.** Artwork from the Stage and the rows with a slow push-in, or one of nine abstract
+scenes drawn on the GPU in your theme's colours. Plugins can add scenes
+([PLUGINS.md](PLUGINS.md#screensavers)), and any scene can also run behind the home screen,
+dimmed so the tiles stay the brightest thing in the room.
+
+**Setup.** Five screens on first run: the look, what to allow, making it the home screen, pairing
+a phone, done. All of it is in Settings afterwards.
 
 <p align="center">
   <img src="docs/screenshots/rows.png" width="49%" alt="The Stage lowered to a band of its picture's own light, with the rows below it: Just added, then a row of posters">
@@ -151,9 +148,9 @@ it the home screen, pairing a phone, done. Every one is reachable again from Set
 
 ## The phone
 
-Settings, Phone companion shows a QR code and a six-digit code. The page at
-`http://<tv>:8787` works in any browser on the same network and can be added to the phone's
-home screen like an app. The TV serves it itself and remembers the phone until you forget it.
+Settings, Phone companion shows a QR code and a six-digit code. The page at `http://<tv>:8787`
+works in any browser on the same network and can be added to the phone's home screen like an
+app. The TV serves it itself, with no account, and remembers the phone until you forget it.
 
 <p align="center">
   <img src="docs/screenshots/phone-home.png" width="23%" alt="What's on: the Stage and the app rows as tiles that open on the TV">
@@ -165,81 +162,80 @@ home screen like an app. The TV serves it itself and remembers the phone until y
   <img src="docs/screenshots/phone-plugins.png" width="23%" alt="Plugins: the built-in plugins, each marked off or needing setup">
 </p>
 
-- **What's on** mirrors the home screen. Tap a tile and it opens on the TV; hold it for the same
-  menu as the remote's: pin it to the Stage or the front of Your apps, hide it, hide its row, or
-  hide everything from its app in Continue watching.
+- **What's on** mirrors the home screen. Tap a tile to open it on the TV, or hold it for the
+  same menu as the remote's.
 - **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into whatever
   the TV has focused, and a place to paste a link that opens on the TV. With Power Setup
   connected, the keys reach whatever app is in front.
-- **Layout** shows and hides rows and drags them into order, pins any app to the front of Your
-  apps and orders the pinned ones, and brings back anything hidden, any app hidden from
-  Continue watching, and anything pinned to the Stage.
-- **Plugins** configures the installed plugins and installs new ones from a file or a link.
-- **More** backs up your layout and settings as one file and restores it, lists the paired
+- **Layout** shows, hides and reorders rows, pins and orders the apps at the front of Your apps,
+  unpins things from the Stage, and brings back anything you hid.
+- **Plugins** sets up the installed plugins and installs new ones from a file or a link.
+- **More** backs up your layout and settings to one file and restores it, lists the paired
   phones, and shows the TV's diagnostics.
 
 ## Plugins
 
 A plugin is a WebAssembly module in a signed `.lgp` bundle. It runs inside the core under a fuel
-budget and a memory cap, with no access to Android, the file system, sockets or other plugins:
-it can only fetch from the hosts its manifest names, keep a small private store, read its
+budget and a memory cap, and it can't touch Android, the file system, sockets or other plugins.
+All it can do is fetch from the hosts its manifest names, keep a small private store, read its
 settings and log. What it publishes becomes tiles, Stage spotlights, channels in the guide or
-rows of its own. The TV pins each publisher's key when you install a plugin and refuses an
-update signed by anyone else; the plugins built into the APK are vouched for by the APK
-itself. Any language that targets core WebAssembly will do: the interface is eight imports
-and six exports with JSON in between.
+rows of its own.
 
-Twenty-two ship in the APK, written against the same SDK as anyone else's. Turn on the ones you use
-from the phone or the TV's settings. When an app such as Plex or Jellyfin is on the TV and its
-plugin is off, the home offers to set the plugin up, under Continue watching, until you do or
-dismiss it.
+The TV pins each publisher's key when you install a plugin and refuses an update signed by
+anyone else. Plugins built into the APK are vouched for by the APK itself. Any language that
+targets core WebAssembly will do: the interface is eight imports and six exports with JSON in
+between.
+
+Twenty-two ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
+use from the phone or the TV's settings. If an app such as Plex or Jellyfin is on the TV and its
+plugin is off, the home offers to set it up until you do or dismiss the offer.
 
 | Plugin | What it adds |
 |---|---|
-| Jellyfin | Your server's resume points and next episodes in Continue watching, its newest additions and your favourites as rows, and search, each opening on its page in the Jellyfin app |
-| Emby | Your server's resume points and next episodes in Continue watching, its newest additions and your favourites as rows, and search |
-| Plex | Your server's On Deck in Continue watching, its newest additions as a row, and search, after a sign-in with a code at plex.tv/link or with a token you paste |
-| Kodi | A Kodi library: resume points, the next episodes, recent additions and Live TV, played on whichever Kodi you choose |
-| Trakt | What you paused, what is next and your watchlist, whichever service they live on |
-| Simkl | What you paused, what is next, what you plan to watch and what airs this week, for shows, anime and films, whichever service they live on |
-| Stremio | Your Stremio account's paused titles, next episodes and newly released episodes in Continue watching, its library as a row, and search, each opening in the Stremio app |
-| Nuvio | Your Nuvio account's paused titles and next episodes in Continue watching, its library as a row, and search, each opening in the Nuvio TV app |
-| Sonarr and Radarr | The week's upcoming episodes and releases, what is downloading now and what has just arrived, each found through search in whichever app has it |
-| Spotify | What you listened to lately, your playlists, saved albums and podcasts with a Spotify developer app, or any Spotify links you paste without one, each opening in the Spotify app |
-| IPTV | An M3U playlist as channels, with a guide from XMLTV |
-| HDHomeRun | The tuner's channels and guide, played in the TV's own player |
-| Tvheadend, Channels DVR, NextPVR | A DVR's channels, guide and recordings |
-| Twitch | The channels you follow that are live, in Live now and the guide |
-| YouTube | New videos from channels and playlists through their public feeds, and with a Google sign-in your subscriptions, playlists and liked videos |
-| Podcasts | New episodes from the feeds you follow, Apple Podcasts links or an OPML export, played in a player app, with search through Apple's directory |
-| Moonlight | Your gaming PCs and the games on them from Sunshine, as tiles that start a stream in Moonlight; a game left running comes back in Continue watching |
-| Internet Archive | Free films, cartoons and television from archive.org, with search |
-| Immich photos | A shared Immich album as the screensaver |
-| Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art on the screensaver |
+| Jellyfin | Resume points and next episodes in Continue watching, newest additions and favourites as rows, and search. Opens in the Jellyfin app. |
+| Emby | The same from an Emby server. Tiles open the Emby app. |
+| Plex | On Deck in Continue watching, newest additions as a row, and search. Sign in with a code at plex.tv/link or paste a token. |
+| Kodi | Resume points, next episodes, recent additions and Live TV from a Kodi library, played on whichever Kodi you choose. |
+| Trakt | What you paused, what's next and your watchlist, wherever you watch it. |
+| Simkl | What you paused, what's next, what you plan to watch and what airs this week, for shows, anime and films. |
+| Stremio | Paused titles, next episodes and newly released episodes in Continue watching, the library as a row, and search. Opens in the Stremio app. |
+| Nuvio | Paused titles and next episodes in Continue watching, the library as a row, and search. Opens in the Nuvio TV app. |
+| Sonarr and Radarr | This week's episodes and releases, what's downloading and what just arrived. Tiles search for the title in whichever app has it. |
+| Spotify | Recently played, playlists, saved albums and podcasts with a Spotify developer app, or any Spotify links you paste without one. Opens in the Spotify app. |
+| IPTV | An M3U playlist as channels, with a guide from XMLTV. |
+| HDHomeRun | The tuner's channels and guide, played in the TV's own player. |
+| Tvheadend, Channels DVR, NextPVR | A DVR's channels, guide and recordings. |
+| Twitch | The live channels you follow, in Live now and the guide. |
+| YouTube | New videos from channels and playlists through their public feeds. With a Google sign-in, your subscriptions, playlists and liked videos too. |
+| Podcasts | New episodes from feeds, Apple Podcasts links or an OPML export, played in a player app. Search uses Apple's directory. |
+| Moonlight | Your gaming PCs and their games from Sunshine, as tiles that start a stream in Moonlight. A game left running shows up in Continue watching. |
+| Internet Archive | Free films, cartoons and television from archive.org, with search. |
+| Immich photos | A shared Immich album as the screensaver. |
+| Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art as the screensaver. |
 
-A twenty-third, **Sample library**, lives in the repository but not the APK: eighteen public-domain
-films with their posters, so you can see Lounge with something on it. The pictures in this file
-show a made-up horror library instead: every title, poster and name in them is invented.
-[PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin on your TV.
+A twenty-third, **Sample library**, lives in the repository but not the APK: eighteen
+public-domain films with their posters, so you can see Lounge with something on it. The pictures
+in this file show a made-up horror library instead; every title, poster and name in them is
+invented.
 
-Plugin submissions are welcome. Open a pull request that adds yours under `plugins/` once it
-passes the [checklist](PLUGINS.md#checklist-before-you-share-it) in PLUGINS.md.
+[PLUGINS.md](PLUGINS.md) takes you from nothing to a plugin on your TV. Submissions are welcome:
+open a pull request that adds yours under `plugins/` once it passes the
+[checklist](PLUGINS.md#checklist-before-you-share-it).
 
 ## The look
 
-The idea is a dim living room at night with one bright thing in it. The backdrop is dark velvet
-and the focused tile is the lamp: its artwork's own colour spills onto the wall and glows around
-it, the tiles beside it lift as if lit from the side, and after a minute without the remote the
-lights go down. Ten themes change the walls and the lamp and nothing else.
+The idea is a dim living room at night with one bright thing in it. The backdrop is dark and the
+focused tile is the lamp: its artwork's colour spills onto the wall around it, and after a
+minute without the remote the lights go down. Ten themes change the walls and the lamp and
+nothing else.
 
 <p align="center">
   <img src="docs/screenshots/themes.png" width="920" alt="The ten themes, each shown as the home screen with the Settings sheet open">
 </p>
 
-Type is Bricolage Grotesque and Figtree, both bundled, the three sounds are rendered rather than
-sampled, and the mark is a plush coral sofa. Reduced motion follows the system or your choice,
-and Lite mode turns the shader and the spill off for a TV that needs it. The whole system is
-written down in [DESIGN.md](DESIGN.md).
+The type is Bricolage Grotesque and Figtree, both bundled. Reduced motion follows the system
+setting or your own, and Lite mode turns off the shader and the colour spill for a TV that
+struggles with them. The whole design system is written down in [DESIGN.md](DESIGN.md).
 
 <p align="center">
   <img src="docs/screenshots/onboarding.png" width="49%" alt="The first setup screen: ten themes in a grid with a live preview of the home screen beside them">
@@ -251,7 +247,7 @@ written down in [DESIGN.md](DESIGN.md).
 Download `Lounge-<version>.apk` from the [Releases](../../releases) page, or build it yourself
 (below). It runs on Android TV and Google TV from Android 9.
 
-### The easy way: a USB stick
+### With a USB stick
 
 1. Copy the APK onto a USB stick and plug it into the TV.
 2. Open the APK with a file manager on the TV. Google TV has none built in, but any from the
@@ -263,7 +259,7 @@ Download `Lounge-<version>.apk` from the [Releases](../../releases) page, or bui
 No USB stick? Install **Downloader** from the Play Store, open
 `github.com/Gingerbreadfork/lounge/releases` in it, choose the APK, and carry on from step 3.
 
-### The advanced way: ADB
+### With ADB
 
 With USB debugging on and a computer on the same network, this installs Lounge and makes it
 the home screen; press Home and its setup starts:
@@ -284,20 +280,20 @@ adb shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
 ```
 
 Power Setup does all of this from the TV as well, and can undo it. It also grants the optional
-accesses, drives the TV over HDMI-CEC, sets the screensaver and compiles Lounge ahead of time,
-showing each command before it runs.
+permissions, drives the TV over HDMI-CEC, sets the screensaver and compiles Lounge ahead of
+time. It shows each command before running it.
 
 ### Updates
 
 Lounge checks the [Releases](../../releases) page twice a day, verifies a newer APK against its
-published hash and installs it while you are in another app. From Android 12 there is no prompt
+published hash and installs it while you're in another app. From Android 12 there is no prompt
 after the first update, and with Power Setup there is none at all; otherwise a tile on the home
-screen offers it. On Google TV, Play Protect may warn the first time that it does not know the
-developer: choose More details, then Install anyway. Settings, Updates turns the check off, if
-you would rather manage updates yourself with [Obtainium](https://github.com/ImranR98/Obtainium)
-pointed at this repository.
+screen offers it. On Google TV, Play Protect may warn the first time that it doesn't know the
+developer: choose More details, then Install anyway. Settings, Updates turns the check off if
+you'd rather manage updates yourself, for example with
+[Obtainium](https://github.com/ImranR98/Obtainium) pointed at this repository.
 
-## Under the hood
+## How it's built
 
 The shell is Kotlin and Compose for TV. Everything that decides what to show is a Rust core
 behind a UniFFI boundary: a graph of apps, programmes, channels and inputs with their usage,
@@ -313,8 +309,9 @@ frames out of ten while you move around. A TCL television with a Mali GPU runs t
 at about 75 MB and is bound by its GPU rather than its CPU. Both are measured with the scripts
 in `tools/`.
 
-Lounge reaches only what you gave it an address for, the artwork the TV's other apps publish,
-and GitHub twice a day for updates. There are no accounts and no analytics.
+Lounge itself fetches the artwork the TV's other apps publish and checks GitHub twice a day for
+updates. Plugins reach only the hosts their manifests name, and only once you turn them on.
+There are no accounts and no analytics.
 
 ## Building from source
 
