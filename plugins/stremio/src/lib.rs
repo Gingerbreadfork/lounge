@@ -745,7 +745,9 @@ impl NewEpisodes {
         let a: LastVideosAnswer = serde_json::from_str(&r.body).map_err(|e| format!("unexpected answer: {e}"))?;
         let mut fresh = NewEpisodes { fetched_ms: now_ms, ids, latest: HashMap::new() };
         for m in a.metas_detailed.into_iter().filter(|m| !m.id.is_empty()) {
-            fresh.latest.insert(m.id, latest_videos(m.videos));
+            // Nothing is new for a show never watched.
+            let Some(since_ms) = shows.iter().find(|it| it.id == m.id).and_then(|it| it.last_watched_ms()) else { continue };
+            fresh.latest.insert(m.id, latest_videos(m.videos, since_ms, now_ms + NEW_EPISODES_EVERY_MS));
         }
         save_within_limit(NEW_EPISODES_KEY, &fresh);
         Ok(fresh)
@@ -773,17 +775,19 @@ impl NewEpisodes {
     }
 }
 
-/// A show's last few dated episodes, specials left out, oldest first: all it takes to know what
-/// came out since it was last watched.
-fn latest_videos(videos: Vec<CinemetaVideo>) -> Vec<NewVideo> {
+/// A show's first few dated episodes out after `since_ms` and by `until_ms`, specials left out,
+/// oldest first: all it takes to know what came out since it was last watched. Episodes
+/// scheduled for later wait for the next answer.
+fn latest_videos(videos: Vec<CinemetaVideo>, since_ms: i64, until_ms: i64) -> Vec<NewVideo> {
     let mut videos: Vec<NewVideo> = videos
         .into_iter()
         .filter(|v| v.season.unwrap_or(1) > 0)
         .filter_map(|v| Some(NewVideo { released_ms: v.released_ms()?, title: v.title(), id: v.id, season: v.season, episode: v.episode, thumbnail: v.thumbnail }))
+        .filter(|v| v.released_ms > since_ms && v.released_ms <= until_ms)
         .collect();
     videos.sort_by_key(|v| v.released_ms);
-    let keep = videos.len().saturating_sub(5);
-    videos.split_off(keep)
+    videos.truncate(5);
+    videos
 }
 
 /// Movies, then shows, matching `query` in Cinemeta's catalogue, each opened with `open`.
@@ -970,12 +974,13 @@ mod tests {
                 {"id":"tt1:0:1","name":"Special","season":0,"number":1,"episode":1,"released":"2026-10-16T00:00:00Z"}]}]}"#,
         )
         .unwrap();
+        let now = parse_iso8601("2026-10-20T00:00:00Z").unwrap();
+        let since = it.last_watched_ms().unwrap();
         let mut latest = NewEpisodes::default();
         for m in a.metas_detailed {
-            latest.latest.insert(m.id, latest_videos(m.videos));
+            latest.latest.insert(m.id, latest_videos(m.videos, since, now + NEW_EPISODES_EVERY_MS));
         }
-        assert_eq!(latest.latest["tt1"].iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), ["tt1:1:1", "tt1:1:2", "tt1:1:3"]);
-        let now = parse_iso8601("2026-10-20T00:00:00Z").unwrap();
+        assert_eq!(latest.latest["tt1"].iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), ["tt1:1:2"]);
         let item = latest.item_for(it, now).unwrap();
         assert_eq!(item.id, "new:tt1");
         assert_eq!(item.kind, ItemKind::Resume);
@@ -988,6 +993,16 @@ mod tests {
         assert!(item.action.view.unwrap().contains("/tt1/tt1%3A1%3A2#"));
         let caught_up = &library(r#"[{"_id":"tt1","name":"Show","type":"series","removed":false,"temp":false,"state":{"lastWatched":"2026-10-16T00:00:00Z"}}]"#)[0];
         assert!(latest.item_for(caught_up, now).is_none());
+
+        // Mid-season, the weeks already scheduled do not push out the episode that is out.
+        let weekly: Vec<String> = ["2026-10-15", "2026-10-22", "2026-10-29", "2026-11-05", "2026-11-12", "2026-11-19", "2026-11-26"]
+            .iter()
+            .enumerate()
+            .map(|(i, day)| format!(r#"{{"id":"tt1:1:{n}","season":1,"episode":{n},"released":"{day}T00:00:00Z"}}"#, n = i + 2))
+            .collect();
+        let videos: Vec<CinemetaVideo> = serde_json::from_str(&format!("[{}]", weekly.join(","))).unwrap();
+        let kept = latest_videos(videos, since, now + NEW_EPISODES_EVERY_MS);
+        assert_eq!(kept.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), ["tt1:1:2"]);
     }
 
     #[test]
