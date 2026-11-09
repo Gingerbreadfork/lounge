@@ -100,8 +100,9 @@ your media server knows, and what you tell it, and it keeps all of that on the T
 
 **The Stage.** The top of the screen is given to one thing at a time: the episode to continue,
 the channel that is on, the app you open every evening at this hour. A strip under it holds the
-next few. Move down into the rows and the Stage lowers to a band with the title still on it;
-move back up and it rises again, one continuous picture, nothing squeezed.
+next few, and no one app takes more than half of them while another has something to continue.
+Move down into the rows and the Stage lowers to a band with the title still on it; move back up
+and it rises again, one continuous picture, nothing squeezed.
 
 **Rows you own.** Continue watching comes from every app that publishes it, from the TV's own
 listings, and from plugins. Your apps holds the apps you pin, in your order, then the five you

@@ -203,7 +203,8 @@ impl Item {
     }
 
     /// Where something to continue comes from: the app it opens in, or its plugin when it opens
-    /// in no app. Continue watching can leave a provider out.
+    /// in no app. Continue watching can leave a provider out, and the Stage shares its places
+    /// between them.
     pub fn provider(&self) -> Option<&str> {
         self.package().filter(|p| !p.is_empty()).or_else(|| self.source.starts_with("plugin:").then_some(self.source.as_str()))
     }
@@ -640,6 +641,8 @@ impl Graph {
     }
 
     /// Stage candidates: pinned first, then continue-watching, then recent apps, capped at `cap`.
+    /// No app or plugin takes more than half the places the pins leave while another has
+    /// something to continue; what it is passed over for comes after the others.
     pub fn stage_candidates(&self, cap: usize) -> Vec<&Item> {
         let mut out: Vec<&Item> = Vec::new();
         for id in &self.layout.stage_pins {
@@ -652,14 +655,28 @@ impl Graph {
                 }
             }
         }
+        let share = cap.saturating_sub(out.len()).div_ceil(2);
+        let mut taken: HashMap<&str, usize> = HashMap::new();
+        let mut passed_over: Vec<&Item> = Vec::new();
         for it in self.continue_watching() {
             if out.len() >= cap {
                 break;
             }
-            if !out.iter().any(|o| o.id == it.id) {
-                out.push(it);
+            if out.iter().any(|o| o.id == it.id) {
+                continue;
             }
+            if let Some(provider) = it.provider() {
+                let places = taken.entry(provider).or_default();
+                if *places >= share {
+                    passed_over.push(it);
+                    continue;
+                }
+                *places += 1;
+            }
+            out.push(it);
         }
+        let free = cap.saturating_sub(out.len());
+        out.extend(passed_over.into_iter().take(free));
         if out.len() < cap {
             let mut recent: Vec<&Item> = self
                 .items
@@ -912,6 +929,25 @@ mod tests {
     fn a_layout_saved_before_muting_still_loads() {
         let l: Layout = serde_json::from_str(r#"{"hidden":[],"pinned_apps":[],"row_order":[],"stage_pins":[]}"#).unwrap();
         assert!(l.muted_providers.is_empty());
+    }
+
+    #[test]
+    fn no_provider_takes_more_than_half_the_stage_while_another_waits() {
+        let mut g = Graph::default();
+        let mut items: Vec<Item> = (0..8).map(|i| watching(&format!("wn:c{i}"), "tv.canal", &format!("Canal {i}"), 100 - i)).collect();
+        items.extend((0..2).map(|i| watching(&format!("wn:p{i}"), "tv.plex", &format!("Plex {i}"), 50 - i)));
+        g.replace_source("tvprovider", items);
+        let stage = |g: &Graph, cap| g.stage_candidates(cap).iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+        // Three places each way, then the one passed over fills the place still free.
+        assert_eq!(stage(&g, 6), ["wn:c0", "wn:c1", "wn:c2", "wn:p0", "wn:p1", "wn:c3"]);
+        // Two pins leave four places, so two for each.
+        g.replace_source("apps", vec![app("a", "A", None), app("b", "B", None)]);
+        g.layout.stage_pins = vec!["app:a".into(), "app:b".into()];
+        assert_eq!(stage(&g, 6), ["app:a", "app:b", "wn:c0", "wn:c1", "wn:p0", "wn:p1"]);
+        // On its own, one provider has every place.
+        g.layout.stage_pins.clear();
+        g.mute_provider("tv.plex");
+        assert_eq!(stage(&g, 6), ["wn:c0", "wn:c1", "wn:c2", "wn:c3", "wn:c4", "wn:c5"]);
     }
 
     #[test]
