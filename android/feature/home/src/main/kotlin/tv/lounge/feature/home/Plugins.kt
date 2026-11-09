@@ -236,11 +236,12 @@ private fun reachText(p: PluginInfo): String {
         }
     }
     val list = parts.toList()
-    return when (list.size) {
+    val reach = when (list.size) {
         0 -> "nothing"
         1 -> list[0]
         else -> list.dropLast(1).joinToString(", ") + " and " + list.last()
     }
+    return if (p.selfSignedServers && list.isNotEmpty()) "$reach, accepting a home server's own certificate" else reach
 }
 
 @Composable

@@ -89,6 +89,7 @@ impl sdk::Plugin for Spotify {
                 SettingSpec { key: "podcasts".into(), label: "Podcasts row".into(), kind: SettingKind::Toggle, required: false, help: Some("The shows you follow.".into()), default: Some("true".into()) },
             ],
             homepage: Some("https://www.spotify.com".into()),
+            self_signed_servers: false,
         }
     }
 

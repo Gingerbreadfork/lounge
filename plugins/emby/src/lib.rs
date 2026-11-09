@@ -47,6 +47,7 @@ impl sdk::Plugin for Emby {
                 SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
             ],
             homepage: Some("https://emby.media".into()),
+            self_signed_servers: false,
         }
     }
 

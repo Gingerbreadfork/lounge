@@ -37,6 +37,7 @@ impl sdk::Plugin for Iptv {
                 SettingSpec { key: "group".into(), label: "Only this group".into(), kind: SettingKind::Text, required: false, help: Some("Optional group-title filter, for very large playlists.".into()), default: None },
             ],
             homepage: None,
+            self_signed_servers: false,
         }
     }
 

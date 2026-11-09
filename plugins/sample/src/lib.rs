@@ -57,6 +57,7 @@ impl sdk::Plugin for Sample {
             rows: vec![RowSpec { id: "shelf".into(), title: "Film club".into(), style: RowStyle::Poster }],
             settings: vec![],
             homepage: None,
+            self_signed_servers: false,
         }
     }
 

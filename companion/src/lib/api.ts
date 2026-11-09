@@ -41,7 +41,7 @@ export type Layout = {
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
 export type Plugin = {
   id: string; name: string; version: string; description: string; publisher: string; publisherName: string; kinds: string[];
-  fetchHosts: string[]; enabled: boolean; builtIn: boolean; configured: boolean; refreshMinutes: number;
+  fetchHosts: string[]; selfSignedServers: boolean; enabled: boolean; builtIn: boolean; configured: boolean; refreshMinutes: number;
   lastRefreshMs?: number | null; lastError?: string | null; items: number; settings: PluginSetting[];
 };
 export type Diagnostics = Record<string, string | number>;

@@ -258,6 +258,8 @@ pub struct PluginInfo {
     pub publisher_name: String,
     pub kinds: Vec<String>,
     pub fetch_hosts: Vec<String>,
+    /// Whether the servers it is given or finds at home may show a certificate of their own.
+    pub self_signed_servers: bool,
     pub enabled: bool,
     pub built_in: bool,
     /// Every required setting has a value.

@@ -23,3 +23,5 @@ parking_lot.workspace = true
 tempfile = "3"
 wat = "1"
 flate2 = "1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1", features = ["std"] }

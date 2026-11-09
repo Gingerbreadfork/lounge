@@ -33,6 +33,7 @@ impl sdk::Plugin for Plex {
                 SettingSpec { key: "libraries".into(), label: "Libraries for recently added".into(), kind: SettingKind::Text, required: false, help: Some("Library names separated by commas. Empty means all of them.".into()), default: None },
             ],
             homepage: Some("https://www.plex.tv".into()),
+            self_signed_servers: false,
         }
     }
 

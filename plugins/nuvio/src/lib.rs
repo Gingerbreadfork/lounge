@@ -91,6 +91,7 @@ impl sdk::Plugin for Nuvio {
                 },
             ],
             homepage: Some("https://nuvio.tv".into()),
+            self_signed_servers: false,
         }
     }
 

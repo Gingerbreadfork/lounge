@@ -27,6 +27,7 @@ impl sdk::Plugin for HdHomeRun {
                 SettingSpec { key: "skip_drm".into(), label: "Hide channels marked DRM".into(), kind: SettingKind::Toggle, required: false, help: Some("They cannot play outside HDHomeRun's own app.".into()), default: Some("true".into()) },
             ],
             homepage: Some("https://www.hdhomerun.com".into()),
+            self_signed_servers: false,
         }
     }
 

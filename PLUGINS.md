@@ -100,7 +100,7 @@ impl sdk::Plugin for Mine {
             refresh_minutes: 30,
             rows: vec![],
             settings: vec![],
-            homepage: None,
+            ..Default::default()
         }
     }
 
@@ -196,11 +196,12 @@ already downloaded cost nothing. Downloads a refresh no longer names are deleted
 | `name`, `description`, `publisher_name` | What the TV and the phone show. The description is one sentence. |
 | `version` | Shown to the user; updates may carry any version, the signature is what matters. |
 | `kinds` | What the plugin does: `content` (items and rows), `epg` (channels and schedule), `wallpaper`, `screensaver`, `search`. |
-| `fetch_hosts` | Hosts `fetch` may reach, including on redirects, each shown to the user in words. A name or IP address is that host, with no scheme, port or path; `*.example.com` is its subdomains, and a wildcard needs at least two labels under it; `*` is any host on the public internet. `$key` is whatever host the user enters in the setting `key`, which is how a plugin reaches a server they name, at home or not. `local-network` is any home-network IP address or local name, for a plugin that finds devices itself, such as a tuner; a local name is one label, or one under `.local`, `.lan`, `.home.arpa` or `.internal`. The TV checks the address every name resolves to. The home network is reachable only through `$key`, `local-network`, or an entry that is itself an IP address or a local name, never through a wildcard or a public name. Loopback and the TV's own addresses are reachable only through an entry that is literally `localhost` or an IP address. |
+| `fetch_hosts` | Hosts `fetch` may reach, including on redirects, each shown to the user in words. A name or IP address is that host, with no scheme, port or path; `*.example.com` is its subdomains, and a wildcard needs at least two labels under it; `*` is any host on the public internet. `$key` is whatever host the user enters in the setting `key`, or every host when they enter several separated by spaces, commas or semicolons, which is how a plugin reaches the servers they name, at home or not. `local-network` is any home-network IP address or local name, for a plugin that finds devices itself, such as a tuner; a local name is one label, or one under `.local`, `.lan`, `.home.arpa` or `.internal`. The TV checks the address every name resolves to. The home network is reachable only through `$key`, `local-network`, or an entry that is itself an IP address or a local name, never through a wildcard or a public name. Loopback and the TV's own addresses are reachable only through an entry that is literally `localhost` or an IP address. |
 | `refresh_minutes` | How often `refresh` runs while the screen is on; at least 5, 0 means the host's default. |
 | `rows` | Rows of your own, in order. `style` is `landscape` (16:9 tiles), `poster` (portrait) or `compact`. Items name a row by its `id`. |
 | `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `url`, `secret_url`, `password`, `number` or `toggle`. A `toggle` is stored as `true` or `false`. A `default` is what `setting` returns while nothing is set, and the TV and the phone show it in the field. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. A `secret_url` is an address that carries credentials, such as a provider's playlist link: it is a secret in the same way, but shown while it is typed. Both stay out of backups. |
 | `homepage` | A link shown on the plugin's page. |
+| `self_signed_servers` | `true` when the servers the plugin reaches present a certificate of their own rather than one a public authority signed, as Sunshine's web interface and many home servers do. The TV then skips the certificate check for a server named through `$key`, an IP address or local name in `fetch_hosts`, or a `local-network` name, and only while the connection lands on a home-network address: a public name, and any name that resolves to the public internet, is always verified. The plugin's page tells the user. Set it only when the plugin needs it. |
 
 The manifest ships as `manifest.json` in the bundle and is also returned by `lg_manifest`;
 the installer refuses a bundle where the two disagree. The SDK writes both from
@@ -412,8 +413,8 @@ key, so a new key means your users have to remove and reinstall. `lgp-tool bundl
 `lgp-tool inspect` verifies and prints the manifest. Installing a bundle with the same `id`
 again is an update: the module and manifest are replaced, settings and the key-value store are
 kept, and the plugin refreshes. An update must not carry an older `version`, which is compared
-number by number, and one whose `fetch_hosts` asks for more than before is turned off until the
-person turns it on again.
+number by number, and one whose `fetch_hosts` asks for more than before, or that newly sets
+`self_signed_servers`, is turned off until the person turns it on again.
 
 ## Limits
 

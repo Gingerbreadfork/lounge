@@ -41,6 +41,7 @@ impl sdk::Plugin for Tvheadend {
                 SettingSpec { key: "tag".into(), label: "Only channels tagged".into(), kind: SettingKind::Text, required: false, help: Some("A channel tag name such as TV. Empty means every enabled channel.".into()), default: None },
             ],
             homepage: Some("https://tvheadend.org".into()),
+            self_signed_servers: false,
         }
     }
 

@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use ureq::config::Config;
 use ureq::http::Uri;
+use ureq::tls::TlsConfig;
 use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
 use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
@@ -18,6 +19,8 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub struct Fetcher {
     agent: ureq::Agent,
+    /// Where this fetcher was built to reach, for which servers may show a certificate of their own.
+    reach: Reach,
     pub max_body: usize,
 }
 
@@ -37,23 +40,41 @@ pub struct Download {
 impl Fetcher {
     /// A fetcher that may connect anywhere, for addresses the person typed themselves.
     pub fn new() -> Fetcher {
-        Fetcher::with_resolver(DefaultResolver::default())
+        Fetcher::with_resolver(DefaultResolver::default(), Reach::default())
     }
 
     /// A fetcher for a plugin: loopback, unspecified and this device's own addresses are refused
     /// whatever name leads to them, and home-network addresses too, except as `reach` allows.
     pub fn guarded(reach: Reach) -> Fetcher {
-        Fetcher::with_resolver(GuardedResolver { inner: DefaultResolver::default(), reach })
+        Fetcher::with_resolver(GuardedResolver { inner: DefaultResolver::default(), reach: reach.clone() }, reach)
     }
 
-    fn with_resolver(resolver: impl Resolver) -> Fetcher {
+    fn with_resolver(resolver: impl Resolver, reach: Reach) -> Fetcher {
         let config = ureq::Agent::config_builder()
             .timeout_global(Some(DEFAULT_TIMEOUT))
             .max_redirects(0)
             .http_status_as_error(false)
             .user_agent("Lounge/0.1 (Android TV; plugin host)")
             .build();
-        Fetcher { agent: ureq::Agent::with_parts(config, DefaultConnector::default(), resolver), max_body: 8 * 1024 * 1024 }
+        Fetcher { agent: ureq::Agent::with_parts(config, DefaultConnector::default(), resolver), reach, max_body: 8 * 1024 * 1024 }
+    }
+
+    /// Whether `host` may show a certificate of its own: only when the plugin asked for that, and
+    /// only for a server it was given or names, or a home-network name it may reach. The resolver
+    /// then lets such a connection land on home-network addresses alone.
+    fn trusts_own_certificate(&self, host: &str) -> bool {
+        let host = host.trim_start_matches('[').trim_end_matches(']').trim_end_matches('.').to_ascii_lowercase();
+        self.reach.self_signed && (self.reach.home.contains(&host) || (self.reach.any_home_name && is_home_name(&host)))
+    }
+
+    /// The request with its timeout set, and the certificate check left out where
+    /// [Self::trusts_own_certificate] allows.
+    fn configured<Any>(&self, request: ureq::RequestBuilder<Any>, host: &str, timeout: Duration) -> ureq::RequestBuilder<Any> {
+        let mut config = request.config().timeout_global(Some(timeout));
+        if self.trusts_own_certificate(host) {
+            config = config.tls_config(TlsConfig::builder().disable_verification(true).build());
+        }
+        config.build()
     }
 
     /// Perform `req` on behalf of a plugin; `allowed` decides per host, including for redirects.
@@ -89,7 +110,7 @@ impl Fetcher {
                     if let Some(basic) = &basic {
                         b = b.header("Authorization", basic);
                     }
-                    b.config().timeout_global(Some(timeout)).build().send(body.as_deref().unwrap_or("")).map_err(|e| fetch_error(e, &url))?
+                    self.configured(b, &host, timeout).send(body.as_deref().unwrap_or("")).map_err(|e| fetch_error(e, &url))?
                 }
                 _ => {
                     let mut b = match method.as_str() {
@@ -103,7 +124,7 @@ impl Fetcher {
                     if let Some(basic) = &basic {
                         b = b.header("Authorization", basic);
                     }
-                    b.config().timeout_global(Some(timeout)).build().call().map_err(|e| fetch_error(e, &url))?
+                    self.configured(b, &host, timeout).call().map_err(|e| fetch_error(e, &url))?
                 }
             };
             let status = response.status().as_u16();
@@ -179,7 +200,7 @@ impl Fetcher {
             if let Some(basic) = &basic {
                 request = request.header("Authorization", basic);
             }
-            let mut response = request.config().timeout_global(Some(timeout)).build().call().map_err(|e| fetch_error(e, &url))?;
+            let mut response = self.configured(request, &host, timeout).call().map_err(|e| fetch_error(e, &url))?;
             let status = response.status().as_u16();
             if matches!(status, 301 | 302 | 303 | 307 | 308)
                 && let Some(loc) = response.headers().get("location").and_then(|v| v.to_str().ok())
@@ -265,11 +286,14 @@ pub struct Reach {
     /// Whether every name may lead into the home network, link-local addresses aside: for a link
     /// a person gave, not one a plugin builds.
     pub whole_home: bool,
+    /// Whether the servers in `home`, and home-network names when `any_home_name`, may show a
+    /// certificate of their own instead of one a public authority signed.
+    pub self_signed: bool,
 }
 
 /// Where a plugin's fetches may lead besides the public internet, with its settings filled in.
 pub fn reach(manifest: &Manifest, setting: &dyn Fn(&str) -> Option<String>) -> Reach {
-    Reach { this_device: local_hosts(manifest), home: manifest.home_hosts(setting), any_home_name: manifest.reaches_local_network(), whole_home: false }
+    Reach { this_device: local_hosts(manifest), home: manifest.home_hosts(setting), any_home_name: manifest.reaches_local_network(), whole_home: false, self_signed: manifest.self_signed_servers }
 }
 
 /// Hosts that may lead back into the TV: only loopback names and address literals the plugin
@@ -311,12 +335,20 @@ impl Resolver for GuardedResolver {
     fn resolve(&self, uri: &Uri, config: &Config, timeout: NextTimeout) -> std::result::Result<ResolvedSocketAddrs, ureq::Error> {
         let addrs = self.inner.resolve(uri, config, timeout)?;
         let host = uri.host().unwrap_or("").trim_start_matches('[').trim_end_matches(']').trim_end_matches('.').to_ascii_lowercase();
+        // A connection that will not check the certificate may only land on the home network,
+        // whatever the name resolves to, decided on the same lookup the connection uses.
+        let unverified = config.tls_config().disable_verification() && uri.scheme_str().is_some_and(|s| s.eq_ignore_ascii_case("https"));
         if self.reach.this_device.contains(&host) {
+            // An address the plugin lists itself may be anywhere, so the same rule holds for it.
+            if unverified && addrs.iter().any(|a| !is_local_network(a.ip()) && !is_own_address(a.ip())) {
+                return Err(ureq::Error::Io(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{host} leads to the public internet, where a certificate is always checked"))));
+            }
             return Ok(addrs);
         }
         let named = self.reach.home.contains(&host) || (self.reach.any_home_name && is_home_name(&host));
         let mut out = self.empty();
         let mut kept_out_of_home = false;
+        let mut kept_off_the_internet = false;
         for addr in addrs.iter() {
             if is_own_address(addr.ip()) {
                 continue;
@@ -326,10 +358,20 @@ impl Resolver for GuardedResolver {
                 kept_out_of_home = true;
                 continue;
             }
+            if unverified && !is_local_network(addr.ip()) {
+                kept_off_the_internet = true;
+                continue;
+            }
             out.push(*addr);
         }
         if out.is_empty() {
-            let why = if kept_out_of_home { "leads into the home network, where the plugin may reach only the addresses it is given" } else { "leads to this device itself" };
+            let why = if kept_out_of_home {
+                "leads into the home network, where the plugin may reach only the addresses it is given"
+            } else if kept_off_the_internet {
+                "leads to the public internet, where a certificate is always checked"
+            } else {
+                "leads to this device itself"
+            };
             return Err(ureq::Error::Io(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{host} {why}"))));
         }
         Ok(out)
@@ -563,6 +605,92 @@ mod tests {
             let err = Fetcher::guarded(reach).fetch(&request("http://192.168.77.1:9/"), &|_| true).unwrap_err();
             assert!(!err.to_string().contains("home network"), "{err}");
         }
+    }
+
+    /// A server with a certificate of its own, like Sunshine's web interface, answering one
+    /// request per connection on loopback.
+    fn self_signed_server() -> u16 {
+        use rustls::pki_types::pem::PemObject;
+        let cert = rustls::pki_types::CertificateDer::from_pem_slice(include_bytes!("../testdata/self-signed.crt")).unwrap();
+        let key = rustls::pki_types::PrivateKeyDer::from_pem_slice(include_bytes!("../testdata/self-signed.key")).unwrap();
+        let config = rustls::ServerConfig::builder_with_provider(std::sync::Arc::new(rustls::crypto::ring::default_provider()))
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert], key)
+            .unwrap();
+        let config = std::sync::Arc::new(config);
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                let mut tcp = stream;
+                let mut tls = rustls::ServerConnection::new(config.clone()).unwrap();
+                let mut stream = rustls::Stream::new(&mut tls, &mut tcp);
+                let mut request = Vec::new();
+                let mut buf = [0u8; 1024];
+                // A client that distrusts the certificate hangs up during the handshake.
+                while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                    match stream.read(&mut buf) {
+                        Ok(n) if n > 0 => request.extend_from_slice(&buf[..n]),
+                        _ => break,
+                    }
+                }
+                if !request.is_empty() {
+                    let _ = std::io::Write::write_all(&mut stream, b"HTTP/1.1 200 OK\r\ncontent-length: 7\r\nconnection: close\r\n\r\ntrusted");
+                    stream.conn.send_close_notify();
+                    let _ = stream.conn.complete_io(stream.sock);
+                }
+            }
+        });
+        port
+    }
+
+    #[test]
+    fn a_servers_own_certificate_is_trusted_only_where_the_plugin_asked() {
+        let port = self_signed_server();
+        let url = format!("https://127.0.0.1:{port}/api/apps");
+        let loopback = Reach { this_device: vec!["127.0.0.1".into()], home: vec!["127.0.0.1".into()], ..Reach::default() };
+
+        // Without the flag the certificate is checked like any other and fails.
+        let err = Fetcher::guarded(loopback.clone()).fetch(&HttpRequest::get(url.clone()), &|_| true).unwrap_err().to_string();
+        assert!(err.to_ascii_lowercase().contains("certificate") || err.contains("Unknown") || err.contains("tls"), "{err}");
+
+        // With it, a server the plugin was given answers.
+        let trusting = Fetcher::guarded(Reach { self_signed: true, ..loopback.clone() });
+        assert_eq!(trusting.fetch(&HttpRequest::get(url.clone()), &|_| true).unwrap().body, "trusted");
+        let dir = tempfile::tempdir().unwrap();
+        let download = trusting.download(&url, dir.path(), 1024, Duration::from_secs(5), &|_| true).unwrap();
+        assert_eq!(std::fs::read(download.path).unwrap(), b"trusted");
+
+        // By name, the flag covers only servers given or named and home-network names.
+        let public = Fetcher::guarded(Reach { self_signed: true, home: vec!["nas.example.org".into()], any_home_name: true, ..Reach::default() });
+        assert!(public.trusts_own_certificate("nas.example.org"));
+        assert!(public.trusts_own_certificate("192.168.0.20") && public.trusts_own_certificate("gaming-pc") && public.trusts_own_certificate("pc.local"));
+        assert!(!public.trusts_own_certificate("api.example.com") && !public.trusts_own_certificate("8.8.8.8"));
+        assert!(!Fetcher::guarded(Reach { home: vec!["nas.example.org".into()], ..Reach::default() }).trusts_own_certificate("nas.example.org"));
+        assert!(!Fetcher::new().trusts_own_certificate("192.168.0.20"));
+
+        // By address, an unverified connection never leaves the home network, even for a server
+        // the plugin was given or names; a verified one to the same address goes through.
+        let resolver = GuardedResolver { inner: DefaultResolver::default(), reach: Reach { self_signed: true, home: vec!["8.8.8.8".into(), "192.168.77.1".into()], ..Reach::default() } };
+        let timeout = || NextTimeout { after: Duration::from_secs(1).into(), reason: ureq::Timeout::Resolve };
+        let unverified = ureq::Agent::config_builder().tls_config(TlsConfig::builder().disable_verification(true).build()).build();
+        let verified = ureq::Agent::config_builder().build();
+        let public: Uri = "https://8.8.8.8:9/".parse().unwrap();
+        let err = resolver.resolve(&public, &unverified, timeout()).unwrap_err().to_string();
+        assert!(err.contains("public internet"), "{err}");
+        assert!(resolver.resolve(&public, &verified, timeout()).is_ok());
+        assert!(resolver.resolve(&"http://8.8.8.8:9/".parse().unwrap(), &unverified, timeout()).is_ok());
+        assert!(resolver.resolve(&"https://192.168.77.1:9/".parse().unwrap(), &unverified, timeout()).is_ok());
+
+        // An address literal in the allow list counts as this device's, and is held to the same rule.
+        let listed = Reach { self_signed: true, this_device: vec!["8.8.8.8".into(), "127.0.0.1".into()], home: vec!["8.8.8.8".into(), "127.0.0.1".into()], ..Reach::default() };
+        let resolver = GuardedResolver { inner: DefaultResolver::default(), reach: listed };
+        let err = resolver.resolve(&public, &unverified, timeout()).unwrap_err().to_string();
+        assert!(err.contains("public internet"), "{err}");
+        assert!(resolver.resolve(&public, &verified, timeout()).is_ok());
+        assert!(resolver.resolve(&"https://127.0.0.1:9/".parse().unwrap(), &unverified, timeout()).is_ok());
     }
 
     #[test]

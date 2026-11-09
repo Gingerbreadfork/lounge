@@ -91,7 +91,8 @@
       if (part && !parts.includes(part)) parts.push(part);
     }
     if (parts.length === 0) return 'nothing';
-    return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+    const reach = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+    return p.selfSignedServers ? `${reach}, accepting a home server's own certificate` : reach;
   }
   function ago(ms: number) {
     const m = Math.floor((Date.now() - ms) / 60000);

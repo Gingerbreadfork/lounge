@@ -185,8 +185,11 @@ pub(crate) fn store_setting(store: &lounge_store::Store, manifest: &Manifest, id
     let value = value.map(|v| if password { v } else { v.trim() }).filter(|v| !v.is_empty());
     if manifest.decides_origin(key) {
         let old = store.plugin_setting(id, key).ok().flatten();
-        let host = |v: Option<&str>| v.and_then(lounge_plugin_api::host_in_setting);
-        if old.is_some() && host(old.as_deref()) != host(value) {
+        let hosts = |v: Option<&str>| v.map(lounge_plugin_api::hosts_in_setting).unwrap_or_default();
+        // A server dropped from a list takes nothing with it; one added is a new destination,
+        // and so is whatever follows once the last one is gone.
+        let (before, after) = (hosts(old.as_deref()), hosts(value));
+        if old.is_some() && (after.iter().any(|h| !before.contains(h)) || (after.is_empty() && !before.is_empty())) {
             for secret in manifest.settings.iter().filter(|s| s.kind.is_secret() && s.key != key && !manifest.decides_origin(&s.key)) {
                 let _ = store.plugin_setting_set(id, &secret.key, None);
             }
@@ -333,7 +336,13 @@ impl PluginManager {
         // An update that asks to reach more is turned off until the person allows it again. The
         // ones bundled with Lounge come with the APK the person installed.
         let widened: Vec<String> = match &installed {
-            Some(old) if !built_in => bundle.manifest.fetch_hosts.iter().filter(|h| !old.fetch_hosts.contains(h)).cloned().collect(),
+            Some(old) if !built_in => {
+                let mut more: Vec<String> = bundle.manifest.fetch_hosts.iter().filter(|h| !old.fetch_hosts.contains(h)).cloned().collect();
+                if bundle.manifest.self_signed_servers && !old.self_signed_servers {
+                    more.push("servers with a certificate of their own".into());
+                }
+                more
+            }
             _ => Vec::new(),
         };
         let was_on = existing.is_some_and(|p| p.enabled);
@@ -604,6 +613,7 @@ pub(crate) fn info_for(row: &PluginRow, manifest: &Manifest, settings: &[(String
         publisher_name: manifest.publisher_name.clone(),
         kinds: manifest.kinds.iter().map(|k| format!("{k:?}").to_lowercase()).collect(),
         fetch_hosts: manifest.fetch_hosts.clone(),
+        self_signed_servers: manifest.self_signed_servers,
         enabled: row.enabled,
         built_in: row.built_in,
         configured: configured(manifest, settings),
@@ -971,6 +981,20 @@ mod tests {
         assert_eq!(password(&store).as_deref(), Some("hunter2"));
         store_setting(&store, &m, "p", "server", Some("http://attacker.example"));
         assert_eq!(password(&store), None);
+        // In a list, taking a server away keeps the password; adding one does not.
+        store_setting(&store, &m, "p", "server", Some("pc-a, pc-b"));
+        store_setting(&store, &m, "p", "password", Some("hunter2"));
+        store_setting(&store, &m, "p", "server", Some("pc-a"));
+        assert_eq!(password(&store).as_deref(), Some("hunter2"));
+        store_setting(&store, &m, "p", "server", Some("pc-a pc-c"));
+        assert_eq!(password(&store), None);
+        // Clearing the server forgets the password, so it cannot follow to the next one typed.
+        store_setting(&store, &m, "p", "password", Some("hunter2"));
+        store_setting(&store, &m, "p", "server", None);
+        assert_eq!(password(&store), None);
+        store_setting(&store, &m, "p", "password", Some("hunter2"));
+        store_setting(&store, &m, "p", "server", Some("http://192.168.0.10:8096"));
+        assert_eq!(password(&store).as_deref(), Some("hunter2"));
         // A password keeps its spaces; an address is tidied.
         store_setting(&store, &m, "p", "password", Some(" pass phrase "));
         assert_eq!(password(&store).as_deref(), Some(" pass phrase "));

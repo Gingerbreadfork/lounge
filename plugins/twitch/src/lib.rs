@@ -42,6 +42,7 @@ impl sdk::Plugin for Twitch {
                 SettingSpec { key: "app".into(), label: "Twitch app".into(), kind: SettingKind::Text, required: false, help: Some("The package that opens streams.".into()), default: Some(DEFAULT_APP.into()) },
             ],
             homepage: Some("https://www.twitch.tv".into()),
+            self_signed_servers: false,
         }
     }
 

@@ -57,6 +57,7 @@ impl sdk::Plugin for Kodi {
                 SettingSpec { key: "pvr".into(), label: "Live TV channels".into(), kind: SettingKind::Toggle, required: false, help: Some("Kodi's PVR channels in Live now and the guide.".into()), default: Some("true".into()) },
             ],
             homepage: Some("https://kodi.tv".into()),
+            self_signed_servers: false,
         }
     }
 

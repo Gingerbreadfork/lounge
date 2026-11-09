@@ -38,6 +38,7 @@ impl sdk::Plugin for Archive {
                 .chain(std::iter::once(SettingSpec { key: "per_row".into(), label: "Items per row".into(), kind: SettingKind::Number, required: false, help: None, default: Some("24".into()) }))
                 .collect(),
             homepage: Some("https://archive.org".into()),
+            self_signed_servers: false,
         }
     }
 

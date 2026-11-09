@@ -81,6 +81,7 @@ impl sdk::Plugin for YouTube {
                 SettingSpec { key: "shorts".into(), label: "Include Shorts".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
             ],
             homepage: None,
+            self_signed_servers: false,
         }
     }
 

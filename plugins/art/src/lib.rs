@@ -52,6 +52,7 @@ impl sdk::Plugin for Art {
                 },
             ],
             homepage: None,
+            self_signed_servers: false,
         }
     }
 

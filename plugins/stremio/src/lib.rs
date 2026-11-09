@@ -68,6 +68,7 @@ impl sdk::Plugin for Stremio {
                 SettingSpec { key: "library".into(), label: "Library row".into(), kind: SettingKind::Toggle, required: false, help: Some("The movies and shows in your Stremio library, most recently watched first.".into()), default: Some("true".into()) },
             ],
             homepage: Some("https://www.stremio.com".into()),
+            self_signed_servers: false,
         }
     }
 

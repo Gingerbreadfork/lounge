@@ -25,6 +25,7 @@ impl sdk::Plugin for Channels {
                 SettingSpec { key: "recordings".into(), label: "Recordings to show".into(), kind: SettingKind::Number, required: false, help: Some("The newest ones.".into()), default: Some("30".into()) },
             ],
             homepage: Some("https://getchannels.com/dvr-server/".into()),
+            self_signed_servers: false,
         }
     }
 

@@ -69,6 +69,15 @@ pub fn host_in_setting(value: &str) -> Option<String> {
     host_of(value).or_else(|| host_of(&format!("http://{value}")))
 }
 
+/// Every host a setting's value names: one address, or several separated by spaces, commas or
+/// semicolons, each with or without its scheme.
+pub fn hosts_in_setting(value: &str) -> Vec<String> {
+    let mut hosts: Vec<String> = value.split([' ', ',', ';', '\n', '\t']).filter(|t| !t.trim().is_empty()).filter_map(host_in_setting).collect();
+    hosts.sort();
+    hosts.dedup();
+    hosts
+}
+
 pub mod exports {
     pub const MEMORY: &str = "memory";
     pub const ALLOC: &str = "lg_alloc";
@@ -131,6 +140,16 @@ pub struct Manifest {
     pub settings: Vec<SettingSpec>,
     #[serde(default)]
     pub homepage: Option<String>,
+    /// Whether a server the plugin is given or names, or a home-network device it may reach,
+    /// may present a certificate of its own instead of one a public authority signed, as home
+    /// servers such as Sunshine do. Only to a home-network address; one on the public internet
+    /// is always verified.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub self_signed_servers: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 /// What is wrong with an allow-list entry that is neither `*`, [LOCAL_NETWORK] nor `$key`: it
@@ -211,7 +230,7 @@ impl Manifest {
         self.fetch_hosts.iter().any(|h| {
             let h = h.to_ascii_lowercase();
             match h.strip_prefix('$') {
-                Some(key) => setting(key).and_then(|v| host_in_setting(&v)).is_some_and(|given| given == host),
+                Some(key) => setting(key).is_some_and(|v| hosts_in_setting(&v).contains(&host)),
                 None if h == LOCAL_NETWORK => is_home_name(&host),
                 None => h == "*" || h == host || (h.starts_with("*.") && host.ends_with(&h[1..])),
             }
@@ -230,12 +249,12 @@ impl Manifest {
         let mut hosts: Vec<String> = self
             .fetch_hosts
             .iter()
-            .filter_map(|h| match h.strip_prefix('$') {
-                Some(key) => setting(key).and_then(|v| host_in_setting(&v)),
-                None if h == "*" || h.starts_with("*.") || h.eq_ignore_ascii_case(LOCAL_NETWORK) => None,
+            .flat_map(|h| match h.strip_prefix('$') {
+                Some(key) => setting(key).map(|v| hosts_in_setting(&v)).unwrap_or_default(),
+                None if h == "*" || h.starts_with("*.") || h.eq_ignore_ascii_case(LOCAL_NETWORK) => Vec::new(),
                 None => {
                     let h = h.trim().trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
-                    (h.parse::<IpAddr>().is_ok() || local_style(&h)).then_some(h)
+                    (h.parse::<IpAddr>().is_ok() || local_style(&h)).then_some(h).into_iter().collect()
                 }
             })
             .collect();
@@ -656,6 +675,12 @@ mod tests {
         assert_eq!(m.home_hosts(&setting), vec!["10.0.0.9", "jf.example.org", "nas.local"]);
         // A server typed without its scheme names its host all the same.
         assert_eq!(m.home_hosts(&|_| Some("192.168.0.10:8096".into())), vec!["10.0.0.9", "192.168.0.10", "nas.local"]);
+        // A setting that lists several servers names each of them.
+        let pcs = |_: &str| Some("gaming-pc, 192.168.0.50:47989 http://[fd00::5]/".to_string());
+        assert_eq!(m.home_hosts(&pcs), vec!["10.0.0.9", "192.168.0.50", "fd00::5", "gaming-pc", "nas.local"]);
+        let listed = Manifest { fetch_hosts: vec!["$server".into()], ..Default::default() };
+        assert!(listed.allows_host_with("fd00::5", &pcs) && listed.allows_host_with("gaming-pc", &pcs) && !listed.allows_host_with("other", &pcs));
+        assert_eq!(hosts_in_setting("  "), Vec::<String>::new());
         assert!(m.home_hosts(&|_| None).iter().all(|h| h != "*"));
 
         let tuner = Manifest { fetch_hosts: vec![LOCAL_NETWORK.into()], ..Default::default() };

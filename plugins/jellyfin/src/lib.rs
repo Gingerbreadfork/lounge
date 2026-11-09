@@ -48,6 +48,7 @@ impl sdk::Plugin for Jellyfin {
                 SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
             ],
             homepage: Some("https://jellyfin.org".into()),
+            self_signed_servers: false,
         }
     }
 

@@ -38,6 +38,7 @@ impl sdk::Plugin for Immich {
                 SettingSpec { key: "max".into(), label: "Pictures to show".into(), kind: SettingKind::Number, required: false, help: Some("The newest ones are kept. Pictures come at Immich's preview size; for a 4K panel set that to 2160 in Immich's image settings.".into()), default: Some("60".into()) },
             ],
             homepage: Some("https://immich.app".into()),
+            self_signed_servers: false,
         }
     }
 
