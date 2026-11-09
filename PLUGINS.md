@@ -37,6 +37,12 @@ different corner of the interface:
 - `plugins/nextpvr`: a session signed in with a digest, a guide gathered across refreshes in a
   fixed set of key-value keys so one refresh never exceeds the fetch budget, and `resolve` so
   play addresses always carry a live session.
+- `plugins/stremio` and `plugins/nuvio`: an online account read through its own API, the items
+  it keeps as bare ids filled in from Cinemeta a few at a time and remembered in the key-value
+  store, next episodes worked out from what was finished, and an `intent:` link that names the
+  app, for a scheme two apps on the TV may answer. Stremio signs in with a code shown on the
+  plugin's page; Nuvio renews its sign-in with a refresh token and finds a self-hosted server
+  through its discovery document.
 
 ## Quick start
 

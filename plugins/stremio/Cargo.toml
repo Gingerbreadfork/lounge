@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-stremio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Stremio: continue watching and your library from your Stremio account, opened in the Stremio app"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true

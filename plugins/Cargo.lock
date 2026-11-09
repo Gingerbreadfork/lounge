@@ -454,6 +454,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-nuvio"
+version = "0.5.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-plex"
 version = "0.5.0"
 dependencies = [
@@ -474,6 +483,15 @@ name = "lounge-plugin-sdk"
 version = "0.5.0"
 dependencies = [
  "lounge-plugin-api",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "lounge-plugin-stremio"
+version = "0.5.0"
+dependencies = [
+ "lounge-plugin-sdk",
  "serde",
  "serde_json",
 ]
