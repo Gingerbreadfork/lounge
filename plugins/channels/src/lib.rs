@@ -27,6 +27,7 @@ impl sdk::Plugin for Channels {
             homepage: Some("https://getchannels.com/dvr-server/".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
+            sent_to: Default::default(),
         }
     }
 

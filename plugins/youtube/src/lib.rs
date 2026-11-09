@@ -83,6 +83,7 @@ impl sdk::Plugin for YouTube {
             homepage: None,
             self_signed_servers: false,
             for_apps: Vec::new(),
+            sent_to: Default::default(),
         }
     }
 

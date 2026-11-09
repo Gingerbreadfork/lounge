@@ -54,6 +54,7 @@ impl sdk::Plugin for Plex {
             homepage: Some("https://www.plex.tv".into()),
             self_signed_servers: false,
             for_apps: vec![APP_PACKAGE.into()],
+            sent_to: Default::default(),
         }
     }
 

@@ -150,6 +150,11 @@ pub struct Manifest {
     /// TV and the plugin is off, the home suggests setting the plugin up.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub for_apps: Vec<String>,
+    /// For a plugin with more than one server: the address setting each secret is sent to, by
+    /// key. A secret named here is forgotten only when that address moves to another host; one
+    /// not named is forgotten when any address does.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub sent_to: BTreeMap<String, String>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -210,6 +215,14 @@ impl Manifest {
         for r in &self.rows {
             if r.id.is_empty() || !rows.insert(&r.id) {
                 return Err(format!("duplicate or empty row id {:?}", r.id));
+            }
+        }
+        for (secret, address) in &self.sent_to {
+            if !self.settings.iter().any(|s| &s.key == secret && s.kind.is_secret()) {
+                return Err(format!("sent_to names {secret:?}, which is not a password setting"));
+            }
+            if !self.decides_origin(address) {
+                return Err(format!("sent_to sends {secret:?} to {address:?}, which is not an address setting"));
             }
         }
         for app in &self.for_apps {
@@ -721,6 +734,22 @@ mod tests {
         assert!(with_apps(&["com.plexapp.android", "tv.emby_two.app"]).validate().is_ok());
         assert!(with_apps(&["Plex"]).validate().is_err());
         assert!(with_apps(&["com.plex app"]).validate().is_err());
+        // A secret is sent to an address setting, and both must be settings of those kinds.
+        let two = |secret: &str, address: &str| {
+            let setting = |key: &str, kind| SettingSpec { key: key.into(), label: key.into(), kind, ..Default::default() };
+            Manifest {
+                id: "tv.lounge.arr".into(),
+                name: "Arr".into(),
+                version: "1.0".into(),
+                settings: vec![setting("sonarr", SettingKind::Url), setting("sonarr_key", SettingKind::Password), setting("days", SettingKind::Number)],
+                sent_to: [(secret.to_string(), address.to_string())].into_iter().collect(),
+                ..Default::default()
+            }
+        };
+        assert!(two("sonarr_key", "sonarr").validate().is_ok());
+        assert!(two("days", "sonarr").validate().is_err());
+        assert!(two("sonarr_key", "days").validate().is_err());
+        assert!(two("sonarr_key", "missing").validate().is_err());
     }
 }
 

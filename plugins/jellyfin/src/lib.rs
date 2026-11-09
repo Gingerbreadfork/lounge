@@ -50,6 +50,7 @@ impl sdk::Plugin for Jellyfin {
             homepage: Some("https://jellyfin.org".into()),
             self_signed_servers: false,
             for_apps: vec![APP_PACKAGE.into()],
+            sent_to: Default::default(),
         }
     }
 

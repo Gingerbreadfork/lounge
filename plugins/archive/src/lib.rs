@@ -40,6 +40,7 @@ impl sdk::Plugin for Archive {
             homepage: Some("https://archive.org".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
+            sent_to: Default::default(),
         }
     }
 

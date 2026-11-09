@@ -91,6 +91,7 @@ impl sdk::Plugin for Spotify {
             homepage: Some("https://www.spotify.com".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
+            sent_to: Default::default(),
         }
     }
 

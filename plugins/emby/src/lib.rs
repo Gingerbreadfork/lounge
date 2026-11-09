@@ -49,6 +49,7 @@ impl sdk::Plugin for Emby {
             homepage: Some("https://emby.media".into()),
             self_signed_servers: false,
             for_apps: vec![APP_PACKAGE.into()],
+            sent_to: Default::default(),
         }
     }
 

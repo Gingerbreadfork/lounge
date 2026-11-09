@@ -95,6 +95,7 @@ impl sdk::Plugin for Nuvio {
             homepage: Some("https://nuvio.tv".into()),
             self_signed_servers: false,
             for_apps: vec![GITHUB_PACKAGE.into(), PLAY_PACKAGE.into()],
+            sent_to: Default::default(),
         }
     }
 

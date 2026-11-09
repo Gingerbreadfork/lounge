@@ -191,6 +191,10 @@ pub(crate) fn store_setting(store: &lounge_store::Store, manifest: &Manifest, id
         let (before, after) = (hosts(old.as_deref()), hosts(value));
         if old.is_some() && (after.iter().any(|h| !before.contains(h)) || (after.is_empty() && !before.is_empty())) {
             for secret in manifest.settings.iter().filter(|s| s.kind.is_secret() && s.key != key && !manifest.decides_origin(&s.key)) {
+                // A secret the plugin sends to another address stays where it is.
+                if manifest.sent_to.get(&secret.key).is_some_and(|address| address != key) {
+                    continue;
+                }
                 let _ = store.plugin_setting_set(id, &secret.key, None);
             }
         }
@@ -1014,6 +1018,32 @@ mod tests {
         assert_eq!(password(&store).as_deref(), Some(" pass phrase "));
         store_setting(&store, &m, "p", "server", Some("  http://192.168.0.10:8096 "));
         assert_eq!(store.plugin_setting("p", "server").unwrap().as_deref(), Some("http://192.168.0.10:8096"));
+    }
+
+    #[test]
+    fn a_key_sent_to_one_server_stays_when_the_other_moves() {
+        let store = lounge_store::Store::open_in_memory().unwrap();
+        let setting = |key: &str, kind| lounge_plugin_api::SettingSpec { key: key.into(), label: key.into(), kind, required: false, help: None, default: None };
+        let url = lounge_plugin_api::SettingKind::Url;
+        let password = lounge_plugin_api::SettingKind::Password;
+        let mut m = Manifest {
+            fetch_hosts: vec!["$sonarr".into(), "$radarr".into()],
+            settings: vec![setting("sonarr", url), setting("sonarr_key", password), setting("radarr", url), setting("radarr_key", password), setting("shared", password)],
+            sent_to: [("sonarr_key".to_string(), "sonarr".to_string()), ("radarr_key".to_string(), "radarr".to_string())].into_iter().collect(),
+            ..Default::default()
+        };
+        assert!(m.validate().is_err());
+        (m.id, m.name, m.version) = ("tv.example.arr".into(), "Arr".into(), "1".into());
+        assert!(m.validate().is_ok());
+        let get = |key: &str| store.plugin_setting("p", key).unwrap();
+        for (key, value) in [("sonarr", "http://192.168.0.10:8989"), ("radarr", "http://192.168.0.10:7878"), ("sonarr_key", "s"), ("radarr_key", "r"), ("shared", "x")] {
+            store_setting(&store, &m, "p", key, Some(value));
+        }
+        // Radarr moves: its own key goes, and so does a secret tied to no address; Sonarr's stays.
+        store_setting(&store, &m, "p", "radarr", Some("http://192.168.0.20:7878"));
+        assert_eq!((get("sonarr_key").as_deref(), get("radarr_key"), get("shared")), (Some("s"), None, None));
+        store_setting(&store, &m, "p", "sonarr", None);
+        assert_eq!(get("sonarr_key"), None);
     }
 
     #[test]

@@ -49,6 +49,7 @@ impl sdk::Plugin for Arr {
             homepage: None,
             self_signed_servers: false,
             for_apps: Vec::new(),
+            sent_to: [("sonarr_key".into(), "sonarr".into()), ("radarr_key".into(), "radarr".into())].into_iter().collect(),
         }
     }
 
@@ -726,6 +727,14 @@ fn uri_encode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_key_goes_only_to_its_own_server() {
+        let m = <Arr as sdk::Plugin>::manifest();
+        assert!(m.validate().is_ok(), "{:?}", m.validate());
+        assert_eq!(m.sent_to.get("sonarr_key").map(String::as_str), Some("sonarr"));
+        assert_eq!(m.sent_to.get("radarr_key").map(String::as_str), Some("radarr"));
+    }
 
     fn at(s: &str) -> i64 {
         parse_iso8601(s).unwrap()

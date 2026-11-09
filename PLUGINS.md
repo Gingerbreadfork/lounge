@@ -222,6 +222,7 @@ already downloaded cost nothing. Downloads a refresh no longer names are deleted
 | `homepage` | A link shown on the plugin's page. |
 | `self_signed_servers` | `true` when the servers the plugin reaches present a certificate of their own rather than one a public authority signed, as Sunshine's web interface and many home servers do. The TV then skips the certificate check for a server named through `$key`, an IP address or local name in `fetch_hosts`, or a `local-network` name, and only while the connection lands on a home-network address: a public name, and any name that resolves to the public internet, is always verified. The plugin's page tells the user. Set it only when the plugin needs it. |
 | `for_apps` | Packages of the apps whose watching the plugin brings to the home, such as `com.plexapp.android`. While one is installed and the plugin is off, the home shows a tile that opens the plugin's page, until the plugin is turned on or the tile dismissed. Leave it empty for a plugin that goes with no app. |
+| `sent_to` | For a plugin with more than one server: which address setting each `password` is sent to, as `{"sonarr_key": "sonarr"}`. A password named here is forgotten only when that address moves to another host; one not named is forgotten when any address does. |
 
 The manifest ships as `manifest.json` in the bundle and is also returned by `lg_manifest`;
 the installer refuses a bundle where the two disagree. The SDK writes both from

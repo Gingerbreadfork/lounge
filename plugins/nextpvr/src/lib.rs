@@ -44,6 +44,7 @@ impl sdk::Plugin for NextPvr {
             homepage: Some("https://nextpvr.com".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
+            sent_to: Default::default(),
         }
     }
 

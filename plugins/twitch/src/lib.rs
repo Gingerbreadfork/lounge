@@ -44,6 +44,7 @@ impl sdk::Plugin for Twitch {
             homepage: Some("https://www.twitch.tv".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
+            sent_to: Default::default(),
         }
     }
 

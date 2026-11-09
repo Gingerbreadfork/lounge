@@ -67,6 +67,7 @@ impl sdk::Plugin for Moonlight {
             homepage: Some("https://moonlight-stream.org".into()),
             self_signed_servers: true,
             for_apps: Vec::new(),
+            sent_to: Default::default(),
         }
     }
 
