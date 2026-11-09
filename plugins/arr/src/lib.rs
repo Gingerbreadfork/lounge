@@ -473,7 +473,7 @@ fn weekday(day_index: i64) -> &'static str {
     ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][(day_index + 4).rem_euclid(7) as usize]
 }
 
-/// The calendar date of a day counted from 1970-01-01 (Howard Hinnant's civil-from-days).
+/// The calendar date of a day counted from 1970-01-01, by Howard Hinnant's civil-from-days.
 pub fn civil(day_index: i64) -> (i64, u32, u32) {
     let z = day_index + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
