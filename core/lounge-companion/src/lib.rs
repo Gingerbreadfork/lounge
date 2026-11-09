@@ -93,6 +93,9 @@ pub struct LayoutDoc {
     /// The same with their names, by title; each id is the provider.
     #[serde(default)]
     pub muted_provider_items: Vec<NamedRef>,
+    /// Notice tiles the person chose not to see again, by id.
+    #[serde(default)]
+    pub dismissed_notices: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -106,6 +109,7 @@ pub struct LayoutPatch {
     pub row_visibility: Option<HashMap<String, bool>>,
     pub recent_apps: Option<u32>,
     pub muted_providers: Option<Vec<String>>,
+    pub dismissed_notices: Option<Vec<String>>,
 }
 
 /// Everything the API can do, provided by the core.

@@ -100,6 +100,7 @@ fn layout_doc(inner: &Inner) -> LayoutDoc {
         recent_apps: l.recent_apps,
         muted_providers: l.muted_providers.iter().cloned().collect(),
         muted_provider_items: engine::muted_providers(&state).into_iter().map(named).collect(),
+        dismissed_notices: l.dismissed_notices.iter().cloned().collect(),
     }
 }
 
@@ -189,6 +190,9 @@ impl CompanionActions for CoreActions {
             }
             if let Some(muted) = patch.muted_providers {
                 layout.muted_providers = muted.into_iter().collect();
+            }
+            if let Some(dismissed) = patch.dismissed_notices {
+                layout.dismissed_notices = dismissed.into_iter().collect();
             }
             layout.normalise();
             state.store.save_layout(&layout).map_err(|e| e.to_string())?;
@@ -553,6 +557,14 @@ mod tests {
         core.set_plugin_enabled("tv.example.plex".into(), false);
         assert!(!suggested(&rows_when(&core, |ids| !suggested(ids))));
         assert!(core.inner.state.lock().graph.layout.dismissed_notices.contains("notice:plugin:tv.example.plex"));
+
+        // The phone can dismiss it as well.
+        core.command(crate::LayoutCommand::ResetLayout);
+        assert!(suggested(&rows_when(&core, suggested)));
+        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
+        let doc = actions.set_layout(LayoutPatch { dismissed_notices: Some(vec![tile.id.clone()]), ..LayoutPatch::default() }).unwrap();
+        assert_eq!(doc.dismissed_notices, [tile.id.as_str()]);
+        assert!(!suggested(&rows_when(&core, |ids| !suggested(ids))));
 
         // Turned on, it needs no suggesting.
         core.command(crate::LayoutCommand::ResetLayout);

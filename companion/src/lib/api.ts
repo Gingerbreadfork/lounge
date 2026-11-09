@@ -41,6 +41,8 @@ export type Layout = {
   recentApps: number;
   /** Apps and plugins left out of Continue watching, each as a tile's `provider`, and the same with their names. */
   mutedProviders: string[]; mutedProviderItems: NamedRef[];
+  /** Notice tiles the person chose not to see again, by id. */
+  dismissedNotices: string[];
 };
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
 export type Plugin = {

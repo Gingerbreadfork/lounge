@@ -15,14 +15,14 @@
 
   let layout = $state<Layout | null>(null);
   let busy = $state(false);
-  let first: HTMLButtonElement;
+  // The sheet's first choice takes focus as it opens.
+  const focus = (el: HTMLElement) => el.focus();
   // Back closes the sheet like any page: the sheet is one history entry, and closing it by
   // other means pops that entry so the page's own history stays as it was.
   let pushed = false;
   $effect(() => {
     history.pushState({ tileSheet: true }, '');
     pushed = true;
-    first?.focus();
     // Pinned state comes with the tile; the layout is read so a change can be written back whole.
     quiet(() => api.layout()).then((l) => (layout = l ?? null));
     return () => {
@@ -43,6 +43,8 @@
   }
 
   const isApp = $derived(tile.id.startsWith('app:'));
+  // A notice has nothing to pin or hide; it can only be told not to come back.
+  const isNotice = $derived(tile.id.startsWith('notice:'));
   const pkg = $derived(tile.id.replace(/^app:/, ''));
   const rowShown = $derived(layout?.availableRows.find((r) => r.id === rowId)?.shown ?? true);
 
@@ -74,6 +76,9 @@
     if (!from) return;
     change(`Everything from ${tile.providerName} hidden`, (l) => ({ mutedProviders: [...l.mutedProviders.filter((p) => p !== from), from] }));
   }
+  function dismiss() {
+    change('It will not be shown again', (l) => ({ dismissedNotices: [...l.dismissedNotices.filter((n) => n !== tile.id), tile.id] }));
+  }
   function hideRow() {
     if (!rowId) return;
     change(`${rowTitle} row hidden`, (l) => ({ rowVisibility: { ...l.rowVisibility, [rowId]: false } }));
@@ -97,8 +102,16 @@
     </div>
     <button class="icon-btn" onclick={close} aria-label="Close"><Icon name="close" size={22} /></button>
   </div>
+  {#if isNotice}
+    <div class="list">
+      <button class="list-row" {@attach focus} disabled={!layout || busy} onclick={dismiss}>
+        <span class="glyph"><Icon name="hide" size={24} /></span>
+        <span class="grow title">Don't show this again</span>
+      </button>
+    </div>
+  {:else}
   <div class="list">
-    <button class="list-row" bind:this={first} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">Open on the TV</span></button>
+    <button class="list-row" {@attach focus} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">Open on the TV</span></button>
     <button class="list-row" disabled={!layout || busy} onclick={toggleStage}>
       <span class="glyph" class:on={tile.stagePinned}><Icon name="pin" size={24} /></span>
       <span class="grow"><span class="title">{tile.stagePinned ? words.unpinStage : words.pinStage}</span><span class="caption">{tile.stagePinned ? words.unpinStageDetail : words.pinStageDetail}</span></span>
@@ -126,6 +139,7 @@
       </button>
     {/if}
   </div>
+  {/if}
 </div>
 
 <style>
