@@ -1031,6 +1031,9 @@ mod tests {
         assert!(line.ends_with(" info: GET https://host/path failed"), "{line}");
         assert_eq!(redact_urls("→http://u:p@a.tv/x?k=v and \"ftp://b.tv/y#z\""), "→http://a.tv/x and \"ftp://b.tv/y\"");
         assert_eq!(redact_urls("odd :// text, no address"), "odd :// text, no address");
+        // A sign-in link is written without its scheme, so it reaches the phone whole.
+        let sign_in = "open accounts.example.com/authorize?client_id=abc&code_challenge=xyz.";
+        assert_eq!(redact_urls(sign_in), sign_in);
     }
 
     #[test]

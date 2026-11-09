@@ -296,11 +296,14 @@ pub fn authorize_url(client_id: &str, verifier: &str) -> String {
     )
 }
 
+/// What to do to sign in. The link goes without its scheme, since the host cuts an address
+/// written with one down to its path.
 fn instruction(client_id: &str, verifier: &str, again: bool) -> String {
     let why = if again { "Spotify ends every sign-in after six months, so it is time to sign in again. " } else { "" };
+    let link = authorize_url(client_id, verifier);
     format!(
         "{why}Sign in on your phone: in Lounge's companion app open Plugins, then Spotify, and tap the link there, or open {}. After you agree, copy the whole address of the page that can't be reached into the Sign-in address setting.",
-        authorize_url(client_id, verifier)
+        link.strip_prefix("https://").unwrap_or(&link)
     )
 }
 
@@ -1227,6 +1230,12 @@ mod tests {
         assert!(url.starts_with("https://accounts.spotify.com/authorize?response_type=code&client_id=abc123&scope=user-read-recently-played%20"));
         assert!(url.contains("&redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Fcallback&code_challenge_method=S256&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&show_dialog=true"));
         assert!(instruction("abc123", "v", true).starts_with("Spotify ends every sign-in after six months, so it is time to sign in again. Sign in on your phone: in Lounge's companion app"));
+        // The host cuts an address with a scheme down to its path and keeps 1000 bytes of an error.
+        let said = instruction("0123456789abcdef0123456789abcdef", "v", true);
+        assert!(!said.contains("://"), "{said}");
+        assert!(said.contains(" or open accounts.spotify.com/authorize?response_type=code&client_id=0123456789abcdef0123456789abcdef&scope="), "{said}");
+        assert!(said.contains("&show_dialog=true. After you agree"), "{said}");
+        assert!(said.len() + "That sign-in address did not work; a code is good for a few minutes and once. ".len() < 1000);
         let t: TokenAnswer = serde_json::from_str(r#"{"access_token":"BQ","token_type":"Bearer","scope":"user-read-recently-played","expires_in":3600,"refresh_token":"AQ"}"#).unwrap();
         assert_eq!((t.access_token.as_str(), t.refresh_token.as_deref(), t.expires_in), ("BQ", Some("AQ"), 3600));
         let token = Token { access: "a".into(), refresh: "r".into(), expires_ms: 0, client_id: "c".into(), signed_in_ms: 0 };
