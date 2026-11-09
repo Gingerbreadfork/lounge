@@ -307,7 +307,7 @@ picture once and writes every size the screen needs. Plugins run in
 [axum](https://github.com/tokio-rs/axum) server in the same process, with the Svelte 5 app
 embedded at build time, about 30 KB gzipped.
 
-The APK is 19 MB. On a Google TV Streamer the release build is on screen in about a second
+The APK is 24 MB. On a Google TV Streamer the release build is on screen in about a second
 from a cold start, sits a little over 100 MB, and keeps the main thread under 5 ms on nine
 frames out of ten while you move around. A TCL television with a Mali GPU runs the same build
 at about 75 MB and is bound by its GPU rather than its CPU. Both are measured with the scripts
