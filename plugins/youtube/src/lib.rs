@@ -881,26 +881,28 @@ impl Source {
 /// Accepts channel ids, `/channel/UC…` links, @handles, `/c/` and `/user/` links, playlist ids
 /// and `list=` links, separated by line breaks, spaces, commas or semicolons. A line that names
 /// a source may carry other words; one that names nothing is refused, naming it so the user can
-/// fix it. A Google Takeout subscriptions export gives its channel links, whether or not the
-/// field it was pasted into kept its line breaks.
+/// fix it. A row of a Google Takeout subscriptions export is an id, the channel's link and its
+/// title, and is read as that whatever the field it was pasted into did with the line breaks.
 pub fn parse_sources(raw: &str) -> Result<Vec<Source>, String> {
-    if raw.trim_start().get(..10).is_some_and(|heading| heading.eq_ignore_ascii_case("channel id")) {
-        let mut out: Vec<Source> = raw.split("/channel/").skip(1).map(id_token).filter(|id| !id.is_empty()).map(Source::Channel).collect();
-        out.dedup();
-        return Ok(out);
-    }
     let mut out = Vec::new();
     for line in raw.lines().map(str::trim).filter(|l| !l.is_empty()) {
         let before = out.len();
         let mut unknown: Option<&str> = None;
-        for piece in line.split([',', ';']).map(str::trim).filter(|s| !s.is_empty()) {
+        let pieces: Vec<&str> = line.split([',', ';']).map(str::trim).filter(|s| !s.is_empty()).collect();
+        for (i, piece) in pieces.iter().enumerate() {
+            // After an id and the link to the same channel comes that channel's title, whose
+            // words name nothing unless one is plainly a link or a handle.
+            let title = i >= 2 && channel_link(pieces[i - 1]).is_some_and(|id| pieces[i - 2].ends_with(&id));
             let found = out.len();
-            out.extend(piece.split_whitespace().filter_map(parse_piece));
-            if out.len() == found {
+            out.extend(piece.split_whitespace().filter(|word| !title || word.starts_with('@') || word.contains('/')).filter_map(parse_piece));
+            if out.len() == found && !title {
                 unknown = unknown.or(Some(piece));
             }
         }
+        // An export's heading names nothing and is no mistake.
+        let heading = line.get(..10).is_some_and(|h| h.eq_ignore_ascii_case("channel id"));
         if out.len() == before
+            && !heading
             && let Some(piece) = unknown
         {
             return Err(format!("\"{piece}\" is not a channel or playlist id or link. Check the channels in the plugin's settings."));
@@ -908,6 +910,12 @@ pub fn parse_sources(raw: &str) -> Result<Vec<Source>, String> {
     }
     out.dedup();
     Ok(out)
+}
+
+/// The channel id in a `/channel/` link.
+fn channel_link(piece: &str) -> Option<String> {
+    let id = id_token(piece.split("/channel/").nth(1)?);
+    (!id.is_empty()).then_some(id)
 }
 
 fn parse_piece(piece: &str) -> Option<Source> {
@@ -1196,6 +1204,10 @@ mod tests {
         // A one-line field turns the line breaks into spaces, or drops them.
         assert_eq!(parse_sources(&csv.replace('\n', " ")).unwrap(), s);
         assert_eq!(parse_sources(&csv.replace('\n', "")).unwrap(), s);
+        // The export may sit under or above other entries, which are read as well.
+        let mixed = vec![Source::Named("@veritasium".into()), Source::Channel("UCBJycsmduvYEL83R_U4JriQ".into()), Source::Channel("UCHnyfMqiRRG1u-2MsSQLbXA".into()), Source::Named("@mkbhd".into())];
+        assert_eq!(parse_sources(&format!("@veritasium\n{csv}@mkbhd")).unwrap(), mixed);
+        assert_eq!(parse_sources(&format!("@veritasium {} @mkbhd", csv.replace('\n', " ").trim())).unwrap(), mixed);
         // Rows without the heading still name their channels, and a title's words name none.
         let rows = "UCBJycsmduvYEL83R_U4JriQ,http://www.youtube.com/channel/UCBJycsmduvYEL83R_U4JriQ,Me@Work UCHnyfMqiRRG1u-2MsSQLbXA,http://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA,Other";
         assert_eq!(parse_sources(rows).unwrap(), s);
