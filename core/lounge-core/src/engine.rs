@@ -184,7 +184,20 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
 pub(crate) fn item_ref(graph: &Graph, id: &str) -> ItemRef {
     match graph.get(id) {
         Some(it) => ItemRef { id: id.to_string(), title: it.title.clone(), icon_path: it.artwork.logo.clone() },
-        None => ItemRef { id: id.to_string(), title: id.rsplit(':').next().unwrap_or(id).to_string(), icon_path: None },
+        None => gone_ref(graph, id),
+    }
+}
+
+/// A name for an item that has gone. An app is known by its package; a title only by the app
+/// its id names, since what follows is the app's own number for it.
+fn gone_ref(graph: &Graph, id: &str) -> ItemRef {
+    let named = |title: String, icon_path: Option<String>| ItemRef { id: id.to_string(), title, icon_path };
+    if let Some(package) = id.strip_prefix("app:") {
+        return named(package.to_string(), None);
+    }
+    match id.split(':').find_map(|part| graph.get(&format!("app:{part}"))) {
+        Some(app) => named(format!("A title {} no longer lists", app.title), app.artwork.logo.clone()),
+        None => named("A title that is no longer listed".to_string(), None),
     }
 }
 
@@ -1146,6 +1159,19 @@ mod tests {
         let mut orphan = live.clone();
         orphan.owner = Some("au.com.gone".into());
         assert!(tile_for(&g, &orphan, TileKind::Landscape).artwork_path.is_none());
+    }
+
+    #[test]
+    fn an_item_that_has_gone_is_named_by_where_it_was() {
+        let mut g = Graph::default();
+        let mut app = Item::app("org.jellyfin.androidtv", "Main", "Jellyfin");
+        app.artwork.logo = Some("/art/jellyfin.png".into());
+        g.upsert(app);
+        let gone = item_ref(&g, "wn:org.jellyfin.androidtv:bca47bff-35a3-b7dc-505d-b96791278d6b");
+        assert_eq!((gone.title.as_str(), gone.icon_path.as_deref()), ("A title Jellyfin no longer lists", Some("/art/jellyfin.png")));
+        assert_eq!(item_ref(&g, "plugin:tv.lounge.plex:deck:41").title, "A title that is no longer listed");
+        assert_eq!(item_ref(&g, "app:com.example.removed").title, "com.example.removed");
+        assert_eq!(item_ref(&g, "app:org.jellyfin.androidtv").title, "Jellyfin");
     }
 
     #[test]
