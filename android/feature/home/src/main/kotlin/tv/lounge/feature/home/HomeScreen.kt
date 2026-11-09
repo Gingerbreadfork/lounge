@@ -672,6 +672,10 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     canMoveRight = indexInRow(ov.rowId, ov.tile.id).let { at -> at >= 0 && (homeRow?.tiles?.getOrNull(at + 1)?.pinned == true) },
                     isStagePinned = ov.tile.stagePinned,
                     onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say("Hidden from every row") },
+                    onHideAllFrom = {
+                        ov.tile.provider?.let { core.command(LayoutCommand.MuteProvider(it)) }
+                        say("Everything from ${ov.tile.providerName} hidden. Settings, Rows brings it back")
+                    },
                     onHideRow = {
                         core.command(LayoutCommand.HideRow(ov.rowId))
                         say("${homeRow?.title ?: "Row"} hidden. Settings, Rows brings it back")
@@ -918,15 +922,17 @@ private fun SheetContent(
         Overlay.Rows -> {
             var rows by remember { mutableStateOf<List<tv.lounge.core.RowInfo>?>(null) }
             var hidden by remember { mutableStateOf<List<tv.lounge.core.ItemRef>?>(null) }
+            var muted by remember { mutableStateOf<List<tv.lounge.core.ItemRef>?>(null) }
             // Each change is shown at once; a read that began before a later change is thrown away,
             // so it cannot put the older state back on screen.
             val edits = remember { intArrayOf(0) }
             suspend fun reload() {
                 val began = edits[0]
-                val (r, h) = withContext(Dispatchers.IO) { core.homeRows() to core.hiddenItems() }
+                val (r, h, m) = withContext(Dispatchers.IO) { Triple(core.homeRows(), core.hiddenItems(), core.mutedProviders()) }
                 if (edits[0] == began) {
                     rows = r
                     hidden = h
+                    muted = m
                 }
             }
             // A change that alters nothing on screen publishes no snapshot, so the list is also
@@ -939,6 +945,7 @@ private fun SheetContent(
             RowsSheet(
                 rows = rows,
                 hidden = hidden,
+                muted = muted,
                 onToggle = { row ->
                     val shown = rows?.firstOrNull { it.id == row.id }?.shown ?: row.shown
                     edited()
@@ -962,6 +969,11 @@ private fun SheetContent(
                     edited()
                     core.command(LayoutCommand.UnhideItem(item.id))
                     hidden = hidden?.filter { it.id != item.id }
+                },
+                onShowProvider = { item ->
+                    edited()
+                    core.command(LayoutCommand.UnmuteProvider(item.id))
+                    muted = muted?.filter { it.id != item.id }
                 },
                 firstFocus = first,
             )

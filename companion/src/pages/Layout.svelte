@@ -132,6 +132,14 @@
     if (!layout) return;
     change({ hidden: layout.hidden.filter((h) => h !== item.id) }, `${item.title} is back on the TV`, { hiddenItems: layout.hiddenItems.filter((i) => i.id !== item.id) });
   }
+  function showProvider(item: NamedRef) {
+    if (!layout) return;
+    change(
+      { mutedProviders: layout.mutedProviders.filter((p) => p !== item.id) },
+      `${item.title} is back in Continue watching`,
+      { mutedProviderItems: layout.mutedProviderItems.filter((i) => i.id !== item.id) },
+    );
+  }
 </script>
 
 <main class="page">
@@ -221,6 +229,23 @@
               {#if item.iconPath}<img class="row-icon" src={art(item.iconPath)} alt="" />{:else}<span class="glyph"><Icon name="hide" size={24} /></span>{/if}
               <div class="grow title">{item.title}</div>
               <button class="btn ghost" onclick={() => showItem(item)}>Show</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h3>Hidden from Continue watching</h3></div>
+      {#if layout.mutedProviderItems.length === 0}
+        <p class="caption">No app is hidden. Hold a tile in Continue watching and choose to hide everything from its app.</p>
+      {:else}
+        <div class="list">
+          {#each layout.mutedProviderItems as item (item.id)}
+            <div class="list-row">
+              {#if item.iconPath}<img class="row-icon" src={art(item.iconPath)} alt="" />{:else}<span class="glyph"><Icon name="hide" size={24} /></span>{/if}
+              <div class="grow title">{item.title}</div>
+              <button class="btn ghost" onclick={() => showProvider(item)}>Show</button>
             </div>
           {/each}
         </div>

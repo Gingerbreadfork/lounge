@@ -10,5 +10,6 @@ export const words = {
   unpinStageDetail: 'What you watch takes its place',
   hide: 'Hide',
   hideDetail: 'Off every row until you show it',
+  hideAllFromDetail: 'Off Continue watching until you show it',
   hideRowDetail: 'The Layout tab brings it back',
 };

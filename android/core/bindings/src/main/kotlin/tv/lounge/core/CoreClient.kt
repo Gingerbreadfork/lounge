@@ -102,6 +102,9 @@ class CoreClient(val core: Core) : SnapshotListener {
     /** Items hidden from every row, by title; waits like [homeRows]. */
     fun hiddenItems(): List<ItemRef> = core.hiddenItems()
 
+    /** The apps and plugins left out of Continue watching; each id is what to show again. */
+    fun mutedProviders(): List<ItemRef> = core.mutedProviders()
+
     fun diagnostics(): Diagnostics = core.diagnostics()
 
     companion object {

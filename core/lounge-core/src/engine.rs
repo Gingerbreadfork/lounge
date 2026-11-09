@@ -188,6 +188,42 @@ pub(crate) fn hidden_items(state: &State) -> Vec<ItemRef> {
     v
 }
 
+/// An app or plugin Continue watching draws on, named for a menu or an editor: the plugin for a
+/// plugin's own key, the app when it is installed, else the plugin whose titles open in it.
+/// `from` is one of its titles, when one is at hand.
+fn provider_ref(graph: &Graph, plugin_name: &dyn Fn(&str) -> String, provider: &str, from: Option<&Item>) -> ItemRef {
+    let named = |title: String, icon_path: Option<String>| ItemRef { id: provider.to_string(), title, icon_path };
+    if let Some(id) = provider.strip_prefix("plugin:") {
+        return named(plugin_name(id), None);
+    }
+    if let Some(app) = graph.get(&format!("app:{provider}")) {
+        return named(app.title.clone(), app.artwork.logo.clone());
+    }
+    let from = from.or_else(|| graph.items().find(|it| it.provider() == Some(provider)));
+    match from.and_then(|it| it.source.strip_prefix("plugin:")) {
+        Some(id) => named(plugin_name(id), None),
+        None => named(provider.rsplit('.').next().unwrap_or(provider).to_string(), None),
+    }
+}
+
+/// The apps and plugins the user left out of Continue watching, by name.
+pub(crate) fn muted_providers(state: &State) -> Vec<ItemRef> {
+    let plugin_name = |id: &str| state.plugins.iter().find(|p| p.id == id).map(|p| p.manifest.name.clone()).unwrap_or_else(|| id.to_string());
+    let mut v: Vec<ItemRef> = state.graph.layout.muted_providers.iter().map(|p| provider_ref(&state.graph, &plugin_name, p, None)).collect();
+    v.sort_by_key(|r| r.title.to_lowercase());
+    v
+}
+
+/// The tile for something to continue, saying which app or plugin it comes from.
+fn provided(mut tile: Tile, graph: &Graph, index: &BuildIndex, it: &Item) -> Tile {
+    if let Some(provider) = it.provider().filter(|_| it.continues()) {
+        let named = provider_ref(graph, &|id| index.plugin_name(id), provider, Some(it));
+        tile.provider = Some(named.id);
+        tile.provider_name = Some(named.title);
+    }
+    tile
+}
+
 /// The most tiles a content row carries, so a big source cannot swell every rebuild. The guide
 /// and search reach the rest.
 const ROW_TILES: usize = 60;
@@ -325,7 +361,7 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
         kind,
         size,
         badge,
-        tiles: items.iter().map(|it| tile_for(graph, it, kind)).collect(),
+        tiles: items.iter().map(|it| provided(tile_for(graph, it, kind), graph, index, it)).collect(),
     })
 }
 
@@ -400,6 +436,8 @@ fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &s
             borrowed_art: false,
             opened_rank: None,
             installed_rank: None,
+            provider: None,
+            provider_name: None,
         }],
     }
 }
@@ -448,6 +486,8 @@ fn all_apps_tile(count: usize) -> Tile {
         borrowed_art: false,
         opened_rank: None,
         installed_rank: None,
+        provider: None,
+        provider_name: None,
     }
 }
 
@@ -468,6 +508,8 @@ fn tv_controls_tile(config: &CoreConfig) -> Tile {
         borrowed_art: false,
         opened_rank: None,
         installed_rank: None,
+        provider: None,
+        provider_name: None,
     }
 }
 
@@ -574,6 +616,8 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         borrowed_art: lent.is_some(),
         opened_rank: None,
         installed_rank: None,
+        provider: None,
+        provider_name: None,
     }
 }
 
@@ -631,7 +675,7 @@ fn build_stage(state: &State, index: &BuildIndex, now: i64, hour_local: u32, con
     for it in candidates {
         spotlights.push(spotlight_for(graph, &index, it, now, hour_local));
         let kind = if it.kind == ItemKind::App { TileKind::AppBanner } else { TileKind::Landscape };
-        let tile = if it.kind == ItemKind::Channel { live_tile(graph, index.airing(it), it, now) } else { tile_for(graph, it, kind) };
+        let tile = if it.kind == ItemKind::Channel { live_tile(graph, index.airing(it), it, now) } else { provided(tile_for(graph, it, kind), graph, index, it) };
         strip.push(tile);
     }
     // With Your apps off the home, the strip ends with the way to every app instead.

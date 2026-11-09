@@ -1172,6 +1172,8 @@ fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::
     match cmd {
         LayoutCommand::HideItem { id } => state.graph.hide(&id),
         LayoutCommand::UnhideItem { id } => state.graph.unhide(&id),
+        LayoutCommand::MuteProvider { provider } => state.graph.mute_provider(&provider),
+        LayoutCommand::UnmuteProvider { provider } => state.graph.unmute_provider(&provider),
         LayoutCommand::PinApp { package } => state.graph.pin_app(&package),
         LayoutCommand::UnpinApp { package } => state.graph.unpin_app(&package),
         LayoutCommand::MoveApp { package, to_index } => state.graph.move_app(&package, to_index as usize),
@@ -1300,6 +1302,8 @@ fn same_tiles(a: &[Tile], b: &[Tile]) -> bool {
             && a.borrowed_art == b.borrowed_art
             && a.opened_rank == b.opened_rank
             && a.installed_rank == b.installed_rank
+            && a.provider == b.provider
+            && a.provider_name == b.provider_name
     })
 }
 

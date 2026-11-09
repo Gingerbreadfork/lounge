@@ -98,6 +98,8 @@ fn layout_doc(inner: &Inner) -> LayoutDoc {
         hidden_items: engine::hidden_items(&state).into_iter().map(named).collect(),
         stage_items: l.stage_pins.iter().map(|id| named(engine::item_ref(graph, id))).collect(),
         recent_apps: l.recent_apps,
+        muted_providers: l.muted_providers.iter().cloned().collect(),
+        muted_provider_items: engine::muted_providers(&state).into_iter().map(named).collect(),
     }
 }
 
@@ -184,6 +186,9 @@ impl CompanionActions for CoreActions {
             }
             if let Some(count) = patch.recent_apps {
                 layout.recent_apps = count.min(60);
+            }
+            if let Some(muted) = patch.muted_providers {
+                layout.muted_providers = muted.into_iter().collect();
             }
             layout.normalise();
             state.store.save_layout(&layout).map_err(|e| e.to_string())?;
@@ -454,6 +459,57 @@ mod tests {
         }
         assert_eq!(core.snapshot().all_apps.len(), 1);
         assert!(core.home_rows().iter().all(|r| r.id != "allapps"));
+    }
+
+    #[test]
+    fn a_muted_app_leaves_continue_watching_until_it_is_shown_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        put_apps(&core, &[("tv.canal", true)]);
+        let watching = |id: &str, package: &str, title: &str, used: i64| {
+            let mut it = lounge_graph::Item::content(id, lounge_graph::ItemKind::Resume, "tvprovider", title, lounge_graph::DeepLink::ViewUri(id.into()));
+            it.owner = Some(package.into());
+            it.last_used_ms = Some(used);
+            it
+        };
+        core.inner.state.lock().graph.replace_source("tvprovider", vec![watching("wn:1", "tv.canal", "News", 20), watching("wn:2", "tv.plex", "Severance", 10)]);
+        core.inner.enqueue_job(worker::Job::Rebuild);
+        // The row's tiles once there are `count` of them, or as last seen.
+        let tiles_when = |count: usize| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            loop {
+                let tiles = core.snapshot().rows.iter().find(|r| r.id == "continue").map(|r| r.tiles.clone()).unwrap_or_default();
+                if tiles.len() == count || std::time::Instant::now() > deadline {
+                    return tiles;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(15));
+            }
+        };
+        // Each tile names where it comes from: the app by its label, or by its package when it is gone.
+        let tiles = tiles_when(2);
+        let from: Vec<(Option<&str>, Option<&str>)> = tiles.iter().map(|t| (t.provider.as_deref(), t.provider_name.as_deref())).collect();
+        assert_eq!(from, [(Some("tv.canal"), Some("TV.CANAL")), (Some("tv.plex"), Some("plex"))]);
+        assert!(core.snapshot().stage.strip.iter().any(|t| t.provider.as_deref() == Some("tv.canal")));
+
+        core.command(crate::LayoutCommand::MuteProvider { provider: "tv.canal".into() });
+        assert_eq!(tiles_when(1).iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["wn:2"]);
+        assert!(core.snapshot().stage.strip.iter().all(|t| t.provider.as_deref() != Some("tv.canal")));
+        let muted: Vec<(String, String)> = core.muted_providers().into_iter().map(|m| (m.id, m.title)).collect();
+        assert_eq!(muted, [("tv.canal".to_string(), "TV.CANAL".to_string())]);
+
+        // The phone reads the same list and can empty it.
+        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
+        let doc = actions.layout();
+        assert_eq!(doc.muted_providers, ["tv.canal"]);
+        assert_eq!(doc.muted_provider_items.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), ["TV.CANAL"]);
+        // By the names the phone's page reads them under.
+        let sent = serde_json::to_string(&doc).unwrap();
+        assert!(sent.contains(r#""mutedProviders":["tv.canal"]"#) && sent.contains(r#""mutedProviderItems":[{"id":"tv.canal""#), "{sent}");
+        let tile = serde_json::to_string(&tiles_when(1)[0]).unwrap();
+        assert!(tile.contains(r#""provider":"tv.plex","providerName":"plex""#), "{tile}");
+        let doc = actions.set_layout(LayoutPatch { muted_providers: Some(Vec::new()), ..LayoutPatch::default() }).unwrap();
+        assert!(doc.muted_providers.is_empty());
+        assert_eq!(tiles_when(2).len(), 2);
     }
 
     #[test]

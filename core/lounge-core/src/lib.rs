@@ -363,6 +363,12 @@ pub struct Tile {
     pub opened_rank: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub installed_rank: Option<u32>,
+    /// The app or plugin something to continue comes from, as the layout knows it, and its name;
+    /// set on those tiles only, so their menu can leave it out of Continue watching.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_name: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum, Serialize, Deserialize)]
@@ -525,6 +531,9 @@ impl HomeSnapshot {
 pub enum LayoutCommand {
     HideItem { id: String },
     UnhideItem { id: String },
+    /// Leaves an app's or plugin's titles out of Continue watching, by a tile's `provider`.
+    MuteProvider { provider: String },
+    UnmuteProvider { provider: String },
     PinApp { package: String },
     UnpinApp { package: String },
     MoveApp { package: String, to_index: u32 },
@@ -908,6 +917,14 @@ impl Core {
         engine::wait_for_graph(&self.inner);
         let state = self.inner.state.lock();
         engine::hidden_items(&state)
+    }
+
+    /// The apps and plugins left out of Continue watching, by name; each id is the provider.
+    pub fn muted_providers(&self) -> Vec<ItemRef> {
+        self.count();
+        engine::wait_for_graph(&self.inner);
+        let state = self.inner.state.lock();
+        engine::muted_providers(&state)
     }
 
     /// Preview channels other apps publish, with whether each is shown as a row.

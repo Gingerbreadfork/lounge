@@ -196,6 +196,18 @@ impl Item {
         }
     }
 
+    /// Whether this is something to continue: a resume point, something playing, or a Watch
+    /// Next entry.
+    pub fn continues(&self) -> bool {
+        matches!(self.kind, ItemKind::Resume | ItemKind::MediaSession) || (self.kind == ItemKind::Program && self.flags.watch_next)
+    }
+
+    /// Where something to continue comes from: the app it opens in, or its plugin when it opens
+    /// in no app. Continue watching can leave a provider out.
+    pub fn provider(&self) -> Option<&str> {
+        self.package().filter(|p| !p.is_empty()).or_else(|| self.source.starts_with("plugin:").then_some(self.source.as_str()))
+    }
+
     /// Portrait or square artwork is framed in the Stage; wide artwork goes full-bleed.
     pub fn framed_art(&self) -> bool {
         self.art_aspect > 0.0 && self.art_aspect < 1.2
@@ -229,6 +241,9 @@ pub struct Layout {
     /// How many recently opened apps follow the pins in Your apps; zero keeps the row to pins.
     #[serde(default = "default_recent_apps")]
     pub recent_apps: u32,
+    /// Apps and plugins left out of Continue watching, each by [Item::provider].
+    #[serde(default)]
+    pub muted_providers: HashSet<String>,
 }
 
 pub const DEFAULT_RECENT_APPS: u32 = 5;
@@ -248,6 +263,7 @@ impl Default for Layout {
             enabled_channels: HashSet::new(),
             row_visibility: HashMap::new(),
             recent_apps: DEFAULT_RECENT_APPS,
+            muted_providers: HashSet::new(),
         }
     }
 }
@@ -351,6 +367,18 @@ impl Graph {
         self.layout.hidden.contains(id)
     }
 
+    pub fn mute_provider(&mut self, provider: &str) {
+        self.layout.muted_providers.insert(provider.to_string());
+    }
+
+    pub fn unmute_provider(&mut self, provider: &str) {
+        self.layout.muted_providers.remove(provider);
+    }
+
+    fn is_muted(&self, it: &Item) -> bool {
+        it.provider().is_some_and(|p| self.layout.muted_providers.contains(p))
+    }
+
     pub fn pin_app(&mut self, package: &str) {
         let p = package.to_string();
         if !self.layout.pinned_apps.contains(&p) {
@@ -449,13 +477,13 @@ impl Graph {
         v
     }
 
-    /// Resume points and Watch Next entries, newest first, one per title.
+    /// Resume points and Watch Next entries, newest first, one per title, without those from
+    /// apps and plugins the user left out.
     pub fn continue_watching(&self) -> Vec<&Item> {
         let mut v: Vec<&Item> = self
             .items
             .values()
-            .filter(|it| matches!(it.kind, ItemKind::Resume | ItemKind::MediaSession) || (it.kind == ItemKind::Program && it.flags.watch_next))
-            .filter(|it| !self.is_hidden(&it.id))
+            .filter(|it| it.continues() && !self.is_hidden(&it.id) && !self.is_muted(it))
             .collect();
         rank::by_recency_then_title(&mut v);
         rank::dedupe_by_title(&mut v);
@@ -842,6 +870,48 @@ mod tests {
         g.replace_source("sessions", vec![b]);
         let ids: Vec<&str> = g.continue_watching().iter().map(|i| i.id.as_str()).collect();
         assert_eq!(ids, vec!["wn:1", "wn:2"]);
+    }
+
+    /// A resume point `title` from `provider`, last watched at `used`.
+    fn watching(id: &str, provider: &str, title: &str, used: i64) -> Item {
+        let mut it = Item::content(id, ItemKind::Resume, "tvprovider", title, DeepLink::ViewUri(id.to_string()));
+        it.owner = Some(provider.to_string());
+        it.last_used_ms = Some(used);
+        it
+    }
+
+    #[test]
+    fn a_provider_is_an_app_or_a_plugin_that_opens_in_none() {
+        assert_eq!(watching("wn:1", "tv.canal", "A", 1).provider(), Some("tv.canal"));
+        let mut server = Item::content("plugin:plex:1", ItemKind::Resume, "plugin:plex", "B", DeepLink::ViewOrLaunch { uri: "plex://1".into(), package: "com.plexapp.android".into() });
+        assert_eq!(server.provider(), Some("com.plexapp.android"));
+        server.deep_link = DeepLink::Control("search:B".into());
+        assert_eq!(server.provider(), Some("plugin:plex"));
+        // A Watch Next entry that names no app has no provider.
+        assert_eq!(watching("wn:2", "", "C", 1).provider(), None);
+    }
+
+    #[test]
+    fn a_muted_provider_stays_out_of_continue_watching_and_the_stage() {
+        let mut g = Graph::default();
+        g.replace_source("tvprovider", vec![watching("wn:c1", "tv.canal", "News", 30), watching("wn:c2", "tv.canal", "Severance", 20), watching("wn:p1", "tv.plex", "Severance", 10)]);
+        let ids = |g: &Graph| g.continue_watching().iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&g), ["wn:c1", "wn:c2"]);
+        g.mute_provider("tv.canal");
+        // The same title from another app takes the place the muted one held.
+        assert_eq!(ids(&g), ["wn:p1"]);
+        assert_eq!(g.stage_candidates(6).iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["wn:p1"]);
+        // A pin is the user's own choice, muted or not.
+        g.layout.stage_pins = vec!["wn:c1".into()];
+        assert_eq!(g.stage_candidates(6).iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["wn:c1", "wn:p1"]);
+        g.unmute_provider("tv.canal");
+        assert_eq!(ids(&g), ["wn:c1", "wn:c2"]);
+    }
+
+    #[test]
+    fn a_layout_saved_before_muting_still_loads() {
+        let l: Layout = serde_json::from_str(r#"{"hidden":[],"pinned_apps":[],"row_order":[],"stage_pins":[]}"#).unwrap();
+        assert!(l.muted_providers.is_empty());
     }
 
     #[test]

@@ -90,6 +90,8 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
                     borrowed_art: false,
                     opened_rank: None,
                     installed_rank: None,
+                    provider: None,
+                    provider_name: None,
                 });
                 links.insert(id, link);
             }

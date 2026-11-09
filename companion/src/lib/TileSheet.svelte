@@ -69,6 +69,11 @@
   function hide() {
     change('Hidden from every row', (l) => ({ hidden: [...l.hidden.filter((h) => h !== tile.id), tile.id] }));
   }
+  function hideAllFrom() {
+    const from = tile.provider;
+    if (!from) return;
+    change(`Everything from ${tile.providerName} hidden`, (l) => ({ mutedProviders: [...l.mutedProviders.filter((p) => p !== from), from] }));
+  }
   function hideRow() {
     if (!rowId) return;
     change(`${rowTitle} row hidden`, (l) => ({ rowVisibility: { ...l.rowVisibility, [rowId]: false } }));
@@ -108,6 +113,12 @@
       <span class="glyph"><Icon name="hide" size={24} /></span>
       <span class="grow"><span class="title">{words.hide} {tile.title}</span><span class="caption">{words.hideDetail}</span></span>
     </button>
+    {#if tile.provider && tile.providerName}
+      <button class="list-row" disabled={!layout || busy} onclick={hideAllFrom}>
+        <span class="glyph"><Icon name="hide" size={24} /></span>
+        <span class="grow"><span class="title">Hide everything from {tile.providerName}</span><span class="caption">{words.hideAllFromDetail}</span></span>
+      </button>
+    {/if}
     {#if rowId && rowTitle && rowShown}
       <button class="list-row" disabled={!layout || busy} onclick={hideRow}>
         <span class="glyph"><Icon name="rows" size={24} /></span>

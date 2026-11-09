@@ -161,6 +161,7 @@ object PinWords {
     const val UNPIN_STAGE = "Unpin from the Stage"
     const val UNPIN_STAGE_DETAIL = "What you watch takes its place"
     const val HIDE_DETAIL = "Off every row until you show it"
+    const val HIDE_ALL_FROM_DETAIL = "Off Continue watching until you show it"
     const val HIDE_ROW_DETAIL = "Settings, Rows brings it back"
 }
 
@@ -178,6 +179,7 @@ fun menuItemsFor(
     canMoveRight: Boolean,
     isStagePinned: Boolean,
     onHide: () -> Unit,
+    onHideAllFrom: () -> Unit,
     onHideRow: () -> Unit,
     onPin: () -> Unit,
     onUnpin: () -> Unit,
@@ -219,6 +221,10 @@ fun menuItemsFor(
         MenuItem(PinWords.PIN_STAGE, LoungeIcons.Pin, detail = PinWords.PIN_STAGE_DETAIL, onSelect = onPinStage)
     }
     items += MenuItem("Hide", LoungeIcons.Hide, detail = PinWords.HIDE_DETAIL, onSelect = onHide)
+    // Only something to continue says where it comes from.
+    tile.providerName?.let { name ->
+        items += MenuItem("Hide everything from $name", LoungeIcons.Hide, detail = PinWords.HIDE_ALL_FROM_DETAIL, onSelect = onHideAllFrom)
+    }
     if (rowTitle != null) items += MenuItem("Hide the $rowTitle row", LoungeIcons.Rows, detail = PinWords.HIDE_ROW_DETAIL, onSelect = onHideRow)
     if (isApp) {
         items += MenuItem("App info", LoungeIcons.Info, onSelect = onAppInfo)

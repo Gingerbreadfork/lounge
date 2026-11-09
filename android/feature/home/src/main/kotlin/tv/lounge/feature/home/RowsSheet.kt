@@ -40,17 +40,20 @@ import tv.lounge.design.sounds
 
 /**
  * The row editor: every row the home could show, top to bottom, with what each holds, and under
- * them the tiles hidden from every row. OK shows or hides a row; holding OK picks it up, Up and
- * Down move it, OK sets it down. [rows] and [hidden] are null until read.
+ * them the tiles hidden from every row and the apps left out of Continue watching. OK shows or
+ * hides a row; holding OK picks it up, Up and Down move it, OK sets it down. [rows], [hidden] and
+ * [muted] are null until read.
  */
 @Composable
 fun RowsSheet(
     rows: List<RowInfo>?,
     hidden: List<ItemRef>?,
+    muted: List<ItemRef>?,
     onToggle: (RowInfo) -> Unit,
     onMove: (RowInfo, Int) -> Unit,
     onResetOrder: () -> Unit,
     onShowItem: (ItemRef) -> Unit,
+    onShowProvider: (ItemRef) -> Unit,
     firstFocus: FocusRequester,
 ) {
     val colors = LoungeTheme.colors
@@ -174,6 +177,36 @@ fun RowsSheet(
                             }
                         },
                         focusRequester = requesterFor(item.id),
+                    )
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(24.dp))
+    SheetGroup("Hidden from Continue watching")
+    when {
+        muted == null -> Unit
+        muted.isEmpty() -> Text("No app is hidden. Hold OK on a tile there to hide everything from its app.", style = LoungeTheme.typography.meta, color = colors.dust)
+        else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            muted.forEachIndexed { i, item ->
+                key(item.id) {
+                    SheetRow(
+                        icon = if (item.iconPath == null) LoungeIcons.Hide else null,
+                        leading = item.iconPath?.let { path ->
+                            { AsyncImage(model = path, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(7.dp))) }
+                        },
+                        title = item.title,
+                        value = "Show",
+                        onClick = {
+                            sounds?.tick()
+                            val next = muted.getOrNull(i + 1) ?: muted.getOrNull(i - 1)
+                            onShowProvider(item)
+                            scope.launch {
+                                withFrameNanos { }
+                                (next?.let { requesterFor("from:${it.id}") } ?: resetFocus).requestWhenReady()
+                            }
+                        },
+                        focusRequester = requesterFor("from:${item.id}"),
                     )
                 }
             }

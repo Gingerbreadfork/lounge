@@ -9,6 +9,8 @@ export type Tile = {
   /** The picture is the owning app's banner, standing in for art the item did not bring. */
   borrowedArt?: boolean;
   openedRank?: number | null; installedRank?: number | null;
+  /** The app or plugin something to continue comes from, as the layout knows it, and its name. */
+  provider?: string | null; providerName?: string | null;
 };
 export type Row = { id: string; title: string; kind: string; size: string; badge?: string | null; tiles: Tile[] };
 export type Spotlight = {
@@ -37,6 +39,8 @@ export type Layout = {
   apps: AppRef[]; hiddenItems: NamedRef[]; stageItems: NamedRef[];
   /** How many recently opened apps follow the pins in Your apps; zero keeps the row to pins. */
   recentApps: number;
+  /** Apps and plugins left out of Continue watching, each as a tile's `provider`, and the same with their names. */
+  mutedProviders: string[]; mutedProviderItems: NamedRef[];
 };
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
 export type Plugin = {

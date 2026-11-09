@@ -108,7 +108,8 @@ listings, and from plugins. Your apps holds the apps you pin, in your order, the
 opened last; Settings turns that five into ten, fifteen or none, and the rest wait in All apps. Games get a row of their own, marked when a controller is connected.
 Hold OK on any tile for a menu: pin it to the front of Your apps, pin it to the Stage so it stays
 among the big pictures at the top, move it, hide it, hide the whole row, app info, the store page,
-uninstall. Each choice says what it does, and a pinned tile wears a small pin. Settings, Rows
+uninstall. On something to continue the menu can also hide everything from its app, which keeps
+that app out of Continue watching and off the Stage until you show it again. Each choice says what it does, and a pinned tile wears a small pin. Settings, Rows
 lists every row the home could show, with what each holds: OK shows or hides one, holding OK
 picks it up to move. Rows with nothing in them stay out of the way.
 
@@ -164,12 +165,14 @@ home screen like an app. The TV serves it itself and remembers the phone until y
 </p>
 
 - **What's on** mirrors the home screen. Tap a tile and it opens on the TV; hold it for the same
-  menu as the remote's: pin it to the Stage or the front of Your apps, hide it, hide its row.
+  menu as the remote's: pin it to the Stage or the front of Your apps, hide it, hide its row, or
+  hide everything from its app in Continue watching.
 - **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into whatever
   the TV has focused, and a place to paste a link that opens on the TV. With Power Setup
   connected, the keys reach whatever app is in front.
 - **Layout** shows and hides rows and drags them into order, pins any app to the front of Your
-  apps and orders the pinned ones, and brings back anything hidden or pinned to the Stage.
+  apps and orders the pinned ones, and brings back anything hidden, any app hidden from
+  Continue watching, and anything pinned to the Stage.
 - **Plugins** configures the installed plugins and installs new ones from a file or a link.
 - **More** backs up your layout and settings as one file and restores it, lists the paired
   phones, and shows the TV's diagnostics.
