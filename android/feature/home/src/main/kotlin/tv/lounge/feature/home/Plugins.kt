@@ -29,11 +29,14 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -284,6 +287,8 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
     // A secret is never shown back; a password is also masked while it is typed.
     val secret = setting.kind == "password" || setting.kind == "secret_url"
     val masked = setting.kind == "password"
+    // A list pasted from the phone has an entry a line; the TV's one line shows them side by side.
+    val onOneLine = remember { VisualTransformation { text -> TransformedText(AnnotatedString(text.text.replace('\n', ' ')), OffsetMapping.Identity) } }
     var field by remember(setting.key) { mutableStateOf(TextFieldValue(setting.value ?: "")) }
     var committed by remember(setting.key) { mutableStateOf(setting.value ?: "") }
     var focused by remember { mutableStateOf(false) }
@@ -328,7 +333,11 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
                 singleLine = true,
                 textStyle = LoungeTheme.typography.title.copy(color = colors.limelight),
                 cursorBrush = SolidColor(colors.houselight),
-                visualTransformation = if (masked) PasswordVisualTransformation() else VisualTransformation.None,
+                visualTransformation = when {
+                    masked -> PasswordVisualTransformation()
+                    setting.kind == "list" -> onOneLine
+                    else -> VisualTransformation.None
+                },
                 keyboardOptions = KeyboardOptions(
                     imeAction = ImeAction.Done,
                     keyboardType = when (setting.kind) {

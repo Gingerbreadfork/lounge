@@ -354,6 +354,9 @@ pub enum SettingKind {
     /// An address that carries credentials, such as an IPTV provider's playlist link.
     #[serde(rename = "secret_url")]
     SecretUrl,
+    /// Several entries, such as links to follow. The phone gives it room for many lines, and
+    /// the value keeps the line breaks it was given.
+    List,
 }
 
 impl SettingKind {

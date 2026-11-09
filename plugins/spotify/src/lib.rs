@@ -62,7 +62,7 @@ impl sdk::Plugin for Spotify {
                 SettingSpec {
                     key: "links".into(),
                     label: "Spotify links".into(),
-                    kind: SettingKind::Text,
+                    kind: SettingKind::List,
                     required: false,
                     help: Some("Playlists, albums, artists or podcasts to keep on the home, one share link per line. Needs no account. Share, Copy link in Spotify gives you one.".into()),
                     default: None,

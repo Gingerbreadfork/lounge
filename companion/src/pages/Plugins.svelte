@@ -143,6 +143,17 @@
               <button class="list-row" onclick={() => act('Saved', () => api.pluginSetting(current!.id, st.key, on ? 'false' : 'true')).then(load)}>
                 <span class="grow title">{on ? 'On' : 'Off'}</span><span class="toggle" class:on></span>
               </button>
+            {:else if st.kind === 'list'}
+              <textarea
+                id={st.key}
+                rows="4"
+                placeholder={st.defaultValue ?? ''}
+                value={drafts[st.key] ?? st.value ?? ''}
+                oninput={(e) => (drafts[st.key] = (e.target as HTMLTextAreaElement).value)}
+                onblur={() => commit(current!, st.key)}
+                autocapitalize="off" spellcheck="false"
+              ></textarea>
+              {#if st.help}<p class="caption">{#each linked(st.help) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
             {:else}
               <input
                 id={st.key}

@@ -42,6 +42,8 @@ const SESSION_COOKIE: &str = "lounge_session";
 const CLOSE_UNPAIRED: u16 = 4401;
 /// Request bodies are small JSON except on the two upload routes.
 const BODY_LIMIT: usize = 64 * 1024;
+/// A setting may hold a pasted list, such as another podcast app's OPML export.
+const SETTING_LIMIT: usize = 512 * 1024;
 const BUNDLE_LIMIT: usize = 16 * 1024 * 1024;
 const BACKUP_LIMIT: usize = 2 * 1024 * 1024;
 /// Most connections at once, and from one address; a phone's browser opens a handful.
@@ -251,7 +253,7 @@ fn routes(app: Shared) -> Router {
         .route("/api/plugins", get(plugins))
         .route("/api/plugins/install", post(install_plugin).layer(DefaultBodyLimit::max(BUNDLE_LIMIT)))
         .route("/api/plugins/install-url", post(install_plugin_url))
-        .route("/api/plugins/{id}/settings", put(plugin_setting))
+        .route("/api/plugins/{id}/settings", put(plugin_setting).layer(DefaultBodyLimit::max(SETTING_LIMIT)))
         .route("/api/plugins/{id}/log", get(plugin_log))
         .route("/api/plugins/{id}/{command}", post(plugin_command))
         .route("/api/diagnostics", get(diagnostics))

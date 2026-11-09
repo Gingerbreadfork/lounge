@@ -59,9 +59,9 @@ impl sdk::Plugin for YouTube {
                 SettingSpec {
                     key: "channels".into(),
                     label: "Channels".into(),
-                    kind: SettingKind::Text,
+                    kind: SettingKind::List,
                     required: false,
-                    help: Some("Channel links, @handles or ids (UC…), playlist links or ids (PL…), separated by spaces or commas. A Google Takeout export of your subscriptions, the CSV file, can be pasted in whole. Not needed with a sign-in below.".into()),
+                    help: Some("Channel links, @handles or ids (UC…), playlist links or ids (PL…), one per line or separated by commas. A Google Takeout export of your subscriptions, the CSV file, can be pasted in whole. Not needed with a sign-in below.".into()),
                     default: None,
                 },
                 SettingSpec {

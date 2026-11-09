@@ -75,7 +75,8 @@ p { margin: 0; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 13px; color: var(--dust); }
 .field input, .field select, .field textarea { min-height: 50px; padding: 0 14px; border-radius: var(--radius); background: var(--velvet); border: 1px solid var(--curtain-edge); color: var(--limelight); width: 100%; outline: none; }
-.field input:focus { border-color: var(--light); box-shadow: 0 0 0 3px color-mix(in srgb, var(--light) 25%, transparent); }
+.field input:focus, .field textarea:focus { border-color: var(--light); box-shadow: 0 0 0 3px color-mix(in srgb, var(--light) 25%, transparent); }
+.field textarea { padding: 12px 14px; line-height: 1.4; resize: vertical; white-space: pre; overflow-x: auto; font: inherit; }
 .toggle { position: relative; width: 52px; height: 32px; border-radius: 16px; background: var(--curtain-edge); flex: none; transition: background 160ms ease-out; }
 .toggle::after { content: ''; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: var(--dust); transition: transform 160ms ease-out, background 160ms ease-out; }
 .toggle.on { background: var(--signal); }

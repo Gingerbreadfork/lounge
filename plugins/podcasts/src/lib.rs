@@ -56,9 +56,9 @@ impl sdk::Plugin for Podcasts {
                 SettingSpec {
                     key: "feeds".into(),
                     label: "Podcasts you follow".into(),
-                    kind: SettingKind::Text,
+                    kind: SettingKind::List,
                     required: false,
-                    help: Some("Feed links, Apple Podcasts links or a link to an OPML export, separated by spaces or commas. An OPML file from another podcast app can be pasted in whole. Lounge's search finds podcasts too, and plays their latest episode.".into()),
+                    help: Some("Feed links, Apple Podcasts links or a link to an OPML export, one per line or separated by commas. An OPML file from another podcast app can be pasted in whole. Lounge's search finds podcasts too, and plays their latest episode.".into()),
                     default: None,
                 },
                 SettingSpec { key: "per_feed".into(), label: "Episodes per podcast".into(), kind: SettingKind::Number, required: false, help: Some("From 1 to 10.".into()), default: Some("3".into()) },
