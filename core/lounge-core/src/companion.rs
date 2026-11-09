@@ -532,6 +532,8 @@ mod tests {
         let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
         let manifest = lounge_plugin_api::Manifest { id: "tv.example.plex".into(), name: "Plex".into(), version: "1".into(), ..Default::default() };
         let said = "Sign in: on your phone open plex.tv/link and enter 25Q4, then press Refresh now here.";
+        // Past the refreshes queued as Lounge opens, which would try this plugin again.
+        engine::wait_for_graph(&core.inner);
         {
             let mut state = core.inner.state.lock();
             let row = lounge_store::PluginRow {
@@ -551,7 +553,7 @@ mod tests {
             let rows = state.store.plugins().unwrap();
             state.plugins = plugins::entries_from_rows(&rows);
         }
-        // After a restart only the sentence is left, until the next refresh.
+        // Until a plugin is refreshed again only the sentence is left.
         let info = core.plugins().remove(0);
         assert_eq!((info.last_error.as_deref(), info.ask), (Some(said), None));
 

@@ -824,11 +824,22 @@ fn due(inner: &Inner) -> Vec<String> {
 }
 
 /// Queue a refresh for each plugin that fell due while Lounge was closed, rather than leave it
-/// for the first check a minute after opening.
+/// for the first check a minute after opening. One whose last refresh failed, or stopped to ask
+/// the person something, is tried again too: what it asked is only remembered while Lounge runs.
 pub(crate) fn refresh_due_soon(inner: &Inner) {
-    for id in due(inner) {
+    let mut ids = due(inner);
+    if inner.screen_on.load(Ordering::Relaxed) {
+        let state = inner.state.lock();
+        ids.extend(stopped_last_time(&state.plugins, &state.store.plugins().unwrap_or_default()));
+    }
+    for id in ids {
         inner.plugins.refresh_soon(&id);
     }
+}
+
+/// The plugins that are on and whose last refresh brought an error or an ask.
+fn stopped_last_time(entries: &[PluginEntry], rows: &[lounge_store::PluginRow]) -> Vec<String> {
+    entries.iter().filter(|p| p.enabled && rows.iter().any(|r| r.id == p.id && r.last_error.is_some())).map(|p| p.id.clone()).collect()
 }
 
 fn record_refresh(inner: &Inner, store: &lounge_store::Store, id: &str, error: Option<&str>) {
@@ -1166,6 +1177,25 @@ mod tests {
         assert!(!refresh_due(Some(0), true, 15, 4 * minute));
         assert!(!refresh_due(Some(0), true, 60, 4 * minute));
         assert!(refresh_due(Some(0), true, 5, 5 * minute));
+    }
+
+    #[test]
+    fn what_stopped_last_time_is_tried_again_when_lounge_opens() {
+        let entry = |id: &str, enabled: bool| PluginEntry { id: id.into(), manifest: Manifest::default(), enabled };
+        let row = |id: &str, last_error: Option<&str>| lounge_store::PluginRow {
+            id: id.into(),
+            manifest_json: "{}".into(),
+            publisher: String::new(),
+            enabled: true,
+            built_in: true,
+            installed_ms: 0,
+            last_refresh_ms: Some(1),
+            last_error: last_error.map(str::to_string),
+            last_success_ms: None,
+        };
+        let entries = [entry("asking", true), entry("fine", true), entry("off", false), entry("new", true)];
+        let rows = [row("asking", Some("Sign in: open plex.tv/link and enter 25Q4")), row("fine", None), row("off", Some("offline"))];
+        assert_eq!(stopped_last_time(&entries, &rows), ["asking"]);
     }
 
     #[test]
