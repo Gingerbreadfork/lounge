@@ -231,7 +231,9 @@ fn quick_connect(server: &str, device_id: &str) -> Result<AuthResponse, String> 
     let pending: Option<Quick> = host::kv_get(QUICK_KEY).and_then(|v| serde_json::from_slice(&v).ok()).filter(|q: &Quick| q.server == server);
     if let Some(quick) = pending {
         let ask = quick_request("GET", format!("{server}/QuickConnect/Connect?secret={}", url_encode(&quick.secret)), device_id, None);
-        let r = sdk::fetch_from("Jellyfin", server, &ask)?;
+        // A server that does not answer, or answers badly for a moment, leaves the code good,
+        // so it stays on the screen.
+        let Ok(r) = sdk::fetch_from("Jellyfin", server, &ask) else { return Err(instruction(&quick.code)) };
         match r.status {
             200 => {
                 let answer: QuickAnswer = serde_json::from_str(&r.body).map_err(unreadable)?;
@@ -253,6 +255,10 @@ fn quick_connect(server: &str, device_id: &str) -> Result<AuthResponse, String> 
             401 => return Err(QUICK_OFF.into()),
             // The code has run out; a new one follows.
             404 => host::kv_delete(QUICK_KEY),
+            s if s >= 500 => {
+                sdk::warn!("HTTP {s} when asked about the Quick Connect code");
+                return Err(instruction(&quick.code));
+            }
             s => return Err(sdk::answered_error("Jellyfin", server, s)),
         }
     }

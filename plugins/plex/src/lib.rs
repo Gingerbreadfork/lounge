@@ -371,7 +371,9 @@ fn pin_step(now_ms: i64) -> Result<String, String> {
     let client = client_id(now_ms);
     let pending: Option<Pin> = host::kv_get(PIN_KEY).and_then(|v| serde_json::from_slice(&v).ok()).filter(|p: &Pin| p.expires_ms > now_ms);
     if let Some(pin) = pending {
-        let r = sdk::fetch_online("Plex", &plex_tv(HttpRequest::get(format!("{PLEX_TV}/pins/{}", pin.id)), &client))?;
+        // plex.tv not answering, or answering badly for a moment, leaves the code good, so it
+        // stays on the screen.
+        let Ok(r) = sdk::fetch_online("Plex", &plex_tv(HttpRequest::get(format!("{PLEX_TV}/pins/{}", pin.id)), &client)) else { return Err(instruction(&pin)) };
         match r.status {
             200 => {
                 let answer: PinAnswer = serde_json::from_str(&r.body).map_err(unreadable_sign_in)?;
@@ -381,7 +383,10 @@ fn pin_step(now_ms: i64) -> Result<String, String> {
                 return Ok(token);
             }
             429 => return Err(instruction(&pin)),
-            s if s >= 500 => return Err(sdk::online_error("Plex", s)),
+            s if s >= 500 => {
+                sdk::warn!("HTTP {s} when asked about the sign-in code");
+                return Err(instruction(&pin));
+            }
             // The code has run out or is unknown; a new one follows.
             _ => host::kv_delete(PIN_KEY),
         }
