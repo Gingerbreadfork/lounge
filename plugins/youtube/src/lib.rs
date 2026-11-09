@@ -61,7 +61,7 @@ impl sdk::Plugin for YouTube {
                     label: "Channels".into(),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("Channel links, @handles or ids (UC…), playlist links or ids (PL…), one per line or separated by commas. A Google Takeout export of your subscriptions, the CSV file, can be pasted in whole. Not needed with a sign-in below.".into()),
+                    help: Some("Channel links, @handles or ids (UC…), playlist links or ids (PL…), separated by spaces or commas. A Google Takeout export of your subscriptions, the CSV file, can be pasted in whole. Not needed with a sign-in below.".into()),
                     default: None,
                 },
                 SettingSpec {
@@ -103,6 +103,9 @@ impl sdk::Plugin for YouTube {
         let mut videos = Vec::new();
         let mut failures = Vec::new();
         let sources = resolve_named(sources, &mut budget, &mut failures);
+        if sources.len() > MAX_FEEDS {
+            sdk::warn!("{} channels and playlists are listed; only the first {MAX_FEEDS} are read", sources.len());
+        }
         for source in sources.iter().take(MAX_FEEDS) {
             budget.spend();
             match feed(source) {
@@ -799,22 +802,25 @@ impl Source {
 }
 
 /// Accepts channel ids, `/channel/UC…` links, @handles, `/c/` and `/user/` links, playlist ids
-/// and `list=` links, one or more a line. A line that names a source may carry other columns,
-/// as each line of a Google Takeout subscriptions export does; one that names nothing is
-/// refused, naming it so the user can fix it.
+/// and `list=` links, separated by line breaks, spaces, commas or semicolons. A line that names
+/// a source may carry other words; one that names nothing is refused, naming it so the user can
+/// fix it. A Google Takeout subscriptions export gives its channel links, whether or not the
+/// field it was pasted into kept its line breaks.
 pub fn parse_sources(raw: &str) -> Result<Vec<Source>, String> {
+    if raw.trim_start().get(..10).is_some_and(|heading| heading.eq_ignore_ascii_case("channel id")) {
+        let mut out: Vec<Source> = raw.split("/channel/").skip(1).map(id_token).filter(|id| !id.is_empty()).map(Source::Channel).collect();
+        out.dedup();
+        return Ok(out);
+    }
     let mut out = Vec::new();
     for line in raw.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        // The heading of a Takeout export.
-        if line.to_ascii_lowercase().starts_with("channel id") {
-            continue;
-        }
         let before = out.len();
         let mut unknown: Option<&str> = None;
         for piece in line.split([',', ';']).map(str::trim).filter(|s| !s.is_empty()) {
-            match parse_piece(piece) {
-                Some(source) => out.push(source),
-                None => unknown = unknown.or(Some(piece)),
+            let found = out.len();
+            out.extend(piece.split_whitespace().filter_map(parse_piece));
+            if out.len() == found {
+                unknown = unknown.or(Some(piece));
             }
         }
         if out.len() == before
@@ -842,7 +848,7 @@ fn parse_piece(piece: &str) -> Option<Source> {
         Some(Source::Channel(token))
     } else if ["PL", "UU", "OL", "FL", "RD"].iter().any(|p| token.starts_with(p)) && token.len() >= 13 && !piece.contains('/') {
         Some(Source::Playlist(token))
-    } else if let Some(rest) = piece.split('@').nth(1) {
+    } else if let Some(rest) = piece.strip_prefix('@').or_else(|| piece.split("/@").nth(1)) {
         let handle = name_token(rest);
         (!handle.is_empty()).then(|| Source::Named(format!("@{handle}")))
     } else if let Some(rest) = piece.split("/c/").nth(1) {
@@ -1100,6 +1106,9 @@ mod tests {
         assert_eq!(page_url("@a b"), "https://www.youtube.com/@a%20b");
         assert_eq!(Source::Named("c/x".into()).label(), "channel c/x");
         assert!(parse_sources("@").is_err());
+        // Line breaks pasted into a one-line field arrive as spaces.
+        let spaced = parse_sources("@one @two https://www.youtube.com/@three").unwrap();
+        assert_eq!(spaced, vec![Source::Named("@one".into()), Source::Named("@two".into()), Source::Named("@three".into())]);
     }
 
     #[test]
@@ -1107,6 +1116,12 @@ mod tests {
         let csv = "Channel Id,Channel Url,Channel Title\nUCBJycsmduvYEL83R_U4JriQ,http://www.youtube.com/channel/UCBJycsmduvYEL83R_U4JriQ,Marques Brownlee\nUCHnyfMqiRRG1u-2MsSQLbXA,http://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA,\"Smith, John\"\n";
         let s = parse_sources(csv).unwrap();
         assert_eq!(s, vec![Source::Channel("UCBJycsmduvYEL83R_U4JriQ".into()), Source::Channel("UCHnyfMqiRRG1u-2MsSQLbXA".into())]);
+        // A one-line field turns the line breaks into spaces, or drops them.
+        assert_eq!(parse_sources(&csv.replace('\n', " ")).unwrap(), s);
+        assert_eq!(parse_sources(&csv.replace('\n', "")).unwrap(), s);
+        // Rows without the heading still name their channels, and a title's words name none.
+        let rows = "UCBJycsmduvYEL83R_U4JriQ,http://www.youtube.com/channel/UCBJycsmduvYEL83R_U4JriQ,Me@Work UCHnyfMqiRRG1u-2MsSQLbXA,http://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA,Other";
+        assert_eq!(parse_sources(rows).unwrap(), s);
     }
 
     #[test]
