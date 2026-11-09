@@ -778,20 +778,42 @@ impl SubsCache {
     }
 
     fn save(&self) {
+        match self.fitted() {
+            Some(json) => host::kv_set(SUBS_KEY, &json),
+            None => {
+                sdk::warn!("too many channels to remember between refreshes; starting over");
+                host::kv_delete(SUBS_KEY);
+            }
+        }
+    }
+
+    /// The cache as it fits the store: with fewer videos a feed, and then with none for the
+    /// feeds read longest ago. Every feed keeps its entry, so each still gets its turn and its
+    /// videos come back when it is read again.
+    fn fitted(&self) -> Option<Vec<u8>> {
         let mut trimmed = SubsCache { channels: self.channels.clone() };
+        let fits = |cache: &SubsCache| serde_json::to_vec(cache).ok().filter(|json| json.len() <= CACHE_BYTES);
         for per_channel in [STORED_PER_CHANNEL, 3, 2, 1] {
             for c in trimmed.channels.values_mut() {
                 c.videos.truncate(per_channel);
             }
-            if let Ok(json) = serde_json::to_vec(&trimmed)
-                && json.len() <= CACHE_BYTES
-            {
-                host::kv_set(SUBS_KEY, &json);
-                return;
+            if let Some(json) = fits(&trimmed) {
+                return Some(json);
             }
         }
-        sdk::warn!("too many channels to remember between refreshes; starting over");
-        host::kv_delete(SUBS_KEY);
+        let mut oldest: Vec<(i64, String)> = trimmed.channels.iter().map(|(key, c)| (c.fetched_ms, key.clone())).collect();
+        oldest.sort();
+        for batch in oldest.chunks(oldest.len().div_ceil(8).max(1)) {
+            for (_, key) in batch {
+                if let Some(c) = trimmed.channels.get_mut(key) {
+                    c.videos.clear();
+                }
+            }
+            if let Some(json) = fits(&trimmed) {
+                return Some(json);
+            }
+        }
+        None
     }
 
     /// The feeds kept from earlier that `followed` does not name.
@@ -1295,6 +1317,24 @@ mod tests {
         let mut budget = Budget::new(ART_RESERVE);
         cache.refresh(&listed, 1_000, &mut budget);
         assert_eq!(cache.channels.keys().map(String::as_str).collect::<Vec<_>>(), ["UCa"]);
+    }
+
+    #[test]
+    fn a_cache_too_big_to_keep_sheds_videos_not_feeds() {
+        let video = |n: usize| Video { id: format!("vid{n:08}"), title: "A video with a title of ordinary length, as most have".into(), channel: format!("Channel number {n}"), published_ms: 1_794_000_000_000, short: false };
+        let mut cache = SubsCache::default();
+        for n in 0..1_200usize {
+            cache.channels.insert(format!("UC{n:022}"), CachedChannel { title: format!("channel UC{n:022}"), fetched_ms: n as i64, attempted_ms: n as i64, videos: vec![video(n); 3] });
+        }
+        let json = cache.fitted().unwrap();
+        assert!(json.len() <= CACHE_BYTES);
+        let kept: SubsCache = serde_json::from_slice(&json).unwrap();
+        // Every feed keeps its place in the turn; the ones read last keep their videos.
+        assert_eq!(kept.channels.len(), 1_200);
+        assert_eq!(kept.channels[&format!("UC{:022}", 1_199)].videos.len(), 1);
+        assert!(kept.channels[&format!("UC{:022}", 0)].videos.is_empty());
+        assert_eq!(kept.channels[&format!("UC{:022}", 0)].attempted_ms, 0);
+        assert!(kept.channels.values().filter(|c| !c.videos.is_empty()).count() >= 300);
     }
 
     #[test]
