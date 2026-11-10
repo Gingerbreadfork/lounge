@@ -5,7 +5,7 @@ resolver = "3"
 members = ["sdk", "iptv", "jellyfin", "emby", "plex", "youtube", "archive", "immich", "hdhomerun", "tvheadend", "channels", "nextpvr", "art", "trakt", "kodi", "twitch", "stremio", "nuvio", "arr", "spotify", "podcasts", "moonlight", "simkl", "sample", "lgp-tool"]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.6.1"
 edition = "2024"
 license = "MIT"
 
