@@ -112,7 +112,7 @@ val StageCollapsedHeight = Dimens.collapsedStageHeight + 32.dp
  * The Stage: playbill, artwork and strip when expanded; a 200 dp band when focus is in the rows.
  * The proscenium lowers over 260 ms as one picture: the frame travels from beside the playbill to
  * the full-width band, cropping to the focal line, while the playbill and strip fade (DESIGN.md
- * §5.2, §6.3).
+ * §5.2, §6.3). [closing] shuts the band from below, 0 open and 1 gone, read while drawing.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -136,6 +136,7 @@ fun StageView(
     onBandFocused: () -> Unit,
     onPlaybillFocusChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    closing: () -> Float = { 0f },
 ) {
     val motion = LoungeTheme.motion
     // The height is read in the layout phase and the progress in layout and draw, so the
@@ -158,13 +159,14 @@ fun StageView(
     val glow = remember(spotlight?.glowArgb) { spotlight?.glowArgb.orEmpty().map { Color(it.toInt()) } }
     // The light drifts on the field's clock only while it shows, so a raised Stage leaves it alone.
     val lightState = LocalLightState.current
-    val clock: () -> Float = remember(lightState, read) { { if (read() < 0.85f) lightState.clock else 0f } }
+    val clock: () -> Float = remember(lightState, read, closing) { { if (read() < 0.85f && closing() < 1f) lightState.clock else 0f } }
     Box(modifier.fillMaxWidth().requiredHeight(StageExpandedHeight)) {
         if (spotlight != null) {
             StageFrame(
                 spotlight = spotlight,
                 index = stage.spotlights.indexOfFirst { it.id == spotlight.id },
                 progress = read,
+                closing = closing,
                 geometry = geometry,
                 glow = glow,
                 light = LoungeTheme.colors.light(spotlight.lightArgb),
@@ -179,10 +181,10 @@ fun StageView(
                         .padding(start = Dimens.safeX)
                         .graphicsLayer {
                             clip = true
-                            shape = geometry.frameShape(read(), originX = Dimens.safeX.toPx())
+                            shape = geometry.frameShape(read(), originX = Dimens.safeX.toPx(), closing = closing())
                         },
                 ) {
-                    BandChrome(spotlight, read, { geometry.left(read()) - geometry.safe }, !expanded, onBandFocused, LoungeTheme.colors)
+                    BandChrome(spotlight, read, closing, { geometry.left(read()) - geometry.safe }, !expanded, onBandFocused, LoungeTheme.colors)
                 }
             }
         }
@@ -209,7 +211,7 @@ fun StageView(
                 .fillMaxWidth()
                 .requiredHeight(StageExpandedHeight)
                 .graphicsLayer {
-                    alpha = shown()
+                    alpha = shown() * (1f - closing())
                     compositingStrategy = CompositingStrategy.ModulateAlpha
                 },
             interactive = expanded,
@@ -239,13 +241,14 @@ private fun PrefetchStageArt(stage: Stage, selectedIndex: Int) {
  * The one picture. Its frame interpolates between the artwork's place beside the playbill and the
  * band, and as it lowers the picture gives way to its own light. Both are laid out once and only
  * scaled and shifted, and the frame is a clip outline on a layer, so a frame of the lowering lays
- * out nothing.
+ * out nothing. As the band closes its light narrows with the frame and dims at the last.
  */
 @Composable
 private fun StageFrame(
     spotlight: StageSpotlight,
     index: Int,
     progress: () -> Float,
+    closing: () -> Float,
     geometry: FrameGeometry,
     glow: List<Color>,
     light: Color,
@@ -257,7 +260,7 @@ private fun StageFrame(
             .requiredHeight(Dimens.stageArtworkHeight)
             .graphicsLayer {
                 clip = true
-                shape = geometry.frameShape(progress())
+                shape = geometry.frameShape(progress(), closing = closing())
             },
     ) {
         Box(
@@ -294,9 +297,10 @@ private fun StageFrame(
                     // Composited whole, so the dither's Plus never lands on the frame's anti-aliased edge.
                     compositingStrategy = CompositingStrategy.Offscreen
                     val p = progress()
-                    alpha = lightIn(p)
+                    val c = closing()
+                    alpha = lightIn(p) * lastLight(c)
                     scaleX = geometry.width(p) / geometry.bandW
-                    scaleY = geometry.height(p) / geometry.bandH
+                    scaleY = geometry.height(p, c) / geometry.bandH
                     transformOrigin = TransformOrigin(0f, 0f)
                     translationX = geometry.left(p)
                 },
@@ -308,6 +312,12 @@ private fun StageFrame(
 private fun lightIn(p: Float): Float {
     val t = ((0.85f - p) / 0.65f).coerceIn(0f, 1f)
     return t * t * (3f - 2f * t)
+}
+
+/** How much of the light is left as the band closes: all of it until the band is a line, none once it has shut. */
+private fun lastLight(closing: Float): Float {
+    val t = ((closing - 0.55f) / 0.45f).coerceIn(0f, 1f)
+    return 1f - t * t * (3f - 2f * t)
 }
 
 /** The frame's rectangle and the picture's placement at a given progress (1 expanded, 0 lowered), in px. */
@@ -324,6 +334,9 @@ internal class FrameGeometry(density: Density, private val focalY: Float) {
     fun left(p: Float) = safe + (artX - safe) * p
     fun width(p: Float) = bandW + (artW - bandW) * p
     fun height(p: Float) = bandH + (artH - bandH) * p
+
+    /** The frame's height with [closing] of it shut from below, down to nothing. */
+    fun height(p: Float, closing: Float) = height(p) * (1f - closing.coerceIn(0f, 1f))
     fun scale(p: Float) = width(p) / bandW
 
     /**
@@ -336,8 +349,11 @@ internal class FrameGeometry(density: Density, private val focalY: Float) {
         return (fh / 2f - focalY * ph).coerceAtMost(0f).coerceAtLeast(minOf(fh - ph, 0f))
     }
 
-    /** The frame's outline, in the coordinates of a node whose left edge sits at [originX]. */
-    fun frameShape(p: Float, originX: Float = 0f): Shape = FrameShape(left(p) - originX, width(p), height(p), radius)
+    /** The frame's outline, in the coordinates of a node whose left edge sits at [originX]. A frame nearly shut keeps round ends. */
+    fun frameShape(p: Float, originX: Float = 0f, closing: Float = 0f): Shape {
+        val h = height(p, closing)
+        return FrameShape(left(p) - originX, width(p), h, minOf(radius, h / 2f))
+    }
 }
 
 private data class FrameShape(val left: Float, val width: Float, val height: Float, val radius: Float) : Shape {
@@ -353,12 +369,14 @@ private val BandWidth = 1920.dp - Dimens.safeX * 2
  * What the band adds to its light when lowered: the title, the progress bar with the time left
  * beside it, and the focusable surface that raises the Stage. The text rides in [textShift] from
  * its place, with the frame's left edge, so it is never cut by the frame. It stays focusable until
- * it leaves composition so focus hands over to the strip.
+ * it leaves composition so focus hands over to the strip. As the band closes the words lift and
+ * are gone before its edge reaches them.
  */
 @Composable
 private fun BandChrome(
     spotlight: StageSpotlight,
     progress: () -> Float,
+    closing: () -> Float,
     textShift: () -> Float,
     interactive: Boolean,
     onFocused: () -> Unit,
@@ -369,7 +387,7 @@ private fun BandChrome(
         Modifier
             .size(BandWidth, Dimens.collapsedStageHeight)
             .graphicsLayer {
-                alpha = (1f - progress() * 2f).coerceIn(0f, 1f)
+                alpha = (1f - progress() * 2f).coerceIn(0f, 1f) * (1f - closing() / 0.35f).coerceIn(0f, 1f)
                 compositingStrategy = CompositingStrategy.ModulateAlpha
             }
             .onFocusChanged { if (it.isFocused) onFocused() }
@@ -377,7 +395,12 @@ private fun BandChrome(
     ) {
         // With progress the line beside the bar is how long is left, which the core puts last.
         val line = if (spotlight.progress != null) spotlight.lines.lastOrNull() else spotlight.lines.firstOrNull()
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 48.dp).graphicsLayer { translationX = textShift() }) {
+        Column(
+            Modifier.align(Alignment.CenterStart).padding(start = 48.dp).graphicsLayer {
+                translationX = textShift()
+                translationY = -closing() * 40.dp.toPx()
+            },
+        ) {
             // A long title takes a second line before it is cut; the band has the height for it.
             Text(
                 spotlight.title,

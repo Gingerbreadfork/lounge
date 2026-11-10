@@ -139,6 +139,9 @@ class HomeState(private val tierA: Boolean = true) {
     /** The Stage's animated height, published by the Stage slot so the rows can follow it in draw. */
     var stageHeight: State<Dp>? = null
 
+    /** How far the lowered Stage has shut, 0 open and 1 gone, for the rows and the Stage to follow in draw. */
+    var bandRise: State<Float>? = null
+
     fun touched() {
         lastInputAt = System.currentTimeMillis()
         idle = false

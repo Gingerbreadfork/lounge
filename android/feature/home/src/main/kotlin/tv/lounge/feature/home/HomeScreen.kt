@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,6 +49,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -80,6 +82,7 @@ import tv.lounge.design.sounds
 import tv.lounge.platform.AndroidPlatform
 import tv.lounge.platform.Prefs
 import tv.lounge.platform.UiCommand
+import kotlin.math.roundToInt
 
 private const val IDLE_AFTER_MS = 20_000L
 /** Home within this long of the last Home press keeps the strip's selection; later it starts over. */
@@ -496,21 +499,24 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
             Spacer(Modifier.height(34.dp))
             Box(Modifier.fillMaxSize()) {
                 // The rows keep one layout whatever the Stage does: a layer translation moves them
-                // and a clip hides what sits under the lowered Stage, so the proscenium never lays
-                // them out.
+                // and a clip hides what sits under the lowered Stage, so neither the proscenium
+                // nor the band closing lays them out.
                 val density = androidx.compose.ui.platform.LocalDensity.current
                 val headerPx = with(density) { tv.lounge.design.Dimens.rowHeaderHeight.toPx() }
                 val collapsedPx = with(density) { StageCollapsedHeight.toPx() }
                 val belowStage = remember(collapsedPx) { TopInsetShape(collapsedPx) }
+                BandRise(state, firstRowId)
                 CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec(collapsedPx + headerPx)) {
                     LazyColumn(
                         state = listState,
                         // Room for the lowered Stage above the first row, and enough below the last row for it to reach the focus line.
-                        contentPadding = PaddingValues(top = StageCollapsedHeight, bottom = 760.dp),
+                        contentPadding = PaddingValues(top = StageCollapsedHeight, bottom = 760.dp + StageCollapsedHeight),
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
+                            // Taller than its place by the band, so the rows still reach the foot of the screen once they have risen into it.
+                            .tallerBy(collapsedPx.roundToInt())
                             .graphicsLayer {
-                                translationY = (state.stageHeight?.value?.toPx() ?: 0f) - collapsedPx
+                                translationY = (state.stageHeight?.value?.toPx() ?: 0f) - collapsedPx * (1f + (state.bandRise?.value ?: 0f))
                                 shape = belowStage
                                 clip = true
                             }
@@ -774,6 +780,28 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
 
 /** The activity's start time, set by the app module. */
 var startupReference: () -> Long = { 0L }
+
+/**
+ * Shuts the lowered Stage while focus is below the first row and opens it again on the way up,
+ * over `proscenium` like the lowering it continues (DESIGN.md §5.2). It reads which row has focus
+ * here, so a move between rows recomposes this and not the home.
+ */
+@Composable
+private fun BandRise(state: HomeState, firstRowId: String?) {
+    val away = state.region == FocusRegion.Rows && state.focusedRowId.let { it != null && it != firstRowId }
+    val rise = animateFloatAsState(if (away) 1f else 0f, LoungeTheme.motion.proscenium(), label = "bandRise")
+    SideEffect { state.bandRise = rise }
+    // The focused tile moves on screen with the rows, and its light has to follow.
+    val light = LocalLightState.current
+    LaunchedEffect(rise) { snapshotFlow { rise.value }.collect { light.sourceMoved() } }
+}
+
+/** Measures the content [extra] px taller than its place and lets it run on below. */
+private fun Modifier.tallerBy(extra: Int): Modifier = layout { measurable, constraints ->
+    val height = constraints.maxHeight + extra
+    val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
+    layout(placeable.width, constraints.maxHeight) { placeable.place(0, 0) }
+}
 
 /** Everything below [top]: the part of the rows' layer the lowered Stage does not cover. */
 private data class TopInsetShape(val top: Float) : androidx.compose.ui.graphics.Shape {
@@ -1064,6 +1092,7 @@ private fun StageSlot(
     val expanded = state.stageExpanded
     val height = animateDpAsState(if (expanded) StageExpandedHeight else StageCollapsedHeight, motion.proscenium(), label = "stageHeight")
     SideEffect { state.stageHeight = height }
+    val closing: () -> Float = remember(state) { { state.bandRise?.value ?: 0f } }
     val light = LocalLightState.current
     LaunchedEffect(height) { snapshotFlow { height.value }.collect { light.sourceMoved() } }
     // Once the viewer has moved along the strip, the selection follows its tile's id, so a snapshot
@@ -1089,6 +1118,7 @@ private fun StageSlot(
         selected = remember(selected) { object : androidx.compose.runtime.IntState { override val intValue: Int get() = selected.value } },
         expanded = expanded,
         height = height,
+        closing = closing,
         indexed = snapshot.revision > 0uL,
         stripRequester = state::stripRequester,
         stripFocus = { state.stripFocus() },

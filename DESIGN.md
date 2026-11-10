@@ -156,6 +156,7 @@ The Stage lowers to a 200 px band at y 136, full width between the safe margins:
 - **The text.** The left 20 % is the picture's own colour at 70 % of its light, so a red picture lowers into deep red and never into the room's velvet, and the light rises over the next half. The title is `display-l` in `limelight` at x 48, up to two lines within 960 px; 18 px below it the 6 px progress bar, 300 wide, with how long is left beside it in `meta` at 84 %. With no progress the line is the first metadata line. Text sits at 9:1 or better on the band.
 - **The lowering.** The light takes over from the picture between 85 % and 20 % of the way down; because the pools come from the picture's own columns, its colours land where they were and the change reads as a defocus. The title and bar fade in over the last half, riding in with the frame's left edge so the frame never cuts them.
 - **The drift.** The pools sway sideways and the bloom wanders and breathes, each on its own long period (29–71 s), on the light field's clock: stepped, below the threshold of attention, still after a minute without input, under reduced motion and in Lite. Each part is drawn once into a layer and the drift only moves layers, so it costs no redraw.
+- **The band closes.** The band is where the Stage lands and the way back to it, so it stays while focus is in the first row. DOWN to the second row shuts it, over `proscenium` like the lowering it continues: its lower edge rises to its upper edge, the corners staying round, so the light narrows to a line under the top bar and dims over the last half of the way. The title and bar lift 40 px and are gone in the first third, before the edge reaches them. The rows rise 232 px with that edge and from there down have the whole screen below the top bar. UP to the first row opens it the same way, light first and then the words, and Back raises the Stage from any row. A second DOWN during the lowering runs the two together: the frame shuts as it lowers and there is no stop between them.
 
 ### 5.3 Rows
 
@@ -172,7 +173,7 @@ The Stage lowers to a 200 px band at y 136, full width between the safe margins:
 | Compact (icon + text) | 288 × 72 | 320 × 80 | 352 × 88 |
 
 - A row with nothing to show is not rendered. There are no empty rows and no placeholder tiles.
-- Focused tile scale 1.06 (poster/landscape/app), 1.04 (compact). Rows do not scroll vertically until the focused row would leave the viewport; the focused row sits at a fixed y when scrolling (the "focus line" at y 334 in collapsed mode) so the eye never hunts.
+- Focused tile scale 1.06 (poster/landscape/app), 1.04 (compact). Rows do not scroll vertically until the focused row would leave the viewport; the focused row sits at a fixed y when scrolling so the eye never hunts: this "focus line" puts the row's top at y 368 while the band shows, under the first row, and at y 136 from the second row down (5.2).
 
 ### 5.4 Overlays
 
@@ -237,7 +238,7 @@ Brightness is a colour-matrix on the tile image, not an overlay, so blacks stay 
 | `settle` | 180 ms | cubic-bezier(0.2, 0, 0, 1) | Focus out, brightness changes |
 | `travel` | 220 ms | cubic-bezier(0.3, 0, 0.1, 1) | Row horizontal scroll, backdrop spill moving |
 | `proscenium` (Stage) | — | — | The Stage's height eases between 864 and 200 px while one picture's frame travels from the artwork's place to the band (5.2), going out of focus into its light, and the playbill and strip fade beneath it; the rows slide up. Nothing is squeezed. Text swaps in the playbill are one in-place fade per spotlight change, lines staggered by 40 ms. |
-| `proscenium` | 260 ms | cubic-bezier(0.35, 0, 0.15, 1) | Stage collapse/expand, overlay enter |
+| `proscenium` | 260 ms | cubic-bezier(0.35, 0, 0.15, 1) | Stage collapse/expand, the band closing and opening, overlay enter |
 | `curtain` | 320 ms | cubic-bezier(0.3, 0, 0.1, 1) | Stage artwork crossfade, playbill swap, theme change |
 | `dim` | 1200 ms | cubic-bezier(0.4, 0, 0.2, 1) | The house lights going down when idle; the screensaver's late dim over 60 s is the same idea stepped |
 | `lamp` | 600 ms | cubic-bezier(0.2, 0, 0, 1) | The lamp warming up after a cold start: content is there from the first frame, only the light ramps in |
