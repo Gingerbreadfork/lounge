@@ -111,6 +111,7 @@ Text scaling: the system font scale is honoured up to 1.3×; above that, row hei
 - Metadata is written as a sentence fragment with commas or as two lines, never joined with dots or slashes: "Season 2, Episode 4" on one line, "23 minutes left" on the next.
 - Numbers that change (clock, time left, channel numbers) use tabular figures so they don't jitter.
 - Titles are never truncated mid-word at display sizes; wrap to two lines first, then ellipsis.
+- A tile's one-line title that is cut short runs across once the tile has held focus for 1.2 seconds, at 72 px a second with its ends faded, and starts over after a pause. With reduced motion it stays cut.
 
 ## 5. Layout
 

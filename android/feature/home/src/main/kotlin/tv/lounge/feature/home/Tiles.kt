@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -60,6 +64,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.tv.material3.Text
@@ -222,7 +227,7 @@ fun TileView(
     ) {
         when (kind) {
             TileKind.POSTER -> PosterContent(tile, filter, size)
-            TileKind.LANDSCAPE -> LandscapeContent(tile, filter, brightnessNow, chrome, size, badged)
+            TileKind.LANDSCAPE -> LandscapeContent(tile, filter, brightnessNow, chrome, size, badged, focused)
             TileKind.APP_BANNER -> AppBannerContent(tile, filter, size)
             TileKind.COMPACT -> CompactContent(tile, filter)
         }
@@ -355,6 +360,7 @@ private fun LandscapeContent(
     chrome: Boolean,
     size: DpSize,
     badged: Boolean,
+    focused: Boolean,
 ) {
     val colors = LoungeTheme.colors
     // A banner names itself and the filmstrip speaks through its pictures; text only with chrome or when the art is missing.
@@ -411,12 +417,11 @@ private fun LandscapeContent(
         }
         if (chrome && badged) TileBadge(tile.badge, Modifier.align(if (live) Alignment.TopEnd else Alignment.TopStart).padding(16.dp))
         if (showText) {
-            val title = rememberFittedLine(words, LoungeTheme.typography.title, size.width - 40.dp)
             Column(
                 Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = if (tile.progress != null) 32.dp else 20.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                if (title.isNotEmpty()) Text(title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (words.isNotEmpty()) RunningTitle(words, LoungeTheme.typography.title, size.width - 40.dp, focused)
                 tile.subtitle?.let { Text(it, style = LoungeTheme.typography.meta, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }
@@ -494,13 +499,48 @@ private fun TileBadge(badge: Badge?, modifier: Modifier) {
 @Composable
 fun FocusedTitle(visible: Boolean, title: String, width: Dp) {
     AnimatedVisibility(visible, enter = fadeIn(LoungeTheme.motion.snap()), exit = fadeOut(LoungeTheme.motion.settle())) {
-        Text(
-            title,
-            style = LoungeTheme.typography.meta,
-            color = LoungeTheme.colors.limelight,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(width).padding(top = 12.dp),
-        )
+        RunningTitle(title, LoungeTheme.typography.meta, width, visible, Modifier.padding(top = 12.dp))
     }
+}
+
+/** How long a tile is sat on before a title cut short starts across. */
+private const val TITLE_RUNS_AFTER_MS = 1_200L
+
+/**
+ * A one-line title [width] wide. One cut short runs across, over and over, once its tile has been
+ * [focused] a while, so all of it can be read; with reduced motion it stays cut (DESIGN.md §4.2).
+ */
+@Composable
+private fun RunningTitle(text: String, style: TextStyle, width: Dp, focused: Boolean, modifier: Modifier = Modifier) {
+    val colors = LoungeTheme.colors
+    val fitted = rememberFittedLine(text, style, width)
+    val cut = fitted != text
+    val still = LoungeTheme.motion.reducedMotion
+    var running by remember { mutableStateOf(false) }
+    LaunchedEffect(focused, cut, still) {
+        running = false
+        if (focused && cut && !still) {
+            delay(TITLE_RUNS_AFTER_MS)
+            running = true
+        }
+    }
+    if (running) {
+        Text(
+            text,
+            style = style,
+            color = colors.limelight,
+            maxLines = 1,
+            softWrap = false,
+            modifier = modifier.width(width).fadedEnds().basicMarquee(iterations = Int.MAX_VALUE, repeatDelayMillis = 1_500, initialDelayMillis = 0, velocity = 72.dp),
+        )
+    } else {
+        Text(fitted, style = style, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
+    }
+}
+
+/** Fades what is drawn out towards both ends, so words running across arrive and leave softly. */
+private fun Modifier.fadedEnds(): Modifier = graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+    drawContent()
+    val fade = (20.dp.toPx() / size.width).coerceAtMost(0.25f)
+    drawRect(Brush.horizontalGradient(0f to Color.Transparent, fade to Color.Black, 1f - fade to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
 }
