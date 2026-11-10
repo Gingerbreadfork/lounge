@@ -467,6 +467,8 @@ private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphic
             tile.iconPath != null -> FilteredPicture(tile.iconPath!!, filter, null, DpSize(48.dp, 48.dp), ContentScale.Fit, Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
             tile.id.startsWith("device:") -> Icon(LoungeIcons.Tv, contentDescription = null, tint = colors.houselight, modifier = Modifier.size(32.dp))
             tile.id.startsWith("notice:") -> Icon(LoungeIcons.Info, contentDescription = null, tint = colors.houselight, modifier = Modifier.size(32.dp))
+            // A tile to read that brings no picture is its words alone.
+            tile.action.isEmpty() -> Unit
             else -> Icon(LoungeIcons.Apps, contentDescription = null, tint = colors.dust, modifier = Modifier.size(32.dp))
         }
         Column(Modifier.weight(1f)) {

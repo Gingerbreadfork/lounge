@@ -268,8 +268,9 @@ private fun search(snapshot: HomeSnapshot, query: String): List<CoreRow> {
     // app comes last, so one already found in Your apps is not shown twice.
     val allApps = CoreRow(id = "allapps", title = "All apps", kind = TileKind.APP_BANNER, size = RowSize.M, badge = null, tiles = snapshot.allApps)
     return (snapshot.rows + snapshot.hiddenRows + allApps).mapNotNull { row ->
-        // A tile that only opens search or another screen would lead away from the result.
-        val hits = row.tiles.filter { matches(it) && !it.action.startsWith("control:") && seen.add(it.id) }
+        // A tile that only opens search or another screen would lead away from the result, and
+        // one that opens nothing is no result at all.
+        val hits = row.tiles.filter { matches(it) && it.action.isNotEmpty() && !it.action.startsWith("control:") && seen.add(it.id) }
         if (hits.isEmpty()) null else row.copy(tiles = hits)
     }
 }

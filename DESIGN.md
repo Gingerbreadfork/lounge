@@ -162,7 +162,7 @@ The Stage lowers to a 200 px band at y 136, full width between the safe margins:
 
 - Header: `headline`, left at x 96, 58 px tall: a 40 px line and 18 px of clear air, so a focused tile lifts into space, not type. The focused row's header is `limelight`; every other header is `limelight` at 62 %, animated over `settle`, so moving between rows reads. A row header may carry one trailing badge: a live dot (`ember`, 10 px, pulsing per 7.3) for Live now; a controller glyph for Games when a controller is connected.
 - Tiles start at x 96, gutter 24, and run off the right edge. Row vertical gap 32 px.
-- Every focusable container reserves 56 px of glow room on all sides; light is never clipped. A d-pad press off either end of a row nudges the focused tile 6 px that way over `snap` and back over `settle`, without a sound.
+- Every focusable container reserves 56 px of glow room on all sides; light is never clipped. A d-pad press off either end of a row nudges the focused tile 6 px that way over `snap` and back over `settle`, without a sound. OK on a tile that opens nothing nudges it the same way.
 - Tile styles and sizes (width × height, radius 12 everywhere except the Stage):
 
 | Style | S | M (default) | L |
@@ -273,6 +273,10 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
 - **Game tile**: landscape with the game's artwork or the app's banner; a controller glyph badge when a controller is connected.
 - **TV controls card** (streamer): a 384 × 216 landscape tile with four compact actions inside: Turn on TV and switch here, Sound to soundbar, Volume, Turn everything off. Each is a `title` line with a glyph; focus moves inside the card.
 
+- **Tile to read** (compact): something a plugin shows that opens nothing, such as a day's
+  weather. A `title` line and a `caption` line beside the plugin's picture, or the words alone
+  when it brings none. OK nudges it without a sound (5.3), its menu offers Hide but not the
+  Stage, and search leaves it out. The phone shows it the same and passes no tap on.
 - **Notice tile** (compact, size L): a `houselight` info glyph, a `title` line that names the
   thing to turn on ("Turn on TV listings") and a `caption` line that says why ("See what you
   were watching"). It sits where the row it stands in for would be, one per row, and its only

@@ -215,10 +215,11 @@ fun menuItemsFor(
         }
     }
     if (tile.id.startsWith("chan:")) items += MenuItem("TV guide", LoungeIcons.Guide, onSelect = onGuide)
-    items += if (isStagePinned) {
-        MenuItem(PinWords.UNPIN_STAGE, LoungeIcons.Pin, detail = PinWords.UNPIN_STAGE_DETAIL, onSelect = onUnpinStage)
-    } else {
-        MenuItem(PinWords.PIN_STAGE, LoungeIcons.Pin, detail = PinWords.PIN_STAGE_DETAIL, onSelect = onPinStage)
+    if (isStagePinned) {
+        items += MenuItem(PinWords.UNPIN_STAGE, LoungeIcons.Pin, detail = PinWords.UNPIN_STAGE_DETAIL, onSelect = onUnpinStage)
+    } else if (tile.action.isNotEmpty()) {
+        // The Stage is for what can be opened, which a tile to read cannot.
+        items += MenuItem(PinWords.PIN_STAGE, LoungeIcons.Pin, detail = PinWords.PIN_STAGE_DETAIL, onSelect = onPinStage)
     }
     items += MenuItem("Hide", LoungeIcons.Hide, detail = PinWords.HIDE_DETAIL, onSelect = onHide)
     // Only something to continue says where it comes from.

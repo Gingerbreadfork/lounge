@@ -138,6 +138,8 @@ fun ContentRow(
     val roomDim = remember { derivedStateOf { heldTile.value() != null } }
     KeepStart(listState, row.tiles.firstOrNull()?.id)
 
+    val nudgePx = 6.dp.value * (safeXPx / Dimens.safeX.value)
+
     fun nudgeBy(px: Float) {
         if (motion.reducedMotion) return
         scope.launch {
@@ -176,9 +178,8 @@ fun ContentRow(
                     .glowRoom()
                     .onPreviewKeyEvent { e ->
                         if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) {
-                            val px = 6.dp.value * (safeXPx / Dimens.safeX.value)
-                            if (e.key == Key.DirectionLeft && focusedIndex.value == 0) nudgeBy(-px)
-                            if (e.key == Key.DirectionRight && focusedIndex.value == row.tiles.lastIndex) nudgeBy(px)
+                            if (e.key == Key.DirectionLeft && focusedIndex.value == 0) nudgeBy(-nudgePx)
+                            if (e.key == Key.DirectionRight && focusedIndex.value == row.tiles.lastIndex) nudgeBy(nudgePx)
                         }
                         false
                     }
@@ -217,7 +218,8 @@ fun ContentRow(
                                     onTileFocused(tile, index, bounds)
                                 }
                             },
-                            onClick = { onTileClick(tile) },
+                            // A tile to read answers OK with the nudge that says there is no further to go.
+                            onClick = { if (tile.action.isEmpty()) nudgeBy(nudgePx) else onTileClick(tile) },
                             onLongPress = { bounds -> onTileLongPress(tile, bounds, requesterFor(index)) },
                             held = held.value,
                             nudge = nudgeRead,

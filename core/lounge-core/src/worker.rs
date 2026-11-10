@@ -939,7 +939,8 @@ fn home_kind(p: &lounge_plugin_api::Item) -> Option<ItemKind> {
 }
 
 /// What selecting a plugin item does. Wallpapers do nothing; a schedule entry without an action
-/// plays through its channel; anything else needs an action of its own.
+/// plays through its channel; a programme put in a row without one is a tile to read, which
+/// opens nothing; anything else needs an action of its own.
 pub(crate) fn plugin_link(plugin: &str, p: &lounge_plugin_api::Item) -> Option<DeepLink> {
     let a = &p.action;
     Some(if let Some(url) = &a.play {
@@ -954,7 +955,7 @@ pub(crate) fn plugin_link(plugin: &str, p: &lounge_plugin_api::Item) -> Option<D
         DeepLink::PluginResolve { plugin: plugin.to_string(), action: action.clone() }
     } else if let Some(query) = &a.search {
         DeepLink::Control(format!("search:{query}"))
-    } else if p.kind == PluginItemKind::Wallpaper || (p.kind == PluginItemKind::Schedule && p.channel_id.is_some()) {
+    } else if p.kind == PluginItemKind::Wallpaper || (p.kind == PluginItemKind::Schedule && p.channel_id.is_some()) || (p.kind == PluginItemKind::Program && p.row.is_some()) {
         DeepLink::None
     } else {
         return None;
@@ -1436,6 +1437,16 @@ mod tests {
         assert_eq!(home_kind(&item(Some(60_000), None)), Some(ItemKind::Resume));
         assert_eq!(home_kind(&item(None, Some(0.4))), Some(ItemKind::Resume));
         assert_eq!(home_kind(&lounge_plugin_api::Item { kind: PluginItemKind::Screensaver, ..Default::default() }), None);
+    }
+
+    #[test]
+    fn a_programme_in_a_row_without_an_action_is_a_tile_to_read() {
+        let item = |kind, row: Option<&str>, channel: Option<&str>| lounge_plugin_api::Item { kind, row: row.map(Into::into), channel_id: channel.map(Into::into), ..Default::default() };
+        assert_eq!(plugin_link("weather", &item(PluginItemKind::Program, Some("forecast"), None)), Some(DeepLink::None));
+        // With no row it shows nowhere, and something to continue has to open.
+        assert_eq!(plugin_link("weather", &item(PluginItemKind::Program, None, None)), None);
+        assert_eq!(plugin_link("jellyfin", &item(PluginItemKind::Resume, Some("recent"), None)), None);
+        assert_eq!(plugin_link("iptv", &item(PluginItemKind::Schedule, None, Some("abc.au"))), Some(DeepLink::None));
     }
 
     #[test]

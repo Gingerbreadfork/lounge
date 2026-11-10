@@ -286,6 +286,8 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     }
 
     fun perform(tile: Tile) {
+        // A tile to read opens nothing, so nothing sounds.
+        if (tile.action.isEmpty()) return
         uiSounds?.open()
         // The All apps tile opens a screen of this app's own; no need to go through the core for that.
         if (tile.action == "control:allapps") {

@@ -45,6 +45,8 @@
   const isApp = $derived(tile.id.startsWith('app:'));
   // A notice has nothing to pin or hide; it can only be told not to come back.
   const isNotice = $derived(tile.id.startsWith('notice:'));
+  // A tile to read has nothing to open, on the TV or from the Stage.
+  const opens = $derived(tile.action !== '');
   const pkg = $derived(tile.id.replace(/^app:/, ''));
   const rowShown = $derived(layout?.availableRows.find((r) => r.id === rowId)?.shown ?? true);
 
@@ -111,18 +113,22 @@
     </div>
   {:else}
   <div class="list">
-    <button class="list-row" {@attach focus} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">Open on the TV</span></button>
-    <button class="list-row" disabled={!layout || busy} onclick={toggleStage}>
-      <span class="glyph" class:on={tile.stagePinned}><Icon name="pin" size={24} /></span>
-      <span class="grow"><span class="title">{tile.stagePinned ? words.unpinStage : words.pinStage}</span><span class="caption">{tile.stagePinned ? words.unpinStageDetail : words.pinStageDetail}</span></span>
-    </button>
+    {#if opens}
+      <button class="list-row" {@attach focus} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">Open on the TV</span></button>
+    {/if}
+    {#if opens || tile.stagePinned}
+      <button class="list-row" disabled={!layout || busy} onclick={toggleStage}>
+        <span class="glyph" class:on={tile.stagePinned}><Icon name="pin" size={24} /></span>
+        <span class="grow"><span class="title">{tile.stagePinned ? words.unpinStage : words.pinStage}</span><span class="caption">{tile.stagePinned ? words.unpinStageDetail : words.pinStageDetail}</span></span>
+      </button>
+    {/if}
     {#if isApp}
       <button class="list-row" disabled={!layout || busy} onclick={toggleApp}>
         <span class="glyph" class:on={tile.pinned}><Icon name="pin" size={24} /></span>
         <span class="grow"><span class="title">{tile.pinned ? words.unpinApp : words.pinApp}</span><span class="caption">{tile.pinned ? words.unpinAppDetail : words.pinAppDetail}</span></span>
       </button>
     {/if}
-    <button class="list-row" disabled={!layout || busy} onclick={hide}>
+    <button class="list-row" {@attach !opens && focus} disabled={!layout || busy} onclick={hide}>
       <span class="glyph"><Icon name="hide" size={24} /></span>
       <span class="grow"><span class="title">{words.hide} {tile.title}</span><span class="caption">{words.hideDetail}</span></span>
     </button>

@@ -17,6 +17,8 @@
     try { return localStorage.getItem(key) === '1'; } catch { return false; }
   }
   function open(t: Tile) {
+    // A tile to read opens nothing on the TV, so a tap is not passed on.
+    if (!t.action) return;
     // A suggested plugin is set up here on the phone, where its settings are easy to type.
     if (t.action.startsWith('control:plugin:')) return go('plugins', t.action.slice('control:plugin:'.length));
     act(`Opening ${t.title} on the TV`, () => api.open(t.action));

@@ -718,6 +718,8 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         action: match &it.deep_link {
             // Said outright, so search can leave out a tile that would only open search again.
             DeepLink::Control(c) if c.starts_with("search:") => format!("control:{c}"),
+            // A plugin's tile to read has no action, so a screen can tell it opens nothing.
+            DeepLink::None if it.kind == ItemKind::Program && it.channel_id.is_none() && it.source.starts_with("plugin:") => String::new(),
             _ => format!("open:{}", it.id),
         },
         // Only an app itself is pinned; a programme from a pinned app is not.
@@ -1280,6 +1282,19 @@ mod tests {
         assert_eq!(tile_for(&g, &trakt, TileKind::Landscape).action, "control:search:Severance");
         let film = Item::content("plugin:jellyfin:latest:1", ItemKind::Program, "plugin:jellyfin", "Static Bloom", DeepLink::ViewUri("intent:#Intent;end".into()));
         assert_eq!(tile_for(&g, &film, TileKind::Poster).action, "open:plugin:jellyfin:latest:1");
+    }
+
+    #[test]
+    fn a_tile_to_read_has_no_action() {
+        let g = Graph::default();
+        let today = Item::content("plugin:weather:day:0", ItemKind::Program, "plugin:weather", "17° today", DeepLink::None);
+        assert_eq!(tile_for(&g, &today, TileKind::Compact).action, "");
+        // A programme on a channel plays through it, and a session is still opened by its id.
+        let mut airing = Item::content("plugin:tw:prog", ItemKind::Program, "plugin:tw", "Speedruns", DeepLink::None);
+        airing.channel_id = Some(-7);
+        assert_eq!(tile_for(&g, &airing, TileKind::Landscape).action, "open:plugin:tw:prog");
+        let session = Item::content("session:au.com.seven:news", ItemKind::MediaSession, "sessions", "News", DeepLink::None);
+        assert_eq!(tile_for(&g, &session, TileKind::Landscape).action, "open:session:au.com.seven:news");
     }
 
     #[test]
