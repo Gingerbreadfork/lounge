@@ -646,11 +646,13 @@ struct ItemArt {
     backdrop: Option<usize>,
     logo: Option<usize>,
     wallpaper: Option<usize>,
+    /// A channel's logo cut at a tile's size, for when it turns out to be a picture of that shape.
+    card: Option<usize>,
 }
 
 impl ItemArt {
     fn slots(&self) -> impl Iterator<Item = usize> {
-        [self.poster, self.landscape, self.hero, self.hero_fit, self.backdrop, self.logo, self.wallpaper].into_iter().flatten()
+        [self.poster, self.landscape, self.hero, self.hero_fit, self.backdrop, self.logo, self.wallpaper, self.card].into_iter().flatten()
     }
 }
 
@@ -659,7 +661,7 @@ type Dress = fn(&mut Item, &ItemArt, &[Option<Prepared>]);
 
 fn dress_content(it: &mut Item, w: &ItemArt, art: &[Option<Prepared>]) {
     let poster = pick(art, w.poster);
-    let landscape = pick(art, w.landscape);
+    let landscape = pick(art, w.landscape).or(pick(art, w.card).filter(|card| fills_a_tile(card)));
     let hero = pick(art, w.hero).or(pick(art, w.hero_fit));
     let logo = pick(art, w.logo);
     it.art_aspect = aspect(hero.or(landscape).or(poster));
@@ -674,6 +676,13 @@ fn dress_content(it: &mut Item, w: &ItemArt, art: &[Option<Prepared>]) {
         wallpaper: pick(art, w.wallpaper).map(|x| x.path.clone()),
         focal_y: hero.map(|x| x.focal_y).unwrap_or(0.5),
     };
+}
+
+/// Whether a logo is a picture of a landscape tile's shape, large enough to fill one. Some
+/// channels bring such a card where a small mark for a corner is expected.
+fn fills_a_tile(logo: &Prepared) -> bool {
+    let aspect = aspect(Some(logo));
+    logo.src_width >= 300 && (1.5..=2.2).contains(&aspect)
 }
 
 fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lounge_store::StoreError> {
@@ -701,6 +710,7 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
             let wide = p.thumbnail_path.as_deref().or(if p.poster_is_portrait { None } else { p.poster_path.as_deref() });
             let portrait = if p.poster_is_portrait { p.poster_path.as_deref() } else { None };
             let schedule = p.kind == ProgramKind::Schedule;
+            let pictureless = p.kind == ProgramKind::Channel && wide.is_none() && p.poster_path.is_none();
             ItemArt {
                 poster: if schedule { None } else { plan.want(portrait, Style::Poster) },
                 landscape: plan.want(wide.or(p.poster_path.as_deref()), Style::Landscape),
@@ -709,6 +719,7 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
                 backdrop: plan.want(wide.or(portrait), Style::Backdrop),
                 logo: if schedule { None } else { plan.want(p.logo_path.as_deref(), Style::Logo) },
                 wallpaper: None,
+                card: if pictureless { plan.want(p.logo_path.as_deref(), Style::Landscape) } else { None },
             }
         })
         .collect();
@@ -831,6 +842,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
                 let style = Style::wallpaper(r.item.framed, inner.config.uhd_wallpapers());
                 return ItemArt { wallpaper: plan.want(wide.or(portrait), style), ..Default::default() };
             }
+            let pictureless = r.item.kind == PluginItemKind::Channel && wide.is_none() && portrait.is_none();
             ItemArt {
                 poster: plan.want(portrait, Style::Poster),
                 landscape: plan.want(wide.or(portrait), Style::Landscape),
@@ -839,6 +851,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
                 backdrop: plan.want(wide.or(portrait), Style::Backdrop),
                 logo: plan.want(r.logo.as_deref(), Style::Logo),
                 wallpaper: None,
+                card: if pictureless { plan.want(r.logo.as_deref(), Style::Landscape) } else { None },
             }
         })
         .collect();
@@ -1300,6 +1313,7 @@ fn same_tiles(a: &[Tile], b: &[Tile]) -> bool {
             && a.pinned == b.pinned
             && a.stage_pinned == b.stage_pinned
             && a.borrowed_art == b.borrowed_art
+            && a.art_title == b.art_title
             && a.opened_rank == b.opened_rank
             && a.installed_rank == b.installed_rank
             && a.provider == b.provider
@@ -1389,6 +1403,30 @@ mod tests {
     fn slug_is_stable_and_safe() {
         assert_eq!(slug("The Bear: S2 E4 — \"Honeydew\""), "the-bear-s2-e4-honeydew");
         assert_eq!(slug("   "), "");
+    }
+
+    #[test]
+    fn a_channel_s_logo_is_its_picture_when_it_is_a_tile_s_shape() {
+        let cut = |path: &str, src: (u32, u32)| {
+            Some(Prepared { path: path.into(), width: 0, height: 0, palette: lounge_graph::color::Palette { dominant: 0, vibrant: None, muted: None }, src_width: src.0, src_height: src.1, focal_y: 0.5, glow: Vec::new() })
+        };
+        let dressed = |src: (u32, u32)| {
+            let mut it = Item::content("chan:1", ItemKind::Channel, "tvprovider", "Nosey", DeepLink::None);
+            dress_content(&mut it, &ItemArt { logo: Some(0), card: Some(1), ..Default::default() }, &[cut("/art/x-logo.jpg", src), cut("/art/x-land.jpg", src)]);
+            (it.artwork.landscape, it.artwork.logo)
+        };
+        // A 16:9 card fills the tile, whatever size it came in above a small one.
+        for card in [(1920, 1080), (1280, 720), (500, 280), (300, 168), (1256, 592)] {
+            assert_eq!(dressed(card), (Some("/art/x-land.jpg".into()), Some("/art/x-logo.jpg".into())), "{card:?}");
+        }
+        // A square mark, a long wordmark and a picture too small to fill a tile stay logos.
+        for mark in [(512, 512), (600, 200), (160, 90), (200, 300)] {
+            assert_eq!(dressed(mark), (None, Some("/art/x-logo.jpg".into())), "{mark:?}");
+        }
+        // A picture of the channel's own comes first.
+        let mut it = Item::content("chan:1", ItemKind::Channel, "tvprovider", "Nosey", DeepLink::None);
+        dress_content(&mut it, &ItemArt { landscape: Some(0), card: Some(1), ..Default::default() }, &[cut("/art/own-land.jpg", (1280, 720)), cut("/art/x-land.jpg", (1280, 720))]);
+        assert_eq!(it.artwork.landscape.as_deref(), Some("/art/own-land.jpg"));
     }
 
     #[test]

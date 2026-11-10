@@ -250,12 +250,13 @@ private fun PinMark(modifier: Modifier) {
 @Composable
 private fun Artwork(path: String?, filter: () -> androidx.compose.ui.graphics.ColorFilter?, tint: Color, size: DpSize, modifier: Modifier = Modifier) {
     val colors = LoungeTheme.colors
-    if (path == null) {
-        // No picture: a diagonal of the item's light into curtain, opaque, so the tile reads as made, not missing.
+    // A picture kept as a PNG can be seen through, so it gets the same body as a tile with none.
+    if (path == null || path.endsWith(".png")) {
+        // A diagonal of the item's light into curtain, opaque, so the tile reads as made, not missing.
         Box(modifier.fillMaxSize().background(Brush.linearGradient(listOf(tint.copy(alpha = 1f).compositeOver(colors.curtain, 0.4f), colors.curtain))))
-        return
     }
-    FilteredPicture(path, filter, remember(tint) { ColorPainter(tint) }, size, ContentScale.Crop, modifier.fillMaxSize())
+    if (path == null) return
+    FilteredPicture(path, filter, if (path.endsWith(".png")) null else remember(tint) { ColorPainter(tint) }, size, ContentScale.Crop, modifier.fillMaxSize())
 }
 
 /** A picture drawn with [filter] read at draw time, cover-cropped or fitted inside its box. */
@@ -357,20 +358,34 @@ private fun LandscapeContent(
     // A borrowed banner always carries its title, or the strip would show the app twice over.
     val showText = (chrome || tile.artworkPath == null || tile.borrowedArt) && !tile.artIsBanner()
     val live = tile.badge == Badge.LIVE
+    // Over a picture that says some of the title, only the rest of it, which may be nothing.
+    val words = tile.artTitle ?: tile.title
+    // A channel's card, lent to what is on: it names the channel, so it is kept readable.
+    val card = live && tile.borrowedArt
     Box(Modifier.fillMaxSize()) {
         Artwork(tile.artworkPath, filter, LoungeTheme.colors.light(tile.lightArgb).copy(alpha = 0.25f), size)
         if (showText && tile.artworkPath != null) {
-            // A borrowed banner is a backdrop, not the picture, so its scrim starts higher and ends deeper.
-            val scrim = if (tile.borrowedArt) {
-                Brush.verticalGradient(0f to colors.velvet.copy(alpha = 0.10f), 0.35f to colors.velvet.copy(alpha = 0.70f), 1f to colors.velvet.copy(alpha = 0.94f))
-            } else {
-                Brush.verticalGradient(0f to Color.Transparent, 0.45f to colors.velvet.copy(alpha = 0.55f), 1f to colors.velvet.copy(alpha = 0.90f))
+            val scrim = when {
+                // With no title to carry, the card needs only a foot for the line of time left.
+                card && words.isEmpty() -> Brush.verticalGradient(0f to Color.Transparent, 1f to colors.velvet.copy(alpha = 0.85f))
+                // Its upper half stays clear, and the words over the lower half stand off it.
+                card -> Brush.verticalGradient(0f to Color.Transparent, 0.40f to colors.velvet.copy(alpha = 0.25f), 0.62f to colors.velvet.copy(alpha = 0.78f), 1f to colors.velvet.copy(alpha = 0.92f))
+                // A borrowed banner is a backdrop, not the picture, so its scrim starts higher and ends deeper.
+                tile.borrowedArt ->
+                    Brush.verticalGradient(0f to colors.velvet.copy(alpha = 0.10f), 0.35f to colors.velvet.copy(alpha = 0.70f), 1f to colors.velvet.copy(alpha = 0.94f))
+                else -> Brush.verticalGradient(0f to Color.Transparent, 0.45f to colors.velvet.copy(alpha = 0.55f), 1f to colors.velvet.copy(alpha = 0.90f))
             }
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(if (tile.borrowedArt) size.height else size.height * 0.6f)
+                    .height(
+                        when {
+                            card && words.isEmpty() -> size.height * 0.35f
+                            tile.borrowedArt -> size.height
+                            else -> size.height * 0.6f
+                        },
+                    )
                     .background(scrim),
             )
         }
@@ -387,12 +402,12 @@ private fun LandscapeContent(
         }
         if (chrome) TileBadge(tile.badge, Modifier.align(if (live) Alignment.TopEnd else Alignment.TopStart).padding(16.dp))
         if (showText) {
-            val title = rememberFittedLine(tile.title, LoungeTheme.typography.title, size.width - 40.dp)
+            val title = rememberFittedLine(words, LoungeTheme.typography.title, size.width - 40.dp)
             Column(
                 Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = if (tile.progress != null) 32.dp else 20.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (title.isNotEmpty()) Text(title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 tile.subtitle?.let { Text(it, style = LoungeTheme.typography.meta, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }

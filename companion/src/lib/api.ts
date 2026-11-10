@@ -8,6 +8,8 @@ export type Tile = {
   badge?: string | null; action: string; pinned: boolean; stagePinned: boolean;
   /** The picture is the owning app's banner, standing in for art the item did not bring. */
   borrowedArt?: boolean;
+  /** What the tile says over a picture that already says some of the title; empty for nothing. */
+  artTitle?: string | null;
   openedRank?: number | null; installedRank?: number | null;
   /** The app or plugin something to continue comes from, as the layout knows it, and its name. */
   provider?: string | null; providerName?: string | null;

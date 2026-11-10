@@ -477,6 +477,7 @@ fn plugin_suggestions(state: &State) -> Vec<Tile> {
                 pinned: false,
                 stage_pinned: false,
                 borrowed_art: false,
+                art_title: None,
                 opened_rank: None,
                 installed_rank: None,
                 provider: None,
@@ -507,6 +508,7 @@ fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &s
             pinned: false,
             stage_pinned: false,
             borrowed_art: false,
+            art_title: None,
             opened_rank: None,
             installed_rank: None,
             provider: None,
@@ -557,6 +559,7 @@ fn all_apps_tile(count: usize) -> Tile {
         pinned: false,
         stage_pinned: false,
         borrowed_art: false,
+        art_title: None,
         opened_rank: None,
         installed_rank: None,
         provider: None,
@@ -579,6 +582,7 @@ fn tv_controls_tile(config: &CoreConfig) -> Tile {
         pinned: false,
         stage_pinned: false,
         borrowed_art: false,
+        art_title: None,
         opened_rank: None,
         installed_rank: None,
         provider: None,
@@ -604,7 +608,40 @@ fn live_tile(graph: &Graph, airing: Option<&Item>, ch: &Item, now: i64) -> Tile 
         }
         None => tile.subtitle = channel_number(ch),
     }
+    // A channel whose logo fills the tile as its picture does not wear it in the corner too. The
+    // picture is the channel's, lent to the programme, and already says the channel's name, so
+    // the tile does not say it again.
+    if tile.artwork_path.is_some() && tile.artwork_path == ch.artwork.landscape {
+        tile.icon_path = None;
+        tile.borrowed_art = true;
+        tile.art_title = past_the_name(&tile.title, &ch.title).map(str::to_string);
+    }
     tile
+}
+
+/// What a title says beyond its channel's name, when it starts with that name: "Wicked Tuna:
+/// Big Fish" on Wicked Tuna says "Big Fish", and "COPS" on COPS says nothing more. After a
+/// name of one word a space is not enough unless an episode's number follows, since "Wild
+/// Kratts" on a channel called Wild is a title of its own.
+fn past_the_name<'a>(title: &'a str, name: &str) -> Option<&'a str> {
+    let name = name.trim();
+    let (head, rest) = title.split_at_checked(name.len())?;
+    if name.is_empty() || !head.eq_ignore_ascii_case(name) {
+        return None;
+    }
+    let spaced = rest.trim_start();
+    if let Some(after) = spaced.strip_prefix([':', '-', '–', '—', '|']) {
+        return Some(after.trim_start());
+    }
+    let after_a_space = spaced.len() < rest.len() && (name.contains(char::is_whitespace) || numbers_an_episode(spaced));
+    (spaced.is_empty() || after_a_space).then_some(spaced)
+}
+
+/// Whether text opens with a season or episode number: "S5 E3", "Season 2", "Ep 4", "12".
+fn numbers_an_episode(text: &str) -> bool {
+    let word = text.split_whitespace().next().unwrap_or("").trim_end_matches([':', ',', '.']).to_ascii_lowercase();
+    let numbered = |prefix: &str| word.strip_prefix(prefix).is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+    matches!(word.as_str(), "season" | "series" | "episode" | "ep" | "part") || ["", "s", "e", "ep"].into_iter().any(numbered)
 }
 
 /// "2 ABC": number and name together, under a programme title.
@@ -687,6 +724,7 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         pinned: it.kind == ItemKind::App && it.package().is_some_and(|p| graph.layout.pinned_apps.iter().any(|x| x == p)),
         stage_pinned: graph.layout.stage_pins.iter().any(|x| x == &it.id),
         borrowed_art: lent.is_some(),
+        art_title: None,
         opened_rank: None,
         installed_rank: None,
         provider: None,
@@ -1276,5 +1314,58 @@ mod tests {
         assert_eq!(tile.subtitle.as_deref(), Some("Now, 30 minutes left"));
         assert_eq!(tile.progress, Some(0.5));
         assert_eq!(tile.badge, Some(Badge::Live));
+    }
+
+    #[test]
+    fn a_channel_s_card_fills_its_tile_instead_of_a_corner() {
+        let channel = |card: Option<&str>| {
+            let mut ch = Item::content("chan:2", ItemKind::Channel, "tvprovider", "Nosey", DeepLink::Tune("a".into()));
+            ch.flags.is_live = true;
+            ch.artwork.logo = Some("/art/nosey-logo.jpg".into());
+            ch.artwork.landscape = card.map(str::to_string);
+            ch
+        };
+        let g = Graph::default();
+        // A small mark stays in the corner of a tile with no picture.
+        let tile = live_tile(&g, None, &channel(None), 0);
+        assert_eq!((tile.artwork_path.as_deref(), tile.icon_path.as_deref()), (None, Some("/art/nosey-logo.jpg")));
+        // A card is the picture, lent to whatever is on, and is not repeated in the corner. With
+        // nothing known to be on, the tile's title is the channel's name, which the card says.
+        let tile = live_tile(&g, None, &channel(Some("/art/nosey-land.jpg")), 0);
+        assert_eq!((tile.artwork_path.as_deref(), tile.icon_path.as_deref(), tile.borrowed_art), (Some("/art/nosey-land.jpg"), None, true));
+        assert_eq!((tile.title.as_str(), tile.art_title.as_deref()), ("Nosey", Some("")));
+        // The title stays whole; over the card the tile says only what the card does not.
+        let on_now = |title: &str| {
+            let prog = Item::content("prog:2", ItemKind::Program, "tvprovider", title, DeepLink::Tune("a".into()));
+            let tile = live_tile(&g, Some(&prog), &channel(Some("/art/nosey-land.jpg")), 0);
+            assert_eq!(tile.title, title);
+            tile.art_title
+        };
+        assert_eq!(on_now("Nosey: Lie Detector Drama").as_deref(), Some("Lie Detector Drama"));
+        assert_eq!(on_now("NOSEY - S2 E5").as_deref(), Some("S2 E5"));
+        assert_eq!(on_now("nosey").as_deref(), Some(""));
+        assert_eq!(on_now("Nosey:").as_deref(), Some(""));
+        // A programme of another name is said in full, and so is one that only begins alike.
+        for other in ["Lie Detector Drama", "Nosey Presents", "Nosey's Best", "Noseybonk", "No"] {
+            assert_eq!(on_now(other), None, "{other}");
+        }
+        // A name of several words is its own, so a space is enough to set what follows apart.
+        assert_eq!(past_the_name("The Osbournes Season 2", "The Osbournes"), Some("Season 2"));
+        assert_eq!(past_the_name("Wild Kratts", "Wild"), None);
+        // After a name of one word, a space sets apart only an episode's number.
+        assert_eq!(past_the_name("MythBusters S5 E3", "MythBusters"), Some("S5 E3"));
+        assert_eq!(past_the_name("Jail Season 2", "Jail"), Some("Season 2"));
+        assert_eq!(past_the_name("Arthur 12", "Arthur"), Some("12"));
+        assert_eq!(past_the_name("Arthur Ep. 4", "Arthur"), Some("Ep. 4"));
+        for own in ["Survivor Stories", "Evil Lives Here", "Storage Wars"] {
+            assert_eq!(past_the_name(own, own.split(' ').next().unwrap()), None, "{own}");
+        }
+        // A programme's own picture takes the tile, with the channel's logo over it.
+        let mut prog = Item::content("prog:1", ItemKind::Program, "tvprovider", "Judge Nosey", DeepLink::Tune("a".into()));
+        prog.artwork.landscape = Some("/art/judge-land.jpg".into());
+        prog.title = "Nosey: Judge Nosey".into();
+        let tile = live_tile(&g, Some(&prog), &channel(Some("/art/nosey-land.jpg")), 0);
+        assert_eq!((tile.artwork_path.as_deref(), tile.icon_path.as_deref(), tile.borrowed_art), (Some("/art/judge-land.jpg"), Some("/art/nosey-logo.jpg"), false));
+        assert_eq!((tile.title.as_str(), tile.art_title), ("Nosey: Judge Nosey", None));
     }
 }

@@ -145,7 +145,7 @@
               {:else}
                 {#if t.artworkPath}<img src={art(t.artworkPath)} alt="" loading="lazy" />{:else}<div class="fill" style="background: color-mix(in srgb, {argb(t.lightArgb)} 35%, var(--curtain))"></div>{/if}
                 {#if tag(t.badge) === 'LIVE'}<span class="badge"><span class="dot"></span>Live</span>{/if}
-                {#if (tag(row.kind) !== 'APP_BANNER' && tag(row.kind) !== 'POSTER') || !t.artworkPath}<div class="scrim"><div class="t">{t.title}</div>{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
+                {#if (tag(row.kind) !== 'APP_BANNER' && tag(row.kind) !== 'POSTER') || !t.artworkPath}<div class="scrim">{#if (t.artTitle ?? t.title)}<div class="t">{t.artTitle ?? t.title}</div>{/if}{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
                 {#if t.pinned || t.stagePinned}<span class="pinmark" aria-hidden="true"><Icon name="pin" size={13} /></span>{/if}
                 {#if t.progress != null}<div class="bar"><i style="width: {progressPct(t.progress)}%"></i></div>{/if}
               {/if}

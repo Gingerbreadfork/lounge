@@ -88,6 +88,7 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
                     pinned: false,
                     stage_pinned: false,
                     borrowed_art: false,
+                    art_title: None,
                     opened_rank: None,
                     installed_rank: None,
                     provider: None,

@@ -391,6 +391,10 @@ pub struct Tile {
     /// The picture is the owning app's banner, standing in for art the item did not bring.
     #[serde(default)]
     pub borrowed_art: bool,
+    /// What the tile says over a picture that already says some of the title: the rest of it,
+    /// or nothing when the picture says it all. Unset, the tile says its title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub art_title: Option<String>,
     /// Where the app falls by last opened and by arrival, for sorting the All apps screen; set
     /// only on that screen's tiles, and only changing when the order does.
     #[serde(default, skip_serializing_if = "Option::is_none")]
