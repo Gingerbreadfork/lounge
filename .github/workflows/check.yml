@@ -100,7 +100,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       # Signed with a key made on the spot; only a release needs the real one.
       - run: tools/plugins/build.sh
-      - run: ./gradlew :power:testDebugUnitTest :update:testDebugUnitTest :feature:home:testDebugUnitTest :app:assembleRelease
+      - run: ./gradlew :core:design:testDebugUnitTest :power:testDebugUnitTest :update:testDebugUnitTest :feature:home:testDebugUnitTest :app:assembleRelease
         working-directory: android
       - uses: actions/upload-artifact@v7
         with:

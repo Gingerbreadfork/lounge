@@ -97,7 +97,7 @@ jobs:
       - run: tools/plugins/build.sh
         env:
           LOUNGE_PUBLISHER_KEY: ${{ runner.temp }}/publisher.key
-      - run: ./gradlew :power:testDebugUnitTest :update:testDebugUnitTest :feature:home:testDebugUnitTest :app:assembleRelease
+      - run: ./gradlew :core:design:testDebugUnitTest :power:testDebugUnitTest :update:testDebugUnitTest :feature:home:testDebugUnitTest :app:assembleRelease
         working-directory: android
       # Beside the APK go its baseline profiles, one for each range of Android versions and named
       # for the lowest it serves. A TV that installs one with the APK compiles the app at once.
