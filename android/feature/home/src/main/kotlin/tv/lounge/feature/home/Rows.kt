@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -40,6 +41,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.LocalPinnableContainer
+import androidx.compose.ui.layout.PinnableContainer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -72,6 +76,24 @@ internal fun KeepStart(state: LazyListState, firstKey: Any?) {
         }
         shown[0] = firstKey
     }
+}
+
+/**
+ * Keeps a lazy list's item composed and laid out from its first measure on, so coming back to it
+ * builds nothing. An item built ahead of time is measured last, so it is finished before it is
+ * kept. For the item's root, from the item's own content.
+ */
+@Composable
+internal fun keptOnceMeasured(): Modifier {
+    val container = LocalPinnableContainer.current ?: return Modifier
+    val pin = remember(container) { arrayOfNulls<PinnableContainer.PinnedHandle>(1) }
+    DisposableEffect(container) {
+        onDispose {
+            pin[0]?.release()
+            pin[0] = null
+        }
+    }
+    return Modifier.onSizeChanged { if (pin[0] == null) pin[0] = container.pin() }
 }
 
 /**

@@ -1,5 +1,6 @@
 package tv.lounge.feature.home
 
+import android.os.SystemClock
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.BringIntoViewSpec
@@ -12,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -49,34 +51,76 @@ fun pivotSpec(pivotPx: Float): BringIntoViewSpec {
 }
 
 /**
- * Keeps the next [rowsAhead] rows below the viewport composed and measured before any scroll,
- * [tilesPerRow] tiles each. The default strategy prefetches one item only once a scroll has begun,
- * which is too late when the Stage lowers.
+ * Builds every row that is off screen in idle time, nearest the viewport first and one at a time,
+ * since requests made together are not run in the order they were made. Together with
+ * [keptOnceMeasured] the whole home is built soon after it opens, so a move between rows builds
+ * nothing. A change in [rows] starts over, which costs nothing for a row already built.
  */
 @OptIn(ExperimentalFoundationApi::class)
-class RowsAheadPrefetch(private val rowsAhead: Int, private val tilesPerRow: Int) : LazyListPrefetchStrategy {
-    private val handles = LinkedHashMap<Int, LazyLayoutPrefetchState.PrefetchHandle>()
+class EveryRowPrefetch(private val rows: () -> List<String>) : LazyListPrefetchStrategy {
+    private var asked: List<String> = emptyList()
+    /** The rows still to ask for, nearest first. */
+    private val waiting = ArrayDeque<Int>()
+    private var building: LazyLayoutPrefetchState.PrefetchHandle? = null
+    private var buildingIndex = -1
+    private var buildingSince = 0L
+    private var list: LazyListPrefetchScope? = null
+
+    /** Asks again for a row the scheduler let lie while the window was hidden. For when it is back in front. */
+    fun resume() {
+        buildingSince = 0L
+        list?.keepBuilding()
+    }
 
     override fun LazyListPrefetchScope.onScroll(delta: Float, layoutInfo: LazyListLayoutInfo) {
-        fill(layoutInfo)
+        list = this
+        keepBuilding()
     }
 
     override fun LazyListPrefetchScope.onVisibleItemsUpdated(layoutInfo: LazyListLayoutInfo) {
-        fill(layoutInfo)
-    }
-
-    override fun NestedPrefetchScope.onNestedPrefetch(firstVisibleItemIndex: Int) {
-        repeat(tilesPerRow) { schedulePrefetch(firstVisibleItemIndex + it) }
-    }
-
-    private fun LazyListPrefetchScope.fill(layoutInfo: LazyListLayoutInfo) {
+        list = this
         val visible = layoutInfo.visibleItemsInfo
         if (visible.isEmpty()) return
-        val last = visible.last().index
-        val wanted = (last + 1..last + rowsAhead).filter { it < layoutInfo.totalItemsCount }.toSet()
-        val gone = handles.keys.filter { it !in wanted }
-        for (i in gone) handles.remove(i)?.cancel()
-        for (i in wanted) if (i !in handles) handles[i] = schedulePrefetch(i)
+        // Read unobserved: the list is measured again whenever its rows change anyway.
+        val ids = Snapshot.withoutReadObservation { rows() }
+        if (ids != asked) {
+            asked = ids
+            building?.cancel()
+            building = null
+            waiting.clear()
+            var below = visible.last().index + 1
+            var above = visible.first().index - 1
+            while (below < layoutInfo.totalItemsCount || above >= 0) {
+                if (below < layoutInfo.totalItemsCount) waiting += below++
+                if (above >= 0) waiting += above--
+            }
+        }
+        keepBuilding()
+    }
+
+    /**
+     * Asks for the next row once the one before it is built. A request the scheduler has let lie
+     * is asked for again, which also starts the scheduler.
+     */
+    private fun LazyListPrefetchScope.keepBuilding() {
+        val now = SystemClock.uptimeMillis()
+        if (building != null && now - buildingSince < STALLED_MS) return
+        val index = if (building != null) buildingIndex else waiting.removeFirstOrNull() ?: return
+        buildingIndex = index
+        buildingSince = now
+        building = schedulePrefetch(index) {
+            if (this.index == buildingIndex) {
+                building = null
+                keepBuilding()
+            }
+        }
+    }
+
+    override fun NestedPrefetchScope.onNestedPrefetch(firstVisibleItemIndex: Int) = Unit
+
+    private companion object {
+        /** How long a request may lie before it is asked for again. */
+        const val STALLED_MS = 2_000L
     }
 }
 

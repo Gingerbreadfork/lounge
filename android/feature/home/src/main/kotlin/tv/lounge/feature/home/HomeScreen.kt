@@ -33,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -54,6 +55,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -157,9 +159,20 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     val heldHomeMenu: () -> Overlay.TileMenu? = { heldMenu()?.takeIf { it.under == Overlay.None } }
     val opaqueOverlay = searchOpen || allAppsOpen || overlay == Overlay.Onboarding || overlay == Overlay.AmbientPreview
     FieldSleep(light, { state.lastInputAt }, opaqueOverlay)
-    // The rows the lowered Stage reveals are composed in idle frames while it is still up, so
-    // the proscenium never composes a row in the middle of a frame.
-    val listState = rememberLazyListState(prefetchStrategy = remember(tierA) { RowsAheadPrefetch(rowsAhead = if (tierA) 3 else 2, tilesPerRow = 8) })
+    // Rows off screen are built in idle time and every row is kept once built, so neither the
+    // proscenium nor a move between rows composes a row in the middle of a frame.
+    val rowIdsNow = rememberUpdatedState(remember(snapshot.rows) { snapshot.rows.map { it.id } })
+    val rowsAhead = remember { EveryRowPrefetch { rowIdsNow.value } }
+    val listState = rememberLazyListState(prefetchStrategy = rowsAhead)
+    // Rows asked for while the window was hidden are never built, so once a frame has been drawn
+    // in front they are asked for again.
+    val homeOwner = LocalLifecycleOwner.current
+    LaunchedEffect(homeOwner, rowsAhead) {
+        homeOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            withFrameNanos { }
+            rowsAhead.resume()
+        }
+    }
     // A row that arrives at the top while the Stage is up (an update notice) must show at the
     // top: the list would otherwise keep its first row in place and hide the new one above it.
     val firstRowId = snapshot.rows.firstOrNull()?.id
@@ -521,6 +534,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                             },
                             onTileClick = { perform(it) },
                             onTileLongPress = { tile, bounds, fr -> openMenu(tile, row.id, bounds, fr) },
+                            modifier = keptOnceMeasured(),
                             heldTileId = { heldHomeMenu()?.tile?.id },
                             heldRowId = { heldHomeMenu()?.rowId },
                         )
