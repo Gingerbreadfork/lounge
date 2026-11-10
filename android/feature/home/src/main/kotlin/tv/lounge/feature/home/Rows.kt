@@ -193,6 +193,8 @@ fun ContentRow(
                             onLongPress = { bounds -> onTileLongPress(tile, bounds, requesterFor(index)) },
                             held = held.value,
                             nudge = nudgeRead,
+                            // A badge the row wears by its title is not repeated on every tile.
+                            badged = tile.badge != row.badge,
                         )
                         if (row.kind == TileKind.POSTER) {
                             val showTitle = remember(index) { derivedStateOf { focusedRow.value && focusedIndex.value == index } }

@@ -105,7 +105,8 @@ private fun Tile.artIsBanner(): Boolean = artworkPath != null && id.startsWith("
 /**
  * One tile. Focus is light: scale, glow and the backdrop spill; everything else is a brightness
  * state (DESIGN.md §6.1). [chrome] adds the title block to landscape tiles, [held] keeps a tile lit
- * while its menu is open, [nudge] is a horizontal offset in px read while drawing.
+ * while its menu is open, [nudge] is a horizontal offset in px read while drawing. [badged] is
+ * false in a row that wears the tile's badge itself, so it is said once.
  */
 @Composable
 fun TileView(
@@ -122,6 +123,7 @@ fun TileView(
     chrome: Boolean = true,
     held: Boolean = false,
     nudge: (() -> Float)? = null,
+    badged: Boolean = true,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -220,14 +222,14 @@ fun TileView(
     ) {
         when (kind) {
             TileKind.POSTER -> PosterContent(tile, filter, size)
-            TileKind.LANDSCAPE -> LandscapeContent(tile, filter, brightnessNow, chrome, size)
+            TileKind.LANDSCAPE -> LandscapeContent(tile, filter, brightnessNow, chrome, size, badged)
             TileKind.APP_BANNER -> AppBannerContent(tile, filter, size)
             TileKind.COMPACT -> CompactContent(tile, filter)
         }
         // A pinned tile says so where it sits, so the word in the menu has something to point at.
         // The live badge owns the top-right corner, so the mark steps down beside the progress bar.
         if (kind != TileKind.COMPACT && (tile.pinned || tile.stagePinned)) {
-            val live = tile.badge == Badge.LIVE && chrome
+            val live = tile.badge == Badge.LIVE && chrome && badged
             PinMark(Modifier.align(if (live) Alignment.BottomEnd else Alignment.TopEnd).padding(horizontal = 10.dp, vertical = if (live) 22.dp else 10.dp))
         }
     }
@@ -352,6 +354,7 @@ private fun LandscapeContent(
     brightness: () -> Float,
     chrome: Boolean,
     size: DpSize,
+    badged: Boolean,
 ) {
     val colors = LoungeTheme.colors
     // A banner names itself and the filmstrip speaks through its pictures; text only with chrome or when the art is missing.
@@ -400,7 +403,7 @@ private fun LandscapeContent(
                 Modifier.align(Alignment.TopStart).padding(16.dp).size(56.dp).clip(RoundedCornerShape(8.dp)),
             )
         }
-        if (chrome) TileBadge(tile.badge, Modifier.align(if (live) Alignment.TopEnd else Alignment.TopStart).padding(16.dp))
+        if (chrome && badged) TileBadge(tile.badge, Modifier.align(if (live) Alignment.TopEnd else Alignment.TopStart).padding(16.dp))
         if (showText) {
             val title = rememberFittedLine(words, LoungeTheme.typography.title, size.width - 40.dp)
             Column(
