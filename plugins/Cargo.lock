@@ -573,6 +573,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-weather"
+version = "0.6.1"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-youtube"
 version = "0.6.1"
 dependencies = [

@@ -74,6 +74,10 @@ different corner of the interface:
   metadata parsed lazily through `RawValue`, a store trimmed to fit a key-value entry, a
   search answered from the stored lists, and artwork looked up from a cached catalogue a few
   titles per refresh.
+- `plugins/weather`: a public API that asks for no key, a town looked up once and kept in the
+  key-value store, asked for in other languages when English finds nothing much, a `compact`
+  row of tiles to read with a `logo` as their symbol, and the last forecast kept so its days
+  still show, named against the clock, while the network is away.
 
 ## Quick start
 

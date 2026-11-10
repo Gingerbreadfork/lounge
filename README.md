@@ -76,7 +76,7 @@ Your artwork or nine abstract scenes, which can also play behind the home screen
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/plugin.svg" width="28" height="28" alt=""><br>
-<b>Twenty-two plugins</b><br>
+<b>Twenty-three plugins</b><br>
 Jellyfin, Plex, Kodi, Stremio, IPTV, Trakt, Twitch and more. Each is sandboxed WebAssembly in a signed bundle.
 </td>
 </tr>
@@ -189,7 +189,7 @@ anyone else. Plugins built into the APK are vouched for by the APK itself. Any l
 targets core WebAssembly will do: the interface is eight imports and six exports with JSON in
 between.
 
-Twenty-two ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
+Twenty-three ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
 use from the phone or the TV's settings. One that needs a sign-in shows a code and a QR code on
 its page, and carries on by itself once you have entered the code on your phone. If an app such as Plex or Jellyfin is on the TV and its
 plugin is off, the home offers to set it up until you do or dismiss the offer.
@@ -216,8 +216,9 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | Internet Archive | Free films, cartoons and television from archive.org, with search. |
 | Immich photos | A shared Immich album as the screensaver. |
 | Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art as the screensaver. |
+| Weather | The temperature and sky now and each day's high for the week ahead in a town you name, as a row of small tiles to read. Celsius or Fahrenheit. From Open-Meteo, with no account or key. |
 
-A twenty-third, **Sample library**, lives in the repository but not the APK: eighteen
+A twenty-fourth, **Sample library**, lives in the repository but not the APK: eighteen
 public-domain films with their posters, so you can see Lounge with something on it. The pictures
 in this file show a made-up horror library instead; every title, poster and name in them is
 invented.
