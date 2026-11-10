@@ -392,16 +392,22 @@ private fun LandscapeContent(
                     .background(scrim),
             )
         }
-        // A live tile carries the channel's logo top-left and its badge top-right (DESIGN.md §7.1).
+        // A live tile carries the channel's logo: large above the words when it is all the picture
+        // there is, else top-left over the programme's own (DESIGN.md §7.1).
         if (live && tile.iconPath != null && chrome) {
-            FilteredPicture(
-                tile.iconPath!!,
-                filter,
-                null,
-                DpSize(56.dp, 56.dp),
-                ContentScale.Fit,
-                Modifier.align(Alignment.TopStart).padding(16.dp).size(56.dp).clip(RoundedCornerShape(8.dp)),
-            )
+            if (tile.artworkPath == null) {
+                val logo = DpSize(176.dp, 92.dp)
+                FilteredPicture(tile.iconPath!!, filter, null, logo, ContentScale.Fit, Modifier.align(Alignment.TopCenter).padding(top = 24.dp).size(logo))
+            } else {
+                FilteredPicture(
+                    tile.iconPath!!,
+                    filter,
+                    null,
+                    DpSize(56.dp, 56.dp),
+                    ContentScale.Fit,
+                    Modifier.align(Alignment.TopStart).padding(16.dp).size(56.dp).clip(RoundedCornerShape(8.dp)),
+                )
+            }
         }
         if (chrome && badged) TileBadge(tile.badge, Modifier.align(if (live) Alignment.TopEnd else Alignment.TopStart).padding(16.dp))
         if (showText) {
