@@ -598,7 +598,7 @@ fn live_tile(graph: &Graph, airing: Option<&Item>, ch: &Item, now: i64) -> Tile 
         Some(prog) => {
             tile.title = prog.title.clone();
             tile.subtitle = Some(match prog.airing_end_ms {
-                Some(end) => format!("Now, {}", left_text(end - now)),
+                Some(end) => left_text(end - now),
                 None => channel_label(ch),
             });
             tile.progress = elapsed(prog, now);
@@ -1311,7 +1311,7 @@ mod tests {
         let ch = g.get("chan:2").unwrap();
         let tile = live_tile(&g, g.airing_index(30 * 60_000).get(&2).copied(), ch, 30 * 60_000);
         assert_eq!(tile.title, "News");
-        assert_eq!(tile.subtitle.as_deref(), Some("Now, 30 minutes left"));
+        assert_eq!(tile.subtitle.as_deref(), Some("30 minutes left"));
         assert_eq!(tile.progress, Some(0.5));
         assert_eq!(tile.badge, Some(Badge::Live));
     }
