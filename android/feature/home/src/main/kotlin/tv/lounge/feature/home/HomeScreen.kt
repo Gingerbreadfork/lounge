@@ -74,6 +74,7 @@ import tv.lounge.design.LocalLightState
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LoungeToastHost
 import tv.lounge.design.Presence
+import tv.lounge.design.RoomLights
 import tv.lounge.design.ToastController
 import tv.lounge.design.sounds
 import tv.lounge.platform.AndroidPlatform
@@ -147,7 +148,9 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
             state.overlay = Overlay.Onboarding
         }
     }
-    LaunchedEffect(state.idle) { light.idle = state.idle }
+    // Followed as a flow: read here, the room going quiet would recompose the whole home.
+    LaunchedEffect(light) { snapshotFlow { state.idle }.collect { light.idle = it } }
+    RoomLights(light)
     val overlay = state.overlay
     val menu = overlay as? Overlay.TileMenu
     // A menu opened from a search result keeps Search open beneath it.
@@ -480,7 +483,6 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 showTvControls = power.hasTvControls,
                 showGuide = (snapshot.rows + snapshot.hiddenRows).any { it.id == "live" },
                 nowPlaying = nowPlaying,
-                idle = state.idle,
                 focus = state.topBar,
                 downFocus = { state.stripFocus() },
                 onFocused = { state.region = FocusRegion.TopBar; light.clear() },
@@ -521,6 +523,9 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                             .focusGroup(),
                     ) {
                     items(snapshot.rows, key = { it.id }) { row ->
+                        // A row kept off screen, or wholly under the lowered Stage, is told so, and its
+                        // tiles then wait to be drawn until it shows.
+                        val shown = remember(row.id) { derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == row.id && it.offset + it.size > 0 } } }
                         ContentRow(
                             row = row,
                             isFocusedRow = { state.focusedRowId == row.id },
@@ -537,6 +542,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                             modifier = keptOnceMeasured(),
                             heldTileId = { heldHomeMenu()?.tile?.id },
                             heldRowId = { heldHomeMenu()?.rowId },
+                            shown = { shown.value },
                         )
                     }
                 }

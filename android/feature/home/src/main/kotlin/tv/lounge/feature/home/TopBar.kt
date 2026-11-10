@@ -60,6 +60,7 @@ import tv.lounge.design.Swap
 import tv.lounge.design.argb
 import tv.lounge.design.focusRing
 import tv.lounge.design.lightGlow
+import tv.lounge.design.lightState
 import tv.lounge.design.sounds
 import kotlin.math.sin
 import java.time.LocalTime
@@ -72,7 +73,6 @@ fun TopBar(
     showTvControls: Boolean,
     showGuide: Boolean,
     nowPlaying: NowPlaying?,
-    idle: Boolean,
     focus: TopBarFocus,
     downFocus: () -> FocusRequester,
     onFocused: () -> Unit,
@@ -100,7 +100,7 @@ fun TopBar(
             TopBarButton(LoungeIcons.Search, "Search", onSearch, focus, focus.search)
             if (showGuide) TopBarButton(LoungeIcons.Guide, "Guide", onGuide, focus, focus.guide)
             if (showTvControls) TopBarButton(LoungeIcons.Tv, "TV controls", onTvControls, focus, focus.tvControls)
-            if (nowPlaying != null) NowPlayingChip(nowPlaying, idle, onNowPlaying, focus)
+            if (nowPlaying != null) NowPlayingChip(nowPlaying, onNowPlaying, focus)
             TopBarButton(LoungeIcons.Settings, "Settings", onSettings, focus, focus.settings)
             Spacer(Modifier.width(12.dp))
             Clock()
@@ -182,7 +182,7 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
  * room is idle.
  */
 @Composable
-private fun NowPlayingChip(np: NowPlaying, idle: Boolean, onClick: () -> Unit, focus: TopBarFocus) {
+private fun NowPlayingChip(np: NowPlaying, onClick: () -> Unit, focus: TopBarFocus) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
@@ -194,7 +194,8 @@ private fun NowPlayingChip(np: NowPlaying, idle: Boolean, onClick: () -> Unit, f
     val lift = animateFloatAsState(if (focused) 1f else 0f, if (focused) motion.snap() else motion.settle(), label = "chipLift")
     val glow = animateFloatAsState(if (focused) visuals.glowAlpha else 0f, if (focused) motion.snap() else motion.settle(), label = "chipGlow")
     val phase = remember { mutableFloatStateOf(0f) }
-    val animate = playing && !idle && !motion.reducedMotion
+    // Idle is read here, so the room going quiet recomposes this chip and nothing around it.
+    val animate = playing && !LoungeTheme.lightState.idle && !motion.reducedMotion
     LaunchedEffect(animate) {
         while (animate) {
             delay(125)

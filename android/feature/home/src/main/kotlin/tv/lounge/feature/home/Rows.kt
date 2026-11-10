@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -29,12 +28,13 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -48,13 +48,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tv.lounge.core.Badge
 import tv.lounge.core.Row as CoreRow
 import tv.lounge.core.Tile
 import tv.lounge.core.TileKind
 import tv.lounge.design.Dimens
+import tv.lounge.design.Eased
 import tv.lounge.design.Lights
 import tv.lounge.design.LiveDot
 import tv.lounge.design.LoungeIcons
@@ -101,7 +101,8 @@ internal fun keptOnceMeasured(): Modifier {
  * focused child (DESIGN.md §5.3). The header follows the light, the list keeps glow room, the
  * focused tile nudges at either end, and the room dims while a menu is open on [heldTileId] in
  * the row [heldRowId]. Both are read inside the tiles' light, so a menu opening or closing
- * recomposes only the tile it belongs to.
+ * recomposes only the tile it belongs to. [shown] is false while the row is kept off screen, and
+ * its tiles then follow no light.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -116,6 +117,7 @@ fun ContentRow(
     modifier: Modifier = Modifier,
     heldTileId: () -> String? = { null },
     heldRowId: () -> String? = { null },
+    shown: () -> Boolean = { true },
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -127,9 +129,9 @@ fun ContentRow(
     val focusedRow = remember(isFocusedRow) { derivedStateOf { isFocusedRow() } }
     val size = tileSize(row.kind, row.size)
     val safeXPx = with(LocalDensity.current) { Dimens.safeX.toPx() }
-    // The header follows the light without recomposing the row: an Animatable fed by the state.
-    val headerAlpha = remember { Animatable(if (focusedRow.value) 1f else 0.62f) }
-    LaunchedEffect(focusedRow) { snapshotFlow { focusedRow.value }.collectLatest { headerAlpha.animateTo(if (it) 1f else 0.62f, motion.settle()) } }
+    // The header follows the light without recomposing the row: its alpha eases as the layer reads it.
+    val light = LoungeTheme.lightState
+    val headerAlpha = remember { Eased(Snapshot.withoutReadObservation { if (focusedRow.value) 1f else 0.62f }) }
     val nudge = remember { Animatable(0f) }
     val heldTile = rememberUpdatedState(heldTileId)
     val heldRow = rememberUpdatedState(heldRowId)
@@ -149,7 +151,11 @@ fun ContentRow(
             Modifier
                 .padding(start = Dimens.safeX)
                 .height(Dimens.rowHeaderHeight)
-                .graphicsLayer { alpha = headerAlpha.value },
+                .graphicsLayer {
+                    alpha = headerAlpha.toward(if (focusedRow.value) 1f else 0.62f, light, motion.settleMs, motion.settleEasing)
+                    // Nothing in a header overlaps, so its alpha needs no layer of its own.
+                    compositingStrategy = CompositingStrategy.ModulateAlpha
+                },
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -215,6 +221,7 @@ fun ContentRow(
                             onLongPress = { bounds -> onTileLongPress(tile, bounds, requesterFor(index)) },
                             held = held.value,
                             nudge = nudgeRead,
+                            shown = shown,
                             // A badge the row wears by its title is not repeated on every tile.
                             badged = tile.badge != row.badge,
                         )

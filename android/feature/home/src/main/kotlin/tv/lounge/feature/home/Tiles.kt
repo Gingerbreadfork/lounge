@@ -1,7 +1,6 @@
 package tv.lounge.feature.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -25,8 +24,8 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,8 +64,6 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import androidx.tv.material3.Text
 import androidx.compose.ui.graphics.painter.ColorPainter
 import coil3.compose.rememberAsyncImagePainter
@@ -78,6 +75,7 @@ import tv.lounge.core.Tile
 import tv.lounge.core.TileKind
 import tv.lounge.design.Badge as BadgeView
 import tv.lounge.design.Dimens
+import tv.lounge.design.HouseLight
 import tv.lounge.design.Lights
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
@@ -86,7 +84,6 @@ import tv.lounge.design.argb
 import tv.lounge.design.focusRim
 import tv.lounge.design.lightGlow
 import tv.lounge.design.lightState
-import tv.lounge.design.lightsFilter
 
 /** Tile sizes at 1080p (DESIGN.md §5.3). */
 fun tileSize(kind: TileKind, size: RowSize): DpSize = when (kind) {
@@ -111,7 +108,8 @@ private fun Tile.artIsBanner(): Boolean = artworkPath != null && id.startsWith("
  * One tile. Focus is light: scale, glow and the backdrop spill; everything else is a brightness
  * state (DESIGN.md §6.1). [chrome] adds the title block to landscape tiles, [held] keeps a tile lit
  * while its menu is open, [nudge] is a horizontal offset in px read while drawing. [badged] is
- * false in a row that wears the tile's badge itself, so it is said once.
+ * false in a row that wears the tile's badge itself, so it is said once. [shown] is false while the
+ * tile is kept off screen.
  */
 @Composable
 fun TileView(
@@ -129,6 +127,7 @@ fun TileView(
     held: Boolean = false,
     nudge: (() -> Float)? = null,
     badged: Boolean = true,
+    shown: () -> Boolean = { true },
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -141,41 +140,35 @@ fun TileView(
     val lightColor = LoungeTheme.colors.light(tile.lightArgb)
     val lit = focused || held
 
-    // Scale, glow and the colour filter are read while drawing, and the house lights arrive as a
-    // State, so a focus change recomposes this tile once and a neighbour's change not at all.
-    val targetScale = if (lit) (if (kind == TileKind.COMPACT) 1.04f else 1.06f) else 1f
-    val scale = animateFloatAsState(targetScale, if (lit) motion.snap() else motion.settle(), label = "tileScale")
-    // Idle is read from the light state in effects and while drawing, never as a parameter, so the
-    // room going idle recomposes no tile.
-    val glow = remember { Animatable(0f) }
-    LaunchedEffect(lit) {
-        snapshotFlow { light.idle }.collectLatest { idle ->
-            val target = if (lit) visuals.glowAlpha * (if (idle) 0.5f else 1f) else 0f
-            val spec = when {
-                idle -> motion.dim<Float>()
-                lit -> motion.snap<Float>()
-                else -> motion.settle<Float>()
-            }
-            glow.animateTo(target, spec)
+    // Scale, rim and glow follow one level and the house light eases as it draws, all read while
+    // drawing: a focus change recomposes this tile once and a neighbour's change not at all.
+    val litLevel = animateFloatAsState(if (lit) 1f else 0f, if (lit) motion.snap() else motion.settle(), label = "tileLit")
+    val litScale = if (kind == TileKind.COMPACT) 0.04f else 0.06f
+    // The idle level is read only by a lit tile, so the room going idle redraws no other glow.
+    val glowAlpha = visuals.glowAlpha
+    val glow: () -> Float = remember(litLevel, light, glowAlpha) {
+        { litLevel.value.let { if (it <= 0.001f) 0f else it * glowAlpha * light.idleLevel } }
+    }
+    // Read unobserved: a change of light reaches the drawing below and never recomposes the tile.
+    val house = remember { HouseLight(Snapshot.withoutReadObservation { if (lit) Lights.Focused else lights.value }) }
+    val litNow = rememberUpdatedState(lit)
+    // A row hands a new State when the tile moves; the light eases on from where it was.
+    val lightsNow = rememberUpdatedState(lights)
+    // Off screen the state is read unobserved, so a change in it does not draw the tile again.
+    val state: (Boolean) -> Lights = remember(litNow, lightsNow) {
+        { seen ->
+            val read = { if (litNow.value) Lights.Focused else lightsNow.value.value }
+            if (seen) read() else Snapshot.withoutReadObservation(read)
         }
     }
-    val rim = animateFloatAsState(if (lit) 1f else 0f, if (lit) motion.snap() else motion.settle(), label = "tileRim")
-    // Read unobserved: a change of light reaches the effect below and never recomposes the tile.
-    val initial = remember { Snapshot.withoutReadObservation { (if (lit) Lights.Focused else lights.value).dimmed(light.idle) } }
-    val animBrightness = remember { Animatable(initial.first) }
-    val animSaturation = remember { Animatable(initial.second) }
-    // Keyed on the State too: a row hands a new one when the tile moves.
-    LaunchedEffect(lit, lights) {
-        snapshotFlow { (if (lit) Lights.Focused else lights.value).dimmed(light.idle) }.collectLatest { (b, sat) ->
-            val spec = if (light.idle) motion.dim<Float>() else motion.settle()
-            launch { animBrightness.animateTo(b, spec) }
-            animSaturation.animateTo(sat, spec)
-        }
+    // Whether it is on screen is watched only while it is not: coming back draws the tile, going away does not.
+    val seen: () -> Boolean = remember(shown) { { Snapshot.withoutReadObservation(shown).also { if (!it) shown() } } }
+    val filter: () -> androidx.compose.ui.graphics.ColorFilter? = remember(house, light, motion, seen) {
+        { seen().let { house.filter(state(it), light, motion, it) } }
     }
-    val filter: () -> androidx.compose.ui.graphics.ColorFilter? = remember(animBrightness, animSaturation) {
-        { lightsFilter(animBrightness.value, animSaturation.value) }
+    val brightnessNow: () -> Float = remember(house, light, motion, seen) {
+        { seen().let { house.brightness(state(it), light, motion, it) } }
     }
-    val brightnessNow: () -> Float = remember(animBrightness) { { animBrightness.value } }
 
     val description = buildString {
         append(tile.title)
@@ -212,16 +205,17 @@ fun TileView(
             // Two layers on purpose: the glow redraws every frame of a focus change, and inside the
             // tile's own layer it re-records only this tile. The clip is the inner layer.
             .graphicsLayer {
-                scaleX = scale.value
-                scaleY = scale.value
+                val scale = 1f + litScale * litLevel.value
+                scaleX = scale
+                scaleY = scale
                 translationX = nudge?.invoke() ?: 0f
             }
-            .lightGlow(lightColor, { glow.value }, cornerRadius = Dimens.tileRadius)
+            .lightGlow(lightColor, glow, cornerRadius = Dimens.tileRadius)
             .graphicsLayer {
                 this.shape = shape
                 clip = true
             }
-            .focusRim(colors, { rim.value }, Dimens.tileRadius)
+            .focusRim(colors, { litLevel.value }, Dimens.tileRadius)
             .size(size)
             .then(if (needsCurtain) Modifier.background(colors.curtain) else Modifier),
     ) {

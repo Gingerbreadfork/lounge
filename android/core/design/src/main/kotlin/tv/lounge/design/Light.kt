@@ -2,7 +2,9 @@ package tv.lounge.design
 
 import androidx.compose.animation.Animatable
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.geometry.isUnspecified
@@ -14,6 +16,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.MotionDurationScale
+import kotlin.coroutines.coroutineContext
 import androidx.compose.runtime.State
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.snapshotFlow
@@ -21,10 +25,14 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.channels.Channel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -64,6 +72,12 @@ class LightState {
     var active: Boolean by mutableStateOf(false)
         private set
     var idle: Boolean by mutableStateOf(false)
+    /** The idle factor on every light: 1 awake, down to 0.5 once the room has gone quiet. Eased by [RoomLights]. */
+    var idleLevel: Float by mutableFloatStateOf(1f)
+        internal set
+    /** The time of the frame being drawn, stepped by [RoomLights] only while [easeUntil] has asked. */
+    var frameNanos: Long by mutableLongStateOf(0L)
+        internal set
     /** The playbill's light while the Stage is expanded, for the light field to draw. */
     var bill: BillLight? by mutableStateOf(null)
     /** True while a [LightField] is drawing the spills, so the Stage publishes instead of painting. */
@@ -79,6 +93,64 @@ class LightState {
     var clock: Float by mutableFloatStateOf(0f)
 
     private var lastCenter: Offset = Offset.Unspecified
+    private var easingUntil = 0L
+    private var stepping = false
+    /** True while [frameNanos] is the time of the frame being drawn. */
+    private var frameCurrent = false
+    private var wake: Channel<Unit>? = null
+    /** The system's setting for how long animations run, which an ease follows as Compose's own do. */
+    private var motionScale: MotionDurationScale? = null
+    /** The clock an ease starts on when no frame is being drawn. */
+    internal var nanoTime: () -> Long = System::nanoTime
+
+    /** When an ease that begins now starts from: the time of the frame being drawn, or the clock's between frames. */
+    internal fun easeStart(): Long = if (frameCurrent) frameNanos else nanoTime()
+
+    /** How long an ease of [durationMs] runs under the system's animation setting. */
+    internal fun easeNanos(durationMs: Int): Long = (durationMs * 1_000_000L * (motionScale?.scaleFactor ?: 1f)).toLong()
+
+    /**
+     * Asks for frames until [nanos], for an [Eased] value that is still moving. False when
+     * nothing is stepping frames, and the caller then shows its target at once.
+     */
+    fun easeUntil(nanos: Long): Boolean {
+        val wake = wake ?: return false
+        if (nanos > easingUntil) easingUntil = nanos
+        if (!stepping) {
+            stepping = true
+            wake.trySend(Unit)
+        }
+        return true
+    }
+
+    /** Steps [frameNanos] once a frame for as long as [easeUntil] has asked, and sleeps otherwise. */
+    internal suspend fun stepFrames() {
+        val asked = Channel<Unit>(Channel.CONFLATED)
+        wake = asked
+        motionScale = coroutineContext[MotionDurationScale]
+        try {
+            for (ask in asked) {
+                do {
+                    // Written inside the frame, so what reads it draws again in this same frame.
+                    val now = withFrameNanos { frame ->
+                        frameNanos = frame
+                        frameCurrent = true
+                        frame
+                    }
+                    // This runs once that frame has been drawn.
+                    frameCurrent = false
+                } while (now < easingUntil)
+                stepping = false
+            }
+        } finally {
+            // Unless another stepper has taken over since.
+            if (wake === asked) {
+                wake = null
+                stepping = false
+                frameCurrent = false
+            }
+        }
+    }
 
     fun set(source: LayoutCoordinates, color: Color) {
         val changed = this.source !== source
@@ -113,6 +185,103 @@ val LocalLightState = staticCompositionLocalOf { LightState() }
 fun rememberIdleLevel(idle: Boolean): State<Float> {
     val motion = LoungeTheme.motion
     return animateFloatAsState(if (idle) 0.5f else 1f, if (idle) motion.dim() else motion.settle(), label = "idleLevel")
+}
+
+/**
+ * Runs the room's shared light: eases [LightState.idleLevel] down over `dim` and back over
+ * `settle`, and steps the frame time that tiles ease on. Called once, where the room is shown.
+ */
+@Composable
+fun RoomLights(state: LightState) {
+    val motion = LoungeTheme.motion
+    LaunchedEffect(state, motion) {
+        snapshotFlow { state.idle }.collectLatest { idle ->
+            animate(state.idleLevel, if (idle) 0.5f else 1f, animationSpec = if (idle) motion.dim() else motion.settle()) { v, _ -> state.idleLevel = v }
+        }
+    }
+    LaunchedEffect(state) { state.stepFrames() }
+}
+
+/**
+ * A value eased toward its target as it is read while drawing, on the room's frame time. A change
+ * of target starts no coroutine and recomposes nothing: what reads it draws again each frame until
+ * it has arrived, and not at all after. Read where nobody can see it, with [seen] false, it takes
+ * its target at once, as it does the first time it is seen.
+ */
+class Eased(initial: Float) {
+    private var from = initial
+    private var to = initial
+    private var value = initial
+    private var start = 0L
+    private var moving = false
+    private var unseen = true
+
+    fun toward(target: Float, light: LightState, durationMs: Int, easing: Easing, seen: Boolean = true): Float {
+        if (unseen || !seen) {
+            unseen = !seen
+            from = target
+            to = target
+            value = target
+            moving = false
+            return target
+        }
+        if (target != to) {
+            from = value
+            to = target
+            start = light.easeStart()
+            moving = true
+        }
+        if (moving) {
+            val duration = light.easeNanos(durationMs)
+            val elapsed = light.frameNanos - start
+            if (duration <= 0L || elapsed >= duration || !light.easeUntil(start + duration)) {
+                moving = false
+                value = to
+            } else {
+                value = from + (to - from) * easing.transform(elapsed.coerceAtLeast(0L).toFloat() / duration)
+            }
+        }
+        return value
+    }
+}
+
+/**
+ * A tile's house light (DESIGN.md §6.1): brightness and saturation eased to the tile's state over
+ * `settle` while it draws, under the room's idle dim. A tile that is not shown takes its state at
+ * once and follows neither the frames nor the dim, so nothing here draws it again until it is.
+ */
+class HouseLight(initial: Lights) {
+    private val brightness = Eased(initial.brightness)
+    private val saturation = Eased(initial.saturation)
+    private var filterBrightness = Float.NaN
+    private var filterSaturation = Float.NaN
+    private var filter: ColorFilter? = null
+
+    fun brightness(state: Lights, light: LightState, motion: LoungeMotion, shown: Boolean = true): Float {
+        val b = brightness.toward(state.brightness, light, motion.settleMs, motion.settleEasing, shown)
+        return b + ((b - 0.12f).coerceAtLeast(0.4f) - b) * idleDim(light, shown)
+    }
+
+    internal fun saturation(state: Lights, light: LightState, motion: LoungeMotion, shown: Boolean = true): Float {
+        val s = saturation.toward(state.saturation, light, motion.settleMs, motion.settleEasing, shown)
+        return s + ((s - 0.05f).coerceAtLeast(0.5f) - s) * idleDim(light, shown)
+    }
+
+    /** The colour filter for the tile's pictures; the same one until the light changes. */
+    fun filter(state: Lights, light: LightState, motion: LoungeMotion, shown: Boolean = true): ColorFilter? {
+        val b = brightness(state, light, motion, shown)
+        val s = saturation(state, light, motion, shown)
+        if (b != filterBrightness || s != filterSaturation) {
+            filterBrightness = b
+            filterSaturation = s
+            filter = lightsFilter(b, s)
+        }
+        return filter
+    }
+
+    /** How far the idle dim has come down, from 0 awake to 1 idle. */
+    private fun idleDim(light: LightState, shown: Boolean): Float =
+        (1f - if (shown) light.idleLevel else Snapshot.withoutReadObservation { light.idleLevel }) * 2f
 }
 
 /**
@@ -339,10 +508,6 @@ enum class Lights(val brightness: Float, val saturation: Float) {
     OtherRow(0.70f, 0.88f),
     /** The room while an anchored menu is open: everything but the menu's own tile. */
     Dimmed(0.60f, 0.84f),
-    ;
-
-    fun dimmed(idle: Boolean): Pair<Float, Float> =
-        if (idle) (brightness - 0.12f).coerceAtLeast(0.4f) to (saturation - 0.05f).coerceAtLeast(0.5f) else brightness to saturation
 }
 
 fun lightsFilter(brightness: Float, saturation: Float): ColorFilter? {
