@@ -36,6 +36,119 @@ class ReleaseTest {
 
     private fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
 
+    /**
+     * Runs the install script with a profile against a stand-in `pm` that writes down what it is
+     * asked and fails where [failing] says. Gives the exit code and the calls made.
+     */
+    private fun runWithProfile(failing: String = "", profileSha256: String? = null, created: String = "Success: created install session [42]", profileThere: Boolean = true): Pair<Int, List<String>> {
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        try {
+            val apk = File(dir, "update.apk").apply { writeBytes(ByteArray(4096) { it.toByte() }) }
+            val dm = File(dir, "update.dm").apply { writeBytes(ByteArray(512) { (it * 7).toByte() }) }
+            val calls = File(dir, "calls")
+            fun sha(file: File, algorithm: String) = hex(MessageDigest.getInstance(algorithm).digest(file.readBytes()))
+            val profile = StagedProfile(dm.path, profileSha256 ?: sha(dm, "SHA-256"), if (profileSha256 == null) sha(dm, "SHA-1") else "0".repeat(40), "pm install-create -r -i tv.lounge", File(dir, "copy.dm").path)
+            val script = UpdateManager.installCommand(apk.path, sha(apk, "SHA-256"), sha(apk, "SHA-1"), "pm install -r -i tv.lounge", File(dir, "copy.apk").path, profile)
+            if (!profileThere) dm.delete()
+            // Only session 42 exists, so a number read wrongly from pm's answer shows as a failed write.
+            val pm = """
+                pm() {
+                  case "${'$'}1" in
+                    install-create) echo "${'$'}1" >> '${calls.path}'; echo '$created' ;;
+                    install-write) echo "${'$'}1 ${'$'}2 ${'$'}3" >> '${calls.path}'; [ "${'$'}2" = 42 ] && [ -f "${'$'}4" ] || return 1 ;;
+                    install-commit|install-abandon) echo "${'$'}1 ${'$'}2" >> '${calls.path}' ;;
+                    install) echo "${'$'}1" >> '${calls.path}' ;;
+                  esac
+                  case " $failing " in *" ${'$'}1 "*) return 1 ;; esac
+                  return 0
+                }
+            """.trimIndent()
+            val p = ProcessBuilder("sh", "-c", "$pm\n$script").redirectErrorStream(true).start()
+            p.inputStream.bufferedReader().readText()
+            val code = p.waitFor()
+            assertFalse(File(dir, "copy.apk").exists())
+            assertFalse(File(dir, "copy.dm").exists())
+            return code to (if (calls.exists()) calls.readLines() else emptyList())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aProfileGoesInWithTheApkThroughOneSession() {
+        assertEquals(0 to listOf("install-create", "install-write 42 lounge.apk", "install-write 42 lounge.dm", "install-commit 42"), runWithProfile())
+    }
+
+    @Test
+    fun aProfileThatChangedOrIsGoneIsLeftOutAndTheApkStillInstalls() {
+        assertEquals(0 to listOf("install"), runWithProfile(profileSha256 = "0".repeat(64)))
+        assertEquals(0 to listOf("install"), runWithProfile(profileThere = false))
+    }
+
+    @Test
+    fun anInstallRefusedWithItsProfileIsTriedAgainWithout() {
+        assertEquals(0 to listOf("install-create", "install-write 42 lounge.apk", "install-write 42 lounge.dm", "install-commit 42", "install-abandon 42", "install"), runWithProfile(failing = "install-commit"))
+        // No session was opened, so nothing can be written to one and the APK goes in alone.
+        val none = "Error: no sessions here"
+        assertEquals(0 to listOf("install-create", "install-write $none lounge.apk", "install-abandon $none", "install"), runWithProfile(failing = "install-create", created = none))
+        // When the APK will not install either, the script says so.
+        assertEquals(1, runWithProfile(failing = "install-commit install").first)
+    }
+
+    @Test
+    fun onlyAnArchiveWithAProfileAndNothingElseIsAProfile() {
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        try {
+            fun archive(vararg names: String) = File(dir, names.joinToString("+").ifEmpty { "empty" } + ".dm").also { file ->
+                java.util.zip.ZipOutputStream(file.outputStream()).use { zip ->
+                    for (name in names) {
+                        zip.putNextEntry(java.util.zip.ZipEntry(name))
+                        zip.write(byteArrayOf(1, 2, 3))
+                        zip.closeEntry()
+                    }
+                }
+            }
+            assertTrue(holdsOnlyAProfile(archive("primary.prof")))
+            assertTrue(holdsOnlyAProfile(archive("primary.prof", "primary.profm")))
+            // Verification data would be taken on trust, so an archive that brings any is no profile.
+            assertFalse(holdsOnlyAProfile(archive("primary.prof", "primary.vdex")))
+            assertFalse(holdsOnlyAProfile(archive("primary.profm")))
+            assertFalse(holdsOnlyAProfile(archive()))
+            assertFalse(holdsOnlyAProfile(File(dir, "noise.dm").apply { writeBytes(ByteArray(512) { (it * 7).toByte() }) }))
+            assertFalse(holdsOnlyAProfile(File(dir, "missing.dm")))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aFailedInstallBlamesItsProfileOnlyWhenItCouldBeWhy() {
+        val failure = android.content.pm.PackageInstaller.STATUS_FAILURE
+        val invalid = android.content.pm.PackageInstaller.STATUS_FAILURE_INVALID
+        val named = "INSTALL_FAILED_BAD_DEX_METADATA: Failed parse during installPackageLI: Error opening base.dm: Invalid file"
+        assertEquals(ProfileBlame.Named, profileBlame(true, invalid, named))
+        assertEquals(ProfileBlame.Possible, profileBlame(true, failure, "INSTALL_FAILED_INTERNAL_ERROR"))
+        assertEquals(ProfileBlame.Possible, profileBlame(true, invalid, null))
+        // It carried none, or the person or the storage is why.
+        assertEquals(ProfileBlame.None, profileBlame(false, invalid, named))
+        assertEquals(ProfileBlame.None, profileBlame(true, android.content.pm.PackageInstaller.STATUS_FAILURE_ABORTED, "INSTALL_FAILED_ABORTED: User rejected permissions"))
+        assertEquals(ProfileBlame.None, profileBlame(true, android.content.pm.PackageInstaller.STATUS_FAILURE_STORAGE, null))
+        assertEquals(ProfileBlame.None, profileBlame(true, android.content.pm.PackageInstaller.STATUS_FAILURE_BLOCKED, null))
+    }
+
+    @Test
+    fun aSuspectedProfileIsSettledOnlyOnceItsReleaseIsRunning() {
+        // Still on the older version: the install without the profile has not landed.
+        assertEquals(Suspicion.Keep, suspicion("v0.6.1", named = true, runningVersion = "0.6.0"))
+        assertEquals(Suspicion.Keep, suspicion("v0.6.1", named = false, runningVersion = "0.6.0"))
+        assertEquals(Suspicion.Refused, suspicion("v0.6.1", named = true, runningVersion = "0.6.1"))
+        // It landed, but Android never said the profile was why.
+        assertEquals(Suspicion.Drop, suspicion("v0.6.1", named = false, runningVersion = "0.6.1"))
+        // A later release got in some other way.
+        assertEquals(Suspicion.Drop, suspicion("v0.6.1", named = true, runningVersion = "0.6.2"))
+        assertEquals(Suspicion.Drop, suspicion("nonsense", named = true, runningVersion = "0.6.1"))
+    }
+
     @Test
     fun versionsParseAndOrder() {
         assertEquals(Version(0, 1, 2), Version.parse("v0.1.2"))
@@ -83,6 +196,34 @@ class ReleaseTest {
         assertEquals("ab".repeat(32), release.sha256)
         assertEquals("https://github.com/x/lounge/releases/download/v0.1.2/SHA256SUMS", release.sumsUrl)
         assertEquals("Nine new plugins.\nPlex and Emby.", release.summary())
+    }
+
+    @Test
+    fun aReleasesProfilesAreReadAndTheOneForThisAndroidChosen() {
+        val base = "https://github.com/x/lounge/releases/download/v0.1.2"
+        fun asset(name: String, url: String = "$base/$name", size: Long = 11_364, digest: String? = null) =
+            """{"name": "$name", "size": $size, ${digest?.let { """"digest": "sha256:$it", """ } ?: ""}"browser_download_url": "$url"},"""
+        val assets = listOf(
+            asset("Lounge-0.1.2.api28.dm"),
+            asset("Lounge-0.1.2.api31.dm", digest = "cd".repeat(32)),
+            // Not this release's, not https, not a size a profile has, and not named for an Android version.
+            asset("Lounge-0.1.1.api31.dm"),
+            asset("Lounge-0.1.2.api33.dm", url = "http://example.com/Lounge-0.1.2.api33.dm"),
+            asset("Lounge-0.1.2.api34.dm", size = Release.MAX_PROFILE_BYTES + 1),
+            asset("Lounge-0.1.2.dm"),
+        ).joinToString("\n")
+        val release = Release.parse(LATEST.replace("\"assets\": [", "\"assets\": [\n$assets"))!!
+        assertEquals(listOf("Lounge-0.1.2.api28.dm", "Lounge-0.1.2.api31.dm"), release.profiles.map { it.name })
+        assertEquals("Lounge-0.1.2.apk", release.apkName)
+        assertNull(release.profileFor(27))
+        assertEquals(28, release.profileFor(28)!!.minSdk)
+        assertEquals(28, release.profileFor(30)!!.minSdk)
+        assertEquals(31, release.profileFor(31)!!.minSdk)
+        assertNull(release.profileFor(30)!!.sha256)
+        assertEquals(31, release.profileFor(34)!!.minSdk)
+        assertEquals("cd".repeat(32), release.profileFor(34)!!.sha256)
+        assertEquals("$base/Lounge-0.1.2.api31.dm", release.profileFor(34)!!.url)
+        assertTrue(Release.parse(LATEST)!!.profiles.isEmpty())
     }
 
     @Test

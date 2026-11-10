@@ -290,11 +290,12 @@ time. It shows each command before running it.
 ### Updates
 
 Lounge checks the [Releases](../../releases) page twice a day, verifies a newer APK against its
-published hash and installs it while you're in another app. From Android 12 there is no prompt
-after the first update, and with Power Setup there is none at all; otherwise a tile on the home
-screen offers it. On Google TV, Play Protect may warn the first time that it doesn't know the
-developer: choose More details, then Install anyway. Settings, Updates turns the check off if
-you'd rather manage updates yourself, for example with
+published hash and installs it while you're in another app. Each release carries a profile, and
+where Android accepts it the update is compiled as it installs, so it is quick from its first
+start. From Android 12 there is no prompt after the first update, and with Power Setup there is
+none at all; otherwise a tile on the home screen offers it. On Google TV, Play Protect may warn the
+first time that it doesn't know the developer: choose More details, then Install anyway. Settings,
+Updates turns the check off if you'd rather manage updates yourself, for example with
 [Obtainium](https://github.com/ImranR98/Obtainium) pointed at this repository.
 
 ## How it's built

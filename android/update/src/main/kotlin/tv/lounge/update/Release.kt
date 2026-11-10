@@ -1,5 +1,8 @@
 package tv.lounge.update
 
+import android.content.pm.PackageInstaller
+import java.io.File
+import java.util.zip.ZipFile
 import org.json.JSONObject
 
 /** A version like 0.1.2 or 1.0.0-beta.1; a pre-release sorts below its release. */
@@ -29,6 +32,19 @@ data class Version(val major: Int, val minor: Int, val patch: Int, val pre: Stri
     }
 }
 
+/**
+ * A baseline profile published beside a release's APK, for Android [minSdk] and later. Installed
+ * with the APK, it has Android compile the app there and then.
+ */
+data class Profile(
+    val name: String,
+    val url: String,
+    val size: Long,
+    /** The profile's SHA-256 when the release carries it; SHA256SUMS lists it otherwise. */
+    val sha256: String?,
+    val minSdk: Int,
+)
+
 /** One published release with the APK to fetch. */
 data class Release(
     val version: Version,
@@ -41,7 +57,11 @@ data class Release(
     val sumsUrl: String?,
     val notes: String,
     val pageUrl: String,
+    val profiles: List<Profile> = emptyList(),
 ) {
+    /** The profile for a device on Android [sdk]: the one made for the newest Android not above it. */
+    fun profileFor(sdk: Int): Profile? = profiles.filter { it.minSdk <= sdk }.maxByOrNull { it.minSdk }
+
     /** The first few lines of the notes, without markdown marks, for a caption. */
     fun summary(lines: Int = 3): String = notes
         .lineSequence()
@@ -60,12 +80,14 @@ data class Release(
             val assets = o.optJSONArray("assets") ?: return null
             var apk: JSONObject? = null
             var sums: JSONObject? = null
+            val others = ArrayList<JSONObject>()
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
                 val name = a.optString("name")
                 when {
                     name.startsWith(apkPrefix) && name.endsWith(".apk") && '/' !in name -> apk = a
                     name == "SHA256SUMS" -> sums = a
+                    else -> others += a
                 }
             }
             val asset = apk ?: return null
@@ -83,8 +105,26 @@ data class Release(
                 sumsUrl = sumsUrl,
                 notes = o.optString("body"),
                 pageUrl = o.optString("html_url"),
+                profiles = others.mapNotNull { profile(it, asset.getString("name").removeSuffix(".apk")) },
             )
         }
+
+        /**
+         * The profile in asset [a] when it is named for the APK [stem], as `stem.api31.dm` is for
+         * Android 12 and later, and is small and fetched over https. Anything else is no profile.
+         */
+        private fun profile(a: JSONObject, stem: String): Profile? {
+            val name = a.optString("name")
+            val minSdk = Regex("\\.api(\\d{1,3})\\.dm").matchEntire(name.removePrefix(stem))?.groupValues?.get(1)?.toInt() ?: return null
+            val url = a.optString("browser_download_url")
+            val size = a.optLong("size")
+            if (!name.startsWith(stem) || !isHttps(url) || size <= 0 || size > MAX_PROFILE_BYTES) return null
+            val digest = a.optString("digest").takeIf { it.startsWith("sha256:") }?.removePrefix("sha256:")?.let(::sha256OrNull)
+            return Profile(name, url, size, digest, minSdk)
+        }
+
+        /** A profile is a few kilobytes; one far larger is not downloaded. */
+        const val MAX_PROFILE_BYTES = 4L * 1024 * 1024
 
         private fun isHttps(url: String): Boolean = url.startsWith("https://", ignoreCase = true)
 
@@ -146,3 +186,58 @@ fun installPath(sdk: Int, selfIsInstaller: Boolean, powerReady: Boolean, canRequ
     !canRequestInstalls -> InstallPath.NeedsPermission
     else -> InstallPath.Confirm
 }
+
+/**
+ * Whether [file] is a profile archive with a profile in it and nothing else. Android would also act
+ * on other entries, such as verification data, which no signature covers here.
+ */
+internal fun holdsOnlyAProfile(file: File): Boolean = runCatching {
+    ZipFile(file).use { zip ->
+        val names = zip.entries().asSequence().map { it.name }.toList()
+        "primary.prof" in names && names.all { it == "primary.prof" || it == "primary.profm" }
+    }
+}.getOrDefault(false)
+
+/** What a failed install says about the profile it carried. */
+internal enum class ProfileBlame {
+    /** Nothing: it carried none, or failed for a reason of its own. */
+    None,
+    /** It may be why, so the update goes in again without it. */
+    Possible,
+    /** Android named it: as [Possible], and once that install lands this Android is known to refuse profiles. */
+    Named,
+}
+
+internal fun profileBlame(carriedProfile: Boolean, status: Int, message: String?): ProfileBlame = when {
+    !carriedProfile -> ProfileBlame.None
+    status != PackageInstaller.STATUS_FAILURE && status != PackageInstaller.STATUS_FAILURE_INVALID -> ProfileBlame.None
+    message?.contains("DEX_METADATA") == true -> ProfileBlame.Named
+    else -> ProfileBlame.Possible
+}
+
+/** What becomes, at a start, of the release that was installed again without its profile. */
+internal enum class Suspicion {
+    /** That install has not landed yet, so the release still goes in without a profile. */
+    Keep,
+    /** It is over and says nothing about this Android. */
+    Drop,
+    /** It landed after Android named the profile: this Android refuses them. */
+    Refused,
+}
+
+internal fun suspicion(suspectTag: String, named: Boolean, runningVersion: String): Suspicion {
+    val suspect = Version.parse(suspectTag)
+    val running = Version.parse(runningVersion)
+    return when {
+        suspect == null || running == null -> Suspicion.Drop
+        running < suspect -> Suspicion.Keep
+        running == suspect && named -> Suspicion.Refused
+        else -> Suspicion.Drop
+    }
+}
+
+/**
+ * A profile staged for a Power Setup install: where it is, what a copy of it must hash to, and the
+ * `pm` command that opens the session it goes in through.
+ */
+internal class StagedProfile(val source: String, val sha256: String, val sha1: String, val session: String, val copy: String = "/data/local/tmp/lounge-update.dm")
