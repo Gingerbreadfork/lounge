@@ -99,12 +99,28 @@ jobs:
           LOUNGE_PUBLISHER_KEY: ${{ runner.temp }}/publisher.key
       - run: ./gradlew :power:testDebugUnitTest :update:testDebugUnitTest :feature:home:testDebugUnitTest :app:assembleRelease
         working-directory: android
+      # Beside the APK go its baseline profiles, one for each range of Android versions and named
+      # for the lowest it serves. A TV that installs one with the APK compiles the app at once.
       - name: Package
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          cp android/app/build/outputs/apk/release/app-release.apk "Lounge-$VERSION.apk"
-          sha256sum "Lounge-$VERSION.apk" > SHA256SUMS
+          OUT=android/app/build/outputs/apk/release
+          cp "$OUT/app-release.apk" "Lounge-$VERSION.apk"
+          jq -r '.baselineProfiles[]? | "\(.minApi) \(.baselineProfiles[0])"' "$OUT/output-metadata.json" | while read -r MIN FILE; do
+            cp "$OUT/$FILE" "Lounge-$VERSION.api$MIN.dm"
+          done
+          if ! ls "Lounge-$VERSION".api*.dm > /dev/null 2>&1; then
+            echo "::error::The build made no baseline profile for the release to carry"
+            exit 1
+          fi
+          # A TV takes the profile named for the newest Android not above its own, so the last one
+          # has to serve every Android after it.
+          if [ "$(jq '[.baselineProfiles[].maxApi] | max' "$OUT/output-metadata.json")" != 2147483647 ]; then
+            echo "::error::The newest baseline profile does not cover every later Android"
+            exit 1
+          fi
+          sha256sum "Lounge-$VERSION.apk" "Lounge-$VERSION".api*.dm > SHA256SUMS
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-      - run: gh release create "$GITHUB_REF_NAME" "Lounge-$VERSION.apk" SHA256SUMS --title "Lounge $VERSION" --generate-notes
+      - run: gh release create "$GITHUB_REF_NAME" "Lounge-$VERSION.apk" "Lounge-$VERSION".api*.dm SHA256SUMS --title "Lounge $VERSION" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
