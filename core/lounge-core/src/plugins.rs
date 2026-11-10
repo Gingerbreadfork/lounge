@@ -823,6 +823,14 @@ fn due(inner: &Inner) -> Vec<String> {
         .collect()
 }
 
+/// Queue a refresh for each plugin whose refresh is due, rather than leave it for the next
+/// check a minute on.
+pub(crate) fn refresh_what_is_due(inner: &Inner) {
+    for id in due(inner) {
+        inner.plugins.refresh_soon(&id);
+    }
+}
+
 /// Queue a refresh for each plugin that fell due while Lounge was closed, rather than leave it
 /// for the first check a minute after opening. One whose last refresh failed, or stopped to ask
 /// the person something, is tried again too: what it asked is only remembered while Lounge runs.

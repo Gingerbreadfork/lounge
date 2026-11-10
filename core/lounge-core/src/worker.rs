@@ -183,7 +183,13 @@ pub(crate) fn spawn(inner: Arc<Inner>, rx: crossbeam_channel::Receiver<Job>) {
                             utc_offset = m;
                             dirty = true;
                         }
-                        Job::Rebuild | Job::Tick => dirty = true,
+                        Job::Rebuild => dirty = true,
+                        Job::Tick => {
+                            // What fell due while the screen was off is fetched now, so a row is
+                            // not read stale until the next minute's check.
+                            crate::plugins::refresh_what_is_due(&inner);
+                            dirty = true;
+                        }
                         Job::Housekeeping => housekeeping(&inner),
                     });
                     if finished.is_none() {
