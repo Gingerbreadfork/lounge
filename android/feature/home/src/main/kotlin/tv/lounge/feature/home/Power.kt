@@ -340,17 +340,18 @@ fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Un
             icon = if (ready) LoungeIcons.Tv else LoungeIcons.Power,
             title = if (ready) "Wake the TV and switch to me" else "Set up TV power and input",
             subtitle = if (ready) reasonFor(power.oneTouchPlay) else null,
+            subtitleLines = WHOLE,
             value = if (ready) valueFor(power.oneTouchPlay, tv?.let { if (it.isOn) "TV is on" else "TV is off" }) else if (status is PowerStatus.Unavailable) "Needs USB debugging" else "Power Setup",
             accent = if (ready) accentFor(power.oneTouchPlay) else colors.houselight,
             onClick = { if (ready) run(power.oneTouchPlay) else onPowerSetup() },
             focusRequester = firstFocus,
         )
         if (ready) {
-            SheetRow(icon = LoungeIcons.Power, title = "TV power", subtitle = reasonFor(power.tvPower), value = valueFor(power.tvPower, "On or off"), accent = accentFor(power.tvPower), onClick = { run(power.tvPower) })
-            SheetRow(icon = LoungeIcons.Power, title = "Everything off", subtitle = reasonFor(power.everythingOff), value = valueFor(power.everythingOff, "Sleep, TV follows"), accent = if (runs[power.everythingOff.id] == null) colors.ember else accentFor(power.everythingOff), onClick = { run(power.everythingOff) })
+            SheetRow(icon = LoungeIcons.Power, title = "TV power", subtitle = reasonFor(power.tvPower), subtitleLines = WHOLE, value = valueFor(power.tvPower, "On or off"), accent = accentFor(power.tvPower), onClick = { run(power.tvPower) })
+            SheetRow(icon = LoungeIcons.Power, title = "Everything off", subtitle = reasonFor(power.everythingOff), subtitleLines = WHOLE, value = valueFor(power.everythingOff, "Sleep, TV follows"), accent = if (runs[power.everythingOff.id] == null) colors.ember else accentFor(power.everythingOff), onClick = { run(power.everythingOff) })
             if (power.isTelevision) {
-                SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the soundbar", subtitle = reasonFor(power.systemAudioOn), value = valueFor(power.systemAudioOn), accent = accentFor(power.systemAudioOn), onClick = { run(power.systemAudioOn) })
-                SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the TV", subtitle = reasonFor(power.systemAudioOff), value = valueFor(power.systemAudioOff), accent = accentFor(power.systemAudioOff), onClick = { run(power.systemAudioOff) })
+                SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the soundbar", subtitle = reasonFor(power.systemAudioOn), subtitleLines = WHOLE, value = valueFor(power.systemAudioOn), accent = accentFor(power.systemAudioOn), onClick = { run(power.systemAudioOn) })
+                SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the TV", subtitle = reasonFor(power.systemAudioOff), subtitleLines = WHOLE, value = valueFor(power.systemAudioOff), accent = accentFor(power.systemAudioOff), onClick = { run(power.systemAudioOff) })
             }
             val others = devices.filter { !it.isTv && it.physicalAddress != 0 }
             if (others.size > 1) {
@@ -358,7 +359,7 @@ fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Un
                 Text("Switch the TV to", style = LoungeTheme.typography.meta, color = colors.dust)
                 others.forEach { d ->
                     val action = power.selectDevice(d)
-                    SheetRow(icon = LoungeIcons.Hdmi, title = d.name, subtitle = reasonFor(action), value = valueFor(action, if (d.isOn) "On" else "Standby"), accent = accentFor(action), onClick = { run(action) })
+                    SheetRow(icon = LoungeIcons.Hdmi, title = d.name, subtitle = reasonFor(action), subtitleLines = WHOLE, value = valueFor(action, if (d.isOn) "On" else "Standby"), accent = accentFor(action), onClick = { run(action) })
                 }
             }
         }

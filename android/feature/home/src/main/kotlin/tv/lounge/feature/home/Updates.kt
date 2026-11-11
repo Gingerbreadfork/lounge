@@ -70,6 +70,7 @@ fun UpdatesSheet(updates: UpdateManager, firstFocus: FocusRequester) {
                 is UpdateState.Failed -> s.message
                 else -> null
             },
+            subtitleLines = WHOLE,
             onClick = { scope.launch { updates.check() } },
             focusRequester = firstFocus,
         )

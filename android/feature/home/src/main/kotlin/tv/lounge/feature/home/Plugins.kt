@@ -225,6 +225,7 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
                 icon = LoungeIcons.Power,
                 title = "Allow and turn on",
                 subtitle = "It can then reach ${joined(p.updateAsksToReach)} as well",
+                subtitleLines = WHOLE,
                 accent = colors.houselight,
                 onClick = { switch(true) },
                 focusRequester = firstFocus,
@@ -389,7 +390,7 @@ private fun StatusLine(p: PluginInfo) {
         // Off and ready: the switch row below says so.
         else -> return
     }
-    Text(text, style = LoungeTheme.typography.meta, color = color, maxLines = 3, overflow = TextOverflow.Ellipsis)
+    Text(text, style = LoungeTheme.typography.meta, color = color)
 }
 
 /** How long ago [ms] was at [now], in words. */

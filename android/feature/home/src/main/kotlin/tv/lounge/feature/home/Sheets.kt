@@ -185,6 +185,9 @@ class SheetBack {
 
 val LocalSheetBack = staticCompositionLocalOf { SheetBack() }
 
+/** No limit on a sheet row's second line. */
+internal const val WHOLE = Int.MAX_VALUE
+
 /**
  * A 72 dp sheet row: glyph, title, optional trailing value. Focus is a lifted `curtainEdge` surface
  * with a glow and the tiles' rim; rested rows paint nothing. An `accent` of `signal` adds a status
@@ -207,6 +210,7 @@ fun SheetRow(
     subtitle: String? = null,
     /** Holding OK, where a row has a second action; a plain press otherwise. */
     onLongClick: (() -> Unit)? = null,
+    /** How many lines [subtitle] may take; [WHOLE] for a failure or a state, which is never cut. */
     subtitleLines: Int = 2,
     /** `ember` for the second step of something that cannot be undone. */
     titleColor: Color = LoungeTheme.colors.limelight,
@@ -482,6 +486,7 @@ fun QuickSettingsSheet(
                 true -> "No moving light or live backgrounds, so the TV stays quick"
                 false -> "The moving light and live backgrounds stay on"
             },
+            subtitleLines = WHOLE,
             value = when (lite) { null -> "Automatic"; true -> "On"; false -> "Off" },
             onClick = { sounds0?.tick(); onSetLite(lite.stepTri(1)) },
             onCycle = { by -> sounds0?.tick(); onSetLite(lite.stepTri(by)) },
@@ -698,6 +703,7 @@ internal fun AccessRow(access: Access, asker: AccessAsker, focusRequester: Focus
         },
         title = access.title,
         subtitle = asker.note(access),
+        subtitleLines = WHOLE,
         value = if (on) "On" else "Not allowed",
         accent = if (on) colors.signal else colors.dust,
         onClick = { asker.ask(access) },
@@ -803,6 +809,7 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
                     s.paired > 0u -> "OK forgets every paired phone"
                     else -> null
                 },
+                subtitleLines = WHOLE,
                 value = if (forgetting) null else if (s.paired == 0u) "None" else s.paired.toString(),
                 accent = if (forgetFailed) colors.ember else colors.dust,
                 modifier = Modifier.onFocusChanged { if (!it.isFocused) forgetting = false },

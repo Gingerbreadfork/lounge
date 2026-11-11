@@ -477,6 +477,7 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
                 status is PowerStatus.Unavailable -> "OK opens the TV's screensaver settings: choose Lounge there, then press Back"
                 else -> "OK opens Power Setup, which can make Lounge's the screensaver"
             },
+            subtitleLines = WHOLE,
             value = name,
             accent = if (ours) colors.signal else colors.dust,
             onClick = { if (!busy) switch() },
