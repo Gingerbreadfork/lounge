@@ -61,13 +61,14 @@ fn normalise(title: &str) -> String {
 }
 
 /// Why an item is in the spotlight, in the product's voice. `source_name` is what to call the
-/// item's source, such as Jellyfin; `habit` counts the app's sittings in each local hour.
-pub fn explanation(item: &Item, now_ms: i64, hour_local: u32, source_name: &str, habit: Option<&[u32; 24]>) -> Option<String> {
+/// item's source, such as Jellyfin; `habit` counts the app's sittings in each local hour. A plain
+/// resume point has no reason beyond its category and its button, so it gets none.
+pub fn explanation(item: &Item, now_ms: i64, hour_local: u32, source_name: &str, habit: Option<&[u32; 24]>, clock_24h: bool) -> Option<String> {
     if item.kind == ItemKind::MediaSession {
         return item.last_used_ms.map(|used| format!("You played this {}", when_word(now_ms - used)));
     }
     if item.kind == ItemKind::Resume {
-        return Some("You were watching this".to_string());
+        return None;
     }
     if let Some(added) = item.added_ms {
         let age = now_ms - added;
@@ -76,13 +77,13 @@ pub fn explanation(item: &Item, now_ms: i64, hour_local: u32, source_name: &str,
         }
     }
     if item.progress.is_some() {
-        return Some("You were watching this".to_string());
+        return None;
     }
     if let Some(hour) = habit.and_then(usual_hour) {
         let apart = (hour as i32 - hour_local as i32).rem_euclid(24);
         if apart <= 1 || apart >= 23 {
             let verb = if item.flags.is_game || item.kind == ItemKind::Game { "play" } else { "watch" };
-            return Some(format!("Because you {verb} at {}", clock_word(hour)));
+            return Some(format!("Because you {verb} at {}", clock_word(hour, clock_24h)));
         }
     }
     None
@@ -105,7 +106,11 @@ fn when_word(age_ms: i64) -> &'static str {
     }
 }
 
-fn clock_word(hour: u32) -> String {
+/// An hour as the TV's clock shows it: "21:00" on a 24-hour clock, else "9 pm", "noon" or "midnight".
+fn clock_word(hour: u32, clock_24h: bool) -> String {
+    if clock_24h {
+        return format!("{hour:02}:00");
+    }
     match hour {
         0 => "midnight".to_string(),
         12 => "noon".to_string(),
@@ -201,18 +206,33 @@ mod tests {
         let mut app = it("Netflix", Some(1_000));
         let mut habit = [0u32; 24];
         habit[21] = 5;
-        assert_eq!(explanation(&app, 2_000, 21, "Apps", Some(&habit)).as_deref(), Some("Because you watch at 9 pm"));
-        assert_eq!(explanation(&app, 2_000, 3, "Apps", Some(&habit)), None);
-        assert_eq!(explanation(&app, 2_000, 21, "Apps", None), None);
+        assert_eq!(explanation(&app, 2_000, 21, "Apps", Some(&habit), false).as_deref(), Some("Because you watch at 9 pm"));
+        assert_eq!(explanation(&app, 2_000, 21, "Apps", Some(&habit), true).as_deref(), Some("Because you watch at 21:00"));
+        assert_eq!(explanation(&app, 2_000, 3, "Apps", Some(&habit), false), None);
+        assert_eq!(explanation(&app, 2_000, 21, "Apps", None, false), None);
         app.source = "plugin:tv.lounge.jellyfin".into();
         app.added_ms = Some(1_500);
-        assert_eq!(explanation(&app, 2_000, 21, "Jellyfin", None).as_deref(), Some("Added to Jellyfin today"));
+        assert_eq!(explanation(&app, 2_000, 21, "Jellyfin", None, false).as_deref(), Some("Added to Jellyfin today"));
+    }
+
+    #[test]
+    fn a_plain_resume_point_needs_no_reason() {
+        let mut resume = it("The Bear", Some(1_000));
+        resume.kind = ItemKind::Resume;
+        resume.progress = Some(0.4);
+        assert_eq!(explanation(&resume, 2_000, 21, "Netflix", None, false), None);
+        let mut program = it("Severance", Some(1_000));
+        program.kind = ItemKind::Program;
+        program.progress = Some(0.4);
+        assert_eq!(explanation(&program, 2_000, 21, "Apple TV", None, false), None);
     }
 
     #[test]
     fn clock_words() {
-        assert_eq!(clock_word(21), "9 pm");
-        assert_eq!(clock_word(9), "9 am");
-        assert_eq!(clock_word(12), "noon");
+        assert_eq!(clock_word(21, false), "9 pm");
+        assert_eq!(clock_word(9, false), "9 am");
+        assert_eq!(clock_word(12, false), "noon");
+        assert_eq!(clock_word(21, true), "21:00");
+        assert_eq!(clock_word(7, true), "07:00");
     }
 }

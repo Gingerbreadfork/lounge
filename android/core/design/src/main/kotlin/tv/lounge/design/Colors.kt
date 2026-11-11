@@ -148,8 +148,10 @@ data class LoungeColors(
             horizon = Color(0xFF191919),
         )
 
+        // Both set their horizon too: a copy would keep House's plum one.
         val Blackout = House.copy(
             velvet = Color(0xFF000000),
+            horizon = Color(0xFF000000),
             curtain = Color(0xFF161016),
             scrim = Color(0x66000000),
             spillScale = 0.5f,
@@ -157,6 +159,7 @@ data class LoungeColors(
 
         val HighContrast = House.copy(
             velvet = Color(0xFF000000),
+            horizon = Color(0xFF000000),
             dust = Color(0xFFD5CBD1),
             spillScale = 1f,
             focusRing = true,

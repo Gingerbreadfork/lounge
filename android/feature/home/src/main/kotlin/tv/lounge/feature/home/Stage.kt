@@ -23,8 +23,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.semantics.semantics
+import androidx.tv.material3.Icon
+import tv.lounge.design.LoungeIcons
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -135,6 +139,7 @@ fun StageView(
     onSecondary: (StageSpotlight) -> Unit,
     onBandFocused: () -> Unit,
     onPlaybillFocusChanged: (Boolean) -> Unit,
+    onStart: () -> Unit,
     modifier: Modifier = Modifier,
     closing: () -> Float = { 0f },
 ) {
@@ -206,6 +211,7 @@ fun StageView(
             onPrimary = onPrimary,
             onSecondary = onSecondary,
             onPlaybillFocusChanged = onPlaybillFocusChanged,
+            onStart = onStart,
             // Alpha modulates each draw, no offscreen layer.
             modifier = Modifier
                 .fillMaxWidth()
@@ -391,7 +397,9 @@ private fun BandChrome(
                 compositingStrategy = CompositingStrategy.ModulateAlpha
             }
             .onFocusChanged { if (it.isFocused) onFocused() }
-            .then(if (interactive) Modifier.focusable() else Modifier),
+            .then(if (interactive) Modifier.focusable() else Modifier)
+            // Read out as one: the title and how long is left.
+            .semantics(mergeDescendants = true) {},
     ) {
         // With progress the line beside the bar is how long is left, which the core puts last.
         val line = if (spotlight.progress != null) spotlight.lines.lastOrNull() else spotlight.lines.firstOrNull()
@@ -401,9 +409,9 @@ private fun BandChrome(
                 translationY = -closing() * 40.dp.toPx()
             },
         ) {
-            // A long title takes a second line before it is cut; the band has the height for it.
+            // A long title takes a second line before it is cut at a word; the band has the height for it.
             Text(
-                spotlight.title,
+                rememberFittedLines(spotlight.title, LoungeTheme.typography.displayL, 960.dp, 2),
                 style = LoungeTheme.typography.displayL,
                 color = colors.limelight,
                 maxLines = 2,
@@ -440,11 +448,14 @@ private fun ExpandedStage(
     onPrimary: (StageSpotlight) -> Unit,
     onSecondary: (StageSpotlight) -> Unit,
     onPlaybillFocusChanged: (Boolean) -> Unit,
+    onStart: () -> Unit,
     modifier: Modifier,
     interactive: Boolean,
     shown: () -> Float,
     canTakeFocus: () -> Boolean,
 ) {
+    // An empty home has no strip to go down to.
+    val hasStrip = stage.strip.isNotEmpty()
     Column(modifier) {
         Row(Modifier.padding(horizontal = Dimens.safeX).height(630.dp)) {
             Box(
@@ -455,14 +466,14 @@ private fun ExpandedStage(
                     // Once for the group itself, once for the buttons inside it: either way Down
                     // reaches the strip's selected tile, which overlaps this box's light room. The
                     // second also keeps the lowered playbill's buttons out of focus.
-                    .focusProperties { down = stripFocus(); up = upFocus }
+                    .focusProperties { if (hasStrip) down = stripFocus(); up = upFocus }
                     .focusGroup()
-                    .focusProperties { down = stripFocus(); up = upFocus; if (!canTakeFocus()) canFocus = false },
+                    .focusProperties { if (hasStrip) down = stripFocus(); up = upFocus; if (!canTakeFocus()) canFocus = false },
             ) {
                 if (spotlight != null) {
                     Playbill(spotlight, onPrimary, onSecondary, interactive, playbillFocus, shown)
                 } else {
-                    EmptyPlaybill(indexed)
+                    EmptyPlaybill(indexed, onStart, playbillFocus, interactive)
                 }
             }
             Spacer(Modifier.width(48.dp))
@@ -471,12 +482,14 @@ private fun ExpandedStage(
                     EmptyStageArt(LoungeTheme.colors.houselight)
                 }
                 spotlight.framed && spotlight.artworkPath != null -> FramedBanner(spotlight, Modifier)
+                spotlight.framed -> FramedGlyph(spotlight)
                 else -> Unit
             }
         }
         Spacer(Modifier.height(32.dp))
         StageStrip(
             strip = stage.strip,
+            spotlights = stage.spotlights,
             selected = selected,
             upFocus = if (spotlight != null) playbillFocus else upFocus,
             canTakeFocus = canTakeFocus,
@@ -492,12 +505,14 @@ private fun ExpandedStage(
 /**
  * The strip under the playbill. Nothing here changes when the selection moves, so a move
  * recomposes no tile: each tile's light is a State on the selection. [canTakeFocus] is read when
- * focus searches, so the lowered strip refuses focus without recomposing.
+ * focus searches, so the lowered strip refuses focus without recomposing. Each tile is read out
+ * with what the playbill shows for it, which is otherwise never read.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StageStrip(
     strip: List<Tile>,
+    spotlights: List<StageSpotlight>,
     selected: androidx.compose.runtime.IntState,
     upFocus: FocusRequester,
     canTakeFocus: () -> Boolean,
@@ -531,12 +546,14 @@ private fun StageStrip(
                 val lights = remember(index) {
                     derivedStateOf { if (kotlin.math.abs(index - selected.intValue) == 1) Lights.Neighbour else Lights.Rested }
                 }
+                val spotlight = spotlights.getOrNull(index)?.takeIf { it.id == tile.id }
                 TileView(
                     tile = tile,
                     kind = tile.kind,
                     size = DpSize(Dimens.stripTileWidth, Dimens.stripTileHeight),
                     lights = lights,
-                    rowName = "Stage",
+                    rowName = "the Stage",
+                    description = spotlight?.let(::spotlightDescription),
                     focusRequester = stripRequester(index),
                     onFocused = { focused, _ -> if (focused) onStripFocused(index, tile) },
                     onClick = { onStripClick(tile) },
@@ -550,6 +567,12 @@ private fun StageStrip(
         }
     }
 }
+
+/** What is read out for a strip tile: the playbill's words, "The Bear, Continue watching, Season 2, Episode 4, 23 minutes left". */
+internal fun spotlightDescription(sp: StageSpotlight): String =
+    (listOf(sp.title, sp.category) + sp.lines + listOfNotNull(sp.source?.let { "on $it" }, sp.explanation))
+        .filter { it.isNotBlank() }
+        .joinToString(", ") { spokenEpisodes(it) }
 
 /**
  * The Stage change (DESIGN.md §6.3): the outgoing artwork slides 12 px and fades while the incoming
@@ -634,6 +657,19 @@ private fun FramedBanner(spotlight: StageSpotlight, modifier: Modifier) {
     }
 }
 
+/** A framed spotlight with no picture of its own, the TV controls or All apps, shows its glyph in the light. */
+@Composable
+private fun FramedGlyph(spotlight: StageSpotlight) {
+    val icon = when {
+        spotlight.kind == SpotlightKind.DEVICE -> LoungeIcons.Tv
+        spotlight.id == "control:allapps" -> LoungeIcons.Apps
+        else -> return
+    }
+    Box(Modifier.size(Dimens.stageArtworkWidth, Dimens.stageArtworkHeight), contentAlignment = Alignment.Center) {
+        Icon(icon, contentDescription = null, tint = LoungeTheme.colors.limelight.copy(alpha = 0.86f), modifier = Modifier.size(160.dp))
+    }
+}
+
 /**
  * A pre-blurred 160×90 thumbnail scaled across a large area: a soft backdrop for the price of one
  * tiny texture, with no render-time blur.
@@ -715,9 +751,15 @@ private fun Playbill(
         }
         // Every slot has a fixed height, so a one-line title or a missing line moves nothing else.
         val type = LoungeTheme.typography
-        val metaLine = with(LocalDensity.current) { type.meta.lineHeight.toDp() }
-        val titleBlock = with(LocalDensity.current) { type.displayXl.lineHeight.toDp() } * 2
-        val captionLine = with(LocalDensity.current) { type.caption.lineHeight.toDp() }
+        val density = LocalDensity.current
+        val metaLine = with(density) { type.meta.lineHeight.toDp() }
+        // Large text keeps the playbill whole: from 1.3 times the explanation goes, and past it the
+        // title keeps to one line and the secondary button goes too (DESIGN.md §4.1, §11).
+        val large = density.fontScale >= 1.29f
+        val larger = density.fontScale > 1.31f
+        val titleLines = if (larger) 1 else 2
+        val titleBlock = with(density) { type.displayXl.lineHeight.toDp() } * titleLines
+        val captionLine = with(density) { type.caption.lineHeight.toDp() }
         Column(Modifier.fillMaxSize().padding(bottom = 6.dp), verticalArrangement = Arrangement.Bottom) {
             PlaybillPart(spotlight) { s ->
                 Column {
@@ -726,7 +768,17 @@ private fun Playbill(
                     }
                     Spacer(Modifier.height(16.dp))
                     Box(Modifier.height(titleBlock), contentAlignment = Alignment.BottomStart) {
-                        Text(s.title, style = type.displayXl, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        // Measured without the slot's height, which the display font's first line
+                        // can overrun, so a title that needs two lines gets them, cut at a word.
+                        val title = rememberFittedLines(s.title, type.displayXl, Dimens.playbillWidth, titleLines)
+                        Text(
+                            title,
+                            style = type.displayXl,
+                            color = colors.limelight,
+                            maxLines = titleLines,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.wrapContentHeight(Alignment.Bottom, unbounded = true),
+                        )
                     }
                 }
             }
@@ -751,12 +803,14 @@ private fun Playbill(
                         // Only the live copy answers the playbill's focus requester; a hidden one cannot take focus.
                         val live = LocalSwapSlotActive.current.value
                         LoungeButton(s.primary.label, onClick = { onPrimary(s) }, light = colors.light(s.lightArgb), enabled = interactive && live, focusRequester = if (live) primaryFocus else null)
-                        s.secondary?.let { LoungeButton(it.label, onClick = { onSecondary(s) }, kind = ButtonKind.Secondary, enabled = interactive && live) }
+                        s.secondary?.takeUnless { larger }?.let { LoungeButton(it.label, onClick = { onSecondary(s) }, kind = ButtonKind.Secondary, enabled = interactive && live) }
                     }
-                    Spacer(Modifier.height(16.dp))
-                    Box(Modifier.height(captionLine)) {
-                        s.explanation?.let { why ->
-                            Text(why, style = type.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (!large) {
+                        Spacer(Modifier.height(16.dp))
+                        Box(Modifier.height(captionLine)) {
+                            s.explanation?.let { why ->
+                                Text(why, style = type.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }
@@ -770,17 +824,22 @@ private fun Playbill(
 private fun PlaybillPart(spotlight: StageSpotlight, delayMs: Int = 0, content: @Composable (StageSpotlight) -> Unit) =
     Swap(spotlight, delayMs = delayMs, rise = 0.dp, outFraction = TEXT_OUT, inDelayFraction = TEXT_IN_DELAY, keepSlots = true, keyOf = { it.id }, content = content)
 
-/** Nothing on the Stage yet: still indexing, or genuinely nothing to show (DESIGN.md §8). */
+/**
+ * Nothing on the Stage yet (DESIGN.md §8): still indexing, or an empty home that invites the
+ * person to set it up, its one button opening the setup steps.
+ */
 @Composable
-private fun EmptyPlaybill(indexed: Boolean) {
+private fun EmptyPlaybill(indexed: Boolean, onStart: () -> Unit, startFocus: FocusRequester, interactive: Boolean) {
     val colors = LoungeTheme.colors
     Column(Modifier.fillMaxSize().padding(bottom = 6.dp), verticalArrangement = Arrangement.Bottom) {
         Text("Your home screen", style = LoungeTheme.typography.meta, color = colors.dust)
         Spacer(Modifier.height(16.dp))
         if (indexed) {
-            Text("Nothing here yet", style = LoungeTheme.typography.displayXl, color = colors.limelight, maxLines = 2)
+            Text("Let's set up your home screen", style = LoungeTheme.typography.displayXl, color = colors.limelight, maxLines = 3)
             Spacer(Modifier.height(16.dp))
-            Text("Install an app and it will show up here.", style = LoungeTheme.typography.meta, color = colors.dust)
+            Text("A few quick steps, then your apps and shows appear here.", style = LoungeTheme.typography.meta, color = colors.dust)
+            Spacer(Modifier.height(24.dp))
+            LoungeButton("Start", onClick = onStart, enabled = interactive, focusRequester = startFocus)
         } else {
             Text("Setting up your home screen", style = LoungeTheme.typography.displayXl, color = colors.limelight, maxLines = 2)
             Spacer(Modifier.height(16.dp))

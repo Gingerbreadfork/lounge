@@ -240,6 +240,41 @@ fn a_qr_link_pairs_once_for_a_token_of_its_own() {
     assert_eq!(state(json_body(&response)["token"].as_str().unwrap()), 200);
 }
 
+#[test]
+fn a_used_code_is_replaced_and_a_late_phone_is_told_what_to_do() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let shown = companion.new_pairing(&format!("http://{host}"), now()).unwrap();
+    assert_eq!(status(&post_pair(port, &host, "link", &shown.link)), 200);
+
+    // A second phone that scanned the same picture is told the cause and the fix.
+    let response = post_pair(port, &host, "link", &shown.link);
+    assert_eq!(status(&response), 403);
+    assert_eq!(json_body(&response)["error"], "That code has been used or has expired. Choose New code on the TV and try again.");
+
+    // The TV already has a fresh code to show, and it pairs.
+    let fresh = companion.live_pairing(now()).unwrap();
+    assert_ne!(fresh.code, shown.code);
+    assert_eq!(status(&post_pair(port, &host, "code", &fresh.code)), 200);
+}
+
+#[test]
+fn the_live_socket_says_the_tv_is_still_there() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let token = pair(&companion, &host);
+    let mut socket = open_socket(port, &host, &session_cookie(port, &host, &token));
+    socket.get_ref().set_read_timeout(Some(Duration::from_secs(8))).unwrap();
+    assert_eq!(frame(&mut socket).0, TEXT);
+    // With nothing new to send, a heartbeat that is not a snapshot arrives anyway.
+    let (op, payload) = frame(&mut socket);
+    assert_eq!((op, payload.as_slice()), (TEXT, b"ping".as_slice()));
+}
+
 /// What the server has sent on `s` up to the end of a response head, or nothing within `wait`.
 fn head(s: &mut TcpStream, wait: Duration) -> String {
     s.set_read_timeout(Some(wait)).unwrap();

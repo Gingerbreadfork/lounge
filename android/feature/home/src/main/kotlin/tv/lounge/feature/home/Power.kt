@@ -21,9 +21,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Text
 import kotlinx.coroutines.Dispatchers
@@ -45,9 +49,37 @@ private sealed interface RunState {
     data class Failed(val reason: String) : RunState
 }
 
+/** What staying on means, said before anyone turns USB debugging on for Power Setup. */
+internal const val DEBUGGING_STAYS_ON = "USB debugging stays on afterwards. Other devices on your home network can then ask to connect, " +
+    "and the TV asks you before any can. TV controls and the phone's keys over other apps need it, and turning it off stops them. Updates still come, though the TV may ask you to confirm one."
+
+/** How to turn USB debugging on, step by step, for Power Setup and the setup steps. */
+@Composable
+internal fun DebuggingHowTo() {
+    val colors = LoungeTheme.colors
+    Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+        Text("To turn on USB debugging:", style = LoungeTheme.typography.caption, color = colors.limelight)
+        Text("1. In the TV's settings, open System, then About, and press OK on Android TV OS build seven times.", style = LoungeTheme.typography.caption, color = colors.dust)
+        Text("2. Go back to System, open Developer options and turn on USB debugging.", style = LoungeTheme.typography.caption, color = colors.dust)
+        Text("3. Come back here and choose Connect.", style = LoungeTheme.typography.caption, color = colors.dust)
+    }
+}
+
+/** One glyph for each thing a Power Setup action sets up. */
+private fun glyphFor(action: PowerAction): ImageVector = when {
+    action.id.startsWith("home") -> SettingsGlyphs.Home
+    action.id == "tv_listings" -> LoungeIcons.Tv
+    action.id == "notifications" -> LoungeIcons.Equaliser
+    action.id == "usage" -> SettingsGlyphs.Clock
+    action.id.startsWith("animations") -> LoungeIcons.Move
+    action.id == "optimise" -> SettingsGlyphs.Gauge
+    else -> LoungeIcons.Power
+}
+
 /**
- * Power Setup: connect the launcher to the device's own debugging service (or Shizuku) and
- * run the handful of shell actions an app cannot do on its own. Nothing runs unasked.
+ * Power Setup: connect the launcher to the TV's own USB debugging or to Shizuku, and run the
+ * handful of shell actions an app cannot do on its own. Nothing runs unasked, and each action
+ * shows what is already so and how it last went.
  */
 @Composable
 fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus: FocusRequester) {
@@ -55,15 +87,24 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val status by power.status.collectAsStateWithLifecycle()
-    val runs = remember { mutableStateMapOf<String, RunState>() }
+    val results by power.results.collectAsStateWithLifecycle()
+    val running = remember { mutableStateMapOf<String, Boolean>() }
     var pairing by remember { mutableStateOf(false) }
+    var forgetting by remember { mutableStateOf(false) }
     // Forgetting the key makes a new one, so the fingerprint is read again on every status change.
     val fingerprint by produceState<String?>(null, status) { value = power.fingerprint() }
-    // Home screens to turn off or back on, read again after any home action runs.
-    var homesChanged by remember { mutableIntStateOf(0) }
-    val homeActions by produceState(emptyList<PowerAction>(), homesChanged) {
+    // What is already so on the TV, read again after any action runs and on return to Lounge.
+    var checks by remember { mutableIntStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { checks++ }
+    val homeActions by produceState(emptyList<PowerAction>(), checks) {
         value = withContext(Dispatchers.IO) { power.takeHome().filter { it.id.startsWith("home_off_") } + power.giveBackHome() }
     }
+    val applied by produceState(emptyMap<String, Boolean>(), checks, homeActions) {
+        value = withContext(Dispatchers.IO) { (power.setupActions + power.normalAnimations).mapNotNull { a -> power.isApplied(a)?.let { a.id to it } }.toMap() }
+    }
+    // The undo for faster animations stays on offer once it has been shown, so focus never loses its row.
+    var offerUndo by remember { mutableStateOf(false) }
+    if (applied[power.normalAnimations.id] == false) offerUndo = true
 
     WhileStarted {
         power.refresh()
@@ -74,19 +115,26 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
     }
 
     fun run(action: PowerAction) {
-        if (runs[action.id] == RunState.Running) return
-        runs[action.id] = RunState.Running
+        if (running[action.id] == true) return
+        running[action.id] = true
         scope.launch {
-            try {
-                val r = power.run(action)
-                runs[action.id] = if (r.ok) RunState.Done(r.output) else RunState.Failed(r.output.ifBlank { "exit ${r.exitCode}" })
-                if (action.id.startsWith("home")) {
-                    onHomeRoleChanged()
-                    homesChanged++
-                }
-            } catch (e: PrivilegedException) {
-                runs[action.id] = RunState.Failed(e.message ?: "failed")
-            }
+            // Power Setup keeps how it went, for this sheet and the next time it opens.
+            runCatching { power.run(action) }
+            running.remove(action.id)
+            checks++
+            if (action.id.startsWith("home")) onHomeRoleChanged()
+        }
+    }
+
+    fun stateOf(action: PowerAction): RunState? {
+        val last = results[action.id]
+        return when {
+            running[action.id] == true -> RunState.Running
+            applied[action.id] == true -> RunState.Done(last?.takeIf { it.ok }?.output.orEmpty())
+            last != null && !last.ok -> RunState.Failed(last.output)
+            applied[action.id] == false -> null
+            last != null -> RunState.Done(last.output)
+            else -> null
         }
     }
 
@@ -94,9 +142,9 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
     SheetHeading(
         "Power Setup",
         when (val s = status) {
-            is PowerStatus.Ready -> if (s.backend == "shizuku") "Connected through Shizuku." else "Connected to this device's own debugging service."
-            PowerStatus.WaitingForApproval -> "Allow it on the prompt this device is showing. Tick “Always allow” so you only do this once."
-            PowerStatus.NotPaired -> "Lets Lounge do the few things an app can't: become the home screen, grant its own accesses, control the TV over HDMI-CEC."
+            is PowerStatus.Ready -> if (s.backend == "shizuku") "Connected through Shizuku." else "Connected to this TV's USB debugging."
+            PowerStatus.WaitingForApproval -> "Allow it on the prompt the TV is showing. Tick “Always allow” so you only do this once."
+            PowerStatus.NotPaired -> "Lets Lounge do the few things an app can't: become the home screen, allow its own accesses, and turn the TV on and switch its input."
             is PowerStatus.Unavailable -> s.reason
             is PowerStatus.Failed -> s.reason
         },
@@ -114,10 +162,10 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
                 else -> "Connect"
             },
             value = when (s) {
-                is PowerStatus.Ready -> if (s.backend == "shizuku") "Shizuku" else "This device"
+                is PowerStatus.Ready -> if (s.backend == "shizuku") "Shizuku" else "USB debugging"
                 PowerStatus.WaitingForApproval -> fingerprint?.let { "Key ${it.take(11)}…" } ?: "Look at the prompt"
                 is PowerStatus.Unavailable -> "Turn on USB debugging"
-                else -> if (pairing) "Connecting…" else "Asks once on screen"
+                else -> if (pairing) "Connecting…" else "The TV asks you once"
             },
             accent = when (s) {
                 is PowerStatus.Ready -> colors.signal
@@ -137,7 +185,13 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
             focusRequester = firstFocus,
         )
         if (!ready && power.shizukuInstalled) {
-            SheetRow(icon = LoungeIcons.Apps, title = "Use Shizuku instead", value = "Ask", onClick = { power.requestShizuku(7001); scope.launch { delay(1500); power.refresh() } })
+            SheetRow(icon = LoungeIcons.Power, title = "Use Shizuku instead", value = "Ask", onClick = { power.requestShizuku(7001); scope.launch { delay(1500); power.refresh() } })
+        }
+        if (!ready) {
+            Column(Modifier.padding(start = 20.dp, end = 4.dp, top = 4.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                if (s is PowerStatus.Unavailable && s.reason == PowerSetup.DEBUGGING_OFF) DebuggingHowTo()
+                Text(DEBUGGING_STAYS_ON, style = LoungeTheme.typography.caption, color = colors.dust)
+            }
         }
     }
 
@@ -145,17 +199,38 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
     Text("What it can do", style = LoungeTheme.typography.meta, color = colors.dust)
     Spacer(Modifier.height(8.dp))
     Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-        power.setupActions.flatMap { if (it == power.homeRole) listOf(it) + homeActions else listOf(it) }
-            .forEach { action -> ActionRow(action, runs[action.id], enabled = ready) { run(action) } }
+        power.setupActions.flatMap {
+            when (it) {
+                power.homeRole -> listOf(it) + homeActions
+                power.quickAnimations -> if (offerUndo) listOf(it, power.normalAnimations) else listOf(it)
+                else -> listOf(it)
+            }
+        }.forEach { action -> ActionRow(action, stateOf(action), enabled = ready) { run(action) } }
     }
 
     if (ready) {
         Spacer(Modifier.height(20.dp))
-        SheetRow(icon = LoungeIcons.Trash, title = "Forget this connection", value = "Asks again next time", onClick = { power.forget() })
+        // Forgetting asks once more first, like removing a plugin; moving away takes the question back.
+        SheetRow(
+            icon = LoungeIcons.Trash,
+            title = if (forgetting) "Yes, forget this connection" else "Forget this connection",
+            titleColor = if (forgetting) colors.ember else colors.limelight,
+            subtitle = "The TV asks you again the next time you connect",
+            modifier = Modifier.onFocusChanged { if (!it.isFocused) forgetting = false },
+            onClick = {
+                if (!forgetting) {
+                    forgetting = true
+                } else {
+                    forgetting = false
+                    power.forget()
+                    scope.launch { firstFocus.requestWhenReady() }
+                }
+            },
+        )
     }
     SheetFootnote(
         "Nothing runs until you press it, and every command is shown first.",
-        fingerprint?.let { "The key stays on this device: $it" } ?: "The key stays on this device.",
+        fingerprint?.let { "The key stays on this TV: $it" } ?: "The key stays on this TV.",
     )
 }
 
@@ -164,7 +239,7 @@ private fun ActionRow(action: PowerAction, state: RunState?, enabled: Boolean, o
     val colors = LoungeTheme.colors
     Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
         SheetRow(
-            icon = LoungeIcons.Power,
+            icon = glyphFor(action),
             title = action.title,
             value = when (state) {
                 RunState.Running -> "Running…"
@@ -191,9 +266,15 @@ private fun ActionRow(action: PowerAction, state: RunState?, enabled: Boolean, o
     }
 }
 
+/** A TV control that did not work, as a sentence with what to try. */
+private fun controlFailure(action: PowerAction, power: PowerSetup): String = when (action) {
+    power.everythingOff -> "It didn't go to sleep. Try again."
+    else -> "The TV didn't answer. Check that HDMI-CEC is on in the TV's settings, then try again."
+}
+
 /**
- * The TV controls card's sheet: power, input and sound over HDMI-CEC through Power Setup,
- * with volume and transport working even without it.
+ * The TV controls card's sheet: power, input and sound through Power Setup, with volume and
+ * playback working even without it.
  */
 @Composable
 fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Unit, onPowerSetup: () -> Unit, firstFocus: FocusRequester) {
@@ -211,23 +292,28 @@ fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Un
         if (runs[action.id] == RunState.Running) return
         runs[action.id] = RunState.Running
         scope.launch {
-            runs[action.id] = try {
+            val result = try {
                 val r = power.run(action)
-                if (r.ok) RunState.Done(r.output) else RunState.Failed(r.output.ifBlank { "exit ${r.exitCode}" })
+                if (r.ok) RunState.Done(r.output) else RunState.Failed(controlFailure(action, power))
             } catch (e: PrivilegedException) {
-                RunState.Failed(e.message ?: "failed")
+                RunState.Failed(e.message ?: controlFailure(action, power))
             }
-            delay(2500)
-            runs.remove(action.id)
+            runs[action.id] = result
+            // A failure stays with its row until it is pressed again, so there is time to read it.
+            if (result is RunState.Done) {
+                delay(2500)
+                if (runs[action.id] == result) runs.remove(action.id)
+            }
         }
     }
 
-    fun valueFor(action: PowerAction, idle: String? = null) = when (val s = runs[action.id]) {
+    fun valueFor(action: PowerAction, idle: String? = null) = when (runs[action.id]) {
         RunState.Running -> "Sending…"
         is RunState.Done -> "Sent"
-        is RunState.Failed -> s.reason.lineSequence().firstOrNull()?.take(28) ?: "Failed"
+        is RunState.Failed -> "Didn't work"
         null -> idle
     }
+    fun reasonFor(action: PowerAction) = (runs[action.id] as? RunState.Failed)?.reason
     fun accentFor(action: PowerAction) = when (runs[action.id]) {
         is RunState.Done -> colors.signal
         is RunState.Failed -> colors.ember
@@ -235,24 +321,25 @@ fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Un
         null -> colors.dust
     }
 
-    SheetHeading("TV controls", if (ready) "$deviceName and the TV, over HDMI-CEC." else "Volume and playback work now. Power and input need Power Setup.")
+    SheetHeading("TV controls", if (ready) "Turn the TV on, switch its input and choose where the sound plays." else "Volume and playback work now. Power and input need Power Setup.")
 
     Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
         val tv = devices.firstOrNull { it.isTv }
         SheetRow(
             icon = if (ready) LoungeIcons.Tv else LoungeIcons.Power,
             title = if (ready) "Wake the TV and switch to me" else "Set up TV power and input",
+            subtitle = if (ready) reasonFor(power.oneTouchPlay) else null,
             value = if (ready) valueFor(power.oneTouchPlay, tv?.let { if (it.isOn) "TV is on" else "TV is off" }) else if (status is PowerStatus.Unavailable) "Needs USB debugging" else "Power Setup",
             accent = if (ready) accentFor(power.oneTouchPlay) else colors.houselight,
             onClick = { if (ready) run(power.oneTouchPlay) else onPowerSetup() },
             focusRequester = firstFocus,
         )
         if (ready) {
-            SheetRow(icon = LoungeIcons.Power, title = "TV power", value = valueFor(power.tvPower, "On or off"), accent = accentFor(power.tvPower), onClick = { run(power.tvPower) })
-            SheetRow(icon = LoungeIcons.Power, title = "Everything off", value = valueFor(power.everythingOff, "Sleep, TV follows"), accent = if (runs[power.everythingOff.id] == null) colors.ember else accentFor(power.everythingOff), onClick = { run(power.everythingOff) })
+            SheetRow(icon = LoungeIcons.Power, title = "TV power", subtitle = reasonFor(power.tvPower), value = valueFor(power.tvPower, "On or off"), accent = accentFor(power.tvPower), onClick = { run(power.tvPower) })
+            SheetRow(icon = LoungeIcons.Power, title = "Everything off", subtitle = reasonFor(power.everythingOff), value = valueFor(power.everythingOff, "Sleep, TV follows"), accent = if (runs[power.everythingOff.id] == null) colors.ember else accentFor(power.everythingOff), onClick = { run(power.everythingOff) })
             if (power.isTelevision) {
-                SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the soundbar", value = valueFor(power.systemAudioOn), accent = accentFor(power.systemAudioOn), onClick = { run(power.systemAudioOn) })
-                SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the TV", value = valueFor(power.systemAudioOff), accent = accentFor(power.systemAudioOff), onClick = { run(power.systemAudioOff) })
+                SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the soundbar", subtitle = reasonFor(power.systemAudioOn), value = valueFor(power.systemAudioOn), accent = accentFor(power.systemAudioOn), onClick = { run(power.systemAudioOn) })
+                SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the TV", subtitle = reasonFor(power.systemAudioOff), value = valueFor(power.systemAudioOff), accent = accentFor(power.systemAudioOff), onClick = { run(power.systemAudioOff) })
             }
             val others = devices.filter { !it.isTv && it.physicalAddress != 0 }
             if (others.size > 1) {
@@ -260,7 +347,7 @@ fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Un
                 Text("Switch the TV to", style = LoungeTheme.typography.meta, color = colors.dust)
                 others.forEach { d ->
                     val action = power.selectDevice(d)
-                    SheetRow(icon = LoungeIcons.Hdmi, title = d.name, value = valueFor(action, if (d.isOn) "On" else "Standby"), accent = accentFor(action), onClick = { run(action) })
+                    SheetRow(icon = LoungeIcons.Hdmi, title = d.name, subtitle = reasonFor(action), value = valueFor(action, if (d.isOn) "On" else "Standby"), accent = accentFor(action), onClick = { run(action) })
                 }
             }
         }
@@ -271,5 +358,5 @@ fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Un
         SheetRow(icon = LoungeIcons.Mute, title = "Mute", onClick = { onKey("mute") })
         SheetRow(icon = LoungeIcons.Play, title = "Play or pause", onClick = { onKey("play_pause") })
     }
-    SheetFootnote(if (ready) "Commands go over HDMI-CEC; the TV decides what it honours." else "Volume reaches the TV or soundbar through HDMI-CEC the way the system remote does.")
+    SheetFootnote(if (ready) "Lounge asks the TV through its HDMI cable; the TV decides what it does." else "Volume reaches the TV or soundbar the way the remote's own buttons do.")
 }

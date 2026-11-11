@@ -54,6 +54,11 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -68,7 +73,6 @@ import kotlinx.coroutines.withContext
 import tv.lounge.core.CoreClient
 import tv.lounge.core.HomeSnapshot
 import tv.lounge.core.PairingInfo
-import tv.lounge.core.companionFailure
 import tv.lounge.design.ButtonKind
 import tv.lounge.design.Dimens
 import tv.lounge.design.LoungeButton
@@ -85,10 +89,13 @@ import tv.lounge.power.PrivilegedException
 
 private const val STEPS = 5
 
+private const val HOME_NOT_TAKEN_SETUP = "Android didn't make Lounge the home screen. Try again, or in Settings open Default home screen for other ways."
+
 /**
  * First run: five full-screen steps, one question each, a heading and one primary button; progress
  * is a row of dots (DESIGN.md §5). Back goes to the previous step and leaves from the first. Focus
- * lands on the thing to decide.
+ * lands on the first thing still to decide, and Next only once there is none. Unfinished, it comes
+ * back at the step reached.
  */
 @Composable
 fun OnboardingScreen(
@@ -97,25 +104,26 @@ fun OnboardingScreen(
     uiPrefs: Prefs.UiPrefs,
     power: PowerSetup,
     visibleState: MutableTransitionState<Boolean>,
+    say: (String) -> Unit,
     onDone: () -> Unit,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val context = LocalContext.current
     val snapshot by core.snapshots.collectAsStateWithLifecycle()
-    var step by remember { mutableIntStateOf(0) }
+    val firstRun = !uiPrefs.onboardingDone
+    var step by remember { mutableIntStateOf(if (firstRun) uiPrefs.onboardingStep.coerceIn(0, STEPS - 1) else 0) }
     val primaryFocus = remember { FocusRequester() }
-    val choiceFocus = remember { FocusRequester() }
+    // One per step, since the step leaving is still composed while the next one takes focus.
+    val choiceFocus = remember { List(STEPS) { FocusRequester() } }
     var previewTheme by remember { mutableStateOf(uiPrefs.theme) }
-    var tick by remember { mutableIntStateOf(0) }
     val leaving = !visibleState.targetState
     val rise = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.roundToPx() }
 
-    // Permissions are re-read when the system screens hand back, not on a timer.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { tick++ }
     LaunchedEffect(step) {
+        if (firstRun) prefs.setOnboardingStep(step)
         delay(80)
-        if (step == 0) choiceFocus.requestWhenReady() else primaryFocus.requestWhenReady()
+        if (!choiceFocus[step].requestWhenReady(6)) primaryFocus.requestWhenReady()
     }
 
     fun next() {
@@ -155,10 +163,10 @@ fun OnboardingScreen(
                         ) { s ->
                             Column {
                                 when (s) {
-                                    0 -> StepLook(prefs, uiPrefs, choiceFocus, onPreview = { previewTheme = it })
-                                    1 -> StepAccess(core, context, tick)
-                                    2 -> StepPower(power, context)
-                                    3 -> StepPhone(core, prefs, uiPrefs)
+                                    0 -> StepLook(prefs, uiPrefs, choiceFocus[0], onPreview = { previewTheme = it })
+                                    1 -> StepAccess(core, choiceFocus[1], say, onPowerSetup = { step = 2 })
+                                    2 -> StepPower(power, context, choiceFocus[2])
+                                    3 -> StepPhone(core, prefs, uiPrefs, choiceFocus[3])
                                     else -> StepDone()
                                 }
                             }
@@ -221,7 +229,8 @@ fun OnboardingScreen(
 @Composable
 private fun Heading(title: String, body: String) {
     val colors = LoungeTheme.colors
-    Text(title, style = LoungeTheme.typography.displayL, color = colors.limelight)
+    // A heading and a live region: TalkBack says it as each step comes up.
+    Text(title, style = LoungeTheme.typography.displayL, color = colors.limelight, modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite })
     Spacer(Modifier.height(18.dp))
     Text(body, style = LoungeTheme.typography.meta, color = colors.dust)
     Spacer(Modifier.height(36.dp))
@@ -257,11 +266,19 @@ private fun StepLook(prefs: Prefs, uiPrefs: Prefs.UiPrefs, choiceFocus: FocusReq
                         onClick = { scope.launch { prefs.setTheme(theme) } },
                         focusRequester = if (selected) choiceFocus else null,
                         leading = { ChoiceDot(selected) },
-                        modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onPreview(theme) },
+                        modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onPreview(theme) }.semantics { this.selected = selected },
                     )
                 }
             }
         }
+    }
+    if (rememberControllerConnected()) {
+        Spacer(Modifier.height(18.dp))
+        Text(
+            "On a controller, A chooses, B goes back, Y opens a tile's options, Start searches and Select opens Settings.",
+            style = LoungeTheme.typography.caption,
+            color = LoungeTheme.colors.dust,
+        )
     }
 }
 
@@ -316,46 +333,36 @@ private fun ThemePreview(theme: Prefs.Theme, snapshot: HomeSnapshot) {
 }
 
 @Composable
-private fun StepAccess(core: CoreClient, context: Context, tick: Int) {
+private fun StepAccess(core: CoreClient, choiceFocus: FocusRequester, say: (String) -> Unit, onPowerSetup: () -> Unit) {
     val colors = LoungeTheme.colors
-    val tv = remember(tick) { hasTvListings(context) }
-    val notifications = remember(tick) { hasNotificationAccess(context) }
-    val usage = remember(tick) { hasUsageAccess(context) }
     val scope = rememberCoroutineScope()
     // The request waits on the core, which may still be loading, so it runs off the main thread.
-    fun allow(name: String) {
-        scope.launch { withContext(Dispatchers.IO) { core.perform("permission:$name") } }
-    }
-    Heading("What may Lounge see?", "Each one adds a part of the home screen. Nothing leaves this device; say no to any of them.")
+    val access = rememberAccessAsker(
+        requestDialog = { name -> scope.launch { withContext(Dispatchers.IO) { core.perform("permission:$name") } } },
+        say = say,
+        onPowerSetup = onPowerSetup,
+    )
+    Heading("What may Lounge see?", "Each one adds a part of the home screen. Nothing leaves this TV; say no to any of them.")
+    val first = Access.entries.firstOrNull { !access.isOn(it) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        AccessRow(LoungeIcons.Play, "TV listings", "Continue watching, channels and the guide", tv) { allow("tv_listings") }
-        AccessRow(LoungeIcons.Equaliser, "Now playing", "What is playing, with play and pause", notifications) { allow("notifications") }
-        AccessRow(LoungeIcons.Apps, "Usage access", "Your apps follows what you open", usage) { allow("usage") }
+        Access.entries.forEach { a -> AccessRow(a, access, focusRequester = if (a == first) choiceFocus else null) }
     }
     Spacer(Modifier.height(20.dp))
-    Text("Now playing and usage access open a system screen; press Back to come back here.", style = LoungeTheme.typography.caption, color = colors.dust)
+    Text("Power Setup, the next step, can allow any of these as well.", style = LoungeTheme.typography.caption, color = colors.dust)
 }
 
 @Composable
-private fun AccessRow(icon: ImageVector, title: String, detail: String, granted: Boolean, onAllow: () -> Unit) {
-    val colors = LoungeTheme.colors
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SheetRow(icon = icon, title = title, value = if (granted) "On" else "Allow", accent = if (granted) colors.signal else colors.houselight, onClick = { if (!granted) onAllow() })
-        Text(detail, style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.padding(start = 20.dp))
-    }
-}
-
-@Composable
-private fun StepPower(power: PowerSetup, context: Context) {
+private fun StepPower(power: PowerSetup, context: Context, choiceFocus: FocusRequester) {
     val colors = LoungeTheme.colors
     val scope = rememberCoroutineScope()
     val status by power.status.collectAsStateWithLifecycle()
     var pairing by remember { mutableStateOf(false) }
-    var homeState by remember { mutableStateOf<String?>(null) }
+    var working by remember { mutableStateOf(false) }
+    var homeFailed by remember { mutableStateOf<String?>(null) }
     var isHome by remember { mutableStateOf(isDefaultHome(context)) }
     val ready = status is PowerStatus.Ready
     val takeHome by produceState(emptyList<PowerAction>(), isHome) { value = withContext(Dispatchers.IO) { power.takeHome() } }
-    val turnOff = takeHome.filter { it.id.startsWith("home_off_") }
+    val first by produceState(emptyList<String>(), isHome) { value = withContext(Dispatchers.IO) { power.homesFirst().map { it.label } } }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         isHome = isDefaultHome(context)
@@ -373,8 +380,8 @@ private fun StepPower(power: PowerSetup, context: Context) {
 
     Heading(
         "Make it your home screen",
-        if (isHome) "Done: pressing Home brings Lounge up. Power Setup can also grant the accesses from the last step and control the TV over HDMI-CEC."
-        else "Google TV has no setting for this, so Lounge asks this device's own debugging service once. You will see a prompt; tick “Always allow” and choose Allow.",
+        if (isHome) "Done: pressing Home brings Lounge up. Power Setup can also allow the accesses from the last step, and turn the TV on and switch its input."
+        else "Google TV has no setting for this. Power Setup can do it through the TV's USB debugging, and the TV asks you once: tick “Always allow”, then choose Allow.",
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SheetRow(
@@ -386,10 +393,10 @@ private fun StepPower(power: PowerSetup, context: Context) {
                 else -> "Connect Power Setup"
             },
             value = when (status) {
-                is PowerStatus.Ready -> "This device"
+                is PowerStatus.Ready -> "USB debugging"
                 PowerStatus.WaitingForApproval -> "Look at the prompt"
                 is PowerStatus.Unavailable -> "Open Developer options"
-                else -> if (pairing) "Connecting…" else "Asks once"
+                else -> if (pairing) "Connecting…" else "The TV asks you once"
             },
             accent = if (ready) colors.signal else colors.houselight,
             onClick = {
@@ -404,69 +411,89 @@ private fun StepPower(power: PowerSetup, context: Context) {
                     }
                 }
             },
+            focusRequester = if (!ready) choiceFocus else null,
         )
         SheetRow(
-            icon = LoungeIcons.Power,
+            icon = SettingsGlyphs.Home,
             title = "Make Lounge the home screen",
+            subtitle = homeFailed,
             value = when {
                 isHome -> "Done"
-                homeState != null -> homeState!!
+                working -> "Working…"
+                homeFailed != null -> "Didn't work"
                 ready -> "Do it"
                 else -> "Connect first"
             },
-            accent = if (isHome) colors.signal else if (ready) colors.houselight else colors.dust,
+            accent = when {
+                isHome -> colors.signal
+                homeFailed != null -> colors.ember
+                ready -> colors.houselight
+                else -> colors.dust
+            },
             onClick = {
-                if (ready && !isHome && homeState != "Working…") {
-                    homeState = "Working…"
+                if (ready && !isHome && !working) {
+                    working = true
+                    homeFailed = null
                     scope.launch {
-                        homeState = try {
+                        homeFailed = try {
                             val r = power.runAll(takeHome.ifEmpty { listOf(power.homeRole) })
                             isHome = isDefaultHome(context)
-                            if (r.ok || isHome) null else r.output.lineSequence().firstOrNull()?.take(28) ?: "Failed"
+                            if (r.ok || isHome) null else HOME_NOT_TAKEN_SETUP
                         } catch (e: PrivilegedException) {
-                            e.message?.take(28) ?: "Failed"
+                            e.message ?: HOME_NOT_TAKEN_SETUP
                         }
+                        working = false
                     }
                 }
             },
+            focusRequester = if (ready && !isHome) choiceFocus else null,
         )
     }
     Spacer(Modifier.height(20.dp))
-    Text(
-        if (!isHome && turnOff.isNotEmpty()) {
-            val them = if (turnOff.size == 1) "it" else "them"
-            "This TV's own home comes before any chosen one, so Lounge turns $them off too: " +
-                turnOff.joinToString("; ") { it.command } +
-                ". Nothing is uninstalled; turn $them back on from Settings → Power Setup, and do that before you uninstall Lounge."
-        } else {
-            "The stock launcher stays installed, so casting, the gear button and the programme guide keep working. Undo from Settings → Power Setup."
-        },
-        style = LoungeTheme.typography.caption,
-        color = colors.dust,
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val s = status
+        if (s is PowerStatus.Unavailable && s.reason == PowerSetup.DEBUGGING_OFF) DebuggingHowTo()
+        if (!ready) Text(DEBUGGING_STAYS_ON, style = LoungeTheme.typography.caption, color = colors.dust)
+        Text(
+            if (!isHome && first.isNotEmpty()) {
+                val them = if (first.size == 1) "it" else "them"
+                "This TV's own home comes before any chosen one, so Lounge turns ${first.joinToString(" and ")} off too. " +
+                    "Nothing is uninstalled; to turn $them back on, in Settings open Power Setup, and do that before you uninstall Lounge."
+            } else {
+                "The TV's own home screen stays installed, so casting, the gear button and the TV guide keep working. To undo this, in Settings open Power Setup."
+            },
+            style = LoungeTheme.typography.caption,
+            color = colors.dust,
+        )
+    }
 }
 
 @Composable
-private fun StepPhone(core: CoreClient, prefs: Prefs, uiPrefs: Prefs.UiPrefs) {
+private fun StepPhone(core: CoreClient, prefs: Prefs, uiPrefs: Prefs.UiPrefs, choiceFocus: FocusRequester) {
     val colors = LoungeTheme.colors
     val scope = rememberCoroutineScope()
-    Heading("Add your phone", "Scan the code with your phone's camera. It becomes a remote and a keyboard, and the place to arrange rows, add sources and install plugins.")
+    val on = uiPrefs.companionEnabled
+    Heading(
+        "Add your phone",
+        (if (on) "Scan the code with your phone's camera." else "Turn on the phone companion to show a code for your phone to scan.") +
+            " Your phone becomes a remote and a keyboard, and the place to arrange rows and install plugins.",
+    )
     SheetRow(
         icon = LoungeIcons.Phone,
         title = "Phone companion",
-        value = if (uiPrefs.companionEnabled) "On" else "Turn on",
-        accent = if (uiPrefs.companionEnabled) colors.signal else colors.houselight,
+        value = if (on) "On" else "Off",
+        accent = if (on) colors.signal else colors.dust,
         onClick = {
-            val on = !uiPrefs.companionEnabled
             scope.launch {
-                prefs.setCompanionEnabled(on)
+                prefs.setCompanionEnabled(!on)
                 // Off stops the server too, as Settings does.
-                if (!on) withContext(Dispatchers.IO) { core.stopCompanion() }
+                if (on) withContext(Dispatchers.IO) { core.stopCompanion() }
             }
         },
+        focusRequester = if (!on) choiceFocus else null,
     )
     Spacer(Modifier.height(20.dp))
-    Text("Everything stays on your home network. Forget a phone any time from Settings → Phone companion.", style = LoungeTheme.typography.caption, color = colors.dust)
+    Text("Everything stays on your home network. To forget a phone later, in Settings open Phone companion.", style = LoungeTheme.typography.caption, color = colors.dust)
 }
 
 @Composable
@@ -474,7 +501,7 @@ private fun StepDone() {
     val colors = LoungeTheme.colors
     Heading("That's the house", "Press Home any time to come back to the Stage. Long-press a tile for its menu, Settings has the essentials, and the rest is on your phone.")
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Up from the Stage reaches Search, the guide and Settings.", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text("Up from the Stage reaches Search, the TV guide and Settings.", style = LoungeTheme.typography.meta, color = colors.dust)
         Text("Back always goes up one level; from the rows it returns to the Stage.", style = LoungeTheme.typography.meta, color = colors.dust)
     }
 }
@@ -511,14 +538,20 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
         if (!uiPrefs.companionEnabled) { pairing = null; return@LaunchedEffect }
         withContext(Dispatchers.IO) { if (core.companionStatus().running) null else core.startCompanion(CoreClient.COMPANION_PORT) }
             ?.onFailure {
-                failed = companionFailure(it)
+                failed = companionStartProblem(it)
                 return@LaunchedEffect
             }
-        url = withContext(Dispatchers.IO) { core.companionStatus().url }
+        var paired = -1L
         while (true) {
+            val s = withContext(Dispatchers.IO) { core.companionStatus() }
+            url = s.url
+            // A phone that paired has used the code on screen, so the next phone gets a fresh one.
             val p = pairing
-            if (p == null || p.expiresMs < System.currentTimeMillis()) withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it }
-            delay(5_000)
+            if (p == null || p.expiresMs < System.currentTimeMillis() || (paired >= 0 && s.paired.toLong() != paired)) {
+                withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; failed = null }.onFailure { failed = pairingProblem(it) }
+            }
+            paired = s.paired.toLong()
+            delay(2_000)
         }
     }
     val p = pairing

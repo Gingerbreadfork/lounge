@@ -154,6 +154,27 @@ pub trait CompanionActions: Send + Sync {
     fn download(&self, url: &str, into: &Path) -> Result<(), String>;
 }
 
+/// What the phone shows for a failure: `detail` when it already reads as a sentence, otherwise
+/// `fallback`, with `detail` kept for the log. A colon, an exception, a package name or a
+/// lower-case start marks text written for a developer.
+pub fn sentence_or(detail: &str, fallback: &str) -> String {
+    let d = detail.trim();
+    let package = |w: &str| {
+        let w = w.trim_end_matches(['.', ',', '?', '!']);
+        w.char_indices().any(|(i, c)| c == '.' && w[..i].ends_with(|p: char| p.is_ascii_alphabetic()) && w[i + 1..].starts_with(|n: char| n.is_ascii_alphabetic()))
+    };
+    let written = d.chars().next().is_some_and(char::is_uppercase)
+        && !d.contains(": ")
+        && !d.contains("Exception")
+        && !d.split_whitespace().any(package)
+        && d.len() <= 240;
+    if !written {
+        tracing::warn!("companion: {d}");
+        return fallback.to_string();
+    }
+    if d.ends_with(['.', '?']) { d.to_string() } else { format!("{d}.") }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CompanionError {
     #[error("io: {0}")]
@@ -248,6 +269,19 @@ pub fn qr_png(text: &str, out: &Path, module_px: u32) -> Result<(), CompanionErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_written_sentences_reach_the_phone() {
+        let fallback = "The TV couldn't do that. Try again.";
+        assert_eq!(sentence_or("That app is not playing anything", fallback), "That app is not playing anything.");
+        assert_eq!(sentence_or("Another app is in front. Connect Power Setup on the TV.", fallback), "Another app is in front. Connect Power Setup on the TV.");
+        assert_eq!(sentence_or("No video player can open this stream. Install VLC or another player.", fallback), "No video player can open this stream. Install VLC or another player.");
+        // An address with its port is part of a written sentence.
+        assert_eq!(sentence_or("Kodi didn't answer at 192.168.0.20:8080. Check that it is on.", fallback), "Kodi didn't answer at 192.168.0.20:8080. Check that it is on.");
+        for raw in ["platform: busy", "No launch intent for com.netflix.ninja", "busy", "Permission Denial: starting Intent", "SecurityException", ""] {
+            assert_eq!(sentence_or(raw, fallback), fallback, "{raw}");
+        }
+    }
 
     #[test]
     fn a_private_address_needs_no_route_out() {

@@ -37,18 +37,12 @@ fun updateStatusWord(state: UpdateState, auto: Boolean): String = when (state) {
     is UpdateState.Idle -> if (auto) "On" else "Manual"
 }
 
-private fun ago(ms: Long): String {
-    if (ms <= 0) return "never"
-    val minutes = (System.currentTimeMillis() - ms) / 60_000
-    return when {
-        minutes < 2 -> "just now"
-        minutes < 60 -> "$minutes min ago"
-        minutes < 48 * 60 -> "${minutes / 60} h ago"
-        else -> "${minutes / (24 * 60)} days ago"
-    }
-}
+private fun ago(ms: Long): String = if (ms <= 0) "never" else agoText(ms, System.currentTimeMillis())
 
-/** Settings → Updates: where Lounge stands against its releases and what, if anything, needs a press. */
+/** What OK on a row that opens Android's list of apps allowed to install says first. */
+private const val INSTALL_HINT = "OK opens Android's list: turn on Lounge there, then press Back"
+
+/** Updates, from Settings: where Lounge stands against its releases and what, if anything, needs a press. */
 @Composable
 fun UpdatesSheet(updates: UpdateManager, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
@@ -65,7 +59,11 @@ fun UpdatesSheet(updates: UpdateManager, firstFocus: FocusRequester) {
             icon = LoungeIcons.Info,
             title = "Lounge ${updates.currentVersion}",
             value = if (state is UpdateState.Idle) "Not checked yet" else updateStatusWord(state, auto),
-            accent = if (state is UpdateState.UpToDate) colors.signal else colors.dust,
+            accent = when (state) {
+                is UpdateState.UpToDate -> colors.signal
+                is UpdateState.Failed -> colors.ember
+                else -> colors.dust
+            },
             subtitle = when (val s = state) {
                 is UpdateState.UpToDate -> "Checked ${ago(s.checkedAtMs)}"
                 is UpdateState.Idle -> "Press to check now"
@@ -76,18 +74,20 @@ fun UpdatesSheet(updates: UpdateManager, firstFocus: FocusRequester) {
             focusRequester = firstFocus,
         )
         SheetRow(
-            icon = LoungeIcons.Refresh,
+            icon = SettingsGlyphs.Clock,
             title = "Check twice a day",
             value = if (auto) "On" else "Off",
             accent = if (auto) colors.signal else colors.dust,
             onClick = { updates.setAutoCheck(!auto) },
         )
         when (val s = state) {
-            is UpdateState.Available -> SheetRow(icon = LoungeIcons.Refresh, title = "Get Lounge ${s.release.version}", value = "Download", onClick = ::act)
-            is UpdateState.Downloading -> SheetRow(icon = LoungeIcons.Refresh, title = "Downloading Lounge ${s.release.version}", value = "${(s.progress * 100).roundToInt()} %", onClick = {})
+            is UpdateState.Available -> SheetRow(icon = SettingsGlyphs.Download, title = "Get Lounge ${s.release.version}", value = "Download", accent = colors.houselight, onClick = ::act)
+            is UpdateState.Downloading -> SheetRow(icon = SettingsGlyphs.Download, title = "Downloading Lounge ${s.release.version}", value = "${(s.progress * 100).roundToInt()} %", onClick = {})
             is UpdateState.Ready -> SheetRow(
-                icon = LoungeIcons.Power,
+                icon = if (s.path == InstallPath.NeedsPermission) LoungeIcons.Settings else SettingsGlyphs.Download,
                 title = if (s.path == InstallPath.NeedsPermission) "Allow Lounge to install updates" else "Install Lounge ${s.release.version}",
+                subtitle = if (s.path == InstallPath.NeedsPermission) INSTALL_HINT else null,
+                accent = colors.houselight,
                 value = when (s.path) {
                     InstallPath.NeedsPermission -> "Open"
                     InstallPath.Confirm -> "Confirm"
@@ -95,8 +95,8 @@ fun UpdatesSheet(updates: UpdateManager, firstFocus: FocusRequester) {
                 },
                 onClick = ::act,
             )
-            is UpdateState.NeedsConfirmation -> SheetRow(icon = LoungeIcons.Power, title = "Install Lounge ${s.release.version}", value = "Confirm", onClick = ::act)
-            is UpdateState.Installing -> SheetRow(icon = LoungeIcons.Power, title = "Installing Lounge ${s.release.version}…", onClick = {})
+            is UpdateState.NeedsConfirmation -> SheetRow(icon = SettingsGlyphs.Download, title = "Install Lounge ${s.release.version}", value = "Confirm", accent = colors.houselight, onClick = ::act)
+            is UpdateState.Installing -> SheetRow(icon = SettingsGlyphs.Download, title = "Installing Lounge ${s.release.version}…", onClick = {})
             is UpdateState.Failed -> SheetRow(icon = LoungeIcons.Refresh, title = "Try again", value = s.release?.let { "Lounge ${it.version}" }, onClick = ::act)
             else -> Unit
         }
@@ -116,12 +116,12 @@ fun UpdatesSheet(updates: UpdateManager, firstFocus: FocusRequester) {
             InstallPath.Silent -> "Updates install by themselves while you are in another app, and Lounge comes back as it was."
             InstallPath.PowerSetup -> "Power Setup installs updates without asking, while you are in another app."
             InstallPath.Confirm -> "Android asks you to confirm this update, and Play Protect may add that it has not seen this developer: choose More details, then Install anyway. After this one, updates install by themselves."
-            InstallPath.NeedsPermission -> "Android does not let Lounge install apps yet. Allow it in Settings → Apps → Special app access → Install unknown apps, or connect Power Setup."
+            InstallPath.NeedsPermission -> "Android doesn't let Lounge install apps yet. To allow it, in the TV's settings open Apps, then Special app access, then Install unknown apps; or connect Power Setup."
         }
         Text("Lounge looks at its releases on GitHub twice a day. $how", style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.padding(horizontal = 16.dp))
         if (path == InstallPath.NeedsPermission) {
             Spacer(Modifier.height(8.dp))
-            SheetRow(icon = LoungeIcons.Settings, title = "Allow Lounge to install updates", value = "Open", onClick = { activity?.let { updates.openInstallPermission(it) } })
+            SheetRow(icon = LoungeIcons.Settings, title = "Allow Lounge to install updates", subtitle = INSTALL_HINT, onClick = { activity?.let { updates.openInstallPermission(it) } })
         }
     }
 }

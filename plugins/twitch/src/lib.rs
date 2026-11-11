@@ -165,7 +165,7 @@ struct Client {
 
 impl Client {
     fn connect(now_ms: i64) -> Result<Client, String> {
-        let client_id = host::required_setting("client_id", "Client ID")?.trim().to_string();
+        let client_id = host::required_setting("client_id", "client ID")?.trim().to_string();
         let saved: Option<Token> = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice(&v).ok());
         let token = match saved {
             Some(t) if t.expires_ms > now_ms + 10 * 60_000 => t,
@@ -410,7 +410,7 @@ pub fn stream_items(s: &Stream, avatar: Option<&str>, app: &str, now_ms: i64) ->
         id: format!("live:{}", if s.id.is_empty() { s.user_login.clone() } else { s.id.clone() }),
         kind: ItemKind::Schedule,
         title: if s.title.trim().is_empty() { name.clone() } else { clip(s.title.trim(), 90) },
-        subtitle: Some(lines.join(", ")),
+        subtitle: Some(sentence_case(&lines.join(", "))),
         channel_id: Some(s.user_login.clone()),
         channel_name: Some(name),
         start_ms: Some(parse_iso8601(&s.started_at).unwrap_or(now_ms)),
@@ -428,6 +428,12 @@ fn watching(n: u64) -> String {
         n if n < 1000 => format!("{n} watching"),
         n => format!("{:.1}k watching", n as f64 / 1000.0),
     }
+}
+
+/// A line of facts as a tile shows it: the first word capitalised, the rest as written.
+fn sentence_case(line: &str) -> String {
+    let mut chars = line.chars();
+    chars.next().map(|first| first.to_uppercase().chain(chars).collect()).unwrap_or_default()
 }
 
 fn clip(s: &str, max: usize) -> String {
@@ -481,12 +487,17 @@ mod tests {
         assert_eq!(watching(1), "1 watching");
         assert_eq!(watching(42), "42 watching");
         assert_eq!(watching(12_345), "12.3k watching");
+        let quiet = |game: &str| Stream { user_login: "x".into(), game_name: game.into(), ..Default::default() };
+        assert_eq!(stream_items(&quiet(""), None, DEFAULT_APP, 0)[1].subtitle.as_deref(), Some("Nobody watching yet"));
+        assert_eq!(stream_items(&quiet("Chess"), None, DEFAULT_APP, 0)[1].subtitle.as_deref(), Some("Chess, nobody watching yet"));
     }
 
     #[test]
     fn the_sign_in_instruction_names_the_code() {
         let d = Device { device_code: "x".into(), user_code: "ABCDEFGH".into(), verification_uri: "https://www.twitch.tv/activate?public=true&device-code=ABCDEFGH".into(), expires_ms: 0 };
         assert_eq!(instruction(&d), "Sign in: on your phone open www.twitch.tv/activate and enter ABCDEFGH, then press Refresh now here.");
+        // Off the TV no setting is filled in, so the first one asked for is named.
+        assert_eq!(Client::connect(0).err().as_deref(), Some("Add the client ID in the plugin's settings."));
         assert_eq!(url_encode("urn:ietf:params:oauth:grant-type:device_code"), "urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code");
     }
 

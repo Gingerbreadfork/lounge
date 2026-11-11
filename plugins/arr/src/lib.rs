@@ -33,16 +33,16 @@ impl sdk::Plugin for Arr {
             ],
             settings: vec![
                 SettingSpec { key: "sonarr".into(), label: "Sonarr address".into(), kind: SettingKind::Url, required: false, help: Some("Like http://192.168.0.10:8989, or …:8989/sonarr if you gave it a URL base. Leave empty if you only run Radarr.".into()), default: None },
-                SettingSpec { key: "sonarr_key".into(), label: "Sonarr API key".into(), kind: SettingKind::Password, required: false, help: Some("In Sonarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone.".into()), default: None },
+                SettingSpec { key: "sonarr_key".into(), label: "Sonarr API key".into(), kind: SettingKind::Password, required: false, help: Some("In Sonarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone companion.".into()), default: None },
                 SettingSpec { key: "radarr".into(), label: "Radarr address".into(), kind: SettingKind::Url, required: false, help: Some("Like http://192.168.0.10:7878, or …:7878/radarr if you gave it a URL base. Leave empty if you only run Sonarr.".into()), default: None },
-                SettingSpec { key: "radarr_key".into(), label: "Radarr API key".into(), kind: SettingKind::Password, required: false, help: Some("In Radarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone.".into()), default: None },
+                SettingSpec { key: "radarr_key".into(), label: "Radarr API key".into(), kind: SettingKind::Password, required: false, help: Some("In Radarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone companion.".into()), default: None },
                 SettingSpec { key: "days".into(), label: "Days ahead".into(), kind: SettingKind::Number, required: false, help: Some("How many days ahead Coming up looks, from 1 to 60. Yesterday is always shown too.".into()), default: Some("7".into()) },
                 SettingSpec {
                     key: "tv_search".into(),
                     label: "Open with the TV's own search".into(),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("Off: Lounge searches your apps and plugins for the title, so a Jellyfin or Plex plugin that is on finds it. On: the TV's search, which on Google TV lists where it streams.".into()),
+                    help: Some("On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it, so a Jellyfin or Plex plugin that is on finds it.".into()),
                     default: Some("false".into()),
                 },
             ],
@@ -64,7 +64,7 @@ impl sdk::Plugin for Arr {
             }
         }
         if servers.is_empty() && failures.is_empty() {
-            return Err("Nothing to show yet: add a Sonarr or Radarr address and API key in the plugin's settings".into());
+            return Err("Nothing to show yet. Add a Sonarr or Radarr address and API key in the plugin's settings.".into());
         }
         let days = host::setting("days").and_then(|v| v.trim().parse::<i64>().ok()).unwrap_or(7).clamp(1, 60);
         let clock = Clock { now_ms: ctx.now_ms, utc_offset_minutes: ctx.utc_offset_minutes };
@@ -161,7 +161,7 @@ impl Server {
         let Some(url) = host::setting(url_key).map(|u| sdk::server_address(&u)).filter(|u| u != "http://") else {
             return Ok(None);
         };
-        let key = host::secret(key_key).map(|k| k.trim().to_string()).filter(|k| !k.is_empty()).ok_or(format!("Add the {name} API key in the plugin's settings."))?;
+        let key = host::secret(key_key).map(|k| k.trim().to_string()).filter(|k| !k.is_empty()).ok_or_else(|| sdk::not_set(&format!("{name} API key")))?;
         Ok(Some(Server { name, url, key }))
     }
 
@@ -170,7 +170,7 @@ impl Server {
         let r = sdk::fetch_from(self.name, &self.url, &req).map_err(|e| {
             if e == host::TOO_LARGE {
                 format!("{} sent more than this plugin can read in one go. Try again later.", self.name)
-            } else if e.starts_with("fetch budget") {
+            } else if e == host::BUDGET_SPENT {
                 "Too much was asked for this refresh; the rest comes with the next.".to_string()
             } else {
                 e
@@ -469,7 +469,7 @@ impl Window {
     }
 }
 
-const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 fn weekday(day_index: i64) -> &'static str {
     ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][(day_index + 4).rem_euclid(7) as usize]
@@ -753,8 +753,8 @@ mod tests {
         assert_eq!(clock.when(clock.day_of(at("2026-11-08T12:00:00Z"))), "Yesterday");
         assert_eq!(clock.when(clock.day_of(at("2026-11-12T12:00:00Z"))), "Thursday");
         assert_eq!(clock.when(clock.day_of(at("2026-11-15T12:00:00Z"))), "Sunday");
-        assert_eq!(clock.when(clock.day_of(at("2026-11-16T12:00:00Z"))), "16 Nov");
-        assert_eq!(clock.when(clock.day_of(at("2026-11-01T12:00:00Z"))), "1 Nov");
+        assert_eq!(clock.when(clock.day_of(at("2026-11-16T12:00:00Z"))), "16 November");
+        assert_eq!(clock.when(clock.day_of(at("2026-11-01T12:00:00Z"))), "1 November");
         assert_eq!(civil(0), (1970, 1, 1));
         assert_eq!(civil(at("2000-03-01T00:00:00Z") / DAY_MS), (2000, 3, 1));
         assert_eq!(iso_utc(at("2026-11-09T09:05:07Z")), "2026-11-09T09:05:07Z");

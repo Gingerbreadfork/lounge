@@ -178,6 +178,12 @@ apart from the key-value store. `refresh` runs when the plugin is turned on, eve
 on the phone. A refresh that fails is tried again after 5 minutes when `refresh_minutes` is
 longer.
 
+An error the plugin returns is shown on the TV and the phone exactly as the plugin wrote it: on
+the plugin's page for a refresh, and as a message on the TV when a `resolve` fails. Write it as a
+sentence with the cause and the fix ("Jellyfin didn't answer at 192.168.0.20:8096. Check the
+server, then try again."), and put the raw cause in the log. When the module itself stops, out of
+fuel or time or on a trap, the TV says the plugin stopped partway through and the log says why.
+
 A refresh that cannot go on until the person does something says so instead of failing:
 `return Err(sdk::sign_in("https://example.com/activate", &code))` for a sign-in with a code, or
 `Err(sdk::ask(Ask { .. }))` for anything else, such as a link with no code or a setting still to
@@ -216,7 +222,7 @@ already downloaded cost nothing. Downloads a refresh no longer names are deleted
   "refresh_minutes": 60,
   "rows": [{ "id": "recent", "title": "Recently added", "style": "poster" }],
   "settings": [
-    { "key": "playlist_url", "label": "Playlist URL (M3U)", "kind": "url", "required": true, "help": "…" },
+    { "key": "playlist_url", "label": "Playlist address (M3U)", "kind": "url", "required": true, "help": "…" },
     { "key": "password", "label": "Password", "kind": "password" }
   ],
   "homepage": "https://example.com"
@@ -231,8 +237,8 @@ already downloaded cost nothing. Downloads a refresh no longer names are deleted
 | `kinds` | What the plugin does: `content` (items and rows), `epg` (channels and schedule), `wallpaper`, `screensaver`, `search`. |
 | `fetch_hosts` | Hosts `fetch` may reach, including on redirects, each shown to the user in words. A name or IP address is that host, with no scheme, port or path; `*.example.com` is its subdomains, and a wildcard needs at least two labels under it; `*` is any host on the public internet. `$key` is whatever host the user enters in the setting `key`, or every host when they enter several separated by spaces, commas or semicolons, which is how a plugin reaches the servers they name, at home or not. `local-network` is any home-network IP address or local name, for a plugin that finds devices itself, such as a tuner; a local name is one label, or one under `.local`, `.lan`, `.home.arpa` or `.internal`. The TV checks the address every name resolves to. The home network is reachable only through `$key`, `local-network`, or an entry that is itself an IP address or a local name, never through a wildcard or a public name. Loopback and the TV's own addresses are reachable only through an entry that is literally `localhost` or an IP address. |
 | `refresh_minutes` | How often `refresh` runs while the screen is on; at least 5, 0 means the host's default. |
-| `rows` | Rows of your own, in order. `style` is `landscape` (16:9 tiles), `poster` (portrait) or `compact` (a small tile of two lines beside the item's `logo`). Items name a row by its `id`. |
-| `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `list`, `url`, `secret_url`, `password`, `number` or `toggle`. A `toggle` is stored as `true` or `false`. A `list` is text with several entries, which the phone shows as a box of many lines and stores with its line breaks; the TV's field has one line, so split on spaces and commas as well. A `default` is what `setting` returns while nothing is set, and the TV and the phone show it in the field. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. A `secret_url` is an address that carries credentials, such as a provider's playlist link: it is a secret in the same way, but shown while it is typed. Both stay out of backups. |
+| `rows` | Rows of your own, in order. `style` is `landscape` (16:9 tiles), `poster` (portrait) or `compact` (a small tile of two lines beside the item's `logo`). Items name a row by its `id`, which never changes. A row's `title` says what it holds and where from, such as "Recordings on Tvheadend", so two plugins never show the same header. |
+| `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `list`, `url`, `secret_url`, `password`, `number` or `toggle`. A `toggle` is stored as `true` or `false`. A `list` is text with several entries, which the phone shows as a box of many lines and stores with its line breaks; the TV's field has one line, so split on spaces and commas as well. A `default` is what `setting` returns while nothing is set, and the TV and the phone show it in the field. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. A `secret_url` is an address that carries credentials, such as a provider's playlist link: it is a secret in the same way, but shown while it is typed. Both stay out of backups. A `label` names the field, calling a web address an address ("Server address"); the TV and the phone add "(optional)" to a field that is not `required`. `help` goes under the field: the TV shows a help of up to 160 characters whole, and of a longer one only its first sentence, up to the first full stop and space, so a longer help opens with one sentence that stands alone and the phone shows the rest. |
 | `homepage` | A link shown on the plugin's page. |
 | `self_signed_servers` | `true` when the servers the plugin reaches present a certificate of their own rather than one a public authority signed, as Sunshine's web interface and many home servers do. The TV then skips the certificate check for a server named through `$key`, an IP address or local name in `fetch_hosts`, or a `local-network` name, and only while the connection lands on a home-network address: a public name, and any name that resolves to the public internet, is always verified. The plugin's page tells the user. Set it only when the plugin needs it. |
 | `for_apps` | Packages of the apps whose watching the plugin brings to the home, such as `com.plexapp.android`. While one is installed and the plugin is off, the home shows a tile that opens the plugin's page, until the plugin is turned on or the tile dismissed. Leave it empty for a plugin that goes with no app. |
@@ -281,7 +287,8 @@ the next. When two items share an id, the first is kept and the plugin's log say
 left out. The first 2,000 items of a refresh are kept, so put what matters first.
 
 **What a tile shows.** `title` is the first line; `subtitle` the second, in the launcher's own
-voice (commas between facts, never dots: "S2 E4, Netflix"). `season` and `episode` are shown
+voice: sentence case, commas between facts, never dots, and lengths and times in words ("S2 E4,
+Netflix", "Radiolab, 2 hours 25 minutes", "Starts in 3 hours"). `season` and `episode` are shown
 as "S2 E4" when both are given. `duration_ms` with `position_ms`, or `progress` from 0 to 1,
 draws the progress bar and "19 minutes left". `last_used_ms` orders Continue watching, newest
 first; a resume item without one keeps the time Lounge first saw it. `added_ms` and `is_new` mark
@@ -386,11 +393,11 @@ Everything a plugin can do, as the SDK exposes it under `host`:
 
 | Function | What it does |
 |---|---|
-| `fetch(request)` | An HTTP request to a host in `fetch_hosts`. Bodies are capped at 8 MB once unpacked, and a larger one fails with `host::TOO_LARGE`; a response body is text when it is valid UTF-8, otherwise base64 in `body_base64`, which `sdk::body_bytes` turns into bytes. Redirects are followed only to allowed hosts, and your headers and body go only to the origin you addressed: a redirect to another host, port or scheme drops them. `timeout_ms` shortens one request; none takes longer than 20 s, redirects included. At most 64 calls per invocation, sharing a 60 s budget. |
+| `fetch(request)` | An HTTP request to a host in `fetch_hosts`. Its errors are sentences that name the address. Bodies are capped at 8 MB once unpacked, and a larger one fails with `host::TOO_LARGE`; a response body is text when it is valid UTF-8, otherwise base64 in `body_base64`, which `sdk::body_bytes` turns into bytes. Redirects are followed only to allowed hosts, and your headers and body go only to the origin you addressed: a redirect to another host, port or scheme drops them. `timeout_ms` shortens one request; none takes longer than 20 s, redirects included. At most 64 calls per invocation, sharing a 60 s budget; past that, a fetch fails with `host::BUDGET_SPENT`. |
 | `get_text(url)` | `fetch` for a GET that must return text, failing on anything but 2xx. Its errors name the address without its query string or password, so they are safe to log; `sdk::redact` does the same for your own messages. |
 | `kv_get`, `kv_get_string`, `kv_set`, `kv_delete` | A private store: 256 keys of up to 256 KB each. Once all 256 are in use, a `kv_set` of a new key stores nothing and says so in the plugin's log. Survives restarts and updates; cleared when the plugin is removed. Cache tokens and the last refresh's result here. |
 | `setting(key)` | A setting's value, or its manifest default. Nothing for a `password`. |
-| `required_setting(key, label)` | The same, or an error naming the field for the user. |
+| `required_setting(key, label)` | The same, or the error "Add the {label} in the plugin's settings.", so `label` is the field's name as it reads inside a sentence, such as "server address". `sdk::not_set(label)` words it for a secret. |
 | `secret(key)` | A `password` or `secret_url` setting's value. Only keys the manifest declares as one of those. |
 | `now_ms()` | Milliseconds since the epoch. |
 | `log(level, message)` | 0 debug, 1 info, 2 warn, 3 error. `sdk::info!`, `warn!` and `error!` format for you. Shown on the plugin's page on the TV and by `lgp-tool run`. |
@@ -510,10 +517,16 @@ one definition the host and the SDK share.
 - Passwords are `password` settings read through `secret`, never logged.
 - `lgp-tool run --artwork` shows the items you expect and no pictures the TV would not show,
   and the log says what happened in a sentence a user could read on the TV.
-- A refresh that fails returns an error naming the cause and the fix ("Jellyfin didn't answer
-  at 192.168.0.20. Check the server, then try again."), not a stack trace. `sdk::fetch_from`,
-  `fetch_online`, `didnt_answer`, `answered_error`, `wrong_server`, `unreadable`, `offline` and
-  `online_error` word the usual failures; log the raw cause with `sdk::warn!`.
+- An error shows on the TV and the phone exactly as the plugin writes it, so a refresh or
+  `resolve` that fails returns one sentence naming the cause and the fix ("Jellyfin didn't
+  answer at 192.168.0.20. Check the server, then try again."), never a stack trace, a status
+  code or a parser's message. `sdk::fetch_from`, `fetch_online`, `didnt_answer`,
+  `answered_error`, `wrong_server`, `unreadable`, `offline`, `online_error` and `not_set` word
+  the usual failures; log the raw cause with `sdk::warn!`.
+- A `help` longer than 160 characters opens with a sentence that stands alone, because the TV
+  shows only that one and leaves the rest to the phone.
+- Row titles say where they come from ("Watchlist on Trakt"), tile lines are in sentence case
+  with commas between facts, and lengths and times are in words.
 - Items keep stable `id`s between refreshes, so pins and hidden tiles survive.
 - A screensaver looks right in every theme, Blackout included, and its log line shows it holding
   a third or a quarter of the resolution on the slowest TV you have.

@@ -72,12 +72,12 @@ impl sdk::Plugin for Nuvio {
                     label: "TMDB API key".into(),
                     kind: SettingKind::Password,
                     required: false,
-                    help: Some("Optional, for when tiles show a code like tmdb:1234 instead of a name. The API Key (v3) from themoviedb.org/settings/api, not the Read Access Token.".into()),
+                    help: Some("Fill this in when tiles show a code like tmdb:1234 instead of a name. Use the API Key (v3) from themoviedb.org/settings/api, not the Read Access Token.".into()),
                     default: None,
                 },
                 SettingSpec {
                     key: "server".into(),
-                    label: "Self-hosted server".into(),
+                    label: "Self-hosted server address".into(),
                     kind: SettingKind::Url,
                     required: false,
                     help: Some("Leave empty for Nuvio's own. For a self-hosted backend, its address, like https://nuvio.example.com.".into()),
@@ -293,7 +293,7 @@ fn server_setting() -> String {
 
 impl Client {
     fn connect(now_ms: i64) -> Result<Client, String> {
-        let email = host::required_setting("email", "Email")?.trim().to_string();
+        let email = host::required_setting("email", "email")?.trim().to_string();
         let server = server_setting();
         let backend = backend_for(&server)?;
         let owner = format!("{}\n{email}", backend.url);
@@ -417,7 +417,7 @@ fn save_session(backend: &Backend, email: &str, t: TokenAnswer, now_ms: i64) -> 
 }
 
 fn sign_in(backend: &Backend, email: &str, now_ms: i64) -> Result<Session, String> {
-    let password = host::secret("password").filter(|p| !p.is_empty()).ok_or("Password is not set")?;
+    let password = host::secret("password").filter(|p| !p.is_empty()).ok_or_else(|| sdk::not_set("password"))?;
     let r = fetch(backend, &token_request(backend, "password", serde_json::json!({ "email": email, "password": password })))?;
     match r.status {
         200..=299 => {}
@@ -819,7 +819,7 @@ fn tmdb_get<T: serde::de::DeserializeOwned + Default>(path: &str, key: &str) -> 
     let r = sdk::fetch_online("TMDB", &HttpRequest::get(format!("{TMDB}/{path}?api_key={}", encode_segment(key))))?;
     match r.status {
         404 => Ok(None),
-        401 => Err("the TMDB API key was refused".into()),
+        401 => Err("TMDB refused the API key. Check the TMDB API key in the plugin's settings.".into()),
         s if !(200..300).contains(&s) => Err(format!("HTTP {s}")),
         _ => serde_json::from_str::<T>(&r.body).map(Some).map_err(|e| e.to_string()),
     }
@@ -981,7 +981,7 @@ impl MetaCache {
                 let title: TmdbTitle = match tmdb_get(&format!("{kind}/{}", encode_segment(num)), key) {
                     Ok(t) => t.unwrap_or_default(),
                     Err(e) => {
-                        sdk::warn!("TMDB did not answer for {id}: {e}");
+                        sdk::warn!("TMDB lookup for {id} failed: {e}");
                         return 1;
                     }
                 };
@@ -1031,7 +1031,7 @@ impl MetaCache {
                 let title: TmdbTitle = match tmdb_get(&format!("tv/{}", encode_segment(num)), key) {
                     Ok(t) => t.unwrap_or_default(),
                     Err(e) => {
-                        sdk::warn!("TMDB did not answer for {id}: {e}");
+                        sdk::warn!("TMDB lookup for {id} failed: {e}");
                         return 1;
                     }
                 };

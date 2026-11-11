@@ -173,6 +173,15 @@ class ReleaseTest {
     }
 
     @Test
+    fun failuresAreSaidAsSentencesWithWhatHappensNext() {
+        assertEquals("Lounge couldn't reach GitHub. Check the TV's internet connection; it tries again later.", failureText(java.net.UnknownHostException("api.github.com")))
+        assertEquals("GitHub took too long to answer. Lounge tries again later.", failureText(java.net.SocketTimeoutException("Read timed out")))
+        assertEquals("The connection to GitHub dropped. Lounge tries again later.", failureText(java.io.EOFException()))
+        assertEquals("Already a sentence.", failureText(UpdateProblem("Already a sentence.")))
+        assertFalse(failureText(IllegalStateException("java.lang.NullPointerException")).contains("java"))
+    }
+
+    @Test
     fun aReleaseThatKeepsFailingIsLeftAlone() {
         var f = Failures(null, 0)
         repeat(Failures.MAX_TRIES - 1) { f = f.after("v0.3.2", final = false) }

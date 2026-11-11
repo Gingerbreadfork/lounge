@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -66,8 +67,16 @@ fun RowsSheet(
     val requesters = remember { HashMap<String, FocusRequester>() }
     fun requesterFor(id: String) = requesters.getOrPut(id) { FocusRequester() }
     val resetFocus = remember { FocusRequester() }
+    var confirmReset by remember { mutableStateOf(false) }
+    var resetDone by remember { mutableStateOf(false) }
+    // While a row is picked up, Back sets it down rather than closing the sheet.
+    val sheetBack = LocalSheetBack.current
+    DisposableEffect(moving != null) {
+        if (moving != null) sheetBack.handler = { sounds?.close(); moving = null; true }
+        onDispose { sheetBack.handler = null }
+    }
 
-    SheetHeading("Home screen rows", "OK shows or hides a row. Hold OK to pick one up, then Up and Down move it.")
+    SheetHeading("Home screen rows", "OK shows or hides a row. Hold OK to pick one up, Up and Down move it, and OK or Back sets it down.")
     when {
         rows == null -> Text("Loading…", style = LoungeTheme.typography.meta, color = colors.dust)
         else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -128,6 +137,7 @@ fun RowsSheet(
                                 }
                                 if (to in rows.indices) {
                                     sounds?.tick()
+                                    resetDone = false
                                     onMove(row, to)
                                     // The node moves with its key; asked again after the frame in case focus did not follow.
                                     scope.launch {
@@ -141,11 +151,24 @@ fun RowsSheet(
                 }
             }
             Spacer(Modifier.height(8.dp))
+            // The order cannot be had back, so it asks once more first; moving away takes the question back.
             SheetRow(
                 icon = LoungeIcons.Refresh,
-                title = "Put the rows back in their usual order",
-                subtitle = "Keeps what you have hidden",
-                onClick = { sounds?.tick(); moving = null; onResetOrder() },
+                title = if (confirmReset) "Yes, put them back" else "Put the rows back in their usual order",
+                titleColor = if (confirmReset) colors.ember else colors.limelight,
+                subtitle = if (resetDone) "Done. What you hid stays hidden." else "Keeps what you have hidden",
+                modifier = Modifier.onFocusChanged { if (!it.isFocused) confirmReset = false },
+                onClick = {
+                    if (!confirmReset) {
+                        confirmReset = true
+                    } else {
+                        sounds?.tick()
+                        moving = null
+                        confirmReset = false
+                        resetDone = true
+                        onResetOrder()
+                    }
+                },
                 focusRequester = resetFocus,
             )
         }

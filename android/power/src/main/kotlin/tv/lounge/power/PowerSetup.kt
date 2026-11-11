@@ -52,12 +52,15 @@ class PowerSetup(private val context: Context) {
     private val shizuku = ShizukuBackend()
     private val lock = Mutex()
     private val giveUpAt = AtomicLong(Long.MAX_VALUE)
-    private val _status = MutableStateFlow<PowerStatus>(PowerStatus.Unavailable("Not checked yet"))
+    private val _status = MutableStateFlow<PowerStatus>(PowerStatus.Unavailable("Checking USB debugging…"))
     private val _log = MutableStateFlow<List<PowerLogEntry>>(emptyList())
+    private val _results = MutableStateFlow<Map<String, PowerResult>>(emptyMap())
     private val _accessGranted = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     val status: StateFlow<PowerStatus> = _status.asStateFlow()
     val log: StateFlow<List<PowerLogEntry>> = _log.asStateFlow()
+    /** How each action last went while Lounge has been running, by action id. */
+    val results: StateFlow<Map<String, PowerResult>> = _results.asStateFlow()
     /** Emits after one of Lounge's own accesses has been granted, so the app can read them again. */
     val accessGranted: SharedFlow<Unit> = _accessGranted.asSharedFlow()
     val packageName: String get() = context.packageName
@@ -74,7 +77,7 @@ class PowerSetup(private val context: Context) {
     suspend fun refresh(): PowerStatus = lock.withLock {
         val s = when {
             shizuku.permitted -> PowerStatus.Ready("shizuku")
-            !adbEnabled -> PowerStatus.Unavailable(if (shizuku.installed) "Shizuku is installed but has not granted access" else "Developer options → USB debugging is off")
+            !adbEnabled -> PowerStatus.Unavailable(if (shizuku.installed) SHIZUKU_WAITING else DEBUGGING_OFF)
             adb.available() -> PowerStatus.Ready("adb")
             else -> PowerStatus.NotPaired
         }
@@ -89,18 +92,24 @@ class PowerSetup(private val context: Context) {
     suspend fun pair(): PowerStatus = lock.withLock {
         withContext(Dispatchers.IO) {
             if (!adbEnabled) {
-                return@withContext PowerStatus.Unavailable("Developer options → USB debugging is off").also { _status.value = it }
+                return@withContext PowerStatus.Unavailable(DEBUGGING_OFF).also { _status.value = it }
             }
             giveUpAt.set(Long.MAX_VALUE)
             val outcome = AdbClient(keys).connect(onWaitingForUser = { _status.value = PowerStatus.WaitingForApproval }, giveUpAt = giveUpAt)
             val s = when (outcome) {
                 is AdbClient.Outcome.Online -> { outcome.connection.close(); PowerStatus.Ready("adb") }
-                AdbClient.Outcome.Refused -> PowerStatus.Unavailable("ADB is not listening. Turn on Developer options → USB debugging, then try again.")
+                AdbClient.Outcome.Refused -> PowerStatus.Unavailable(AdbBackend.UNREACHABLE)
                 AdbClient.Outcome.Unknown, AdbClient.Outcome.Denied -> PowerStatus.NotPaired
-                is AdbClient.Outcome.TlsRequired -> PowerStatus.Failed(outcome.detail)
-                is AdbClient.Outcome.NotThisDevice -> PowerStatus.Failed(outcome.detail)
-                is AdbClient.Outcome.Error -> PowerStatus.Failed(outcome.detail)
+                is AdbClient.Outcome.TlsRequired -> PowerStatus.Failed(AdbBackend.TLS)
+                is AdbClient.Outcome.NotThisDevice -> PowerStatus.Failed(AdbBackend.NOT_THIS_TV)
+                is AdbClient.Outcome.Error -> PowerStatus.Failed(AdbBackend.DROPPED)
             }
+            when (outcome) {
+                is AdbClient.Outcome.TlsRequired -> outcome.detail
+                is AdbClient.Outcome.NotThisDevice -> outcome.detail
+                is AdbClient.Outcome.Error -> outcome.detail
+                else -> null
+            }?.let { android.util.Log.w("Lounge", "power setup: $it") }
             _status.value = s
             s
         }
@@ -140,17 +149,19 @@ class PowerSetup(private val context: Context) {
     suspend fun run(action: PowerAction): ShellResult {
         // After a restart nothing is known until checked; with a key or Shizuku there, check now.
         val backend = backend() ?: (if (hasKey || shizuku.installed) refresh().let { backend() } else null)
-            ?: throw PrivilegedException("Power Setup is not connected")
+            ?: throw PrivilegedException(NOT_CONNECTED).also { keepResult(action, PowerResult(false, it.message.orEmpty())) }
         return try {
             val r = backend.run(action.command, action.timeoutMs)
             record(PowerLogEntry(System.currentTimeMillis(), action.title, action.command, r, null))
+            keepResult(action, PowerResult(r.ok, r.output.ifBlank { if (r.ok) "" else "exit ${r.exitCode}" }))
             if (r.ok && (action == tvListings || action == notificationAccess || action == usageAccess)) _accessGranted.tryEmit(Unit)
             r
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            val failure = e as? PrivilegedException ?: PrivilegedException(e.message ?: "That did not work", e)
-            record(PowerLogEntry(System.currentTimeMillis(), action.title, action.command, null, failure.message))
+            val failure = e as? PrivilegedException ?: PrivilegedException("Power Setup couldn't run that. Try again.", e)
+            record(PowerLogEntry(System.currentTimeMillis(), action.title, action.command, null, listOfNotNull(failure.message, failure.cause?.message).joinToString(": ")))
+            keepResult(action, PowerResult(false, failure.message.orEmpty()))
             // A lost connection or a timeout says nothing about the pairing; only a refused key does.
             if (backend === adb && e is KeyNotApprovedException) _status.value = PowerStatus.NotPaired
             throw failure
@@ -162,24 +173,53 @@ class PowerSetup(private val context: Context) {
         _log.update { (it + entry).takeLast(60) }
     }
 
+    private fun keepResult(action: PowerAction, result: PowerResult) {
+        _results.update { it + (action.id to result) }
+    }
+
+    /**
+     * Whether what [action] sets up is already so, read from the system; null when that cannot be
+     * told. Reads settings and the package list, so call it off the main thread.
+     */
+    fun isApplied(action: PowerAction): Boolean? = runCatching {
+        val resolver = context.contentResolver
+        fun scales() = listOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale").map { Settings.Global.getFloat(resolver, it, 1f) }
+        when (action.id) {
+            homeRole.id -> context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == context.packageName
+            tvListings.id -> context.checkSelfPermission("android.permission.READ_TV_LISTINGS") == PackageManager.PERMISSION_GRANTED
+            notificationAccess.id -> androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+            usageAccess.id -> context.getSystemService(android.app.AppOpsManager::class.java)?.let { ops ->
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    ops.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+                } else {
+                    @Suppress("DEPRECATION")
+                    ops.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+                } == android.app.AppOpsManager.MODE_ALLOWED
+            }
+            quickAnimations.id -> scales().all { it == 0.5f }
+            normalAnimations.id -> scales().all { it == 1f }
+            else -> null
+        }
+    }.getOrNull()
+
     // ----- the whitelist -----
 
     private val home = ComponentName(context.packageName, "tv.lounge.launcher.MainActivity").flattenToShortString()
 
-    val homeRole = PowerAction("home", "Make Lounge the home screen", "Pressing Home brings Lounge up; the stock launcher stays installed.", homeCommand(home, userId))
-    val tvListings = PowerAction("tv_listings", "Allow TV listings", "Lets Lounge read Watch Next, channels and the guide.", grantCommand(context.packageName, "android.permission.READ_TV_LISTINGS", userId))
+    val homeRole = PowerAction("home", "Make Lounge the home screen", "Pressing Home brings Lounge up; the TV's own home screen stays installed.", homeCommand(home, userId))
+    val tvListings = PowerAction("tv_listings", "Allow TV listings", "Lets Lounge see what you were watching, channels and the TV guide.", grantCommand(context.packageName, "android.permission.READ_TV_LISTINGS", userId))
     val notificationAccess = PowerAction("notifications", "Allow Now playing", "Lets Lounge see what is playing and control it.", "cmd notification allow_listener ${context.packageName}/tv.lounge.collector.media.NowPlayingListener")
-    val usageAccess = PowerAction("usage", "Allow usage access", "Sorts Your apps by what you actually open.", "appops set ${context.packageName} GET_USAGE_STATS allow")
-    val quickAnimations = PowerAction("animations", "Faster system animations", "Sets the three animation scales to 0.5×.", "settings put global window_animation_scale 0.5; settings put global transition_animation_scale 0.5; settings put global animator_duration_scale 0.5")
-    val normalAnimations = PowerAction("animations_reset", "Normal system animations", "Sets the three animation scales back to 1×.", "settings put global window_animation_scale 1.0; settings put global transition_animation_scale 1.0; settings put global animator_duration_scale 1.0")
-    val optimise = PowerAction("optimise", "Optimise Lounge now", "Compiles the launcher ahead of time, as the system would overnight.", "cmd package compile -r bg-dexopt ${context.packageName}", timeoutMs = 5 * 60_000)
+    val usageAccess = PowerAction("usage", "Allow usage access", "Lets Your apps follow what you open.", "appops set ${context.packageName} GET_USAGE_STATS allow")
+    val quickAnimations = PowerAction("animations", "Faster system animations", "Halves the TV's own animations, so its menus and apps open quicker.", "settings put global window_animation_scale 0.5; settings put global transition_animation_scale 0.5; settings put global animator_duration_scale 0.5")
+    val normalAnimations = PowerAction("animations_reset", "Normal system animations", "Puts the TV's own animations back to their usual length.", "settings put global window_animation_scale 1.0; settings put global transition_animation_scale 1.0; settings put global animator_duration_scale 1.0")
+    val optimise = PowerAction("optimise", "Optimise Lounge now", "Prepares Lounge now so it opens and scrolls faster, as the TV would overnight.", "cmd package compile -r bg-dexopt ${context.packageName}", timeoutMs = 5 * 60_000)
 
-    val oneTouchPlay = PowerAction("cec_otp", "Wake the TV and switch to me", "HDMI-CEC One Touch Play.", "cmd hdmi_control onetouchplay")
-    val tvPower = PowerAction("cec_tv_power", "TV power", "Toggles the TV on or off over HDMI-CEC.", "input keyevent KEYCODE_TV_POWER")
-    val everythingOff = PowerAction("sleep", "Everything off", "Puts this device to sleep; the TV follows over HDMI-CEC.", "input keyevent KEYCODE_SLEEP")
-    val systemAudioOn = PowerAction("cec_sam_on", "Sound through the soundbar", "HDMI-CEC System Audio Mode on.", "cmd hdmi_control setsystemaudiomode on")
-    val systemAudioOff = PowerAction("cec_sam_off", "Sound through the TV", "HDMI-CEC System Audio Mode off.", "cmd hdmi_control setsystemaudiomode off")
-    fun selectDevice(d: CecDevice) = PowerAction("cec_select_${d.logicalAddress}", "Switch to ${d.name}", "HDMI-CEC device select.", "cmd hdmi_control deviceselect ${d.logicalAddress}")
+    val oneTouchPlay = PowerAction("cec_otp", "Wake the TV and switch to me", "Turns the TV on and switches it to Lounge.", "cmd hdmi_control onetouchplay")
+    val tvPower = PowerAction("cec_tv_power", "TV power", "Turns the TV on or off.", "input keyevent KEYCODE_TV_POWER")
+    val everythingOff = PowerAction("sleep", "Everything off", "Goes to sleep, and the TV turns off with it.", "input keyevent KEYCODE_SLEEP")
+    val systemAudioOn = PowerAction("cec_sam_on", "Sound through the soundbar", "Plays the sound through the soundbar or receiver.", "cmd hdmi_control setsystemaudiomode on")
+    val systemAudioOff = PowerAction("cec_sam_off", "Sound through the TV", "Plays the sound through the TV's own speakers.", "cmd hdmi_control setsystemaudiomode off")
+    fun selectDevice(d: CecDevice) = PowerAction("cec_select_${d.logicalAddress}", "Switch to ${d.name}", "Switches the TV to ${d.name}.", "cmd hdmi_control deviceselect ${d.logicalAddress}")
 
     /** A remote key for whatever is in front, while Lounge is not; only the d-pad, Back, Home and Menu, anything else is refused. */
     fun inputKey(keyCode: Int): PowerAction? {
@@ -228,6 +268,9 @@ class PowerSetup(private val context: Context) {
         }
     }
 
+    /** Home screens Android would open before Lounge. Reads the package list, so call it off the main thread. */
+    fun homesFirst(): List<HomeApp> = homes().let { (own, others) -> outranking(others, own) }
+
     /** Home screens switched off as a whole app. Reads the package list, so call it off the main thread. */
     fun homesOff(): List<HomeApp> = switchedOff(homes().second)
 
@@ -247,7 +290,7 @@ class PowerSetup(private val context: Context) {
     val useAmbient = PowerAction(
         "ambient",
         "Use Lounge as the screensaver",
-        "Points the system screensaver at Lounge's Ambient mode.",
+        "Makes Lounge's the screensaver the TV starts when it is left idle.",
         "settings get secure screensaver_enabled; settings put secure screensaver_components $ambient; settings put secure screensaver_enabled 1",
     )
 
@@ -296,6 +339,10 @@ class PowerSetup(private val context: Context) {
     val hasTvControls: Boolean get() = hasCec && !isTelevision
 
     companion object {
+        const val DEBUGGING_OFF = "USB debugging is off. Turn it on in Developer options, then come back."
+        const val SHIZUKU_WAITING = "Shizuku is installed but hasn't allowed Lounge yet. Choose Use Shizuku instead, or turn on USB debugging."
+        const val NOT_CONNECTED = "Power Setup isn't connected. In Settings, open Power Setup and choose Connect."
+
         private val REMOTE_KEYS = mapOf(
             android.view.KeyEvent.KEYCODE_DPAD_UP to "KEYCODE_DPAD_UP",
             android.view.KeyEvent.KEYCODE_DPAD_DOWN to "KEYCODE_DPAD_DOWN",

@@ -23,7 +23,7 @@ impl sdk::Plugin for HdHomeRun {
             refresh_minutes: 60,
             rows: vec![],
             settings: vec![
-                SettingSpec { key: "device".into(), label: "Tuner address".into(), kind: SettingKind::Url, required: false, help: Some("Like http://192.168.0.20. Leave it empty and the tuner is found automatically.".into()), default: None },
+                SettingSpec { key: "device".into(), label: "Tuner address".into(), kind: SettingKind::Url, required: false, help: Some("Leave it empty and the tuner is found automatically. Otherwise use its address, like http://192.168.0.20.".into()), default: None },
                 SettingSpec { key: "skip_drm".into(), label: "Hide channels marked DRM".into(), kind: SettingKind::Toggle, required: false, help: Some("They cannot play outside HDHomeRun's own app.".into()), default: Some("true".into()) },
             ],
             homepage: Some("https://www.hdhomerun.com".into()),
@@ -176,7 +176,10 @@ fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
 }
 
 fn parse<T: serde::de::DeserializeOwned>(url: &str, body: &str) -> Result<T, String> {
-    serde_json::from_str(body).map_err(|e| format!("unexpected answer from {}: {e}", sdk::redact_url(url)))
+    serde_json::from_str(body).map_err(|e| {
+        sdk::warn!("unexpected answer from {}: {e}", sdk::redact_url(url));
+        sdk::unreadable("HDHomeRun", url)
+    })
 }
 
 pub fn channel_item(c: &LineupEntry, logo: Option<String>) -> Item {
@@ -284,8 +287,7 @@ mod tests {
     #[test]
     fn errors_never_show_the_device_key() {
         let e = parse::<Vec<GuideChannel>>("https://api.hdhomerun.com/api/guide?DeviceAuth=SECRETKEY", "<html>").unwrap_err();
-        assert!(e.starts_with("unexpected answer from https://api.hdhomerun.com/api/guide?…"), "{e}");
-        assert!(!e.contains("SECRETKEY"));
+        assert_eq!(e, "HDHomeRun at api.hdhomerun.com/api/guide?… sent a reply this plugin can't read.");
     }
 
     #[test]

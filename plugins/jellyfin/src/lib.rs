@@ -64,7 +64,7 @@ impl sdk::Plugin for Jellyfin {
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let Some(session) = Session::connect(true)? else { return Err("Jellyfin is not signed in yet".into()) };
+        let Some(session) = Session::connect(true)? else { return Err("Jellyfin isn't signed in yet. Press Refresh now to sign in.".into()) };
         let mut items = Vec::new();
         let resume: ItemsResponse = session.get_json(&format!(
             "/Users/{}/Items/Resume?Limit=24&Recursive=true&MediaTypes=Video&Fields=Overview,ParentId,SeriesInfo,RunTimeTicks&EnableImageTypes=Primary,Backdrop,Thumb",
@@ -300,7 +300,7 @@ impl Session {
     /// no username that is by Quick Connect, which only `may_ask` starts; without it there is
     /// no session yet.
     fn connect(may_ask: bool) -> Result<Option<Session>, String> {
-        let server = host::server_setting("server", "Server address")?;
+        let server = host::server_setting("server", "server address")?;
         let username = host::setting("username").map(|u| u.trim().to_string()).unwrap_or_default();
         let device_id = device_id();
         // The saved session belongs to one server and user; another of either signs in afresh.
@@ -673,5 +673,6 @@ mod tests {
             s.get_json::<serde_json::Value>("/Users/u").err().as_deref(),
             Some("Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.")
         );
+        assert_eq!(<Jellyfin as sdk::Plugin>::refresh(&RefreshContext::default()).err().as_deref(), Some("Add the server address in the plugin's settings."));
     }
 }

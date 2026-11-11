@@ -44,8 +44,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.LocalPinnableContainer
 import androidx.compose.ui.layout.PinnableContainer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import android.hardware.input.InputManager
+import android.view.InputDevice
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import kotlinx.coroutines.launch
@@ -161,12 +164,14 @@ fun ContentRow(
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(row.title, style = LoungeTheme.typography.headline, color = colors.limelight)
+            Text(row.title, style = LoungeTheme.typography.headline, color = colors.limelight, modifier = Modifier.alignByBaseline())
             when (row.badge) {
                 Badge.LIVE -> RowLiveDot(Modifier.padding(top = 15.dp))
-                Badge.CONTROLLER -> Icon(LoungeIcons.Controller, contentDescription = "Controller connected", tint = colors.dust, modifier = Modifier.padding(top = 5.dp).size(30.dp))
+                Badge.CONTROLLER -> ControllerGlyph(Modifier.padding(top = 5.dp).size(30.dp))
                 else -> Unit
             }
+            // Beside the header, so the row's height and the focus line stay as they are.
+            row.note?.let { Text(it, style = LoungeTheme.typography.meta, color = colors.dust, maxLines = 1, modifier = Modifier.alignByBaseline()) }
         }
         CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec(safeXPx)) {
             LazyRow(
@@ -242,3 +247,39 @@ fun ContentRow(
 /** A row header's live dot, reading idle on its own so the row around it never recomposes for it. */
 @Composable
 private fun RowLiveDot(modifier: Modifier) = LiveDot(LoungeTheme.lightState.idle, modifier)
+
+/** The Games header's controller glyph, there only while a controller is connected (DESIGN.md §5.3). */
+@Composable
+private fun ControllerGlyph(modifier: Modifier) {
+    if (rememberControllerConnected()) {
+        Icon(LoungeIcons.Controller, contentDescription = "Controller connected", tint = LoungeTheme.colors.dust, modifier = modifier)
+    }
+}
+
+/** Whether a game controller is connected, followed as controllers come and go. */
+@Composable
+internal fun rememberControllerConnected(): Boolean {
+    val context = LocalContext.current
+    var connected by remember { mutableStateOf(false) }
+    DisposableEffect(context) {
+        val input = context.getSystemService(InputManager::class.java)
+        fun check() {
+            connected = InputDevice.getDeviceIds().any { id -> InputDevice.getDevice(id)?.let(::isController) == true }
+        }
+        val listener = object : InputManager.InputDeviceListener {
+            override fun onInputDeviceAdded(deviceId: Int) = check()
+            override fun onInputDeviceRemoved(deviceId: Int) = check()
+            override fun onInputDeviceChanged(deviceId: Int) = check()
+        }
+        check()
+        input?.registerInputDeviceListener(listener, null)
+        onDispose { input?.unregisterInputDeviceListener(listener) }
+    }
+    return connected
+}
+
+/** A gamepad with sticks; a TV remote with game buttons is not one. */
+private fun isController(device: InputDevice): Boolean =
+    !device.isVirtual &&
+        (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD &&
+        (device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK

@@ -1,5 +1,5 @@
-//! Tvheadend: channels become Live now with the guide behind them, finished recordings a
-//! "Recordings" row, and the guide answers search. Everything plays in the TV's player straight
+//! Tvheadend: channels become Live now with the guide behind them, finished recordings a row
+//! of their own, and the guide answers search. Everything plays in the TV's player straight
 //! from the server. The API is read with the user's password, answering the server's Digest or
 //! Basic challenge; streams and pictures, which the TV fetches on its own, carry the persistent
 //! token from the user's Tvheadend settings.
@@ -24,7 +24,7 @@ impl sdk::Plugin for Tvheadend {
             kinds: vec![Kind::Content, Kind::Epg, Kind::Search],
             fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
-            rows: vec![RowSpec { id: "recordings".into(), title: "Recordings".into(), style: RowStyle::Landscape }],
+            rows: vec![RowSpec { id: "recordings".into(), title: "Recordings on Tvheadend".into(), style: RowStyle::Landscape }],
             settings: vec![
                 SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:9981".into()), default: None },
                 SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: false, help: Some("Leave both empty if the server allows anonymous access.".into()), default: None },
@@ -37,7 +37,7 @@ impl sdk::Plugin for Tvheadend {
                     help: Some("Lets the TV play streams without a password. In Tvheadend go to Configuration, Users, Access entries, open your user and turn on Persistent authentication; the token appears there.".into()),
                     default: None,
                 },
-                SettingSpec { key: "profile".into(), label: "Stream profile".into(), kind: SettingKind::Text, required: false, help: Some("A profile from Configuration, Stream. pass sends the channel as is.".into()), default: Some("pass".into()) },
+                SettingSpec { key: "profile".into(), label: "Stream profile".into(), kind: SettingKind::Text, required: false, help: Some("A profile from Configuration, Stream. The default, pass, sends the channel as it is.".into()), default: Some("pass".into()) },
                 SettingSpec { key: "tag".into(), label: "Only channels tagged".into(), kind: SettingKind::Text, required: false, help: Some("A channel tag name such as TV. Empty means every enabled channel.".into()), default: None },
             ],
             homepage: Some("https://tvheadend.org".into()),
@@ -52,7 +52,7 @@ impl sdk::Plugin for Tvheadend {
         let tag_uuid = s.tag_uuid()?;
         let mut channels = s.channels(tag_uuid.as_deref())?;
         if channels.is_empty() {
-            return Err("Tvheadend has no enabled channels. Map some services to channels first.".into());
+            return Err("Tvheadend has no enabled channels. Map some services to channels in Tvheadend first.".into());
         }
         if channels.len() > sdk::MAX_ITEMS {
             sdk::warn!("{} channels, of which the TV shows the first {}; choose a channel tag in the settings", channels.len(), sdk::MAX_ITEMS);
@@ -374,7 +374,7 @@ pub struct Recording {
 
 impl Server {
     fn from_settings() -> Result<Server, String> {
-        let base = host::server_setting("server", "Server address")?;
+        let base = host::server_setting("server", "server address")?;
         let username = host::setting("username").map(|u| u.trim().to_string()).filter(|u| !u.is_empty());
         let password = host::secret("password").unwrap_or_default();
         let token = host::secret("token").map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
@@ -434,7 +434,7 @@ impl Server {
 
     fn rejected(&self) -> String {
         let tried = match (&self.login, &*self.auth.borrow()) {
-            (None, _) => return "Tvheadend wants a username and password: enter them in the plugin's settings".into(),
+            (None, _) => return "Tvheadend wants a username and password. Enter them in the plugin's settings.".into(),
             (Some(_), None) => return "Tvheadend refused the request without saying how to sign in. In Tvheadend's general settings, check the authentication type.".into(),
             (Some(_), Some(Auth::Digest(_))) => "Digest",
             (Some(_), Some(Auth::Basic)) => "Basic",
@@ -553,14 +553,15 @@ fn first_airings(events: Vec<Event>, limit: usize) -> Vec<Event> {
     out
 }
 
-/// "On now", "Starts in 20 minutes", "Starts in 3 h", "Starts in 2 days".
+/// "On now", "Starts in 20 minutes", "Starts in 3 hours", "Starts in 2 days".
 fn airs(start_ms: i64, now_ms: i64) -> String {
     let minutes = (start_ms - now_ms + 59_999) / 60_000;
     match minutes {
         ..=0 => "On now".into(),
         1 => "Starts in 1 minute".into(),
         2..=59 => format!("Starts in {minutes} minutes"),
-        60..=1_439 => format!("Starts in {} h", minutes / 60),
+        60..=119 => "Starts in 1 hour".into(),
+        120..=1_439 => format!("Starts in {} hours", minutes / 60),
         1_440..=2_879 => "Starts in 1 day".into(),
         _ => format!("Starts in {} days", minutes / 1_440),
     }
@@ -612,7 +613,9 @@ mod tests {
         assert_eq!(kept.iter().map(|e| (e.channel_uuid.as_str(), e.start)).collect::<Vec<_>>(), [("c1", 100), ("c2", 300), ("c1", 400)]);
         assert_eq!(airs(1_000, 5_000), "On now");
         assert_eq!(airs(20 * 60_000, 0), "Starts in 20 minutes");
-        assert_eq!(airs(3 * 3_600_000 + 60_000, 0), "Starts in 3 h");
+        assert_eq!(airs(3_600_000, 0), "Starts in 1 hour");
+        assert_eq!(airs(3 * 3_600_000 + 60_000, 0), "Starts in 3 hours");
+        assert_eq!(airs(86_400_000, 0), "Starts in 1 day");
         assert_eq!(airs(3 * 86_400_000, 0), "Starts in 3 days");
         let item = server().search_item(&ev("News", "c1", 0), 0);
         assert_eq!(item.subtitle.as_deref(), Some("On now, BBC One"));
@@ -730,6 +733,13 @@ mod tests {
         *s.auth.borrow_mut() = None;
         assert_eq!(s.rejected(), "Tvheadend refused the request without saying how to sign in. In Tvheadend's general settings, check the authentication type.");
         assert_eq!(request_target("http://host"), "/");
+        let anonymous = Server { login: None, ..server() };
+        assert_eq!(anonymous.rejected(), "Tvheadend wants a username and password. Enter them in the plugin's settings.");
+    }
+
+    #[test]
+    fn a_missing_address_says_where_to_add_it() {
+        assert_eq!(<Tvheadend as sdk::Plugin>::refresh(&RefreshContext::default()).err().as_deref(), Some("Add the server address in the plugin's settings."));
     }
 
     #[test]

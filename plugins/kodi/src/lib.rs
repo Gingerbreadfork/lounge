@@ -31,8 +31,8 @@ impl sdk::Plugin for Kodi {
             fetch_hosts: vec!["$server".into(), "localhost".into(), "127.0.0.1".into()],
             refresh_minutes: 10,
             rows: vec![
-                RowSpec { id: "upnext".into(), title: "Up next in Kodi".into(), style: RowStyle::Landscape },
-                RowSpec { id: "recent".into(), title: "New in Kodi".into(), style: RowStyle::Poster },
+                RowSpec { id: "upnext".into(), title: "Up next on Kodi".into(), style: RowStyle::Landscape },
+                RowSpec { id: "recent".into(), title: "New on Kodi".into(), style: RowStyle::Poster },
             ],
             settings: vec![
                 SettingSpec {
@@ -40,7 +40,7 @@ impl sdk::Plugin for Kodi {
                     label: "Kodi address".into(),
                     kind: SettingKind::Url,
                     required: true,
-                    help: Some("Like http://192.168.0.20:8080, or http://localhost:8080 when Kodi runs on this TV. In Kodi turn on Settings → Services → Control → Allow remote control via HTTP.".into()),
+                    help: Some("Like http://192.168.0.20:8080, or http://localhost:8080 when Kodi runs on this TV. In Kodi, open Settings, Services, Control and turn on Allow remote control via HTTP.".into()),
                     default: None,
                 },
                 SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: false, help: Some("Kodi's default is kodi.".into()), default: Some("kodi".into()) },
@@ -89,7 +89,7 @@ impl sdk::Plugin for Kodi {
         for (i, show) in shows.tvshows.iter().enumerate() {
             let next = match kodi.next_episode(show.tvshowid) {
                 Ok(n) => n,
-                Err(e) if e.contains("budget") => break,
+                Err(e) if e == host::BUDGET_SPENT => break,
                 Err(e) => {
                     sdk::warn!("{}: {e}", show.title);
                     continue;
@@ -162,7 +162,7 @@ impl sdk::Plugin for Kodi {
             "episode" => json!({"episodeid": id}),
             "channel" => json!({"channelid": id}),
             "show" => {
-                let next = kodi.next_episode(id)?.or_else(|| kodi.first_episode(id).ok().flatten()).ok_or("Kodi has no episodes of this show")?;
+                let next = kodi.next_episode(id)?.or_else(|| kodi.first_episode(id).ok().flatten()).ok_or("Kodi has no episodes of this show. Update Kodi's library, then try again.")?;
                 json!({"episodeid": next.episodeid})
             }
             _ => return Err(unknown()),
@@ -400,14 +400,14 @@ impl Server {
 
     fn call<T: serde::de::DeserializeOwned>(&self, method: &str, params: Value) -> Result<T, String> {
         let r = host::fetch(&self.request(method, params)).map_err(|e| {
-            if e.contains("budget") {
+            if e == host::BUDGET_SPENT {
                 return e;
             }
             sdk::warn!("{e}");
             if e.contains("leads to this device itself") {
                 format!("{} is this TV's own address, which a plugin may not use. For Kodi on this TV, set the address to {}.", redact_url(&self.base), on_localhost(&self.base))
             } else {
-                format!("Kodi didn't answer at {}. Check that it is running and allows remote control over HTTP, then try again.", redact_url(&self.base))
+                format!("Kodi didn't answer at {}. Check that it is running and allows remote control over HTTP, then try again.", sdk::address(&self.base))
             }
         })?;
         match r.status {
@@ -746,6 +746,11 @@ mod tests {
         assert_eq!(parse_local("", 0), None);
         assert_eq!(parse_local("0000-00-00 00:00:00", 0), None);
         assert_eq!(base64(b"kodi:s3cret"), "a29kaTpzM2NyZXQ=");
+    }
+
+    #[test]
+    fn a_missing_address_says_where_to_add_it() {
+        assert_eq!(<Kodi as sdk::Plugin>::resolve("movie:12").err().as_deref(), Some("Add the Kodi address in the plugin's settings."));
     }
 
     #[test]

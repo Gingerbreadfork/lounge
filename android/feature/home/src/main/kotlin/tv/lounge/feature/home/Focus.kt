@@ -29,6 +29,11 @@ import androidx.compose.ui.input.key.KeyInputModifierNode
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.SemanticsModifierNode
+import androidx.compose.ui.node.invalidateSemantics
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import tv.lounge.design.LoungeTheme
 
 /**
@@ -132,24 +137,48 @@ private val backKeys = setOf(Key.Back, Key.Escape, Key.ButtonB)
  * D-pad centre for tiles: a short press selects; holding it, or the Menu or controller Y key,
  * opens the tile menu. `combinedClickable` cannot see key long-presses, so this reads the repeated
  * KeyDowns. The press lives in a node, so a recomposition between KeyDown and KeyUp keeps it.
+ * Accessibility services press through the same node: [clickLabel] names the press, and the hold
+ * is offered as an action only when [longPressLabel] names it.
  */
-fun Modifier.tilePress(onClick: () -> Unit, onLongPress: () -> Unit): Modifier = this then TilePressElement(onClick, onLongPress)
+fun Modifier.tilePress(onClick: () -> Unit, onLongPress: () -> Unit, clickLabel: String? = null, longPressLabel: String? = null): Modifier =
+    this then TilePressElement(onClick, onLongPress, clickLabel, longPressLabel)
 
-private class TilePressElement(val onClick: () -> Unit, val onLongPress: () -> Unit) : ModifierNodeElement<TilePressNode>() {
-    override fun create() = TilePressNode(onClick, onLongPress)
+private class TilePressElement(
+    val onClick: () -> Unit,
+    val onLongPress: () -> Unit,
+    val clickLabel: String?,
+    val longPressLabel: String?,
+) : ModifierNodeElement<TilePressNode>() {
+    override fun create() = TilePressNode(onClick, onLongPress, clickLabel, longPressLabel)
 
     override fun update(node: TilePressNode) {
-        node.onClick = onClick
-        node.onLongPress = onLongPress
+        node.press = onClick
+        node.hold = onLongPress
+        if (node.clickLabel != clickLabel || node.longPressLabel != longPressLabel) {
+            node.clickLabel = clickLabel
+            node.longPressLabel = longPressLabel
+            node.invalidateSemantics()
+        }
     }
 
     override fun equals(other: Any?): Boolean =
-        other is TilePressElement && other.onClick === onClick && other.onLongPress === onLongPress
+        other is TilePressElement && other.onClick === onClick && other.onLongPress === onLongPress &&
+            other.clickLabel == clickLabel && other.longPressLabel == longPressLabel
 
-    override fun hashCode(): Int = 31 * onClick.hashCode() + onLongPress.hashCode()
+    override fun hashCode(): Int = ((31 * onClick.hashCode() + onLongPress.hashCode()) * 31 + clickLabel.hashCode()) * 31 + longPressLabel.hashCode()
 }
 
-private class TilePressNode(var onClick: () -> Unit, var onLongPress: () -> Unit) : Modifier.Node(), KeyInputModifierNode, FocusEventModifierNode {
+private class TilePressNode(
+    var press: () -> Unit,
+    var hold: () -> Unit,
+    var clickLabel: String?,
+    var longPressLabel: String?,
+) : Modifier.Node(), KeyInputModifierNode, FocusEventModifierNode, SemanticsModifierNode {
+    override fun SemanticsPropertyReceiver.applySemantics() {
+        onClick(label = clickLabel) { press(); true }
+        longPressLabel?.let { label -> onLongClick(label = label) { hold(); true } }
+    }
+
     private var downAt = 0L
     private var longFired = false
 
@@ -165,7 +194,7 @@ private class TilePressNode(var onClick: () -> Unit, var onLongPress: () -> Unit
         val isMenu = event.key in menuKeys
         return when {
             isMenu && event.type == KeyEventType.KeyUp -> {
-                onLongPress(); true
+                hold(); true
             }
             isMenu && event.type == KeyEventType.KeyDown -> true
             isSelect && event.type == KeyEventType.KeyDown -> {
@@ -180,14 +209,14 @@ private class TilePressNode(var onClick: () -> Unit, var onLongPress: () -> Unit
                     // The system flags the repeat at the person's own long-press time; failing that, 450 ms.
                     !longFired && (event.nativeKeyEvent.isLongPress || now - downAt >= LONG_PRESS_MS) -> {
                         longFired = true
-                        onLongPress()
+                        hold()
                     }
                 }
                 true
             }
             isSelect && event.type == KeyEventType.KeyUp -> {
                 val armed = downAt != 0L
-                if (!longFired && armed) onClick()
+                if (!longFired && armed) press()
                 downAt = 0L
                 longFired = false
                 armed
@@ -246,10 +275,62 @@ suspend fun androidx.compose.ui.focus.FocusRequester.requestWhenReady(maxFrames:
     return false
 }
 
-/** Focus the selected strip tile; if it is not composed, the first tile. */
+/** Focus the selected strip tile; if it is not composed, the first tile; with no strip, the playbill's button. */
 suspend fun HomeState.focusStrip(): Boolean =
-    stripFocus().requestWhenReady(15) || stripRequester(0).requestWhenReady(15)
+    stripFocus().requestWhenReady(15) || stripRequester(0).requestWhenReady(15) || playbillFocus.requestWhenReady(4)
 
 /** Focus a row at its entry tile; if that tile is not composed, the first one. */
 suspend fun HomeState.focusRow(rowId: String): Boolean =
     rowEntryRequester(rowId).requestWhenReady(8) || rowRequester(rowId, 0).requestWhenReady(8)
+
+/**
+ * Which way a d-pad press at an end of the top bar would leave it: -1 for Left off the first
+ * button, 1 for Right off the last, 0 for a press that stays inside. The bar nudges instead of
+ * letting focus leave sideways (DESIGN.md §5.3).
+ */
+internal fun topBarEdge(key: Key, focused: Any?, first: Any, last: Any): Int = when {
+    key == Key.DirectionLeft && focused === first -> -1
+    key == Key.DirectionRight && focused === last -> 1
+    else -> 0
+}
+
+/** What Back does on the home with nothing open over it (DESIGN.md §6.4). */
+enum class HomeBack {
+    /** From a row or the top bar: up to the Stage, focus on the strip. */
+    ToStage,
+    /** From the playbill's buttons: down to the strip they belong to. */
+    ToStrip,
+    /** From the strip: nothing, the home is already home. */
+    Stay,
+}
+
+internal fun homeBack(region: FocusRegion, playbillFocused: Boolean): HomeBack = when (region) {
+    FocusRegion.Rows, FocusRegion.TopBar -> HomeBack.ToStage
+    FocusRegion.Stage -> if (playbillFocused) HomeBack.ToStrip else HomeBack.Stay
+}
+
+/** Where focus goes when the rows change under a focused tile, as when it is hidden from its menu. */
+sealed interface RowFocus {
+    /** Still in its row, now at [index]. */
+    data class Stays(val index: Int) : RowFocus
+
+    /** Gone from a row that still has tiles: the one now at its place, or the last. */
+    data class Neighbour(val index: Int) : RowFocus
+
+    /** Its row went too: the row now in that row's place. */
+    data class NextRow(val rowId: String) : RowFocus
+
+    /** No rows are left: the Stage. */
+    data object Stage : RowFocus
+}
+
+internal fun rowFocusAfter(before: List<String>, rows: List<tv.lounge.core.Row>, rowId: String, tileId: String, index: Int): RowFocus {
+    val row = rows.firstOrNull { it.id == rowId }
+    val at = row?.tiles?.indexOfFirst { it.id == tileId } ?: -1
+    return when {
+        at >= 0 -> RowFocus.Stays(at)
+        row != null && row.tiles.isNotEmpty() -> RowFocus.Neighbour(index.coerceIn(0, row.tiles.lastIndex))
+        rows.isNotEmpty() -> RowFocus.NextRow(rows[before.indexOf(rowId).coerceIn(0, rows.lastIndex)].id)
+        else -> RowFocus.Stage
+    }
+}

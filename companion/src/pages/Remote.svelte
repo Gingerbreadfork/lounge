@@ -1,15 +1,30 @@
 <script lang="ts">
   import { api } from '../lib/api';
   import Icon from '../lib/Icon.svelte';
-  import { act, app, connectionLabel, toast } from '../lib/state.svelte';
+  import { app, connectionLabel, done, toast } from '../lib/state.svelte';
 
   let text = $state('');
   let listening = $state(false);
   let recognition: any = null;
 
-  function key(k: string) {
+  // Keys go to the TV one at a time, in the order pressed. A repeat from a held key is dropped
+  // while one is still waiting, so letting go stops at once, and a refused key drops the rest
+  // so its reason is said once.
+  let waiting: string[] = [];
+  let sending = false;
+  function key(k: string, repeat = false) {
     if (navigator.vibrate) navigator.vibrate(8);
-    act('', () => api.key(k));
+    if (repeat && waiting.length > 0) return;
+    waiting.push(k);
+    if (!sending) sendKeys();
+  }
+  async function sendKeys() {
+    sending = true;
+    while (waiting.length > 0) {
+      const k = waiting.shift()!;
+      if (!(await done('', () => api.key(k)))) waiting = [];
+    }
+    sending = false;
   }
 
   // A key is sent when it is let go, so a scroll that starts on one sends nothing, and keyboard
@@ -30,7 +45,7 @@
         repeated = false;
         stop();
         if (!repeats) return;
-        const tick = (wait: number) => (repeat = setTimeout(() => { repeated = true; key(k); tick(120); }, wait));
+        const tick = (wait: number) => (repeat = setTimeout(() => { repeated = true; key(k, true); tick(120); }, wait));
         tick(450);
       },
       onpointerup: stop,
@@ -38,24 +53,23 @@
       onpointerleave: stop,
     };
   }
-  function send() {
-    if (!text.trim()) return;
+  // What was typed stays in the field until the TV has it, so a failure loses nothing.
+  async function sendText(label: string, f: (t: string) => Promise<unknown>) {
     const t = text;
-    text = '';
-    act('Typed on the TV', () => api.text(t));
+    if (!t.trim()) return;
+    if ((await done(label, () => f(t))) && text === t) text = '';
+  }
+  function send() {
+    sendText('Sent to Lounge on the TV', (t) => api.text(t));
   }
   function search() {
-    if (!text.trim()) return;
-    const t = text;
-    text = '';
-    act(`Searching for “${t}”`, () => api.search(t));
+    sendText(`Searching the TV for “${text.trim()}”`, (t) => api.search(t));
   }
   let link = $derived(text.trim().match(/^https?:\/\/\S+$/) ? text.trim() : null);
   function openLink() {
     if (!link) return;
     const l = link;
-    text = '';
-    act('Opened on the TV', () => api.open(`url:${l}`));
+    sendText('Opened on the TV', () => api.open(`url:${l}`));
   }
 
   // Voice through the phone's own recogniser; the TV never needs one. Browsers give the microphone
@@ -94,12 +108,12 @@
   <section class="dpad" aria-label="Direction pad">
     <button class="pad up" {...press('up', true)} aria-label="Up"><Icon name="up" size={28} /></button>
     <button class="pad left" {...press('left', true)} aria-label="Left"><Icon name="left" size={28} /></button>
-    <button class="pad ok" {...press('center')} aria-label="Select">OK</button>
+    <button class="pad ok" {...press('center')}>OK</button>
     <button class="pad right" {...press('right', true)} aria-label="Right"><Icon name="right" size={28} /></button>
     <button class="pad down" {...press('down', true)} aria-label="Down"><Icon name="down" size={28} /></button>
   </section>
 
-  <section class="keys">
+  <section class="keys nav">
     <button class="key labelled" {...press('back')}><Icon name="back" size={22} /><span>Back</span></button>
     <button class="key labelled" {...press('home')}><Icon name="home" size={22} /><span>Home</span></button>
     <button class="key labelled" {...press('menu')}><Icon name="menu" size={22} /><span>Menu</span></button>
@@ -117,7 +131,7 @@
   <section class="card type">
     <label class="caption" for="type">Type on the TV</label>
     <div class="type-row">
-      <input id="type" bind:value={text} placeholder="Lands in the TV's focused field" enterkeyhint="send" onkeydown={(e) => { if (e.key === 'Enter') send(); }} autocapitalize="off" autocorrect="off" />
+      <input id="type" bind:value={text} placeholder="Types into the field open in Lounge" enterkeyhint="send" onkeydown={(e) => { if (e.key === 'Enter') send(); }} autocapitalize="off" autocorrect="off" />
       {#if Speech}<button class="round" class:listening onclick={voice} aria-label={listening ? 'Stop listening' : 'Speak'}><Icon name="mic" size={22} /></button>{/if}
     </div>
     <div class="type-actions">
@@ -138,7 +152,7 @@
   .dpad { display: grid; grid-template-areas: '. up .' 'left ok right' '. down .'; grid-template-columns: 1fr 1fr 1fr; gap: 10px; width: min(78vw, 300px); margin: 4px auto 0; }
   .pad { aspect-ratio: 1; border-radius: 24px; background: var(--curtain); color: var(--limelight); display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--curtain-edge); transition: transform 90ms ease-out, background 90ms ease-out; user-select: none; touch-action: manipulation; }
   .pad:active { transform: scale(0.95); background: var(--curtain-edge); }
-  .pad.ok { border-radius: 50%; background: var(--light); color: var(--velvet); font-family: var(--headline); font-size: 22px; font-weight: 600; box-shadow: 0 10px 40px -14px var(--light); }
+  .pad.ok { border-radius: 50%; background: var(--light); color: var(--on-light); font-family: var(--headline); font-size: 22px; font-weight: 600; box-shadow: 0 10px 40px -14px var(--light); }
   .pad.up { grid-area: up; } .pad.down { grid-area: down; } .pad.left { grid-area: left; } .pad.right { grid-area: right; } .pad.ok { grid-area: ok; }
   .keys { display: flex; justify-content: center; align-items: center; gap: 10px; }
   /* Six keys share the width whatever the phone, with a breath between playback and volume. */
@@ -148,6 +162,9 @@
   .key { min-width: 44px; height: 52px; padding: 0 10px; border-radius: 26px; background: var(--curtain); color: var(--limelight); display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: inset 0 0 0 1px var(--curtain-edge); touch-action: manipulation; user-select: none; transition: transform 90ms ease-out, background 90ms ease-out; }
   .key:active { transform: scale(0.95); background: var(--curtain-edge); }
   .key.labelled { padding: 0 18px 0 14px; font-weight: 600; }
+  /* Back, Home and Menu share the width, so they fit a 320 px phone. */
+  .keys.nav { display: grid; grid-template-columns: repeat(3, minmax(0, max-content)); justify-content: center; }
+  @media (max-width: 360px) { .keys.nav { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } .key.labelled { padding: 0 8px; gap: 6px; } }
   .type { display: flex; flex-direction: column; gap: 10px; }
   .type-row { display: flex; gap: 8px; align-items: center; }
   .type-row input { flex: 1; min-width: 0; min-height: 50px; padding: 0 14px; border-radius: var(--radius); background: var(--velvet); border: 1px solid var(--curtain-edge); color: var(--limelight); outline: none; }

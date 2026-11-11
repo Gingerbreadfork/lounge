@@ -1,5 +1,5 @@
 //! Channels DVR: the server's channels become Live now with the guide behind them, half-watched
-//! recordings go into Continue watching, and the rest fill a "Recordings" row. Everything plays
+//! recordings go into Continue watching, and the rest fill a row of recordings. Everything plays
 //! in the TV's player from the server, which needs no login on the local network.
 use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
@@ -18,7 +18,7 @@ impl sdk::Plugin for Channels {
             kinds: vec![Kind::Content, Kind::Epg],
             fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
-            rows: vec![RowSpec { id: "recordings".into(), title: "Recordings".into(), style: RowStyle::Landscape }],
+            rows: vec![RowSpec { id: "recordings".into(), title: "Recordings on Channels DVR".into(), style: RowStyle::Landscape }],
             settings: vec![
                 SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8089".into()), default: None },
                 SettingSpec { key: "favorites_only".into(), label: "Only favourite channels".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
@@ -32,7 +32,7 @@ impl sdk::Plugin for Channels {
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let base = host::server_setting("server", "Server address")?;
+        let base = host::server_setting("server", "server address")?;
         let favorites_only = host::setting("favorites_only").map(|v| v == "true").unwrap_or(false);
         let max_recordings = host::setting("recordings").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(30).clamp(1, 100);
         let mut numbers = HashSet::new();
@@ -229,7 +229,10 @@ impl Recording {
 
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
     let body = host::get_text(url)?;
-    serde_json::from_str(&body).map_err(|e| format!("unexpected answer from {}: {e}", sdk::redact_url(url)))
+    serde_json::from_str(&body).map_err(|e| {
+        sdk::warn!("unexpected answer from {}: {e}", sdk::redact_url(url));
+        sdk::unreadable("Channels DVR", url)
+    })
 }
 
 /// Epoch milliseconds from a stamp in milliseconds, or in seconds as older servers send.
@@ -388,6 +391,11 @@ mod tests {
         let ids: Vec<&str> = kept.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(ids, ["499", "498", "496", "495", "494"]);
         assert!(newest_recordings("{\"error\": \"nope\"}", 5).is_err());
+    }
+
+    #[test]
+    fn a_missing_address_says_where_to_add_it() {
+        assert_eq!(<Channels as sdk::Plugin>::refresh(&RefreshContext::default()).err().as_deref(), Some("Add the server address in the plugin's settings."));
     }
 
     #[test]

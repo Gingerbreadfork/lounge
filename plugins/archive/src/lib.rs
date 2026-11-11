@@ -7,6 +7,9 @@ use std::collections::HashSet;
 
 pub struct Archive;
 
+/// How errors name the service.
+const SERVICE: &str = "The Internet Archive";
+
 const ROWS: [(&str, &str, &str); 3] = [
     ("films", "Feature films", "feature_films"),
     ("cartoons", "Classic cartoons", "classic_cartoons"),
@@ -24,7 +27,7 @@ impl sdk::Plugin for Archive {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["archive.org".into(), "*.archive.org".into()],
             refresh_minutes: 24 * 60,
-            rows: ROWS.iter().map(|(id, title, _)| RowSpec { id: (*id).into(), title: (*title).into(), style: RowStyle::Landscape }).collect(),
+            rows: ROWS.iter().map(|(id, title, _)| RowSpec { id: (*id).into(), title: format!("{title} on the Internet Archive"), style: RowStyle::Landscape }).collect(),
             settings: ROWS
                 .iter()
                 .map(|(id, title, collection)| SettingSpec {
@@ -66,7 +69,7 @@ impl sdk::Plugin for Archive {
             items.extend(docs.into_iter().enumerate().map(|(i, d)| item_for(&d, Some(row), (count - i) as i32)));
         }
         if items.is_empty() {
-            return Err(failures.into_iter().next().unwrap_or_else(|| "archive.org has nothing in these collections. Check the collection names in the plugin's settings.".into()));
+            return Err(failures.into_iter().next().unwrap_or_else(|| "The Internet Archive has nothing in these collections. Check the collections in the plugin's settings.".into()));
         }
         sdk::info!("{} items", items.len());
         Ok(items)
@@ -84,7 +87,7 @@ impl sdk::Plugin for Archive {
             "This tile is out of date. Refresh the plugin, then try again.".to_string()
         })?;
         let meta: Metadata = get_json(&format!("https://archive.org/metadata/{}", encode_path(identifier)))?;
-        let file = best_video(&meta.files).ok_or_else(|| "This item has no playable video file".to_string())?;
+        let file = best_video(&meta.files).ok_or_else(|| "This item has no video file the TV can play. Try another one.".to_string())?;
         let title = meta.metadata.and_then(|m| m.title.map(|t| t.into_string())).unwrap_or_else(|| identifier.to_string());
         Ok(Action::play(format!("https://archive.org/download/{}/{}", encode_path(identifier), encode_path(&file.name)), title))
     }
@@ -238,14 +241,14 @@ fn unique_docs(docs: Vec<Doc>) -> Vec<Doc> {
 }
 
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
-    let r = sdk::fetch_online("archive.org", &HttpRequest::get(url))?;
+    let r = sdk::fetch_online(SERVICE, &HttpRequest::get(url))?;
     if !r.ok() {
         sdk::warn!("HTTP {} for {}", r.status, sdk::redact_url(url));
-        return Err(sdk::online_error("archive.org", r.status));
+        return Err(sdk::online_error(SERVICE, r.status));
     }
     serde_json::from_str(&r.body).map_err(|e| {
         sdk::warn!("unexpected answer from archive.org: {e}");
-        sdk::unreadable("The Internet Archive", "archive.org")
+        sdk::unreadable(SERVICE, "archive.org")
     })
 }
 
@@ -377,6 +380,14 @@ fn encode_path(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rows_name_the_archive_and_settings_name_the_collection() {
+        let m = <Archive as sdk::Plugin>::manifest();
+        assert_eq!(m.rows.iter().map(|r| r.title.as_str()).collect::<Vec<_>>(), ["Feature films on the Internet Archive", "Classic cartoons on the Internet Archive", "Classic television on the Internet Archive"]);
+        assert_eq!(m.rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["films", "cartoons", "tv"]);
+        assert_eq!((m.settings[0].key.as_str(), m.settings[0].label.as_str()), ("films_collection", "Feature films collection"));
+    }
 
     #[test]
     fn runtimes_parse() {

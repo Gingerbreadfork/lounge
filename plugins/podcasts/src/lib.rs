@@ -76,7 +76,7 @@ impl sdk::Plugin for Podcasts {
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let sources = parse_sources(&host::setting("feeds").unwrap_or_default())?;
         if sources.is_empty() {
-            return Err("No podcasts yet: add a feed link, an Apple Podcasts link or an OPML export in the plugin's settings".into());
+            return Err("No podcasts yet. Add a feed link, an Apple Podcasts link or an OPML export in the plugin's settings.".into());
         }
         let per_feed = number_setting("per_feed", 3).clamp(1, STORED_PER_FEED as i64) as usize;
         let days = number_setting("days", 30).clamp(0, 3_650);
@@ -248,7 +248,7 @@ fn fetch_feed_once(url: &str, cached: Option<&Show>, partial: bool, timeout_ms: 
     let r = host::fetch(&req).map_err(|e| {
         if e == host::TOO_LARGE {
             FeedError::TooLarge(format!("The feed at {} is too big to read, even in part. Only its newest episodes are needed; the publisher's other links may give a smaller feed.", sdk::address(url)))
-        } else if e.starts_with("fetch budget") {
+        } else if e == host::BUDGET_SPENT {
             FeedError::Budget
         } else {
             sdk::warn!("{e}");
@@ -685,13 +685,14 @@ impl FeedCache {
 // Tiles
 // ---------------------------------------------------------------------------
 
-/// A length as the launcher writes one: "48 min", "2 h 25 min", "2 h".
+/// A length in words: "48 minutes", "2 hours 25 minutes", "1 hour".
 pub fn length_text(ms: i64) -> String {
     let minutes = (ms + 30_000) / 60_000;
+    let count = |n: i64, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
     match (minutes / 60, minutes % 60) {
-        (0, m) => format!("{} min", m.max(1)),
-        (h, 0) => format!("{h} h"),
-        (h, m) => format!("{h} h {m} min"),
+        (0, m) => count(m.max(1), "minute", "minutes"),
+        (h, 0) => count(h, "hour", "hours"),
+        (h, m) => format!("{} {}", count(h, "hour", "hours"), count(m, "minute", "minutes")),
     }
 }
 
@@ -1196,7 +1197,7 @@ mod tests {
         let show = parse_feed(FEED, "https://feeds.example/radiolab");
         let item = episode_item(&show, &show.episodes[2], 3, true);
         assert_eq!(item.title, "The Other Latif & Co");
-        assert_eq!(item.subtitle.as_deref(), Some("Radiolab, 2 h 25 min"));
+        assert_eq!(item.subtitle.as_deref(), Some("Radiolab, 2 hours 25 minutes"));
         assert_eq!((item.season.as_deref(), item.episode.as_deref()), (Some("3"), Some("7")));
         assert_eq!(item.thumbnail.as_deref(), Some("https://img.example/ep2.jpg"));
         assert_eq!(item.action.play.as_deref(), Some("https://cdn.example/ep2.mp3"));
@@ -1210,9 +1211,10 @@ mod tests {
         let tile = show_item(&show, 1).unwrap();
         assert_eq!((tile.title.as_str(), tile.subtitle.as_deref(), tile.row.as_deref()), ("Radiolab", Some("Latest: Bonus \u{2019} newest"), Some("shows")));
         assert_eq!(tile.action.play.as_deref(), Some("https://cdn.example/ep3.m4a?a=1&b=2&c=3"));
-        assert_eq!(length_text(48 * 60_000), "48 min");
-        assert_eq!(length_text(2 * 3_600_000), "2 h");
-        assert_eq!(length_text(20_000), "1 min");
+        assert_eq!(length_text(48 * 60_000), "48 minutes");
+        assert_eq!(length_text(2 * 3_600_000), "2 hours");
+        assert_eq!(length_text(20_000), "1 minute");
+        assert_eq!(length_text(61 * 60_000), "1 hour 1 minute");
     }
 
     #[test]

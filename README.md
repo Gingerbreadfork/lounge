@@ -150,14 +150,16 @@ a phone, done. All of it is in Settings afterwards.
 
 ## The phone
 
-Settings, Phone companion shows a QR code and a six-digit code. The page at `http://<tv>:8787`
-works in any browser on the same network and can be added to the phone's home screen like an
-app. The TV serves it itself, with no account, and remembers the phone until you forget it.
+Settings, Phone companion shows a QR code and a six-digit code. The phone companion is a web page
+at `http://<tv>:8787` that works in any browser on the same network, and a shortcut to it can go
+on the phone's home screen. It is not an app to install: the TV serves it itself, with no
+account, and remembers the phone until you forget it. A code or QR code pairs one phone, and
+the TV shows a fresh one as soon as it is used.
 
 <p align="center">
   <img src="docs/screenshots/phone-home.png" width="23%" alt="What's on: the Stage and the app rows as tiles that open on the TV">
   &nbsp;
-  <img src="docs/screenshots/phone-remote.png" width="23%" alt="Remote: a d-pad, media keys, a field that types on the TV, and voice">
+  <img src="docs/screenshots/phone-remote.png" width="23%" alt="Remote: a d-pad, media keys and a field that types on the TV">
   &nbsp;
   <img src="docs/screenshots/phone-layout.png" width="23%" alt="Layout: the rows in order with arrows to move them">
   &nbsp;
@@ -166,15 +168,17 @@ app. The TV serves it itself, with no account, and remembers the phone until you
 
 - **What's on** mirrors the home screen. Tap a tile to open it on the TV, or hold it for the
   same menu as the remote's.
-- **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into whatever
-  the TV has focused, and a place to paste a link that opens on the TV. With Power Setup
-  connected, the keys reach whatever app is in front.
+- **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into Lounge's
+  search and other fields, and a place to paste a link that opens on the TV. Home, the volume and
+  the media keys work whatever is on screen. The d-pad, OK, Back and Menu reach another app only
+  while Power Setup is connected; without it they work in Lounge alone.
 - **Layout** shows, hides and reorders rows, pins and orders the apps at the front of Your apps,
   unpins things from the Stage, shows or hides each source of Continue watching, and brings back
   anything you hid.
 - **Plugins** sets up the installed plugins and installs new ones from a file or a link.
-- **More** backs up your layout and settings to one file and restores it, lists the paired
-  phones, and shows the TV's diagnostics.
+- **More** backs up your layout and settings to one file and restores it, asking first before a
+  restore replaces anything, lists the paired phones with when each was last seen, and shows the
+  TV's diagnostics.
 
 ## Plugins
 
@@ -196,11 +200,11 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 
 | Plugin | What it adds |
 |---|---|
-| Jellyfin | Resume points and next episodes in Continue watching, newest additions and favourites as rows, and search. Opens in the Jellyfin app. Sign in with Quick Connect or a username and password. |
+| Jellyfin | Resume points and next episodes in Continue watching, recently added and favourites as rows, and search. Opens in the Jellyfin app. Sign in with Quick Connect or a username and password. |
 | Emby | The same from an Emby server. Tiles open the Emby app. |
-| Plex | On Deck in Continue watching, newest additions as a row, and search. Sign in with a code at plex.tv/link or paste a token. |
-| Kodi | Resume points, next episodes, recent additions and Live TV from a Kodi library, played on whichever Kodi you choose. |
-| Trakt | What you paused, what's next and your watchlist, wherever you watch it. |
+| Plex | On Deck in Continue watching, recently added as a row, and search. Sign in with a code at plex.tv/link or paste a token. |
+| Kodi | Resume points in Continue watching, up next and new additions as rows, and Live TV, from a Kodi library, played on whichever Kodi you choose. |
+| Trakt | What you paused in Continue watching, and what's next and your watchlist as rows, wherever you watch it. |
 | Simkl | What you paused, what's next, what you plan to watch and what airs this week, for shows, anime and films. |
 | Stremio | Paused titles, next episodes and newly released episodes in Continue watching, the library as a row, and search. Opens in the Stremio app. |
 | Nuvio | Paused titles and next episodes in Continue watching, the library as a row, and search. Opens in the Nuvio TV app. |
@@ -208,7 +212,7 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | Spotify | Recently played, playlists, saved albums and podcasts with a Spotify developer app, or any Spotify links you paste without one. Opens in the Spotify app. |
 | IPTV | An M3U playlist as channels, with a guide from XMLTV. |
 | HDHomeRun | The tuner's channels and guide, played in the TV's own player. |
-| Tvheadend, Channels DVR, NextPVR | A DVR's channels, guide and recordings. |
+| Tvheadend, Channels DVR, NextPVR | A DVR's channels and guide, with its recordings as a row. |
 | Twitch | The live channels you follow, in Live now and the guide. |
 | YouTube | New videos from channels and playlists through their public feeds. With a Google sign-in, your subscriptions, playlists and liked videos too. |
 | Podcasts | New episodes from feeds, Apple Podcasts links or an OPML export, played in a player app. Search uses Apple's directory. |
@@ -259,7 +263,8 @@ Download `Lounge-<version>.apk` from the [Releases](../../releases) page, or bui
    Play Store will do. The first time, Android asks you to let that file manager install apps.
 3. Open Lounge. Its setup makes it the home screen through **Power Setup**: when it asks, turn
    on USB debugging in Developer options, then choose Allow on the TV's prompt and tick Always
-   allow.
+   allow. USB debugging stays on afterwards: the TV controls and the phone's keys in other apps
+   need it, and Power Setup says what stops working if you turn it off.
 
 No USB stick? Install **Downloader** from the Play Store, open
 `github.com/Gingerbreadfork/lounge/releases` in it, choose the APK, and carry on from step 3.
@@ -284,7 +289,8 @@ adb shell pm disable-user --user 0 com.google.android.apps.tv.launcherx
 adb shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
 ```
 
-Power Setup does all of this from the TV as well, and can undo it. It also grants the optional
+Power Setup does all of this from the TV as well, and can undo it, including the faster
+animations it offers. It also grants the optional
 permissions, drives the TV over HDMI-CEC, sets the screensaver and compiles Lounge ahead of
 time. It shows each command before running it.
 

@@ -1,7 +1,6 @@
 package tv.lounge.feature.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,16 +19,29 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
@@ -41,11 +53,14 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import tv.lounge.core.CoreClient
 import tv.lounge.core.PluginAsk
@@ -55,52 +70,63 @@ import tv.lounge.design.Hairline
 import tv.lounge.design.LocalSwapSlotActive
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
-import tv.lounge.design.focusRing
+import tv.lounge.design.focusRim
 import tv.lounge.design.lightGlow
 
-/** Installed plugins: one row each with its state. Selecting one opens its detail sheet. */
+/** Installed plugins by name, each with its state. Selecting one opens its detail sheet. */
 @Composable
 fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRequester, cameFrom: Overlay? = null) {
     val colors = LoungeTheme.colors
+    val snapshot by core.snapshots.collectAsStateWithLifecycle()
     var plugins by remember { mutableStateOf<List<PluginInfo>?>(null) }
     // Each read waits on the core's lock, which a big refresh can hold, so the reads run off the main thread.
     WhileStarted {
         while (true) {
-            plugins = withContext(Dispatchers.IO) { core.plugins() }
+            plugins = withContext(Dispatchers.IO) { core.plugins() }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             delay(2000)
         }
     }
+    // A plugin for an app on the TV wears that app's icon.
+    val appIcons = remember(snapshot.allApps) { snapshot.allApps.mapNotNull { t -> t.iconPath?.let { t.id.removePrefix("app:") to it } }.toMap() }
     // The rows land after the sheet first asks for focus; a copy being swapped out leaves focus alone.
     val live = LocalSwapSlotActive.current
     LaunchedEffect(plugins != null) { if (plugins != null && live.value) firstFocus.requestWhenReady() }
     val list = plugins
     // Back from a plugin's page puts focus on that plugin, if it is still there.
     val returnTo = (cameFrom as? Overlay.PluginDetail)?.id?.takeIf { id -> list.orEmpty().any { it.id == id } }
-    SheetHeading("Plugins", "Sources that add rows, channels and guide data. Each runs in its own sandbox.")
+    SheetHeading("Plugins", "They add rows, channels and guide data from your services.")
     if (list == null) {
         Text("Loading…", style = LoungeTheme.typography.meta, color = colors.dust)
     } else if (list.isEmpty()) {
-        Text("No plugins installed.", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text("No plugins installed. They install from the phone companion: on your phone, open Plugins.", style = LoungeTheme.typography.meta, color = colors.dust)
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             list.forEachIndexed { i, p ->
+                val appIcon = p.forApps.firstNotNullOfOrNull { appIcons[it] }
                 SheetRow(
-                    icon = LoungeIcons.Apps,
+                    icon = if (appIcon == null) pluginGlyph(p) else null,
+                    leading = appIcon?.let { path ->
+                        { AsyncImage(model = path, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(7.dp))) }
+                    },
                     title = p.name,
                     value = statusWord(p),
-                    accent = when {
-                        p.enabled && p.ask != null -> colors.houselight
-                        p.enabled && p.lastError == null -> colors.signal
-                        p.lastError != null -> colors.ember
-                        else -> colors.dust
-                    },
+                    accent = statusColour(p),
                     onClick = { onOpen(p.id) },
                     focusRequester = if (p.id == returnTo || (returnTo == null && i == 0)) firstFocus else null,
                 )
             }
         }
     }
-    SheetFootnote("Plugins can only reach the hosts they declare, and only see their own settings and storage.", "More plugins install from the companion app on your phone.")
+    SheetFootnote("Each plugin can reach only the places it names, and sees only its own settings.", "More plugins install from the phone companion.")
+}
+
+/** A glyph for what a plugin brings, for one with no app of its own on the TV. */
+private fun pluginGlyph(p: PluginInfo): ImageVector = when {
+    "epg" in p.kinds -> LoungeIcons.Guide
+    "content" in p.kinds -> LoungeIcons.Play
+    "screensaver" in p.kinds || "wallpaper" in p.kinds -> LoungeIcons.Frame
+    "search" in p.kinds -> LoungeIcons.Search
+    else -> SettingsGlyphs.Plugin
 }
 
 private fun statusWord(p: PluginInfo): String = when {
@@ -108,13 +134,26 @@ private fun statusWord(p: PluginInfo): String = when {
     p.enabled && p.ask != null -> if (p.ask?.link != null || p.ask?.code != null) "Sign in" else "Needs setup"
     p.lastError != null && p.enabled -> "Problem"
     p.enabled -> "On"
+    p.updateAsksToReach.isNotEmpty() -> "Turned off by its update"
     !p.configured -> "Needs setup"
     else -> "Off"
 }
 
+@Composable
+private fun statusColour(p: PluginInfo) = with(LoungeTheme.colors) {
+    when {
+        p.enabled && p.ask != null -> houselight
+        p.enabled && p.lastError == null -> signal
+        p.enabled -> ember
+        p.updateAsksToReach.isNotEmpty() -> houselight
+        else -> dust
+    }
+}
+
 /**
  * One plugin: what it is, whether it runs, its settings as editable fields, its log. Built-in
- * plugins can be turned off but not removed.
+ * plugins can be turned off but not removed. One that still needs setting up opens on its first
+ * empty required field, and offers Turn on after the last one.
  */
 @Composable
 fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit, firstFocus: FocusRequester) {
@@ -123,7 +162,12 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
     var loaded by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf<List<String>?>(null) }
+    var refreshAsked by remember { mutableStateOf<Long?>(null) }
     val scope = rememberCoroutineScope()
+    // A switch waits for any setting still being written, so it sees what was just typed.
+    val writes = remember { Mutex() }
+    val fieldFocus = remember(pluginId) { HashMap<String, FocusRequester>() }
+    fun focusOf(key: String) = fieldFocus.getOrPut(key) { FocusRequester() }
     WhileStarted(pluginId) {
         while (true) {
             info = withContext(Dispatchers.IO) { core.plugins().firstOrNull { it.id == pluginId } }
@@ -140,53 +184,92 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
     }
     val p = info ?: run {
         SheetHeading("Plugin", "This plugin is no longer installed.")
-        SheetRow(icon = LoungeIcons.Info, title = "Back", onClick = onRemoved, focusRequester = firstFocus)
+        SheetRow(icon = SettingsGlyphs.Plugin, title = "Back to Plugins", onClick = onRemoved, focusRequester = firstFocus)
         return
     }
 
-    SheetHeading(p.name, "v${p.version}" + if (p.publisherName.isNotEmpty()) " · by ${p.publisherName}" else "")
+    val held = !p.enabled && p.updateAsksToReach.isNotEmpty()
+    val missing = p.settings.firstOrNull { it.required && !it.hasValue }
+    val startAtField = !p.enabled && !held && !p.configured && missing != null
+    /** Turns it on once every required setting is in; until then, takes focus to the one still empty. */
+    fun switch(on: Boolean) {
+        scope.launch {
+            val now = writes.withLock {
+                withContext(Dispatchers.IO) {
+                    val fresh = core.plugins().firstOrNull { it.id == pluginId }
+                    if (fresh != null && (!on || fresh.configured)) core.setPluginEnabled(fresh.id, on)
+                    core.plugins().firstOrNull { it.id == pluginId }
+                }
+            }
+            info = now
+            if (on && now != null && !now.enabled) now.settings.firstOrNull { it.required && !it.hasValue }?.let { focusOf(it.key).requestWhenReady() }
+        }
+    }
+
+    SheetHeading(p.name, "Version ${p.version}" + if (p.publisherName.isNotEmpty()) ", by ${p.publisherName}" else "")
     if (p.description.isNotEmpty()) {
         Text(p.description, style = LoungeTheme.typography.meta, color = colors.dust)
         Spacer(Modifier.height(20.dp))
     }
     val ask = p.ask?.takeIf { p.enabled }
-    if (ask != null) AskCard(ask) else StatusLine(p)
+    when {
+        held -> Text("Turned off by its update, which also asks to reach ${joined(p.updateAsksToReach)}.", style = LoungeTheme.typography.meta, color = colors.houselight)
+        ask != null -> AskCard(ask)
+        else -> StatusLine(p)
+    }
     Spacer(Modifier.height(20.dp))
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SheetRow(
-            icon = LoungeIcons.Power,
-            title = if (p.enabled) "On" else "Off",
-            value = when {
-                p.enabled -> "Turn off"
-                p.configured -> "Turn on"
-                else -> "Set up first"
-            },
-            accent = if (p.enabled) colors.signal else colors.dust,
-            onClick = {
-                scope.launch {
-                    info = withContext(Dispatchers.IO) {
-                        if (p.enabled || p.configured) core.setPluginEnabled(p.id, !p.enabled)
-                        core.plugins().firstOrNull { it.id == pluginId }
-                    }
-                }
-            },
-            focusRequester = firstFocus,
-        )
+        if (held) {
+            SheetRow(
+                icon = LoungeIcons.Power,
+                title = "Allow and turn on",
+                subtitle = "It can then reach ${joined(p.updateAsksToReach)} as well",
+                accent = colors.houselight,
+                onClick = { switch(true) },
+                focusRequester = firstFocus,
+            )
+        } else {
+            SheetRow(
+                icon = LoungeIcons.Power,
+                title = p.name,
+                value = if (p.enabled) "On" else "Off",
+                accent = if (p.enabled) colors.signal else colors.dust,
+                onClick = { switch(!p.enabled) },
+                focusRequester = if (startAtField) null else firstFocus,
+            )
+        }
         if (p.settings.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text("Settings", style = LoungeTheme.typography.meta, color = colors.dust)
             p.settings.forEach { s ->
                 SettingField(
                     setting = s,
-                    onCommit = { value -> scope.launch { withContext(Dispatchers.IO) { core.setPluginSetting(p.id, s.key, value) } } },
-                    onToggle = { on -> scope.launch { withContext(Dispatchers.IO) { core.setPluginSetting(p.id, s.key, if (on) "true" else "false") } } },
+                    focusRequester = if (startAtField && s.key == missing?.key) firstFocus else focusOf(s.key),
+                    onCommit = { value -> scope.launch { writes.withLock { withContext(Dispatchers.IO) { core.setPluginSetting(p.id, s.key, value) } } } },
+                    onToggle = { on -> scope.launch { writes.withLock { withContext(Dispatchers.IO) { core.setPluginSetting(p.id, s.key, if (on) "true" else "false") } } } },
+                )
+            }
+            if (!p.enabled && !held) {
+                SheetRow(
+                    icon = LoungeIcons.Power,
+                    title = "Turn on ${p.name}",
+                    subtitle = missing?.let { "Fill in ${it.label} first" },
+                    accent = colors.houselight,
+                    onClick = { switch(true) },
                 )
             }
             Spacer(Modifier.height(8.dp))
         }
         if (p.enabled) {
-            SheetRow(icon = LoungeIcons.Move, title = "Refresh now", onClick = { core.refreshPlugin(p.id) })
+            val refreshing = refreshAsked?.let { asked -> (p.lastRefreshMs ?: 0L) < asked && System.currentTimeMillis() - asked < 120_000 } == true
+            SheetRow(
+                icon = LoungeIcons.Refresh,
+                title = "Refresh now",
+                value = if (refreshing) "Refreshing…" else null,
+                accent = if (refreshing) colors.houselight else colors.dust,
+                onClick = { refreshAsked = System.currentTimeMillis(); core.refreshPlugin(p.id) },
+            )
         }
         SheetRow(
             icon = LoungeIcons.Info,
@@ -219,6 +302,7 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             SheetRow(
                 icon = LoungeIcons.Trash,
                 title = if (confirming) "Yes, remove it and its settings" else "Remove",
+                titleColor = if (confirming) colors.ember else colors.limelight,
                 accent = colors.ember,
                 modifier = Modifier.onFocusChanged { if (!it.isFocused) confirming = false },
                 onClick = {
@@ -232,9 +316,17 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
         }
     }
     SheetFootnote(
-        "Can connect to: ${reachText(p)}.",
-        "Signed by ${p.publisher.take(16)}… Refreshes every ${p.refreshMinutes} min while the TV is on.",
+        "It can reach ${reachText(p)}.",
+        "It refreshes every ${minutesText(p.refreshMinutes.toLong())} while the TV is on.",
+        "Updates are taken only from its publisher, whose key starts ${p.publisher.take(8).chunked(4).joinToString(" ")}.",
     )
+}
+
+/** Items in a sentence: "a", "a and b", "a, b and c". */
+private fun joined(parts: List<String>): String = when (parts.size) {
+    0 -> "nothing"
+    1 -> parts[0]
+    else -> parts.dropLast(1).joinToString(", ") + " and " + parts.last()
 }
 
 /** Where a plugin may connect, in words; a host it names is shown as it is. */
@@ -250,11 +342,7 @@ private fun reachText(p: PluginInfo): String {
         }
     }
     val list = parts.toList()
-    val reach = when (list.size) {
-        0 -> "nothing"
-        1 -> list[0]
-        else -> list.dropLast(1).joinToString(", ") + " and " + list.last()
-    }
+    val reach = joined(list)
     return if (p.selfSignedServers && list.isNotEmpty()) "$reach, accepting a home server's own certificate" else reach
 }
 
@@ -281,7 +369,7 @@ private fun AskCard(ask: PluginAsk) {
             val where = when {
                 link == null -> ask.after
                 ask.linkText != null -> "Scan this with its camera, or open ${ask.linkText}" + if (ask.code != null) " and enter" else ""
-                else -> "Scan this with its camera, or tap the link in Lounge on your phone" + if (ask.code != null) " and enter" else ""
+                else -> "Scan this with its camera, or tap the link in the phone companion" + if (ask.code != null) " and enter" else ""
             }
             where?.let { Text(it, style = LoungeTheme.typography.meta, color = colors.dust) }
             ask.code?.let { Text(it, style = LoungeTheme.typography.displayL, color = colors.limelight, maxLines = 1) }
@@ -295,36 +383,51 @@ private fun StatusLine(p: PluginInfo) {
     val colors = LoungeTheme.colors
     val (text, color) = when {
         p.enabled && p.lastError != null -> p.lastError!! to colors.ember
-        p.enabled && p.lastRefreshMs != null -> "${p.items} items · refreshed ${agoText(p.lastRefreshMs!!)}" to colors.signal
+        p.enabled && p.lastRefreshMs != null -> "${if (p.items == 1u) "1 item" else "${p.items} items"}, refreshed ${agoText(p.lastRefreshMs!!, System.currentTimeMillis())}" to colors.signal
         p.enabled -> "Fetching for the first time…" to colors.dust
         !p.configured -> "Fill in the settings below, then turn it on." to colors.houselight
-        else -> "Off" to colors.dust
+        // Off and ready: the switch row below says so.
+        else -> return
     }
     Text(text, style = LoungeTheme.typography.meta, color = color, maxLines = 3, overflow = TextOverflow.Ellipsis)
 }
 
-private fun agoText(ms: Long): String {
-    val minutes = (System.currentTimeMillis() - ms) / 60_000
+/** How long ago [ms] was at [now], in words. */
+internal fun agoText(ms: Long, now: Long): String {
+    val minutes = (now - ms) / 60_000
     return when {
         minutes < 1 -> "just now"
-        minutes < 60 -> "$minutes min ago"
-        minutes < 1440 -> "${minutes / 60} h ago"
-        else -> "${minutes / 1440} d ago"
+        minutes < 60 -> "${minutesText(minutes)} ago"
+        minutes < 1440 -> (minutes / 60).let { if (it == 1L) "1 hour ago" else "$it hours ago" }
+        else -> (minutes / 1440).let { if (it == 1L) "1 day ago" else "$it days ago" }
     }
 }
 
+/** About three lines of `caption` in the sheet: help this long reads whole. */
+private const val SHORT_HELP = 160
+
+private fun minutesText(minutes: Long): String = if (minutes == 1L) "1 minute" else "$minutes minutes"
+
+/** A setting's help as the TV shows it: whole when short, else its first sentence and a pointer to the phone. */
+internal fun shortHelp(text: String): String {
+    val trimmed = text.trim()
+    if (trimmed.length <= SHORT_HELP) return trimmed
+    val end = Regex("""[.!?](?=\s+["“‘(]?[A-Z0-9])""").find(trimmed)?.range?.last ?: return trimmed
+    return trimmed.substring(0, end + 1) + " Your phone shows the full steps."
+}
+
 /**
- * A plugin setting as a TV text field: label above, value in `title`, saved when the keyboard's
- * Done is pressed or focus leaves. Passwords are masked; toggles are a row. Text typed on the phone
- * goes into the focused field.
+ * A plugin setting as a TV text field: label above, value in `title`. Focus rests on the field as
+ * a row, and OK opens the keyboard on it; Done, Back or leaving saves it. Passwords are masked;
+ * toggles are a row. Text typed on the phone goes into the focused field.
  */
 @Composable
-private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit, onToggle: (Boolean) -> Unit) {
+private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusRequester, onCommit: (String?) -> Unit, onToggle: (Boolean) -> Unit) {
     val colors = LoungeTheme.colors
     val visuals = LoungeTheme.visuals
     if (setting.kind == "toggle") {
         val on = (setting.value ?: setting.defaultValue) == "true"
-        SheetRow(icon = null, title = setting.label, value = if (on) "On" else "Off", onClick = { onToggle(!on) })
+        SheetRow(icon = null, title = setting.label, value = if (on) "On" else "Off", accent = if (on) colors.signal else colors.dust, onClick = { onToggle(!on) }, focusRequester = focusRequester)
         return
     }
     // A secret is never shown back; a password is also masked while it is typed.
@@ -334,8 +437,14 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
     val onOneLine = remember { VisualTransformation { text -> TransformedText(AnnotatedString(text.text.replace('\n', ' ')), OffsetMapping.Identity) } }
     var field by remember(setting.key) { mutableStateOf(TextFieldValue(setting.value ?: "")) }
     var committed by remember(setting.key) { mutableStateOf(setting.value ?: "") }
-    var focused by remember { mutableStateOf(false) }
+    var rowFocused by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    // Only a press that began on the row opens the keyboard, not the release of the one that opened the page.
+    var pressed by remember { mutableStateOf(false) }
+    val focused = rowFocused || editing
     val keyboard = LocalSoftwareKeyboardController.current
+    val editor = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
     PhoneTextInput(active = focused) { typed ->
         val next = field.text + typed
         field = TextFieldValue(next, TextRange(next.length))
@@ -347,12 +456,34 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
             onCommit(text.ifBlank { null })
         }
     }
+    fun stopEditing() {
+        commit()
+        editing = false
+        keyboard?.hide()
+        focusRequester.requestFocus()
+    }
+    // While the keyboard's field is open, Back returns to the row rather than closing the sheet.
+    val sheetBack = LocalSheetBack.current
+    DisposableEffect(editing) {
+        val handler = { stopEditing(); true }
+        if (editing) sheetBack.handler = handler
+        onDispose { if (sheetBack.handler === handler) sheetBack.handler = null }
+    }
+    val label = setting.label + if (setting.required) "" else " (optional)"
+    val placeholder = when {
+        secret && setting.hasValue -> "•••••••• (saved)"
+        setting.defaultValue != null -> setting.defaultValue!!
+        else -> "Not set"
+    }
+    // What TalkBack says after the label while the field is empty.
+    val state = when {
+        field.text.isNotEmpty() -> null
+        secret && setting.hasValue -> "Saved"
+        setting.defaultValue != null -> "Not set, uses ${setting.defaultValue}"
+        else -> "Not set"
+    }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            setting.label + if (setting.required) "" else " (optional)",
-            style = LoungeTheme.typography.caption,
-            color = colors.dust,
-        )
+        Text(label, style = LoungeTheme.typography.caption, color = colors.dust)
         Box(
             Modifier
                 .fillMaxWidth()
@@ -360,15 +491,33 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
                 .lightGlow(colors.houselight, if (focused) visuals.glowAlpha * 0.8f else 0f, cornerRadius = 12.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (focused) colors.curtainEdge else colors.velvet)
-                .focusRing(colors, { focused }, 12.dp)
+                .focusRim(colors, { if (focused) 1f else 0f }, 12.dp)
+                .focusRequester(focusRequester)
+                .onFocusChanged {
+                    if (rowFocused && !it.isFocused && !editing) commit()
+                    rowFocused = it.isFocused
+                }
+                .onPreviewKeyEvent { e ->
+                    val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                    if (editing || !ok) return@onPreviewKeyEvent false
+                    when (e.type) {
+                        KeyEventType.KeyDown -> pressed = true
+                        KeyEventType.KeyUp -> if (pressed) {
+                            pressed = false
+                            editing = true
+                            scope.launch { if (editor.requestWhenReady()) keyboard?.show() }
+                        }
+                    }
+                    true
+                }
+                .focusable()
+                .semantics {
+                    contentDescription = label
+                    state?.let { stateDescription = it }
+                }
                 .padding(horizontal = 16.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            val placeholder = when {
-                secret && setting.hasValue -> "•••••••• (saved)"
-                setting.defaultValue != null -> setting.defaultValue!!
-                else -> "Not set"
-            }
             if (field.text.isEmpty()) Text(placeholder, style = LoungeTheme.typography.title, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
             BasicTextField(
                 value = field,
@@ -389,13 +538,25 @@ private fun SettingField(setting: PluginSettingInfo, onCommit: (String?) -> Unit
                         "password" -> KeyboardType.Password
                         else -> KeyboardType.Text
                     },
+                    showKeyboardOnFocus = false,
                 ),
-                keyboardActions = KeyboardActions(onDone = { commit(); keyboard?.hide() }),
+                keyboardActions = KeyboardActions(onDone = { stopEditing() }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .onFocusChanged { if (focused && !it.isFocused) commit(); focused = it.isFocused },
+                    .focusRequester(editor)
+                    // Reached only through OK on the row, so walking down a page never raises the keyboard.
+                    .focusProperties { canFocus = editing }
+                    // The field would drop focus on Back's press; the sheet's release then returns to the row.
+                    .onPreviewKeyEvent { e -> editing && e.key == Key.Back && e.type == KeyEventType.KeyDown }
+                    .onFocusChanged {
+                        if (editing && !it.isFocused) {
+                            commit()
+                            editing = false
+                        }
+                    }
+                    .semantics { contentDescription = label },
             )
         }
-        setting.help?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust) }
+        setting.help?.let { Text(shortHelp(it), style = LoungeTheme.typography.caption, color = colors.dust) }
     }
 }

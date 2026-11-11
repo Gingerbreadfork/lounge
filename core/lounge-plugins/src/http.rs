@@ -89,9 +89,9 @@ impl Fetcher {
         let mut body = req.body.clone();
         let mut headers = req.headers.clone();
         for _hop in 0..5 {
-            let host = host_of(&url).ok_or_else(|| PluginError::Fetch(format!("bad url {}", redact(&url))))?;
+            let host = host_of(&url).ok_or_else(|| not_web(&url))?;
             if !allowed(&host) {
-                return Err(PluginError::Denied(format!("host {host} is not in the plugin's allow list")));
+                return Err(PluginError::Denied(not_allowed(&host)));
             }
             let timeout = time_left(deadline, &url)?;
             let (address, basic) = credentials_of(&url);
@@ -167,7 +167,7 @@ impl Fetcher {
                 Err(e) => HttpResponse { status, headers: out_headers, body: String::new(), body_base64: Some(base64_encode(e.as_bytes())) },
             });
         }
-        Err(PluginError::Fetch("too many redirects".into()))
+        Err(too_many_redirects(&url))
     }
 
     /// The cached download of `url` in `dir`, if there is one.
@@ -188,11 +188,11 @@ impl Fetcher {
         let mut url = url.to_string();
         for _hop in 0..5 {
             if !is_web(&url) {
-                return Err(PluginError::Denied(format!("{} is not an http or https link", redact(&url))));
+                return Err(PluginError::Denied(format!("{} is not an http or https link, so Lounge didn't fetch it.", redact(&url))));
             }
-            let host = host_of(&url).ok_or_else(|| PluginError::Fetch(format!("bad url {}", redact(&url))))?;
+            let host = host_of(&url).ok_or_else(|| not_web(&url))?;
             if !allowed(&host) {
-                return Err(PluginError::Denied(format!("host {host} is not in the plugin's allow list")));
+                return Err(PluginError::Denied(not_allowed(&host)));
             }
             let timeout = time_left(deadline, &url)?;
             let (address, basic) = credentials_of(&url);
@@ -209,7 +209,7 @@ impl Fetcher {
                 continue;
             }
             if !(200..300).contains(&status) {
-                return Err(PluginError::Fetch(format!("HTTP {status} for {}", redact(&url))));
+                return Err(PluginError::Fetch(format!("{} answered with error {status}. Check the address, then try again.", redact(&url))));
             }
             // Each download writes its own temporary file, so two fetching one URL never collide.
             static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -220,7 +220,7 @@ impl Fetcher {
                 let mut buf = [0u8; 16 * 1024];
                 let mut total = 0u64;
                 loop {
-                    let n = reader.read(&mut buf).map_err(|e| PluginError::Fetch(e.to_string()))?;
+                    let n = reader.read(&mut buf).map_err(|e| fetch_error(e.into(), &url))?;
                     if n == 0 {
                         break;
                     }
@@ -234,7 +234,7 @@ impl Fetcher {
                 Ok(total)
             })();
             let written = match written {
-                Ok(0) => Err(PluginError::Fetch("empty body".into())),
+                Ok(0) => Err(PluginError::Fetch(format!("{} answered with nothing.", redact(&url)))),
                 other => other,
             };
             return match written.and_then(|n| std::fs::rename(&tmp, &path).map(|_| n).map_err(PluginError::from)) {
@@ -245,7 +245,7 @@ impl Fetcher {
                 }
             };
         }
-        Err(PluginError::Fetch("too many redirects".into()))
+        Err(too_many_redirects(&url))
     }
 }
 
@@ -255,8 +255,53 @@ fn cache_path(url: &str, dir: &Path) -> PathBuf {
     dir.join(format!("{}.img", &name[..32]))
 }
 
+/// A failed request as a sentence for the plugin: what happened at which address, without the
+/// address's query string or password.
 fn fetch_error(e: ureq::Error, url: &str) -> PluginError {
-    PluginError::Fetch(format!("{e} ({})", redact(url)))
+    use std::io::ErrorKind;
+    let at = redact(url);
+    let didnt_answer = || format!("{at} didn't answer. Check that it is on and reachable, then try again.");
+    let too_slow = || format!("{at} took too long to answer. Check that it is on, then try again.");
+    PluginError::Fetch(match e {
+        ureq::Error::Timeout(_) => too_slow(),
+        ureq::Error::HostNotFound => format!("{at} couldn't be found. Check the address and the TV's internet connection."),
+        ureq::Error::ConnectionFailed => didnt_answer(),
+        ureq::Error::BodyExceedsLimit(max) => too_large(url, max),
+        ureq::Error::TooManyRedirects => format!("{at} redirected too many times. Check the address, then try again."),
+        // The guarded resolver's refusals say why in words of their own.
+        ureq::Error::Io(io) if io.kind() == ErrorKind::PermissionDenied => format!("Lounge didn't fetch {at}: {io}."),
+        ureq::Error::Io(io) if io.kind() == ErrorKind::TimedOut => too_slow(),
+        ureq::Error::Io(io)
+            if matches!(
+                io.kind(),
+                ErrorKind::ConnectionRefused | ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted | ErrorKind::NotConnected | ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable | ErrorKind::AddrNotAvailable
+            ) =>
+        {
+            didnt_answer()
+        }
+        tls @ (ureq::Error::Tls(_) | ureq::Error::Rustls(_)) => format!("Lounge couldn't trust the certificate of {at}: {tls}."),
+        other => format!("{at} didn't answer: {other}."),
+    })
+}
+
+/// The error for an answer larger than `max` bytes. The SDK, and plugins built with older
+/// versions of it, recognise it by "body is larger than".
+pub fn too_large(url: &str, max: u64) -> String {
+    let size = if max >= 1 << 20 { format!("{} MB", max >> 20) } else { format!("{} KB", max.div_ceil(1024)) };
+    format!("{} sent too much: the body is larger than {size}.", redact(url))
+}
+
+/// The refusal of a host the plugin did not name. Plugins may look for "allow list" in it.
+pub fn not_allowed(host: &str) -> String {
+    format!("This plugin may not reach {host}, which isn't on its allow list. Check the addresses in its settings.")
+}
+
+fn not_web(url: &str) -> PluginError {
+    PluginError::Fetch(format!("{} isn't an address Lounge can fetch.", redact(url)))
+}
+
+fn too_many_redirects(url: &str) -> PluginError {
+    PluginError::Fetch(format!("{} redirected too many times. Check the address, then try again.", redact(url)))
 }
 
 /// The time left before `deadline`, or the timeout error once it has passed.
@@ -596,10 +641,18 @@ mod tests {
     }
 
     #[test]
+    fn refusals_read_as_sentences_without_secrets() {
+        let err = Fetcher::new().fetch(&HttpRequest::get("https://evil.example/x?token=1"), &|_| false).unwrap_err();
+        assert_eq!(err.to_string(), "This plugin may not reach evil.example, which isn't on its allow list. Check the addresses in its settings.");
+        assert_eq!(too_large("http://me:pw@iptv.example/get.php?password=pw", 8 << 20), "http://iptv.example/get.php sent too much: the body is larger than 8 MB.");
+        assert_eq!(too_large("http://a.tv/p.jpg", 1024), "http://a.tv/p.jpg sent too much: the body is larger than 1 KB.");
+    }
+
+    #[test]
     fn only_hosts_a_plugin_was_given_lead_into_the_home_network() {
         let request = |url: &str| HttpRequest { timeout_ms: 300, ..HttpRequest::get(url.to_string()) };
         let err = Fetcher::guarded(Reach::default()).fetch(&request("http://192.168.77.1:9/"), &|_| true).unwrap_err();
-        assert!(err.to_string().contains("home network"), "{err}");
+        assert_eq!(err.to_string(), "Lounge didn't fetch http://192.168.77.1:9/: 192.168.77.1 leads into the home network, where the plugin may reach only the addresses it is given.");
         // Named, or covered by the home network entry, the address is tried and simply does not answer.
         for reach in [Reach { home: vec!["192.168.77.1".into()], ..Reach::default() }, Reach { any_home_name: true, ..Reach::default() }] {
             let err = Fetcher::guarded(reach).fetch(&request("http://192.168.77.1:9/"), &|_| true).unwrap_err();
@@ -921,13 +974,13 @@ mod tests {
 
         let started = Instant::now();
         let err = fetcher.fetch(&HttpRequest { timeout_ms: timeout.as_millis() as u32, ..HttpRequest::get(url.clone()) }, &|_| true).unwrap_err();
-        assert!(err.to_string().contains("timeout"), "{err}");
+        assert!(err.to_string().contains("took too long to answer. Check that it is on, then try again."), "{err}");
         assert!(started.elapsed() < timeout * 2, "{:?}", started.elapsed());
 
         let dir = tempfile::tempdir().unwrap();
         let started = Instant::now();
         let Err(err) = fetcher.download(&url, dir.path(), 1024, timeout, &|_| true) else { panic!("the download finished") };
-        assert!(err.to_string().contains("timeout"), "{err}");
+        assert!(err.to_string().contains("took too long to answer. Check that it is on, then try again."), "{err}");
         assert!(started.elapsed() < timeout * 2, "{:?}", started.elapsed());
     }
 }

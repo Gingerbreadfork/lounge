@@ -33,8 +33,8 @@ impl sdk::Plugin for Trakt {
             fetch_hosts: vec!["api.trakt.tv".into(), "*.trakt.tv".into()],
             refresh_minutes: 15,
             rows: vec![
-                RowSpec { id: "upnext".into(), title: "Up next".into(), style: RowStyle::Landscape },
-                RowSpec { id: "watchlist".into(), title: "Watchlist".into(), style: RowStyle::Poster },
+                RowSpec { id: "upnext".into(), title: "Up next on Trakt".into(), style: RowStyle::Landscape },
+                RowSpec { id: "watchlist".into(), title: "Watchlist on Trakt".into(), style: RowStyle::Poster },
             ],
             settings: vec![
                 SettingSpec {
@@ -53,7 +53,7 @@ impl sdk::Plugin for Trakt {
                     label: "Open with the TV's own search".into(),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("Off: Lounge searches your apps and plugins for the title. On: the TV's search, which on Google TV lists where it streams.".into()),
+                    help: Some("On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it.".into()),
                     default: Some("false".into()),
                 },
             ],
@@ -93,7 +93,7 @@ impl sdk::Plugin for Trakt {
                 let progress: Progress = match client.get_json(&format!("/shows/{}/progress/watched?hidden=false&specials=false&count_specials=false", w.show.ids.trakt)) {
                     Ok(p) => p,
                     // Every request after one of these fails the same way.
-                    Err(e) if e.contains("budget") || e == SIGNED_OUT || e == PAUSE => break,
+                    Err(e) if e == host::BUDGET_SPENT || e == SIGNED_OUT || e == PAUSE => break,
                     Err(e) => {
                         sdk::warn!("{}: {e}", w.show.title);
                         continue;
@@ -233,8 +233,8 @@ struct Client {
 impl Client {
     /// A signed-in client, or the one sentence the plugin's page should show to get there.
     fn connect(now_ms: i64) -> Result<Client, String> {
-        let client_id = host::required_setting("client_id", "Client ID")?.trim().to_string();
-        let secret = host::secret("client_secret").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or("Client secret is not set")?;
+        let client_id = host::required_setting("client_id", "client ID")?.trim().to_string();
+        let secret = host::secret("client_secret").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or_else(|| sdk::not_set("client secret"))?;
         let saved: Option<Token> = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice(&v).ok());
         let token = match saved {
             Some(t) if !t.due(now_ms) => t,
@@ -653,6 +653,8 @@ mod tests {
     fn the_sign_in_instruction_names_the_code() {
         let d = Device { device_code: "x".into(), user_code: "5055CC52".into(), verification_url: "https://trakt.tv/activate".into(), expires_ms: 0 };
         assert_eq!(instruction(&d), "Sign in: on your phone open trakt.tv/activate and enter 5055CC52, then press Refresh now here.");
+        // Off the TV no setting is filled in, so the first one asked for is named.
+        assert_eq!(Client::connect(0).err().as_deref(), Some("Add the client ID in the plugin's settings."));
     }
 
     fn token(expires_ms: i64, lifetime_ms: i64) -> Token {

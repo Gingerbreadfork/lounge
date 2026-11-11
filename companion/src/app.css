@@ -15,9 +15,14 @@
   --ember: #ff5468;
   --signal: #7cdfb3;
   --light: var(--houselight);
+  /* Text on the light: velvet or limelight, whichever reads better; set beside each light. */
+  --on-light: var(--velvet);
   --radius: 12px;
   --radius-l: 20px;
   --gutter: 16px;
+  /* The gutter, or more where a landscape phone's notch or rounded corner needs it. */
+  --side-l: max(var(--gutter), env(safe-area-inset-left));
+  --side-r: max(var(--gutter), env(safe-area-inset-right));
   --display: 'Bricolage Display', 'Bricolage Headline', system-ui, sans-serif;
   --headline: 'Bricolage Headline', system-ui, sans-serif;
   --text: 'Figtree', system-ui, sans-serif;
@@ -44,7 +49,7 @@ p { margin: 0; }
 .caption { font-size: 13px; color: var(--dust); }
 
 /* Layout */
-.page { flex: 1; padding: calc(env(safe-area-inset-top) + 20px) var(--gutter) calc(env(safe-area-inset-bottom) + 96px); display: flex; flex-direction: column; gap: 24px; }
+.page { flex: 1; padding: calc(env(safe-area-inset-top) + 20px) var(--side-r) calc(env(safe-area-inset-bottom) + 96px) var(--side-l); display: flex; flex-direction: column; gap: 24px; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .section { display: flex; flex-direction: column; gap: 12px; }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; }
@@ -68,7 +73,7 @@ p { margin: 0; }
 /* Controls */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 22px; border-radius: 24px; background: var(--curtain); color: var(--limelight); font-weight: 600; font-size: 16px; box-shadow: inset 0 0 0 1px var(--curtain-edge); transition: transform 120ms ease-out, background 120ms ease-out; }
 .btn:active { transform: scale(0.97); }
-.btn.primary { background: var(--light); color: var(--velvet); box-shadow: 0 0 0 0 transparent; }
+.btn.primary { background: var(--light); color: var(--on-light); box-shadow: 0 0 0 0 transparent; }
 .btn.ghost { background: transparent; box-shadow: none; color: var(--dust); }
 .btn.danger { color: var(--ember); }
 .btn:disabled { opacity: 0.45; }
@@ -88,7 +93,7 @@ p { margin: 0; }
 .tile.landscape { width: 196px; aspect-ratio: 16 / 9; }
 .tile.poster { width: 112px; aspect-ratio: 2 / 3; }
 .tile.app_banner { width: 160px; aspect-ratio: 16 / 9; }
-.tile.compact { width: 180px; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
+.tile.compact { width: 200px; height: 60px; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
 .tile .scrim { position: absolute; inset: auto 0 0 0; padding: 26px 10px 8px; background: linear-gradient(to top, color-mix(in srgb, var(--velvet) 82%, transparent), transparent); }
 .tile .scrim .t { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .scrim .s { font-size: 11px; color: var(--dust); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -98,7 +103,7 @@ p { margin: 0; }
 .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ember); }
 
 /* Tab bar */
-.tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-around; padding: 8px var(--gutter) calc(env(safe-area-inset-bottom) + 8px); background: color-mix(in srgb, var(--velvet) 88%, transparent); backdrop-filter: blur(16px); border-top: 1px solid var(--curtain-edge); }
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-around; padding: 8px var(--side-r) calc(env(safe-area-inset-bottom) + 8px) var(--side-l); background: color-mix(in srgb, var(--velvet) 88%, transparent); backdrop-filter: blur(16px); border-top: 1px solid var(--curtain-edge); }
 .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 56px; padding: 6px 4px; color: var(--dust); font-size: 11px; font-weight: 500; border-radius: 12px; }
 .tab svg { width: 24px; height: 24px; }
 .tab.active { color: var(--limelight); }
@@ -107,7 +112,8 @@ p { margin: 0; }
 /* Status */
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: var(--curtain-edge); color: var(--dust); }
 .pill.on { color: var(--signal); }
-.pill.bad { color: var(--ember); }
+/* Ember needs a darker plate than the hairline colour to stay readable. */
+.pill.bad { color: var(--ember); background: color-mix(in srgb, var(--ember) 10%, var(--velvet)); }
 .pill.ask { color: var(--houselight); }
 .empty { padding: 32px 16px; text-align: center; color: var(--dust); }
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 92px); transform: translateX(-50%); background: var(--curtain); border: 1px solid var(--curtain-edge); border-radius: 14px; padding: 12px 18px; font-weight: 600; max-width: calc(100vw - 32px); z-index: 30; }

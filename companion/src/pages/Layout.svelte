@@ -28,7 +28,8 @@
     if (l && waiting === 0 && edits === began) layout = l;
   }
   // Saves run one at a time and in order, so the TV ends up with the last move. Only the last
-  // answer is shown, so an older one cannot undo a newer move on screen.
+  // answer is shown, so an older one cannot undo a newer move on screen. When the last save
+  // fails, the page reads the TV again, so it never shows a change the TV does not have.
   let queue: Promise<void> = Promise.resolve();
   let waiting = 0;
   function save(patch: Partial<Layout>, message = 'Saved to the TV') {
@@ -38,10 +39,14 @@
     queue = queue.then(async () => {
       const l = await act(message, () => api.setLayout(patch));
       waiting--;
-      if (waiting === 0) {
-        if (l) layout = l;
-        busy = false;
+      if (waiting > 0) return;
+      if (l) layout = l;
+      else {
+        const began = edits;
+        const fresh = await quiet(() => api.layout());
+        if (fresh && waiting === 0 && edits === began) layout = fresh;
       }
+      if (waiting === 0) busy = false;
     });
   }
   // Each change shows at once, so the next one builds on it even before the TV has answered;
@@ -163,7 +168,7 @@
         {#snippet children(row)}
           <div class="grow" class:dim={!row.shown}>
             <div class="title">{row.title}</div>
-            <div class="caption one-line">{row.shown ? row.detail : `Hidden · ${row.detail}`}</div>
+            <div class="caption one-line">{row.shown ? row.detail : row.detail ? `Hidden, ${row.detail}` : 'Hidden'}</div>
           </div>
           <button class="icon-btn" class:quiet={row.shown} onclick={() => toggleRow(row)} aria-label={row.shown ? `Hide ${row.title}` : `Show ${row.title}`}>
             <Icon name={row.shown ? 'show' : 'hide'} size={22} />
@@ -194,7 +199,7 @@
       <div class="section-head"><h3>Your apps</h3></div>
       <p class="caption">Pinned apps stay at the front in this order, then the apps you opened last. Everything else is in All apps on the TV, where holding OK on an app pins it.</p>
       <div class="segments" role="radiogroup" aria-label="Recent apps shown after the pins">
-        {#each [0, 5, 10, 15] as n}
+        {#each [0, 5, 10, 15] as n (n)}
           <button class="segment" class:on={layout.recentApps === n} role="radio" aria-checked={layout.recentApps === n} onclick={() => setRecent(n)}>{n === 0 ? 'Pinned only' : `${n} recent`}</button>
         {/each}
       </div>
@@ -254,7 +259,7 @@
               {#if source.iconPath}<img class="row-icon" src={art(source.iconPath)} alt="" />{:else}<span class="glyph"><Icon name="play" size={22} /></span>{/if}
               <div class="grow" class:dim={!source.shown}>
                 <div class="title">{source.title}</div>
-                <div class="caption one-line">{source.shown ? titles(source.count) : `Hidden · ${titles(source.count)}`}</div>
+                <div class="caption one-line">{source.shown ? titles(source.count) : `Hidden, ${titles(source.count).toLowerCase()}`}</div>
               </div>
               <button class="icon-btn" class:quiet={source.shown} onclick={() => toggleSource(source)} aria-label={source.shown ? `Hide ${source.title}` : `Show ${source.title}`}>
                 <Icon name={source.shown ? 'show' : 'hide'} size={22} />
@@ -272,7 +277,7 @@
 <style>
   .row-icon { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; flex: none; }
   .segments { display: flex; gap: 6px; padding: 4px; background: var(--curtain); border-radius: 14px; }
-  .segment { flex: 1; min-height: 40px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--dust); transition: background 120ms ease-out, color 120ms ease-out; }
+  .segment { flex: 1; min-height: 44px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--dust); transition: background 120ms ease-out, color 120ms ease-out; }
   .segment.on { background: var(--velvet); color: var(--limelight); box-shadow: inset 0 0 0 1px var(--curtain-edge); }
   .dim .title { color: var(--dust); }
   .center { text-align: center; margin-top: -10px; }

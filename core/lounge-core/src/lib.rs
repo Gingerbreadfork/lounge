@@ -271,6 +271,10 @@ pub struct PluginInfo {
     pub ask: Option<PluginAsk>,
     pub items: u32,
     pub settings: Vec<PluginSettingInfo>,
+    /// Packages of the apps the plugin brings to the home.
+    pub for_apps: Vec<String>,
+    /// Where an update that turned the plugin off also asks to reach. Empty unless that is why it is off.
+    pub update_asks_to_reach: Vec<String>,
 }
 
 /// A step a plugin waits on the person for, such as a sign-in on their phone.
@@ -298,6 +302,9 @@ pub struct CompanionStatus {
     pub url: Option<String>,
     pub port: u16,
     pub paired: u32,
+    /// The code and QR link that pair a phone now. A used one is replaced at once, so this is
+    /// what the TV shows; none once it has expired.
+    pub pairing: Option<PairingInfo>,
 }
 
 /// What the TV shows to pair a phone: a code to type and a link (as a QR PNG) that pairs by itself.
@@ -330,7 +337,7 @@ pub struct RowInfo {
     pub chosen: bool,
     /// Tiles the row would carry now; a shown row with none stays off the screen.
     pub count: u32,
-    /// One short line under the title: "14 apps", "Jellyfin · 30 titles", "Same apps as Your apps".
+    /// One short line under the title: "14 apps", "Jellyfin, 30 titles", "Same apps as Your apps".
     pub detail: String,
 }
 
@@ -407,6 +414,14 @@ pub struct Tile {
     pub provider: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_name: Option<String>,
+    /// An app hidden from every row; only All apps and search still list it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[uniffi(default = false)]
+    pub hidden: bool,
+    /// How long is left, "23 minutes left", for what is read out about the tile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[uniffi(default = None)]
+    pub time_left: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum, Serialize, Deserialize)]
@@ -425,6 +440,11 @@ pub struct Row {
     pub size: RowSize,
     pub badge: Option<Badge>,
     pub tiles: Vec<Tile>,
+    /// A line beside the header, such as "Offline, showing what we have" for a plugin's row whose
+    /// last refresh failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[uniffi(default = None)]
+    pub note: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
@@ -736,6 +756,8 @@ pub(crate) struct State {
     pub pending_art: worker::PendingArt,
     /// The latest TvProvider records, for preparing pictures later.
     pub last_programs: Vec<ProgramRecord>,
+    /// Whether the TV shows a 24-hour clock, so the Stage writes times as the clock does.
+    pub clock_24h: bool,
 }
 
 #[derive(uniffi::Object)]
@@ -799,6 +821,7 @@ impl Core {
                 playing: Default::default(),
                 pending_art: Default::default(),
                 last_programs: Vec::new(),
+                clock_24h: false,
             }),
             snapshot: RwLock::new(snapshot),
             snapshot_json: Mutex::new(String::new()),
@@ -1015,6 +1038,18 @@ impl Core {
         self.enqueue(worker::Job::UtcOffset(minutes));
     }
 
+    /// Whether the TV shows a 24-hour clock; times the core writes follow it.
+    pub fn set_clock_24h(&self, on: bool) {
+        self.count();
+        let changed = {
+            let mut state = self.inner.state.lock();
+            std::mem::replace(&mut state.clock_24h, on) != on
+        };
+        if changed {
+            self.enqueue(worker::Job::Rebuild);
+        }
+    }
+
     // ----- plugins -----
 
     /// Abstract screensavers from enabled plugins, in install order.
@@ -1094,7 +1129,7 @@ impl Core {
         companion::status(&self.inner)
     }
 
-    /// A fresh pairing code and QR link; valid for five minutes.
+    /// A fresh pairing code and QR link, valid for five minutes; the code shown before stops working.
     pub fn companion_pairing(&self) -> Result<PairingInfo, CoreError> {
         self.count();
         companion::pairing(&self.inner).map_err(|detail| CoreError::Companion { detail })

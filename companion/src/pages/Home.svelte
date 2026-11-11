@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, argb, art, tag, type Tile } from '../lib/api';
+  import { api, art, light, lit, tag, type Tile } from '../lib/api';
   import { hold } from '../lib/hold';
   import Icon from '../lib/Icon.svelte';
   import { act, app, connectionLabel, dismissShare, go, openShare } from '../lib/state.svelte';
@@ -63,7 +63,7 @@
     <span class="pill" class:on={app.connected}>{connectionLabel()}</span>
   </header>
 
-  {#if app.error}
+  {#if app.error && !app.away}
     <p class="empty">{app.error}</p>
   {/if}
 
@@ -79,7 +79,7 @@
   {/if}
 
   {#if np}
-    <section class="card np" style="--light: {argb(np.lightArgb)}">
+    <section class="card np" style={lit(np.lightArgb)}>
       <div class="np-art">{#if np.artPath}<img src={art(np.artPath)} alt="" />{/if}</div>
       <div class="np-text">
         <p class="caption">{np.appLabel}</p>
@@ -95,14 +95,14 @@
   {/if}
 
   {#if spotlight}
-    <section class="stage" style="--light: {argb(spotlight.lightArgb)}">
+    <section class="stage" style={lit(spotlight.lightArgb)}>
       <div class="stage-art">
         {#if spotlight.artworkPath}<img src={art(spotlight.artworkPath)} alt="" />{/if}
       </div>
       <div class="stage-text">
-        <p class="meta">{spotlight.category}{#if spotlight.source}<span class="source">{` · ${spotlight.source}`}</span>{/if}</p>
+        <p class="meta">{spotlight.category}{#if spotlight.source}<span class="source">{`, ${spotlight.source}`}</span>{/if}</p>
         <h2>{spotlight.title}</h2>
-        {#each spotlight.lines as line}<p class="meta">{line}</p>{/each}
+        {#each spotlight.lines as line, i (i)}<p class="meta">{line}</p>{/each}
         {#if progressPct(spotlight.progress) != null}
           <div class="progress"><i style="width: {progressPct(spotlight.progress)}%"></i></div>
         {/if}
@@ -124,7 +124,7 @@
         <div class="section-head"><h3>Stage</h3></div>
         <div class="row-scroller">
           {#each snapshot.stage.strip as t (t.id)}
-            <button class="tile landscape" class:borrowed={t.borrowedArt} style="--light: {argb(t.lightArgb)}" aria-label={describe(t)} onclick={() => open(t)} use:hold={() => menu(t, null, null)}>
+            <button class="tile landscape" class:borrowed={t.borrowedArt} style={lit(t.lightArgb)} aria-label={describe(t)} onclick={() => open(t)} use:hold={() => menu(t, null, null)}>
               {#if t.artworkPath}<img src={art(t.artworkPath)} alt="" loading="lazy" />{/if}
               {#if tag(t.kind) !== 'APP_BANNER' || !t.artworkPath}<div class="scrim"><div class="t">{t.title}</div>{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
               {#if t.stagePinned}<span class="pinmark" aria-hidden="true"><Icon name="pin" size={13} /></span>{/if}
@@ -137,15 +137,19 @@
     {#each snapshot.rows as row (row.id)}
       <section class="section">
         <div class="section-head"><h3>{row.title}</h3>{#if tag(row.badge) === 'LIVE'}<span class="pill bad"><span class="dot"></span>Live</span>{/if}</div>
+        {#if row.note}<p class="caption dust">{row.note}</p>{/if}
         <div class="row-scroller">
           {#each row.tiles.filter((t) => !t.id.startsWith('control:')) as t (t.id)}
-            <button class="tile {tag(row.kind).toLowerCase()}" class:borrowed={t.borrowedArt} style="--light: {argb(t.lightArgb)}" aria-label={describe(t)} onclick={() => open(t)} use:hold={t.id.startsWith('control:') ? null : () => menu(t, row.id, row.title)}>
+            <button class="tile {tag(row.kind).toLowerCase()}" class:borrowed={t.borrowedArt} style={lit(t.lightArgb)} aria-label={describe(t)} onclick={() => open(t)} use:hold={t.id.startsWith('control:') ? null : () => menu(t, row.id, row.title)}>
               {#if tag(row.kind) === 'COMPACT'}
                 {#if t.iconPath}<img class="icon" src={art(t.iconPath)} alt="" loading="lazy" />{/if}
-                <span class="t">{t.title}</span>
+                <span class="lines">
+                  <span class="t">{t.title}</span>
+                  {#if t.subtitle}<span class="s">{t.subtitle}</span>{/if}
+                </span>
                 {#if t.pinned || t.stagePinned}<span class="pin-inline" aria-hidden="true"><Icon name="pin" size={14} /></span>{/if}
               {:else}
-                {#if t.artworkPath}<img src={art(t.artworkPath)} alt="" loading="lazy" />{:else}<div class="fill" style="background: color-mix(in srgb, {argb(t.lightArgb)} 35%, var(--curtain))"></div>{/if}
+                {#if t.artworkPath}<img src={art(t.artworkPath)} alt="" loading="lazy" />{:else}<div class="fill" style="background: color-mix(in srgb, {light(t.lightArgb)} 35%, var(--curtain))"></div>{/if}
                 {#if tag(t.badge) === 'LIVE' && tag(row.badge) !== 'LIVE'}<span class="badge"><span class="dot"></span>Live</span>{/if}
                 {#if (tag(row.kind) !== 'APP_BANNER' && tag(row.kind) !== 'POSTER') || !t.artworkPath}<div class="scrim">{#if (t.artTitle ?? t.title)}<div class="t">{t.artTitle ?? t.title}</div>{/if}{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
                 {#if t.pinned || t.stagePinned}<span class="pinmark" aria-hidden="true"><Icon name="pin" size={13} /></span>{/if}
@@ -183,13 +187,16 @@
   .np-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .np-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .np-controls { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-  .round { width: 40px; height: 40px; border-radius: 50%; background: var(--velvet); color: var(--limelight); display: grid; place-items: center; }
-  .round.big { width: 48px; height: 48px; background: var(--light); color: var(--velvet); }
+  .round { width: 44px; height: 44px; border-radius: 50%; background: var(--velvet); color: var(--limelight); display: grid; place-items: center; }
+  .round.big { width: 48px; height: 48px; background: var(--light); color: var(--on-light); }
   .source { color: var(--dust); }
   .round:disabled { opacity: 0.35; }
   .tile .fill { position: absolute; inset: 0; }
   .tile .icon { width: 28px; height: 28px; border-radius: 7px; flex: none; object-fit: cover; }
-  .tile.compact .t { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  /* A compact tile reads like the TV's: its title, then the line that says why, as a caption. */
+  .tile.compact .lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .tile.compact .t { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.compact .s { font-size: 12px; font-weight: 500; color: var(--dust); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hint { margin: -12px 0 -8px; }
   .pinmark { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--velvet) 72%, transparent); color: var(--limelight); }
   .pin-inline { color: var(--dust); display: grid; place-items: center; flex: none; }

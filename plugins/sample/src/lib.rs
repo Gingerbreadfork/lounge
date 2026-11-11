@@ -54,7 +54,7 @@ impl sdk::Plugin for Sample {
             kinds: vec![Kind::Content, Kind::Screensaver],
             fetch_hosts: vec!["thumb.wikimedia.org".into(), "upload.wikimedia.org".into()],
             refresh_minutes: 24 * 60,
-            rows: vec![RowSpec { id: "shelf".into(), title: "Film club".into(), style: RowStyle::Poster }],
+            rows: vec![RowSpec { id: "shelf".into(), title: "Films in the sample library".into(), style: RowStyle::Poster }],
             settings: vec![],
             homepage: None,
             self_signed_servers: false,

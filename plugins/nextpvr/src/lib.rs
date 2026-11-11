@@ -1,5 +1,5 @@
 //! NextPVR: channels become Live now with the guide behind them, half-watched recordings go
-//! into Continue watching and the rest fill a "Recordings" row. The server wants a session
+//! into Continue watching and the rest fill a row of recordings. The server wants a session
 //! signed in with its PIN; the session is kept between refreshes, and play addresses are
 //! worked out when something is selected so they always carry a live session.
 use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
@@ -35,7 +35,7 @@ impl sdk::Plugin for NextPvr {
             kinds: vec![Kind::Content, Kind::Epg],
             fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
-            rows: vec![RowSpec { id: "recordings".into(), title: "Recordings".into(), style: RowStyle::Landscape }],
+            rows: vec![RowSpec { id: "recordings".into(), title: "Recordings on NextPVR".into(), style: RowStyle::Landscape }],
             settings: vec![
                 SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8866".into()), default: None },
                 SettingSpec { key: "pin".into(), label: "PIN".into(), kind: SettingKind::Password, required: false, help: Some("The server's PIN from Settings, General. New installs use 0000.".into()), default: Some("0000".into()) },
@@ -251,7 +251,7 @@ pub fn ms_from_any(t: i64) -> i64 {
 impl Server {
     /// Reuses the saved session when the server still accepts it, otherwise signs in with the PIN.
     fn connect() -> Result<Server, String> {
-        let base = host::server_setting("server", "Server address")?;
+        let base = host::server_setting("server", "server address")?;
         if let Some(saved) = host::kv_get_string(SESSION_KEY).and_then(|s| serde_json::from_str::<SavedSession>(&s).ok()).filter(|s| s.base == base) {
             let s = Server { base: base.clone(), sid: saved.sid };
             if s.call::<Status>("session.verify", "").map(|st| st.stat == "ok").unwrap_or(false) {
@@ -556,6 +556,11 @@ fn move_span(from: usize, channels: usize) -> (std::ops::Range<usize>, bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_missing_address_says_where_to_add_it() {
+        assert_eq!(<NextPvr as sdk::Plugin>::refresh(&RefreshContext::default()).err().as_deref(), Some("Add the server address in the plugin's settings."));
+    }
 
     #[test]
     fn part_watched_recordings_stay_past_the_rows_limit() {

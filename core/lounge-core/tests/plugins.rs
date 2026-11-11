@@ -279,6 +279,16 @@ fn an_update_never_rolls_back_and_is_turned_off_when_it_asks_for_more() {
     let wider = core.install_plugin(version("3", r#""a.example","b.example""#), false).unwrap();
     assert!(!wider.enabled);
     assert!(core.plugin_log(ID.into()).iter().any(|l| l.contains("b.example")));
+    // The screens are told why, through further updates, until the person turns it on.
+    assert_eq!(wider.update_asks_to_reach, vec!["b.example"]);
+    let further = core.install_plugin(version("4", r#""a.example","b.example","c.example""#), false).unwrap();
+    assert_eq!(further.update_asks_to_reach, vec!["b.example", "c.example"]);
+    assert_eq!(core.plugins()[0].update_asks_to_reach, vec!["b.example", "c.example"]);
+    core.set_plugin_enabled(ID.into(), true);
+    assert!(core.plugins()[0].enabled && core.plugins()[0].update_asks_to_reach.is_empty());
+    // One the person turned off takes a wider update without being held back.
+    core.set_plugin_enabled(ID.into(), false);
+    assert!(core.install_plugin(version("5", r#""a.example","b.example","c.example","d.example""#), false).unwrap().update_asks_to_reach.is_empty());
 }
 
 #[test]

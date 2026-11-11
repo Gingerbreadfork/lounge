@@ -468,6 +468,14 @@ impl Graph {
         v
     }
 
+    /// Every app A to Z, hidden ones too: the All apps screen and search keep them, so the way to
+    /// an app is never lost by hiding it from the rows.
+    pub fn every_app(&self) -> Vec<&Item> {
+        let mut v: Vec<&Item> = self.items.values().filter(|it| it.kind == ItemKind::App).collect();
+        v.sort_by_cached_key(|it| it.title.to_lowercase());
+        v
+    }
+
     pub fn games(&self) -> Vec<&Item> {
         let mut v: Vec<&Item> = self
             .items
@@ -858,6 +866,8 @@ mod tests {
         g.hide("app:a");
         assert!(g.your_apps().is_empty());
         assert!(g.all_apps().is_empty());
+        // Every app keeps it, for the All apps screen and search.
+        assert_eq!(g.every_app().len(), 1);
         g.unhide("app:a");
         assert_eq!(g.all_apps().len(), 1);
     }

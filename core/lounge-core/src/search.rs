@@ -93,11 +93,13 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
                     installed_rank: None,
                     provider: None,
                     provider_name: None,
+                    hidden: false,
+                    time_left: None,
                 });
                 links.insert(id, link);
             }
             if !tiles.is_empty() {
-                rows.push(Row { id: format!("search:plugin:{}", g.plugin), title: g.plugin_name.clone(), kind, size: RowSize::M, badge: None, tiles });
+                rows.push(Row { id: format!("search:plugin:{}", g.plugin), title: g.plugin_name.clone(), kind, size: RowSize::M, badge: None, tiles, note: None });
             }
         }
     }

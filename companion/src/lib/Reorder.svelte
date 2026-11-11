@@ -170,7 +170,7 @@
   .reorder-item { transition: box-shadow 160ms ease-out, background 160ms ease-out; }
   .reorder-item.lifted { position: relative; z-index: 2; background: var(--curtain-edge); box-shadow: 0 14px 32px -12px rgb(0 0 0 / 0.7), 0 0 0 1px color-mix(in srgb, var(--light) 40%, transparent); }
   .lifting { user-select: none; -webkit-user-select: none; }
-  .grip { width: 36px; height: 44px; margin-left: -8px; display: grid; place-items: center; color: var(--dust); touch-action: none; cursor: grab; border-radius: 10px; flex: none; }
+  .grip { width: 44px; height: 44px; margin-left: -12px; display: grid; place-items: center; color: var(--dust); touch-action: none; cursor: grab; border-radius: 10px; flex: none; }
   .grip:active, .lifted .grip { color: var(--limelight); cursor: grabbing; }
   .grip:focus-visible { outline: 2px solid var(--light); outline-offset: -2px; }
   /* Kept for screen readers and the keyboard, out of sight for everyone else. */

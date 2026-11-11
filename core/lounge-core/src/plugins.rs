@@ -236,6 +236,42 @@ pub(crate) fn store_setting(store: &lounge_store::Store, manifest: &Manifest, id
     let _ = store.plugin_setting_set(id, key, value);
 }
 
+/// How an update that newly accepts home servers' own certificates is named among the hosts it asks to reach.
+const SELF_SIGNED: &str = "servers with a certificate of their own";
+
+fn held_key(id: &str) -> String {
+    format!("plugin_held:{id}")
+}
+
+/// Where a plugin turned off by its update asks to reach, until the person allows it.
+pub(crate) fn held_back(store: &lounge_store::Store, id: &str) -> Vec<String> {
+    store.meta(&held_key(id)).ok().flatten().and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default()
+}
+
+pub(crate) fn set_held_back(store: &lounge_store::Store, id: &str, reach: &[String]) {
+    let key = held_key(id);
+    if reach.is_empty() && store.meta(&key).ok().flatten().is_none_or(|v| v == "[]") {
+        return;
+    }
+    let json = serde_json::to_string(reach).unwrap_or_else(|_| "[]".to_string());
+    if let Err(e) = store.set_meta(&key, &json) {
+        tracing::warn!("plugin {id}: could not keep what its update asks to reach: {e}");
+    }
+}
+
+/// What a plugin held back by updates waits on the person to allow once `manifest` is installed:
+/// what it waited on before and what this update adds, as far as `manifest` still asks for it.
+fn still_held(before: &[String], added: &[String], manifest: &Manifest) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for h in before.iter().chain(added) {
+        let asked = if h == SELF_SIGNED { manifest.self_signed_servers } else { manifest.fetch_hosts.contains(h) };
+        if asked && !out.contains(h) {
+            out.push(h.clone());
+        }
+    }
+    out
+}
+
 /// `text` cut to at most `max` bytes on a character boundary.
 pub(crate) fn clip_bytes(text: &str, max: usize) -> &str {
     if text.len() <= max {
@@ -367,8 +403,9 @@ impl PluginManager {
         single_component(&self.art_dir, id)
     }
 
-    /// Verify, pin the publisher and copy a bundle into place. Returns the stored row.
-    pub fn install(&self, path: &Path, built_in: bool, existing: Option<&PluginRow>) -> Result<(PluginRow, Manifest), String> {
+    /// Verify, pin the publisher and copy a bundle into place. Returns the stored row and where the
+    /// update asks to reach beyond the version it replaces.
+    pub fn install(&self, path: &Path, built_in: bool, existing: Option<&PluginRow>) -> Result<(PluginRow, Manifest, Vec<String>), String> {
         let bundle = Bundle::read(path).map_err(|e| e.to_string())?;
         bundle.verify().map_err(|e| e.to_string())?;
         let installed: Option<Manifest> = existing.and_then(|prev| serde_json::from_str(&prev.manifest_json).ok());
@@ -406,7 +443,7 @@ impl PluginManager {
             Some(old) if !built_in => {
                 let mut more: Vec<String> = bundle.manifest.fetch_hosts.iter().filter(|h| !old.fetch_hosts.contains(h)).cloned().collect();
                 if bundle.manifest.self_signed_servers && !old.self_signed_servers {
-                    more.push("servers with a certificate of their own".into());
+                    more.push(SELF_SIGNED.into());
                 }
                 more
             }
@@ -427,7 +464,7 @@ impl PluginManager {
             last_error: None,
             last_success_ms: None,
         };
-        Ok((row, bundle.manifest))
+        Ok((row, bundle.manifest, widened))
     }
 
     pub fn remove_files(&self, id: &str) {
@@ -693,6 +730,8 @@ pub(crate) fn info_for(row: &PluginRow, manifest: &Manifest, settings: &[(String
         ask: None,
         items,
         settings: setting_infos,
+        for_apps: manifest.for_apps.clone(),
+        update_asks_to_reach: Vec::new(),
     }
 }
 
@@ -1029,6 +1068,9 @@ impl Inner {
                 let settings = state.store.plugin_settings(&row.id).unwrap_or_default();
                 let items = state.graph.count_source(&format!("plugin:{}", row.id)) as u32;
                 let mut info = info_for(row, &manifest, &settings, items);
+                if !row.enabled {
+                    info.update_asks_to_reach = held_back(&state.store, &row.id);
+                }
                 // A plugin that waits on the person has a step to show, not a problem.
                 if let Some(pending) = asks.get(&row.id).filter(|_| row.enabled) {
                     info.last_error = None;
@@ -1043,20 +1085,28 @@ impl Inner {
         let _one_at_a_time = self.plugins.installing.lock();
         let id = lounge_plugins::bundle::Bundle::read(path).map_err(|e| e.to_string())?.manifest.id;
         let existing = self.state.lock().store.plugins().map_err(|e| e.to_string())?.into_iter().find(|r| r.id == id);
-        let (row, manifest) = self.plugins.install(path, built_in, existing.as_ref())?;
+        let (row, manifest, added) = self.plugins.install(path, built_in, existing.as_ref())?;
         // The store keeps a plugin's switch through an update, so one turned off by it is turned
         // off here, which also takes away what it published.
-        if existing.as_ref().is_some_and(|e| e.enabled) && !row.enabled {
+        let turned_off = existing.as_ref().is_some_and(|e| e.enabled) && !row.enabled;
+        if turned_off {
             self.plugin_set_enabled(&row.id, false);
         }
         let info = {
             let mut state = self.state.lock();
             state.store.plugin_upsert(&row).map_err(|e| e.to_string())?;
+            // Kept for the screens until the person allows it, together with what an earlier
+            // update asked for that they have not allowed yet.
+            let before = if row.enabled { Vec::new() } else { held_back(&state.store, &row.id) };
+            let held = if turned_off || !before.is_empty() { still_held(&before, &added, &manifest) } else { Vec::new() };
+            set_held_back(&state.store, &row.id, &held);
             let rows = state.store.plugins().map_err(|e| e.to_string())?;
             state.plugins = entries_from_rows(&rows);
             let settings = state.store.plugin_settings(&row.id).map_err(|e| e.to_string())?;
             let stored = rows.into_iter().find(|r| r.id == row.id).unwrap_or(row.clone());
-            info_for(&stored, &manifest, &settings, 0)
+            let mut info = info_for(&stored, &manifest, &settings, 0);
+            info.update_asks_to_reach = held;
+            info
         };
         if info.enabled {
             self.plugins.refresh_now(&info.id);
@@ -1083,6 +1133,7 @@ impl Inner {
             let mut state = self.state.lock();
             let _ = state.store.plugin_remove(id);
             screensavers::clear(&state.store, id);
+            set_held_back(&state.store, id, &[]);
             state.graph.replace_source(&format!("plugin:{id}"), Vec::new());
             let rows = state.store.plugins().unwrap_or_default();
             state.plugins = entries_from_rows(&rows);
@@ -1114,7 +1165,10 @@ impl Inner {
         {
             let mut state = self.state.lock();
             let _ = state.store.plugin_set_enabled(id, enabled);
-            if !enabled {
+            if enabled {
+                // Turning it on allows whatever its update asked to reach.
+                set_held_back(&state.store, id, &[]);
+            } else {
                 self.plugins.forget_ask(id);
                 let _ = state.store.replace_items(&format!("plugin:{id}"), &[], now_ms());
                 screensavers::clear(&state.store, id);
@@ -1173,6 +1227,17 @@ mod tests {
         assert!(!older("1", "1.0"));
         assert!(!older("2", "1.9"));
         assert!(!older("beta", "1"));
+    }
+
+    #[test]
+    fn what_an_update_asks_to_reach_waits_until_a_later_one_stops_asking() {
+        let s = |v: &[&str]| v.iter().map(|h| h.to_string()).collect::<Vec<String>>();
+        let manifest = Manifest { fetch_hosts: s(&["a.example", "b.example", "c.example"]), self_signed_servers: true, ..Default::default() };
+        assert_eq!(still_held(&[], &s(&["b.example"]), &manifest), s(&["b.example"]));
+        assert_eq!(still_held(&s(&["b.example"]), &s(&["c.example", "b.example"]), &manifest), s(&["b.example", "c.example"]));
+        assert_eq!(still_held(&s(&["gone.example", SELF_SIGNED]), &[], &manifest), s(&[SELF_SIGNED]));
+        let plain = Manifest { fetch_hosts: s(&["a.example"]), ..Default::default() };
+        assert!(still_held(&s(&["b.example", SELF_SIGNED]), &[], &plain).is_empty());
     }
 
     #[test]

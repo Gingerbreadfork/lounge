@@ -12,6 +12,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    // The focus tests draw real screens on the JVM, fonts and pictures included.
+    testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
 composeCompiler {
@@ -40,5 +42,9 @@ dependencies {
     implementation(libs.coil.compose)
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
+    testImplementation(bom)
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.compose.ui.test.manifest)
     debugImplementation(libs.compose.ui.tooling)
 }

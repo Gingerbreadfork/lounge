@@ -186,8 +186,8 @@ pub struct UserData {
 impl Session {
     /// Reuse the cached token; sign in again when there is none or the server rejects it.
     fn connect() -> Result<Session, String> {
-        let server = host::server_setting("server", "Server address")?;
-        let username = host::required_setting("username", "Username")?;
+        let server = host::server_setting("server", "server address")?;
+        let username = host::required_setting("username", "username")?;
         let device_id = device_id();
         // The saved session belongs to one server and user; another of either signs in afresh.
         let owner = format!("{server}\n{username}");
@@ -392,6 +392,11 @@ impl Finished {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_missing_address_says_where_to_add_it() {
+        assert_eq!(<Emby as sdk::Plugin>::refresh(&RefreshContext::default()).err().as_deref(), Some("Add the server address in the plugin's settings."));
+    }
 
     #[test]
     fn favourites_go_in_their_own_row() {

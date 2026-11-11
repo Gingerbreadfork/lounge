@@ -3,7 +3,6 @@ package tv.lounge.feature.home
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -62,8 +61,10 @@ import tv.lounge.design.LoungeButton
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.ProgressBar
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
 import tv.lounge.design.argb
-import tv.lounge.design.focusRing
+import tv.lounge.design.focusRim
 import tv.lounge.design.lightGlow
 
 /**
@@ -103,7 +104,7 @@ fun NowPlayingCard(
     }
 
     Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(visibleState, enter = fadeIn(tween(200)), exit = fadeOut(tween(180))) {
+        AnimatedVisibility(visibleState, enter = fadeIn(motion.timed(200)), exit = fadeOut(motion.timed(180))) {
             Box(Modifier.fillMaxSize().background(colors.scrim))
         }
         AnimatedVisibility(
@@ -118,6 +119,7 @@ fun NowPlayingCard(
                     .lightGlow(light, 0.22f, radius = 60.dp, cornerRadius = 20.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(colors.curtain)
+                    .semantics { paneTitle = "Now playing" }
                     .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
                     .focusProperties { canFocus = !leaving }
                     .trapFocus(leaving)
@@ -133,7 +135,7 @@ fun NowPlayingCard(
                 Column(Modifier.weight(1f).fillMaxSize().padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 18.dp)) {
                     Text(np.appLabel, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(4.dp))
-                    Text(np.title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(np.title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
                     np.subtitle?.let {
                         Spacer(Modifier.height(2.dp))
                         Text(it, style = LoungeTheme.typography.meta, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -164,7 +166,7 @@ fun NowPlayingCard(
     LaunchedEffect(Unit) { firstFocus.requestWhenReady() }
 }
 
-/** A 56 px round transport button; the primary one is filled with the artwork's light. */
+/** A 56 px round transport button; the primary one is filled with the artwork's light. Focus adds the tiles' rim. */
 @Composable
 private fun TransportButton(
     icon: ImageVector,
@@ -181,6 +183,7 @@ private fun TransportButton(
     var focused by remember { mutableStateOf(false) }
     val scale = animateFloatAsState(if (focused) 1.08f else 1f, if (focused) motion.snap() else motion.settle(), label = "transportScale")
     val glow = animateFloatAsState(if (focused) visuals.glowAlpha else 0f, if (focused) motion.snap() else motion.settle(), label = "transportGlow")
+    val rim = animateFloatAsState(if (focused) 1f else 0f, if (focused) motion.snap() else motion.settle(), label = "transportRim")
     val fill = if (primary) light else if (focused) colors.curtainEdge else colors.velvet
     val tint = if (primary) tv.lounge.design.textOn(light, colors) else if (focused) colors.limelight else colors.dust
     Box(
@@ -190,7 +193,7 @@ private fun TransportButton(
             .lightGlow(light, { glow.value }, radius = 32.dp, cornerRadius = 28.dp)
             .clip(CircleShape)
             .background(fill)
-            .focusRing(colors, { focused }, 28.dp)
+            .focusRim(colors, { rim.value }, 28.dp)
             .alpha(if (enabled) 1f else 0.4f)
             .onFocusChanged { focused = it.isFocused }
             .then(if (enabled) Modifier.tilePress(onClick, onClick) else Modifier)

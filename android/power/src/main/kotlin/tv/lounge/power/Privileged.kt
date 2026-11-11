@@ -16,10 +16,14 @@ data class ShellResult(val exitCode: Int, val output: String) {
     val ok: Boolean get() = exitCode == 0
 }
 
+/** A failure whose message is a sentence for the screen; the raw detail is in [cause]. */
 open class PrivilegedException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /** The daemon answered but does not know Lounge's key: the one failure that means pairing again. */
-class KeyNotApprovedException : PrivilegedException("This device has not approved Lounge's key")
+class KeyNotApprovedException : PrivilegedException("This TV no longer allows Lounge. In Settings, open Power Setup and choose Connect.")
+
+/** How an action last went: [output] is what the shell printed, or why it could not run. */
+data class PowerResult(val ok: Boolean, val output: String)
 
 /** One way of running a shell command with shell-user rights. */
 interface Privileged {

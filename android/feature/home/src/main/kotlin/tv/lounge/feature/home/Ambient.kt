@@ -46,10 +46,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
-import java.util.Date
 import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -254,14 +255,20 @@ private fun FramedPicture(path: String, filter: androidx.compose.ui.graphics.Col
 @Composable
 internal fun rememberAmbientClock(): String {
     val context = LocalContext.current
-    var clock by remember { mutableStateOf(android.text.format.DateFormat.getTimeFormat(context).format(Date())) }
+    var clock by remember { mutableStateOf(clockText(context)) }
     LaunchedEffect(Unit) {
         while (true) {
-            clock = android.text.format.DateFormat.getTimeFormat(context).format(Date())
+            clock = clockText(context)
             delay(1_000L * (61 - (System.currentTimeMillis() / 1_000 % 60)))
         }
     }
     return clock
+}
+
+/** The time as the top bar writes it, following the system's 24-hour setting. */
+private fun clockText(context: android.content.Context): String {
+    val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
+    return java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.getDefault()))
 }
 
 /** Two pixels of drift a minute, so nothing sits still on an OLED panel. */
@@ -277,7 +284,10 @@ internal fun rememberAmbientDrift(): IntOffset {
     return drift
 }
 
-/** The clock bottom-left with two lines saying what is on screen, over a scrim that keeps it readable. */
+/**
+ * The clock bottom-left with two lines saying what is on screen, over a scrim deep enough that the
+ * `dust` line stays readable over the brightest picture or scene.
+ */
 @Composable
 internal fun AmbientCaption(clock: String, title: String?, line: String?, drift: IntOffset) {
     val colors = LoungeTheme.colors
@@ -287,7 +297,7 @@ internal fun AmbientCaption(clock: String, title: String?, line: String?, drift:
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .height(300.dp)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))),
+                .background(Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color.Black.copy(alpha = 0.6f), 1f to Color.Black.copy(alpha = 0.92f))),
         )
         Column(Modifier.align(Alignment.BottomStart).offset { drift }.padding(start = 96.dp, bottom = 72.dp)) {
             Text(clock, style = LoungeTheme.typography.clock, color = colors.limelight)
@@ -358,7 +368,26 @@ fun AmbientPreview(core: CoreClient, prefs: Prefs, onClose: () -> Unit) {
     LaunchedEffect(Unit) { focus.requestWhenReady() }
 }
 
-/** Settings → Screensaver: make Lounge the system screensaver (through Power Setup) or go back. */
+/**
+ * The screensaver by the name Settings and the Screensaver sheet both give it: Lounge, off, or
+ * the TV's own by its app's name.
+ */
+internal fun screensaverName(power: PowerSetup, context: android.content.Context): String {
+    val enabled = runCatching { android.provider.Settings.Secure.getInt(context.contentResolver, "screensaver_enabled", 1) }.getOrDefault(1)
+    val current = power.currentScreensaver
+    return when {
+        enabled == 0 -> "Off"
+        current == null -> "The TV's own"
+        current.contains(context.packageName) -> "Lounge"
+        // A label that is only a package name says nothing to a person.
+        else -> power.labelFor(current).takeUnless { it.contains('.') && ' ' !in it } ?: "The TV's own"
+    }
+}
+
+/**
+ * The Screensaver sheet: which screensaver the TV starts, which OK switches between Lounge's and
+ * the one before through Power Setup, then the style and a preview.
+ */
 @Composable
 fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup: () -> Unit, onPreview: () -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
@@ -376,26 +405,52 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
         scope.launch { prefs.setAmbientStyle(next) }
     }
     val status by power.status.collectAsStateWithLifecycle()
-    var current by remember { mutableStateOf(power.currentScreensaver) }
-    var busy by remember { mutableStateOf<String?>(null) }
+    var name by remember { mutableStateOf(screensaverName(power, context)) }
+    var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val ready = status is PowerStatus.Ready
-    val ours = current?.contains(context.packageName) == true
+    val ours = name == "Lounge"
 
     LaunchedEffect(Unit) { power.refresh() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { name = screensaverName(power, context) }
 
-    fun run(id: String, block: suspend () -> Unit) {
-        if (busy != null) return
-        busy = id
+    /** Runs a switch, then reads the TV's setting again; [block] returns what to say when it did not take. */
+    fun run(block: suspend () -> String?) {
+        if (busy) return
+        busy = true
         error = null
         scope.launch {
-            try {
+            error = try {
                 block()
             } catch (e: PrivilegedException) {
-                error = e.message
+                e.message
             }
-            current = power.currentScreensaver
-            busy = null
+            name = screensaverName(power, context)
+            busy = false
+        }
+    }
+
+    fun switch() {
+        when {
+            ours && ready -> run {
+                val r = power.run(power.restoreScreensaver(prefs.previousScreensaver.first(), prefs.previousScreensaverEnabled.first()))
+                if (r.ok && power.currentScreensaver?.contains(context.packageName) != true) null else NOT_TAKEN
+            }
+            ready -> run {
+                val previous = power.currentScreensaver
+                val r = power.run(power.useAmbient)
+                // The one before is kept only once the switch has happened, so a failed one cannot lose it.
+                val took = power.currentScreensaver?.contains(context.packageName) == true
+                if (took) {
+                    prefs.setPreviousScreensaver(previous)
+                    prefs.setPreviousScreensaverEnabled(PowerSetup.previousScreensaverEnabled(r.output))
+                }
+                if (r.ok && took) null else NOT_TAKEN
+            }
+            !ours && status is PowerStatus.Unavailable -> runCatching {
+                context.startActivity(Intent(android.provider.Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.onFailure { error = "This TV has no screensaver settings of its own. Power Setup can switch it instead." }
+            else -> onPowerSetup()
         }
     }
 
@@ -408,66 +463,34 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
         SheetRow(
             icon = LoungeIcons.Frame,
             title = "Screensaver",
-            value = when {
-                ours -> "Lounge"
-                current.isNullOrBlank() -> "Off"
-                else -> power.labelFor(current!!)
+            subtitle = when {
+                busy -> "Switching…"
+                ours && ready -> "OK puts back the one before"
+                ours -> "Power Setup can put back the one before"
+                ready -> "OK makes Lounge's the screensaver"
+                status is PowerStatus.Unavailable -> "OK opens the TV's screensaver settings: choose Lounge there, then press Back"
+                else -> "OK opens Power Setup, which can make Lounge's the screensaver"
             },
+            value = name,
             accent = if (ours) colors.signal else colors.dust,
-            onClick = {},
+            onClick = { if (!busy) switch() },
             focusRequester = firstFocus,
         )
         SheetRow(
-            icon = LoungeIcons.Theme,
+            icon = SettingsGlyphs.Scene,
             title = "Style",
             value = choices[at].second,
             subtitle = choices[at].third,
             onClick = { step(1) },
             onCycle = { step(it) },
         )
-        if (!ours) {
-            SheetRow(
-                icon = LoungeIcons.Power,
-                title = "Use Lounge as the screensaver",
-                value = when {
-                    busy == "use" -> "Switching…"
-                    ready -> "Through Power Setup"
-                    status is PowerStatus.Unavailable -> "Open settings"
-                    else -> "Power Setup"
-                },
-                accent = colors.houselight,
-                onClick = {
-                    when {
-                        ready -> run("use") {
-                            prefs.setPreviousScreensaver(current)
-                            val r = power.run(power.useAmbient)
-                            prefs.setPreviousScreensaverEnabled(PowerSetup.previousScreensaverEnabled(r.output))
-                        }
-                        status is PowerStatus.Unavailable -> runCatching {
-                            context.startActivity(Intent(android.provider.Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                        }.onFailure { error = "This device has no screensaver settings screen; use Power Setup." }
-                        else -> onPowerSetup()
-                    }
-                },
-            )
-        } else {
-            SheetRow(
-                icon = LoungeIcons.Refresh,
-                title = "Back to the previous screensaver",
-                value = if (busy == "restore") "Switching…" else if (ready) "" else "Power Setup",
-                onClick = {
-                    if (ready) run("restore") {
-                        val previous = prefs.previousScreensaver.first()
-                        power.run(power.restoreScreensaver(previous, prefs.previousScreensaverEnabled.first()))
-                    } else onPowerSetup()
-                },
-            )
-        }
-        SheetRow(icon = LoungeIcons.Play, title = "Preview it now", value = "Any key brings you back", onClick = onPreview)
+        SheetRow(icon = LoungeIcons.Play, title = "Preview it now", subtitle = "Any key brings you back", onClick = onPreview)
         if (error != null) Text(error!!, style = LoungeTheme.typography.caption, color = colors.ember)
     }
     SheetFootnote(
         "Pictures come from what is already on your home screen and abstract scenes are drawn on the TV; nothing is downloaded for this.",
-        "The system decides when the screensaver starts: Settings → System → Screensaver on most devices.",
+        "The TV decides when the screensaver starts. To change when, in the TV's settings open System, then Screensaver.",
     )
 }
+
+private const val NOT_TAKEN = "The TV didn't take the change. Try again, or in the TV's settings open System, then Screensaver."

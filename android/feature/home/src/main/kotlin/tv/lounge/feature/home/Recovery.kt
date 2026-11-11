@@ -20,6 +20,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
 import kotlinx.coroutines.launch
@@ -37,15 +41,15 @@ data class OtherHome(val packageName: String, val label: String, val enabled: Bo
 /**
  * Shown in place of the home when the core will not open, so the TV is never left without a way
  * on. [onTryAgain] returns when the attempt is over; if it worked, the caller shows the home.
+ * [onOpenSettings] and [onOtherHome] return false when nothing could be opened.
  */
 @Composable
 fun RecoveryScreen(
     reason: RecoveryReason,
-    detail: String?,
     otherHomes: List<OtherHome>,
     onTryAgain: suspend (fresh: Boolean) -> Unit,
-    onOpenSettings: () -> Unit,
-    onOtherHome: (OtherHome) -> Unit,
+    onOpenSettings: () -> Boolean,
+    onOtherHome: (OtherHome) -> Boolean,
 ) {
     val colors = LoungeTheme.colors
     val type = LoungeTheme.typography
@@ -53,6 +57,7 @@ fun RecoveryScreen(
     var busy by remember { mutableStateOf(false) }
     var failedAttempts by remember { mutableIntStateOf(0) }
     var confirmFresh by remember { mutableStateOf(false) }
+    var stuck by remember { mutableStateOf<String?>(null) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { first.requestWhenReady() }
     // Buttons stay enabled while an attempt runs, so focus never falls off the one just pressed.
@@ -78,7 +83,8 @@ fun RecoveryScreen(
         contentAlignment = Alignment.CenterStart,
     ) {
         Column(Modifier.width(1100.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
-            Text("Lounge couldn't start", style = type.displayL, color = colors.limelight)
+            // A heading and a live region: TalkBack says it as the screen comes up.
+            Text("Lounge couldn't start", style = type.displayL, color = colors.limelight, modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite })
             Text(
                 when (reason) {
                     RecoveryReason.StorageFull ->
@@ -102,14 +108,18 @@ fun RecoveryScreen(
                         light = if (confirmFresh) colors.ember else colors.houselight,
                     )
                 }
-                LoungeButton(label = "Settings", onClick = onOpenSettings, kind = ButtonKind.Secondary)
+                LoungeButton(
+                    label = "Settings",
+                    onClick = { stuck = if (onOpenSettings()) null else "This TV's settings didn't open. Open them from the TV's own home screen instead." },
+                    kind = ButtonKind.Secondary,
+                )
             }
             if (otherHomes.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     for (home in otherHomes) {
                         LoungeButton(
                             label = if (home.enabled) "Open ${home.label}" else "Turn ${home.label} back on",
-                            onClick = { onOtherHome(home) },
+                            onClick = { stuck = if (onOtherHome(home)) null else "${home.label} didn't open. In the TV's settings, open Apps to find it." },
                             kind = ButtonKind.Secondary,
                         )
                     }
@@ -117,7 +127,7 @@ fun RecoveryScreen(
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (failedAttempts > 0 && !busy) Text("It still won't open.", style = type.meta, color = colors.dust)
-                if (detail != null) Text(detail, style = type.caption, color = colors.dust, maxLines = 3)
+                stuck?.let { Text(it, style = type.meta, color = colors.dust) }
             }
         }
     }

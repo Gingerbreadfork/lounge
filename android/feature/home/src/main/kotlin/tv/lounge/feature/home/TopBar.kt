@@ -56,18 +56,28 @@ import tv.lounge.core.PlaybackStatus
 import tv.lounge.design.Dimens
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.launch
 import tv.lounge.design.Swap
+import tv.lounge.design.Words
 import tv.lounge.design.argb
-import tv.lounge.design.focusRing
+import tv.lounge.design.focusRim
+import tv.lounge.design.is24HourClock
 import tv.lounge.design.lightGlow
 import tv.lounge.design.lightState
 import tv.lounge.design.sounds
 import kotlin.math.sin
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
-/** Top bar (DESIGN.md §5.1): the mark on the left; Search, TV controls, Settings and the clock on the right. */
+/**
+ * Top bar (DESIGN.md §5.1): the mark on the left; Search, TV controls, Settings and the clock on
+ * the right. Left off Search and Right off Settings nudge the button instead of leaving the bar.
+ */
 @Composable
 fun TopBar(
     showTvControls: Boolean,
@@ -83,12 +93,26 @@ fun TopBar(
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val motion = LoungeTheme.motion
+    val scope = rememberCoroutineScope()
+    val nudgePx = with(LocalDensity.current) { 6.dp.toPx() }
     Row(
         modifier
             .fillMaxWidth()
             .padding(start = Dimens.safeX, end = Dimens.safeX, top = Dimens.safeY)
             .height(Dimens.topBarHeight)
             .onFocusChanged { if (it.hasFocus) onFocused() }
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val edge = topBarEdge(e.key, focus.last, focus.search, focus.settings)
+                if (edge != 0 && e.nativeKeyEvent.repeatCount == 0 && !motion.reducedMotion) {
+                    scope.launch {
+                        focus.nudge.animateTo(edge * nudgePx, motion.snap())
+                        focus.nudge.animateTo(0f, motion.settle())
+                    }
+                }
+                edge != 0
+            }
             .focusRestorer()
             .focusGroup()
             .focusProperties { down = downFocus() },
@@ -98,7 +122,7 @@ fun TopBar(
         Mark()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             TopBarButton(LoungeIcons.Search, "Search", onSearch, focus, focus.search)
-            if (showGuide) TopBarButton(LoungeIcons.Guide, "Guide", onGuide, focus, focus.guide)
+            if (showGuide) TopBarButton(LoungeIcons.Guide, "TV guide", onGuide, focus, focus.guide)
             if (showTvControls) TopBarButton(LoungeIcons.Tv, "TV controls", onTvControls, focus, focus.tvControls)
             if (nowPlaying != null) NowPlayingChip(nowPlaying, onNowPlaying, focus)
             TopBarButton(LoungeIcons.Settings, "Settings", onSettings, focus, focus.settings)
@@ -134,8 +158,9 @@ private fun Mark() {
 private const val SEAT = 0.85f
 
 /**
- * A top-bar button: glyph and label. Focus is a `curtainEdge` pill behind it (the label does
- * not move), the glyph in houselight, the full glow and a 1.04 scale, all read while drawing.
+ * A top-bar button: glyph and label. Focus is a `curtainEdge` pill behind it with the tiles' rim,
+ * the glyph in houselight, the full glow and a 1.04 scale, all read while drawing; the label does
+ * not move.
  */
 @Composable
 private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, focus: TopBarFocus, requester: FocusRequester) {
@@ -150,14 +175,18 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
     Row(
         Modifier
             .focusRequester(requester)
-            .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+            .graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+                translationX = if (focus.last === requester) focus.nudge.value else 0f
+            }
             .lightGlow(colors.houselight, { glow.value }, cornerRadius = 24.dp)
             .drawBehind {
                 val a = lift.value
                 if (a > 0.001f) drawRoundRect(colors.curtainEdge.copy(alpha = a), cornerRadius = CornerRadius(size.height / 2f))
             }
             .clip(RoundedCornerShape(24.dp))
-            .focusRing(colors, { focused }, 24.dp)
+            .focusRim(colors, { lift.value }, 24.dp)
             .onFocusChanged {
                 if (it.isFocused && !focused) sounds?.tick()
                 focused = it.isFocused
@@ -212,7 +241,7 @@ private fun NowPlayingChip(np: NowPlaying, onClick: () -> Unit, focus: TopBarFoc
                 if (a > 0.001f) drawRoundRect(colors.curtainEdge.copy(alpha = a), cornerRadius = CornerRadius(size.height / 2f))
             }
             .clip(RoundedCornerShape(24.dp))
-            .focusRing(colors, { focused }, 24.dp)
+            .focusRim(colors, { lift.value }, 24.dp)
             .onFocusChanged {
                 if (it.isFocused && !focused) sounds?.tick()
                 focused = it.isFocused
@@ -251,12 +280,13 @@ private fun NowPlayingChip(np: NowPlaying, onClick: () -> Unit, focus: TopBarFoc
     }
 }
 
-/** The clock. Only the digits that change swap, with a 6 px rise, once a minute. */
+/**
+ * The clock, as the TV's 24-hour setting has it and without am or pm. Only the digits that change
+ * swap, with a 6 px rise, once a minute.
+ */
 @Composable
 private fun Clock() {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val is24Hour = android.text.format.DateFormat.is24HourFormat(context)
-    val formatter = remember(is24Hour) { DateTimeFormatter.ofPattern(if (is24Hour) "HH:mm" else "h:mm", Locale.getDefault()) }
+    val is24Hour = is24HourClock()
     var now by remember { mutableStateOf(LocalTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -264,7 +294,7 @@ private fun Clock() {
             delay(60_000L - (System.currentTimeMillis() % 60_000L) + 20)
         }
     }
-    val text = now.format(formatter)
+    val text = Words.clock(now, is24Hour, period = false)
     Row {
         // Places are keyed from the right, so an hour gaining a digit shifts nothing else.
         text.forEachIndexed { i, ch ->

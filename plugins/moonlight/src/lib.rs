@@ -34,8 +34,8 @@ impl sdk::Plugin for Moonlight {
             fetch_hosts: vec!["$hosts".into(), "local-network".into()],
             refresh_minutes: 5,
             rows: vec![
-                RowSpec { id: "games".into(), title: "Play on Moonlight".into(), style: RowStyle::Poster },
-                RowSpec { id: "pcs".into(), title: "Gaming PCs".into(), style: RowStyle::Compact },
+                RowSpec { id: "games".into(), title: "Games on Moonlight".into(), style: RowStyle::Poster },
+                RowSpec { id: "pcs".into(), title: "Gaming PCs on Moonlight".into(), style: RowStyle::Compact },
             ],
             settings: vec![
                 SettingSpec {
@@ -43,7 +43,7 @@ impl sdk::Plugin for Moonlight {
                     label: "Gaming PCs".into(),
                     kind: SettingKind::Text,
                     required: true,
-                    help: Some("Names or addresses of the PCs running Sunshine, separated by spaces or commas, like gaming-pc or 192.168.0.50. Add :port if Sunshine's port was changed from 47989. Pair each PC in Moonlight and open it there once, so Moonlight knows its games.".into()),
+                    help: Some("Names or addresses of the PCs running Sunshine, like gaming-pc or 192.168.0.50, each paired in Moonlight first. Separate several with spaces or commas, and add :port if Sunshine's port was changed from 47989. Pair each PC in Moonlight and open it there once, so Moonlight knows its games.".into()),
                     default: None,
                 },
                 SettingSpec {
@@ -51,7 +51,7 @@ impl sdk::Plugin for Moonlight {
                     label: "Sunshine username".into(),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("The sign-in for Sunshine's web page, at https://192.168.0.50:47990 for a PC at 192.168.0.50; the same one is used on every PC. It lists the games. Without it only the PCs are shown. Apollo's page has no sign-in a plugin can use, so an Apollo PC is shown without its games.".into()),
+                    help: Some("The sign-in for Sunshine's web page, which lets Lounge list each PC's games. The same one is used on every PC, and the page is at https://192.168.0.50:47990 for a PC at 192.168.0.50. Without it only the PCs are shown. Apollo's page has no sign-in a plugin can use, so an Apollo PC is shown without its games.".into()),
                     default: None,
                 },
                 SettingSpec { key: "password".into(), label: "Sunshine password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
@@ -72,9 +72,9 @@ impl sdk::Plugin for Moonlight {
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let addresses = parse_hosts(&host::required_setting("hosts", "Gaming PCs")?);
+        let addresses = parse_hosts(&host::required_setting("hosts", "addresses of your gaming PCs")?);
         if addresses.is_empty() {
-            return Err("Gaming PCs needs a name or address, like gaming-pc or 192.168.0.50.".into());
+            return Err("The gaming PCs setting holds no name or address. Add one in the plugin's settings, like gaming-pc or 192.168.0.50.".into());
         }
         let login = Login::from_settings();
         let mut cache = Cache::load();
@@ -100,7 +100,7 @@ impl sdk::Plugin for Moonlight {
                     }
                     pc.seen_ms = Some(ctx.now_ms);
                 }
-                Err(e) if e.contains("budget") => {
+                Err(e) if e == host::BUDGET_SPENT => {
                     sdk::warn!("{}: {e}", pc.address.key());
                     budget_left = false;
                     continue;
@@ -312,7 +312,7 @@ fn server_info(address: &Address) -> Result<ServerInfo, String> {
     let url = address.status_url();
     let request = HttpRequest { timeout_ms: SERVERINFO_TIMEOUT_MS, ..HttpRequest::get(&url) };
     let r = host::fetch(&request).map_err(|e| {
-        if e.contains("budget") { e } else { format!("didn't answer ({})", sdk::redact(&e)) }
+        if e == host::BUDGET_SPENT { e } else { format!("didn't answer ({})", sdk::redact(&e)) }
     })?;
     if !r.ok() {
         return Err(format!("answered with error {}", r.status));
@@ -416,7 +416,7 @@ fn web_get(address: &Address, login: &Login, path: &str) -> Result<sdk::HttpResp
     let mut request = HttpRequest { timeout_ms: WEB_TIMEOUT_MS, ..HttpRequest::get(&url) };
     request.headers.insert("Authorization".into(), login.header());
     request.headers.insert("Accept".into(), "application/json, image/png".into());
-    let r = host::fetch(&request).map_err(|e| if e.contains("budget") { WebError::Budget(e) } else { WebError::Other(format!("web interface didn't answer ({})", sdk::redact(&e))) })?;
+    let r = host::fetch(&request).map_err(|e| if e == host::BUDGET_SPENT { WebError::Budget(e) } else { WebError::Other(format!("web interface didn't answer ({})", sdk::redact(&e))) })?;
     match r.status {
         401 if r.headers.get("www-authenticate").is_some_and(|w| w.to_ascii_lowercase().starts_with("basic")) => Err(WebError::State(Web::Refused)),
         401 => Err(WebError::State(Web::NoBasic)),

@@ -58,7 +58,7 @@ impl sdk::Plugin for Weather {
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let place = locate(&host::required_setting("place", "Town or city")?)?;
+        let place = locate(&host::required_setting("place", "town or city")?)?;
         let fahrenheit = host::setting("fahrenheit").is_some_and(|v| v == "true");
         let url = forecast_url(&place, fahrenheit);
         match get_json::<Forecast>(&url) {

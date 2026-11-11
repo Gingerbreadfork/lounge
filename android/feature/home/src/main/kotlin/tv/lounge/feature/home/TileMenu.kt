@@ -35,6 +35,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
@@ -83,13 +86,14 @@ fun TileMenuPopover(
                     enter = fadeIn(motion.snap()) +
                         scaleIn(motion.snap(), initialScale = 0.96f, transformOrigin = TransformOrigin(if (toRight) 0f else 1f, 0.15f)) +
                         slideInHorizontally(motion.snap()) { full -> if (toRight) -(full * 8 / 480) else (full * 8 / 480) },
-                    exit = fadeOut(androidx.compose.animation.core.tween(90)),
+                    exit = fadeOut(motion.timed(90)),
                 ) {
                     Column(
                         Modifier
                             .width(MenuWidth)
                             .clip(RoundedCornerShape(16.dp))
                             .background(colors.curtain)
+                            .semantics { paneTitle = "Options for ${tile.title}" }
                             .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
                             .focusProperties { canFocus = !leaving }
                             .trapFocus(leaving)
@@ -114,6 +118,7 @@ fun TileMenuPopover(
                                 color = colors.limelight,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.semantics { heading() },
                             )
                         }
                         items.forEachIndexed { i, item ->
@@ -147,8 +152,11 @@ fun TileMenuPopover(
     LaunchedEffect(Unit) { firstFocus.requestWhenReady() }
 }
 
-/** Wide enough for the longest item, "Hide the Continue watching row", on one line. */
+/** Wide enough for the longest item, "Pin to the front of Your apps", on one line. */
 private val MenuWidth = 480.dp
+
+/** Whether holding OK on [tile] opens a menu: a tile that only opens a screen or the TV's own controls has nothing to pin or hide. */
+fun hasMenu(tile: Tile): Boolean = !tile.id.startsWith("control:") && !tile.id.startsWith("search:") && tile.id != "device:tv"
 
 /** What each pin does, in the menu and on the phone, so the word "pin" never stands alone. */
 object PinWords {
@@ -161,14 +169,18 @@ object PinWords {
     const val UNPIN_STAGE = "Unpin from the Stage"
     const val UNPIN_STAGE_DETAIL = "What you watch takes its place"
     const val HIDE_DETAIL = "Off every row until you show it"
+    const val SHOW = "Show"
+    const val SHOW_DETAIL = "Back on every row it belongs in"
     const val HIDE_ALL_FROM_DETAIL = "Off Continue watching until you show it"
+    const val HIDE_ROW = "Hide this row"
     const val HIDE_ROW_DETAIL = "Settings, Rows brings it back"
 }
 
 /**
  * Menu items for a tile, by what it is and where it sits. All of them do something real.
  * [rowTitle] names the home row the tile sits in; the caller passes null for the Stage and for
- * search results, which keep their home row ids.
+ * search results, which keep their home row ids. An app hidden from every row, which only All
+ * apps and search still list, offers Show and what an app always can.
  */
 fun menuItemsFor(
     tile: Tile,
@@ -179,6 +191,7 @@ fun menuItemsFor(
     canMoveRight: Boolean,
     isStagePinned: Boolean,
     onHide: () -> Unit,
+    onShow: () -> Unit,
     onHideAllFrom: () -> Unit,
     onHideRow: () -> Unit,
     onPin: () -> Unit,
@@ -197,6 +210,15 @@ fun menuItemsFor(
     val items = mutableListOf<MenuItem>()
     if (tile.id.startsWith("notice:")) {
         items += MenuItem("Don't show this again", LoungeIcons.Hide, onSelect = onDismissNotice)
+        return items
+    }
+    if (tile.hidden) {
+        items += MenuItem(PinWords.SHOW, LoungeIcons.Hide, detail = PinWords.SHOW_DETAIL, onSelect = onShow)
+        if (isApp) {
+            items += MenuItem("App info", LoungeIcons.Info, onSelect = onAppInfo)
+            items += MenuItem("Open in Play Store", LoungeIcons.Play, onSelect = onPlay)
+            items += MenuItem("Uninstall", LoungeIcons.Trash, destructive = true, onSelect = onUninstall)
+        }
         return items
     }
     if (isApp && rowId == "apps") {
@@ -226,7 +248,7 @@ fun menuItemsFor(
     tile.providerName?.let { name ->
         items += MenuItem("Hide everything from $name", LoungeIcons.Hide, detail = PinWords.HIDE_ALL_FROM_DETAIL, onSelect = onHideAllFrom)
     }
-    if (rowTitle != null) items += MenuItem("Hide the $rowTitle row", LoungeIcons.Rows, detail = PinWords.HIDE_ROW_DETAIL, onSelect = onHideRow)
+    if (rowTitle != null) items += MenuItem(PinWords.HIDE_ROW, LoungeIcons.Rows, detail = PinWords.HIDE_ROW_DETAIL, onSelect = onHideRow)
     if (isApp) {
         items += MenuItem("App info", LoungeIcons.Info, onSelect = onAppInfo)
         items += MenuItem("Open in Play Store", LoungeIcons.Play, onSelect = onPlay)

@@ -2,7 +2,6 @@ package tv.lounge.feature.home
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -86,7 +85,7 @@ import tv.lounge.design.Lights
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.Swap
-import tv.lounge.design.focusRing
+import tv.lounge.design.focusRim
 import tv.lounge.design.glowRoom
 import tv.lounge.design.sounds
 import tv.lounge.platform.Prefs
@@ -178,6 +177,8 @@ fun AllAppsScreen(
     LaunchedEffect(shown, covered) {
         val id = focusedTileId ?: return@LaunchedEffect
         if (leaving || covered || fieldFocused || shown.any { it.id == id }) return@LaunchedEffect
+        // Named first, so the way back in is open to it.
+        focusedTileId = shown.getOrNull(focusedIndex.coerceIn(0, (shown.size - 1).coerceAtLeast(0)))?.id
         focusApp(focusedIndex)
     }
 
@@ -185,7 +186,7 @@ fun AllAppsScreen(
     // The focused row sits a glow's width below the fade, so its light is never under it.
     val pivotPx = with(LocalDensity.current) { (Dimens.glowRoom * 2).toPx() }
 
-    AnimatedVisibility(visibleState, enter = fadeIn(tween(180)), exit = fadeOut(motion.settle())) {
+    AnimatedVisibility(visibleState, enter = fadeIn(motion.timed(180)), exit = fadeOut(motion.settle())) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -197,6 +198,11 @@ fun AllAppsScreen(
                     true
                 }
                 .trapFocus(leaving)
+                // A focused app that leaves the list leaves focus nowhere, and it would come back in
+                // at the top; the effect below puts it on the app that took its place instead.
+                .focusProperties {
+                    onEnter = { if (focusedTileId?.let { id -> shown.none { it.id == id } } == true) cancelFocusChange() }
+                }
                 .focusGroup()
                 .focusProperties { if (leaving) canFocus = false }
                 .semantics { paneTitle = "All apps" },
@@ -208,7 +214,7 @@ fun AllAppsScreen(
                 // The alphabet: letters with apps are live, the one the grid is at glows. It only
                 // means something A to Z, so it fades for the other orders and while narrowed.
                 Box(Modifier.width(RailWidth)) {
-                    androidx.compose.animation.AnimatedVisibility(visible = alphabetical, modifier = Modifier, enter = fadeIn(tween(180)), exit = fadeOut(tween(120))) {
+                    androidx.compose.animation.AnimatedVisibility(visible = alphabetical, modifier = Modifier, enter = fadeIn(motion.timed(180)), exit = fadeOut(motion.timed(120))) {
                         Column(Modifier.focusGroup(), horizontalAlignment = Alignment.Start) {
                             for (c in ALPHABET) {
                                 val first = firstOfLetter[c]
@@ -244,7 +250,8 @@ fun AllAppsScreen(
                                                 Modifier
                                             },
                                         )
-                                        .background(if (letterFocused) colors.curtainEdge else colors.velvet.copy(alpha = 0f), CircleShape),
+                                        .background(if (letterFocused) colors.curtainEdge else colors.velvet.copy(alpha = 0f), CircleShape)
+                                        .focusRim(colors, { if (letterFocused) 1f else 0f }, 14.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Text(
@@ -326,7 +333,7 @@ fun AllAppsScreen(
             }
             AnimatedVisibility(
                 visibleState,
-                enter = fadeIn(tween(180, delayMillis = 60)) + slideInVertically(tween(180, delayMillis = 60)) { rise },
+                enter = fadeIn(motion.timed(180, delayMs = 60)) + slideInVertically(motion.timed(180, delayMs = 60)) { rise },
                 exit = fadeOut(motion.settle()),
             ) {
                 Column(Modifier.fillMaxWidth()) {
@@ -381,14 +388,14 @@ private fun SortPill(sort: String, onSetSort: (String) -> Unit) {
     val colors = LoungeTheme.colors
     var focused by remember { mutableStateOf(false) }
     val at = SORTS.indexOf(sort).coerceAtLeast(0)
-    fun next() = onSetSort(SORTS[(at + 1) % SORTS.size])
+    val next = { onSetSort(SORTS[(at + 1) % SORTS.size]) }
     Row(
         Modifier
             .clip(RoundedCornerShape(24.dp))
             .background(if (focused) colors.curtainEdge else colors.curtain)
-            .focusRing(colors, { focused }, 24.dp)
+            .focusRim(colors, { if (focused) 1f else 0f }, 24.dp)
             .onFocusChanged { focused = it.isFocused }
-            .tilePress({ next() }, { next() })
+            .tilePress(next, next, clickLabel = "Change the order")
             .focusable()
             .semantics { role = Role.Button; contentDescription = "Sorted ${sortLabel(sort)}. OK changes the order" }
             .height(48.dp)
@@ -405,7 +412,7 @@ private fun SortPill(sort: String, onSetSort: (String) -> Unit) {
     }
 }
 
-/** The search field: a glyph, the typed text in `title`, and a hairline that lights with focus. */
+/** The search field: a glyph, the typed text in `title`, and a hairline that lights with focus, inside the tiles' rim. */
 @Composable
 private fun SearchField(field: TextFieldValue, onChange: (TextFieldValue) -> Unit, focusRequester: FocusRequester, onFocused: (Boolean) -> Unit, onDown: () -> Unit) {
     val colors = LoungeTheme.colors
@@ -413,6 +420,7 @@ private fun SearchField(field: TextFieldValue, onChange: (TextFieldValue) -> Uni
     Column(
         Modifier
             .width(440.dp)
+            .focusRim(colors, { if (focused) 1f else 0f }, 8.dp)
             .onPreviewKeyEvent { e ->
                 if (e.key == Key.DirectionDown && e.type == KeyEventType.KeyDown) { onDown(); true } else false
             },

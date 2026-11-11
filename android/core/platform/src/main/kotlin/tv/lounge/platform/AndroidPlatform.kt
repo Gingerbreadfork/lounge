@@ -161,6 +161,17 @@ class AndroidPlatform(private val context: Context) : Platform {
         }
     }
 
+    /** Set by the shell: whether Lounge's own window is in front. */
+    @Volatile var inFront: () -> Boolean = { true }
+
+    /** Set by the shell: whether Power Setup can press keys for another app in front. */
+    @Volatile var keysForOtherApps: () -> Boolean = { false }
+
+    /**
+     * A key from the phone. Home, volume and media keys always arrive; the d-pad, Back and Menu
+     * reach Lounge while it is in front and another app only through Power Setup, and a key that
+     * can reach nothing is refused with the reason.
+     */
     override fun sendKey(key: String) {
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
         when (key) {
@@ -199,15 +210,20 @@ class AndroidPlatform(private val context: Context) : Platform {
                     "center", "ok", "select" -> android.view.KeyEvent.KEYCODE_DPAD_CENTER
                     "back" -> android.view.KeyEvent.KEYCODE_BACK
                     "menu" -> android.view.KeyEvent.KEYCODE_MENU
-                    else -> throw PlatformException.Failed("Unknown key: $key")
+                    else -> throw PlatformException.Failed("Lounge on the TV doesn't know that key. Update Lounge, then try again.")
                 }
-                if (!_commands.tryEmit(UiCommand.Key(code))) throw PlatformException.Failed("busy")
+                if (!inFront() && !keysForOtherApps()) {
+                    throw PlatformException.Failed("Another app is in front. Connect Power Setup on the TV so the phone's keys reach it.")
+                }
+                if (!_commands.tryEmit(UiCommand.Key(code))) throw PlatformException.Failed(BUSY)
             }
         }
     }
 
+    /** Text from the phone lands only in a field open in Lounge, so it needs Lounge in front. */
     override fun typeText(text: String) {
-        if (!_commands.tryEmit(UiCommand.TypeText(text))) throw PlatformException.Failed("busy")
+        if (!inFront()) throw PlatformException.Failed("Another app is in front, and the phone types only into Lounge. Press Home, then try again.")
+        if (!_commands.tryEmit(UiCommand.TypeText(text))) throw PlatformException.Failed(BUSY)
     }
 
     override fun mediaCommand(`package`: String, command: String) {
@@ -271,6 +287,7 @@ class AndroidPlatform(private val context: Context) : Platform {
 
     private companion object {
         const val TAG = "LoungePlatform"
+        const val BUSY = "The TV is busy with the last few presses. Try again in a moment."
         const val APK_TYPE = "application/vnd.android.package-archive"
         const val URI_GRANTS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION

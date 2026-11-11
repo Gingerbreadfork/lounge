@@ -1,5 +1,5 @@
 // Shared, reactive app state: the live snapshot, connection, the current route and toasts.
-import { api, liveState, setToken, token, type State } from './api';
+import { api, contact, explain, liveState, setToken, token, type State } from './api';
 
 export const app = $state({
   route: parseRoute(location.hash),
@@ -11,6 +11,10 @@ export const app = $state({
   error: null as string | null,
   /** A link shared to the app, waiting for the person to say it should open on the TV. */
   share: null as string | null,
+  /** Set once the TV has not answered for a while, so the page can say what to check. */
+  away: false,
+  /** Why the phone is on the Pair page when it did not choose to be. */
+  pairNote: null as string | null,
 });
 
 export type Route = { page: 'home' | 'remote' | 'layout' | 'plugins' | 'more' | 'pair'; id?: string };
@@ -31,16 +35,57 @@ function decodeId(id: string): string | undefined {
   }
 }
 
-export function go(page: Route['page'], id?: string) {
-  location.hash = id ? `#/${page}/${encodeURIComponent(id)}` : `#/${page}`;
+function hashOf(page: Route['page'], id?: string) {
+  return id ? `#/${page}/${encodeURIComponent(id)}` : `#/${page}`;
 }
 
+/** Opens a page at its top. A tab takes the place of the page it leaves, so Back does not walk
+ *  every tab visited; a page opened from another is one step that Back undoes. */
+export function go(page: Route['page'], id?: string, { replace = false } = {}) {
+  if (app.route.page !== page || app.route.id !== id) {
+    if (replace) history.replaceState(null, '', hashOf(page, id));
+    else history.pushState({ back: true }, '', hashOf(page, id));
+    app.route = { page, id };
+  }
+  window.scrollTo(0, 0);
+}
+
+/** Back to `page`: the step before when it led here, else straight to it. */
+export function goBack(page: Route['page']) {
+  if (history.state?.back) history.back();
+  else go(page, undefined, { replace: true });
+}
+
+/** The route follows the address when Back, Forward or a typed address changes it. */
+function followAddress() {
+  const next = parseRoute(location.hash);
+  if (next.page !== app.route.page || next.id !== app.route.id) app.route = next;
+}
+
+/** How long a toast stays (DESIGN.md §7.4). */
+const TOAST_MS = 4000;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 export function toast(message: string) {
   app.toast = message;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (app.toast = null), 3200);
+  toastTimer = setTimeout(() => (app.toast = null), TOAST_MS);
 }
+
+/** How long the TV may go unheard before the page says it is away. */
+const AWAY_AFTER_MS = 20000;
+let awayTimer: ReturnType<typeof setTimeout> | undefined;
+contact.heard = () => {
+  clearTimeout(awayTimer);
+  awayTimer = undefined;
+  if (app.away) app.away = false;
+};
+contact.missed = () => {
+  if (awayTimer !== undefined || app.away) return;
+  awayTimer = setTimeout(() => {
+    awayTimer = undefined;
+    if (app.paired) app.away = true;
+  }, AWAY_AFTER_MS);
+};
 
 let stopLive: (() => void) | null = null;
 
@@ -80,7 +125,8 @@ export function dismissShare() {
 }
 
 export function start() {
-  window.addEventListener('hashchange', () => (app.route = parseRoute(location.hash)));
+  window.addEventListener('hashchange', followAddress);
+  window.addEventListener('popstate', followAddress);
   // A pairing link carries a one-time key in the fragment, #token=…, which the TV swaps for this
   // phone's own token.
   const link = location.hash.match(/token=([A-Za-z0-9_-]+)/)?.[1];
@@ -102,6 +148,15 @@ export function start() {
   connect();
 }
 
+/** Called once a code or link has given this phone its token. */
+export function paired(device: string) {
+  app.paired = true;
+  app.pairNote = null;
+  go('home', undefined, { replace: true });
+  connect();
+  toast(`Paired with ${device}`);
+}
+
 /** A phone that is already paired ignores the link and keeps its token, so a stray link cannot
  *  sign it out. The link is used only when the TV no longer takes that token. */
 async function pairByLink(link: string) {
@@ -116,13 +171,12 @@ async function pairByLink(link: string) {
   try {
     const r = await api.pairLink(link);
     setToken(r.token);
-    app.paired = true;
-    toast(`Paired with ${r.device}`);
-  } catch (e: any) {
-    toast(e?.status === 403 ? 'That QR code has expired. Open Settings › Phone companion on the TV for a new one.' : (e?.message ?? 'The TV did not answer.'));
+    paired(r.device);
+  } catch (e) {
+    toast(explain(e));
+    history.replaceState(null, '', '#/pair');
+    app.route = { page: 'pair' };
   }
-  if (app.paired) connect();
-  else app.route = { page: 'pair' };
 }
 
 /** Whether the TV still takes this phone's token. Only a refusal says no; a TV that does not
@@ -139,6 +193,8 @@ async function stillPaired(): Promise<boolean> {
 export async function connect() {
   stopLive?.();
   stopLive = null;
+  // Nothing has been heard yet, so a TV that never answers is reported like one that went away.
+  contact.missed();
   // The cookie for pictures and the live socket comes first; without it they would be refused.
   try {
     await api.session();
@@ -151,29 +207,40 @@ export async function connect() {
   if (pending) app.share = pending;
   stopLive = liveState(
     (s) => { app.state = s; app.error = null; },
-    (c) => { app.connected = c; if (c) app.everConnected = true; },
+    (c) => {
+      app.connected = c;
+      if (c) { app.everConnected = true; contact.heard(); }
+      else contact.missed();
+    },
     unpair,
   );
   // The socket may already have delivered a newer snapshot than this first read.
   api.state().then((s) => { if (!app.state?.snapshot || (s.snapshot && s.snapshot.revision >= app.state.snapshot.revision)) app.state = s; }).catch((e) => {
     if (e?.status === 401) unpair();
-    else app.error = e?.message ?? 'The TV did not answer.';
+    else app.error = explain(e);
   });
 }
 
-/** What the connection pill says: live, or honest about which way it is heading. */
+/** What the connection pill says: connected, or honest about which way it is heading. */
 export function connectionLabel(): string {
-  return app.connected ? 'Live' : app.everConnected ? 'Reconnecting…' : 'Connecting…';
+  return app.connected ? 'Connected' : app.everConnected ? 'Reconnecting…' : 'Connecting…';
 }
 
-export function unpair() {
+const FORGOTTEN = 'The TV has forgotten this phone. Pair it again to carry on.';
+
+/** Lets go of this phone's token and shows the Pair page, saying why when `note` is given. */
+export function unpair(note: string | null = FORGOTTEN) {
   stopLive?.();
   stopLive = null;
   setToken(null);
+  clearTimeout(awayTimer);
+  awayTimer = undefined;
+  app.away = false;
   app.paired = false;
   app.state = null;
+  app.pairNote = note;
   app.route = { page: 'pair' };
-  location.hash = '#/pair';
+  history.replaceState(null, '', '#/pair');
 }
 
 /** A background read: a failure is not worth a toast every few seconds, and nothing is read
@@ -188,6 +255,8 @@ export async function quiet<T>(f: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
+/** Runs a request and toasts `label` when it works, or the reason when it does not. Undefined
+ *  means it failed, unless the request itself answers nothing. */
 export async function act<T>(label: string, f: () => Promise<T>): Promise<T | undefined> {
   try {
     const r = await f();
@@ -195,7 +264,12 @@ export async function act<T>(label: string, f: () => Promise<T>): Promise<T | un
     return r;
   } catch (e: any) {
     if (e?.status === 401) { unpair(); return undefined; }
-    toast(e?.message ?? 'That did not work.');
+    toast(explain(e));
     return undefined;
   }
+}
+
+/** Like `act`, for a request that answers nothing: true when it worked. */
+export async function done(label: string, f: () => Promise<unknown>): Promise<boolean> {
+  return (await act(label, () => f().then(() => true))) ?? false;
 }

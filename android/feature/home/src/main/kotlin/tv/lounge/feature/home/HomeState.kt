@@ -1,5 +1,6 @@
 package tv.lounge.feature.home
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
@@ -55,6 +56,8 @@ class TopBarFocus {
     val settings = FocusRequester()
     /** The button that last had focus; not read by composition. */
     var last: FocusRequester = search
+    /** How far the button at an end of the bar is nudged, in px, read while drawing. */
+    val nudge = Animatable(0f)
 }
 
 @OptIn(ExperimentalFoundationApi::class)

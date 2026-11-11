@@ -37,6 +37,10 @@ data class LoungeMotion(
     fun <T> dim(): FiniteAnimationSpec<T> = tween(dimMs, easing = dimEasing)
     fun <T> lamp(): FiniteAnimationSpec<T> = tween(lampMs, easing = lampEasing)
 
+    /** A plain fade or slide of its own length, which reduced motion makes instant like every named curve. */
+    fun <T> timed(durationMs: Int, delayMs: Int = 0): FiniteAnimationSpec<T> =
+        if (reducedMotion) tween(1) else tween(durationMs, delayMs)
+
     companion object {
         val Default = LoungeMotion(
             snapMs = 120,

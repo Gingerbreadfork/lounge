@@ -64,7 +64,7 @@ impl sdk::Plugin for Art {
         let max = host::setting("max").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(60).clamp(4, 200);
         let query = host::setting("query").map(|q| q.trim().to_string()).unwrap_or_default();
         if !met_on && !cma_on {
-            return Err("Turn on at least one museum in the plugin's settings".into());
+            return Err("Both museums are turned off. Turn on at least one in the plugin's settings.".into());
         }
         // An equal share each, so the museum that sends more per refresh cannot fill the walls.
         let share = GALLERY_CAP / (usize::from(met_on) + usize::from(cma_on));
@@ -271,7 +271,7 @@ fn met_slice(query: &str, offset: usize, gallery: &Gallery) -> Result<(Vec<Paint
         looked += 1;
         let body = match host::get_text(&format!("https://collectionapi.metmuseum.org/public/collection/v1/objects/{id}")) {
             Ok(b) => b,
-            Err(e) if e.contains("budget") => break,
+            Err(e) if e == host::BUDGET_SPENT => break,
             Err(e) => {
                 sdk::warn!("{MET} object {id}: {e}");
                 continue;

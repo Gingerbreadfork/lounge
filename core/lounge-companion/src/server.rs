@@ -2,10 +2,11 @@
 //! `Authorization: Bearer …`, checked before a byte of the body is read, except `POST /api/pair`.
 //! Pictures, the snapshot socket and the backup load by URL, so those `GET` routes also accept
 //! the session cookie `POST /api/session` sets, and no token ever sits in a URL.
-//! Snapshots are pushed over `/api/ws` whenever the core says one changed.
+//! Snapshots are pushed over `/api/ws` whenever the core says one changed. Every error the page
+//! can show is a sentence that says the cause and the fix; the raw reason goes to the log.
 
 use crate::auth::{PairingInfo, TokenStore};
-use crate::{CompanionActions, CompanionError, LayoutPatch};
+use crate::{sentence_or, CompanionActions, CompanionError, LayoutPatch};
 use axum::body::Bytes;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, DefaultBodyLimit, FromRequest, Path as AxPath, Query, Request, State};
@@ -57,6 +58,10 @@ const MAX_BUFFER: usize = 16 * 1024;
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 /// How long open connections get to finish once the server is told to stop.
 const GRACE: Duration = Duration::from_secs(2);
+/// How often the live socket says the TV is still there. A page cannot see protocol pings, so
+/// this is a text message, and it is not JSON so a page that expects only snapshots skips it.
+const HEARTBEAT: Duration = Duration::from_secs(5);
+const HEARTBEAT_TEXT: &str = "ping";
 
 type Shared = Arc<App>;
 
@@ -130,6 +135,11 @@ impl Companion {
 
     pub fn new_pairing(&self, base_url: &str, now_ms: i64) -> Result<PairingInfo, String> {
         self.tokens.new_pairing(base_url, now_ms)
+    }
+
+    /// The code that pairs a phone now; a used one has already been replaced.
+    pub fn live_pairing(&self, now_ms: i64) -> Option<PairingInfo> {
+        self.tokens.live_pairing(now_ms)
     }
 
     pub fn paired_devices(&self) -> usize {
@@ -312,10 +322,10 @@ async fn require_token(State(app): State<Shared>, mut req: Request, next: Next) 
     } else if let Some(session) = cookie_route(req.method(), req.uri().path()).then(|| cookie(headers, SESSION_COOKIE)).flatten() {
         app.tokens.authenticate_session(&session, now_ms())
     } else {
-        return ApiError(StatusCode::UNAUTHORIZED, "pair this phone with the TV first".into()).into_response();
+        return ApiError(StatusCode::UNAUTHORIZED, "Pair this phone with the TV first.".into()).into_response();
     };
     let Some(device) = device else {
-        return ApiError(StatusCode::UNAUTHORIZED, "this phone is no longer paired".into()).into_response();
+        return ApiError(StatusCode::UNAUTHORIZED, "The TV has forgotten this phone. Pair it again to carry on.".into()).into_response();
     };
     req.extensions_mut().insert(Paired(device));
     next.run(req).await
@@ -326,11 +336,11 @@ async fn require_token(State(app): State<Shared>, mut req: Request, next: Next) 
 async fn local_only(req: Request, next: Next) -> Response {
     let peer = req.extensions().get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip());
     if !peer.is_some_and(local_peer) {
-        return (StatusCode::FORBIDDEN, "not on this network").into_response();
+        return (StatusCode::FORBIDDEN, "The TV answers only phones on its own network. Join the TV's Wi-Fi, then try again.").into_response();
     }
     let host = req.headers().get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("");
     if !local_name(host) {
-        return (StatusCode::MISDIRECTED_REQUEST, "unknown host").into_response();
+        return (StatusCode::MISDIRECTED_REQUEST, "Open the phone companion at the address the TV shows. In Settings on the TV, open Phone companion to find it.").into_response();
     }
     next.run(req).await
 }
@@ -370,6 +380,13 @@ fn bad(e: String) -> ApiError {
     ApiError(StatusCode::BAD_REQUEST, e)
 }
 
+/// A failure the launcher reported, as a sentence: its own when it wrote one, else `fallback`.
+fn refused(fallback: &'static str) -> impl FnOnce(String) -> ApiError {
+    move |e| bad(sentence_or(&e, fallback))
+}
+
+const USED_CODE: &str = "That code has been used or has expired. Choose New code on the TV and try again.";
+
 fn json_raw(s: String) -> Response {
     ([(header::CONTENT_TYPE, "application/json")], s).into_response()
 }
@@ -392,39 +409,40 @@ async fn pair(State(app): State<Shared>, ConnectInfo(peer): ConnectInfo<SocketAd
             crate::auth::RedeemError::NotSaved(e) => not_saved(e),
             _ => {
                 tracing::warn!("companion: expired pairing link from {name}");
-                ApiError(StatusCode::FORBIDDEN, "expired pairing link".into())
+                ApiError(StatusCode::FORBIDDEN, USED_CODE.into())
             }
         }),
         (None, Some(code)) => app.tokens.redeem(code.trim(), &name, peer.ip(), now_ms()).map_err(|e| match e {
             crate::auth::RedeemError::LockedOut => {
                 tracing::warn!("companion: pairing locked out for {} after repeated wrong codes", peer.ip());
-                ApiError(StatusCode::TOO_MANY_REQUESTS, "too many wrong codes; wait a moment and ask the TV for a new one".into())
+                ApiError(StatusCode::TOO_MANY_REQUESTS, "Too many wrong codes. Scan the QR code on the TV instead, or wait a few minutes and try again.".into())
             }
             crate::auth::RedeemError::Wrong => {
                 tracing::warn!("companion: wrong pairing code from {name}");
-                ApiError(StatusCode::FORBIDDEN, "wrong or expired code".into())
+                ApiError(StatusCode::FORBIDDEN, USED_CODE.into())
             }
             crate::auth::RedeemError::NotSaved(e) => not_saved(e),
         }),
-        (None, None) => Err(bad("a pairing code or link is needed".into())),
+        (None, None) => Err(bad("Type the six digits the TV shows.".into())),
     }?;
     Ok(Json(serde_json::json!({ "token": token, "device": app.actions.device_info().name })).into_response())
 }
 
 fn not_saved(e: String) -> ApiError {
-    ApiError(StatusCode::SERVICE_UNAVAILABLE, format!("the TV could not save this phone, so it is not paired: {e}"))
+    tracing::warn!("companion: a paired phone could not be saved ({e})");
+    ApiError(StatusCode::SERVICE_UNAVAILABLE, "The TV couldn't save this phone, so it isn't paired. Check the TV has free space, then try again.".into())
 }
 
 /// Hands the page a cookie for the routes it loads by URL. It holds a value of its own, not the
 /// token, because a browser sends it to every port on the TV's address. Strict same-site, never
 /// readable by script, scoped to the API.
 async fn session(State(app): State<Shared>, Extension(Paired(device)): Extension<Paired>) -> Result<Response, ApiError> {
-    let session = app.tokens.new_session(&device).ok_or_else(|| ApiError(StatusCode::SERVICE_UNAVAILABLE, "the TV could not start a session".into()))?;
+    let session = app.tokens.new_session(&device).ok_or_else(|| ApiError(StatusCode::SERVICE_UNAVAILABLE, "The TV couldn't start a session for this phone. Try again in a moment.".into()))?;
     let cookie = format!("{SESSION_COOKIE}={session}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=31536000");
     Ok((StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response())
 }
 
-/// "Pixel 8 · Chrome" from a user agent, roughly.
+/// "Chrome on Pixel 8" from a user agent, roughly.
 fn device_name(ua: &str) -> String {
     let device = if ua.contains("iPhone") {
         "iPhone"
@@ -439,8 +457,8 @@ fn device_name(ua: &str) -> String {
     } else {
         "Phone"
     };
-    let browser = if ua.contains("Firefox") { "Firefox" } else if ua.contains("Edg/") { "Edge" } else if ua.contains("Chrome") { "Chrome" } else if ua.contains("Safari") { "Safari" } else { "browser" };
-    format!("{device} · {browser}")
+    let browser = if ua.contains("Firefox") { "Firefox" } else if ua.contains("Edg/") { "Edge" } else if ua.contains("Chrome") { "Chrome" } else if ua.contains("Safari") { "Safari" } else { "A browser" };
+    format!("{browser} on {device}")
 }
 
 async fn state(State(app): State<Shared>) -> Response {
@@ -466,14 +484,17 @@ async fn ws(State(app): State<Shared>, Extension(Paired(device)): Extension<Pair
     Ok(upgrade.max_message_size(4096).max_frame_size(4096).on_upgrade(move |socket| ws_loop(app, socket, device)))
 }
 
-/// Pushes each new snapshot for as long as the device stays paired. Once it is forgotten the
-/// socket closes with `CLOSE_UNPAIRED`.
+/// Pushes each new snapshot for as long as the device stays paired, and a heartbeat between
+/// them so the page can tell a quiet TV from a gone one. Once the device is forgotten the socket
+/// closes with `CLOSE_UNPAIRED`.
 async fn ws_loop(app: Shared, mut socket: WebSocket, device: String) {
     let mut rx = app.revision.subscribe();
     let mut revoked = app.tokens.revocations();
     if socket.send(Message::Text(state_json(&app).into())).await.is_err() {
         return;
     }
+    let mut heartbeat = tokio::time::interval_at(tokio::time::Instant::now() + HEARTBEAT, HEARTBEAT);
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
             changed = rx.changed() => {
@@ -492,8 +513,8 @@ async fn ws_loop(app: Shared, mut socket: WebSocket, device: String) {
                     _ => {}
                 }
             }
-            _ = tokio::time::sleep(std::time::Duration::from_secs(25)) => {
-                if socket.send(Message::Ping(Bytes::new())).await.is_err() { return; }
+            _ = heartbeat.tick() => {
+                if socket.send(Message::Text(HEARTBEAT_TEXT.into())).await.is_err() { return; }
             }
         }
     }
@@ -504,7 +525,10 @@ async fn ws_loop(app: Shared, mut socket: WebSocket, device: String) {
 /// resolve, an install or a store write waiting behind a big ingest would otherwise hold them.
 async fn on_core<T: Send + 'static>(app: &Shared, f: impl FnOnce(&dyn CompanionActions) -> T + Send + 'static) -> Result<T, ApiError> {
     let actions = Arc::clone(&app.actions);
-    tokio::task::spawn_blocking(move || f(actions.as_ref())).await.map_err(|e| bad(e.to_string()))
+    tokio::task::spawn_blocking(move || f(actions.as_ref())).await.map_err(|e| {
+        tracing::warn!("companion: a call into the launcher failed ({e})");
+        ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Lounge on the TV ran into a problem. Try again in a moment.".into())
+    })
 }
 
 #[derive(Deserialize)]
@@ -512,7 +536,7 @@ struct KeyBody {
     key: String,
 }
 async fn key(State(app): State<Shared>, Json(b): Json<KeyBody>) -> Result<StatusCode, ApiError> {
-    on_core(&app, move |a| a.send_key(&b.key)).await?.map_err(bad)?;
+    on_core(&app, move |a| a.send_key(&b.key)).await?.map_err(refused("The TV didn't take that key. Try again."))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -521,7 +545,7 @@ struct TextBody {
     text: String,
 }
 async fn text(State(app): State<Shared>, Json(b): Json<TextBody>) -> Result<StatusCode, ApiError> {
-    on_core(&app, move |a| a.type_text(&b.text)).await?.map_err(bad)?;
+    on_core(&app, move |a| a.type_text(&b.text)).await?.map_err(refused("The TV didn't take the text. Try again."))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -530,7 +554,7 @@ struct ActionBody {
     action: String,
 }
 async fn open(State(app): State<Shared>, Json(b): Json<ActionBody>) -> Result<StatusCode, ApiError> {
-    on_core(&app, move |a| a.perform(&b.action)).await?.map_err(bad)?;
+    on_core(&app, move |a| a.perform(&b.action)).await?.map_err(refused("The TV couldn't open that. Try it from the TV."))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -539,7 +563,7 @@ struct LaunchBody {
     package: String,
 }
 async fn launch(State(app): State<Shared>, Json(b): Json<LaunchBody>) -> Result<StatusCode, ApiError> {
-    on_core(&app, move |a| a.launch(&b.package)).await?.map_err(bad)?;
+    on_core(&app, move |a| a.launch(&b.package)).await?.map_err(refused("The TV couldn't open that app. Is it still installed?"))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -548,7 +572,7 @@ struct SearchBody {
     query: String,
 }
 async fn search(State(app): State<Shared>, Json(b): Json<SearchBody>) -> Result<StatusCode, ApiError> {
-    on_core(&app, move |a| a.search(&b.query)).await?.map_err(bad)?;
+    on_core(&app, move |a| a.search(&b.query)).await?.map_err(refused("The TV couldn't start the search. Try again."))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -557,7 +581,7 @@ async fn layout(State(app): State<Shared>) -> Result<Response, ApiError> {
 }
 
 async fn set_layout(State(app): State<Shared>, Json(patch): Json<LayoutPatch>) -> Result<Response, ApiError> {
-    Ok(Json(on_core(&app, move |a| a.set_layout(patch)).await?.map_err(bad)?).into_response())
+    Ok(Json(on_core(&app, move |a| a.set_layout(patch)).await?.map_err(refused("The TV couldn't save that change. Try again."))?).into_response())
 }
 
 async fn plugins(State(app): State<Shared>) -> Result<Response, ApiError> {
@@ -567,24 +591,39 @@ async fn plugins(State(app): State<Shared>) -> Result<Response, ApiError> {
 /// The body of an upload that holds its turn, within the route's body limit and time.
 async fn upload_body(req: Request) -> Result<Bytes, ApiError> {
     match tokio::time::timeout(UPLOAD_TIMEOUT, Bytes::from_request(req, &())).await {
-        Ok(body) => body.map_err(|e| ApiError(e.status(), e.body_text())),
-        Err(_) => Err(ApiError(StatusCode::REQUEST_TIMEOUT, "the upload stopped arriving".into())),
+        Ok(body) => body.map_err(|e| {
+            tracing::warn!("companion: upload refused ({})", e.body_text());
+            let said = if e.status() == StatusCode::PAYLOAD_TOO_LARGE { "That file is too big for the TV." } else { "The file didn't arrive in full. Try again." };
+            ApiError(e.status(), said.into())
+        }),
+        Err(_) => Err(ApiError(StatusCode::REQUEST_TIMEOUT, "The file stopped arriving. Check this phone's Wi-Fi, then try again.".into())),
     }
 }
 
+/// The TV could not keep an upload long enough to read it.
+fn not_stored(e: std::io::Error) -> ApiError {
+    tracing::warn!("companion: an upload could not be stored ({e})");
+    ApiError(StatusCode::INSUFFICIENT_STORAGE, "The TV couldn't store the file. Check it has free space, then try again.".into())
+}
+
+/// Waits for the one upload turn.
+async fn upload_turn(app: &Shared) -> Result<tokio::sync::SemaphorePermit<'_>, ApiError> {
+    app.uploads.acquire().await.map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "Lounge on the TV is stopping. Try again in a moment.".into()))
+}
+
 async fn install_plugin(State(app): State<Shared>, req: Request) -> Result<Response, ApiError> {
-    let _turn = app.uploads.acquire().await.map_err(|e| bad(e.to_string()))?;
+    let _turn = upload_turn(&app).await?;
     let body = upload_body(req).await?;
     if body.is_empty() {
-        return Err(bad("empty upload".into()));
+        return Err(bad("That file is empty. Choose the plugin's .lgp file.".into()));
     }
     let path = app.actions.temp_dir().join(format!("upload-{}.lgp", now_ms()));
-    tokio::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new("."))).await.map_err(|e| bad(e.to_string()))?;
-    tokio::fs::write(&path, &body).await.map_err(|e| bad(e.to_string()))?;
+    tokio::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new("."))).await.map_err(not_stored)?;
+    tokio::fs::write(&path, &body).await.map_err(not_stored)?;
     let p = path.clone();
     let result = on_core(&app, move |a| a.install_plugin(&p)).await;
     let _ = tokio::fs::remove_file(&path).await;
-    Ok(json_raw(result?.map_err(bad)?))
+    Ok(json_raw(result?.map_err(refused("The TV couldn't install that plugin. Check it is a Lounge plugin, then try again."))?))
 }
 
 #[derive(Deserialize)]
@@ -592,12 +631,12 @@ struct UrlBody {
     url: String,
 }
 async fn install_plugin_url(State(app): State<Shared>, Json(b): Json<UrlBody>) -> Result<Response, ApiError> {
-    let _turn = app.uploads.acquire().await.map_err(|e| bad(e.to_string()))?;
+    let _turn = upload_turn(&app).await?;
     let path = app.actions.temp_dir().join(format!("download-{}.lgp", now_ms()));
     let p = path.clone();
     let result = on_core(&app, move |a| a.download(&b.url, &p).and_then(|()| a.install_plugin(&p))).await;
     let _ = tokio::fs::remove_file(&path).await;
-    Ok(json_raw(result?.map_err(bad)?))
+    Ok(json_raw(result?.map_err(refused("The TV couldn't install from that link. Check the address, then try again."))?))
 }
 
 #[derive(Deserialize)]
@@ -606,7 +645,7 @@ struct SettingBody {
     value: Option<String>,
 }
 async fn plugin_setting(State(app): State<Shared>, AxPath(id): AxPath<String>, Json(b): Json<SettingBody>) -> Result<StatusCode, ApiError> {
-    on_core(&app, move |a| a.set_plugin_setting(&id, &b.key, b.value)).await?.map_err(bad)?;
+    on_core(&app, move |a| a.set_plugin_setting(&id, &b.key, b.value)).await?.map_err(refused("The TV couldn't save that setting. Try again."))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -615,7 +654,7 @@ async fn plugin_log(State(app): State<Shared>, AxPath(id): AxPath<String>) -> Re
 }
 
 async fn plugin_command(State(app): State<Shared>, AxPath((id, command)): AxPath<(String, String)>) -> Result<StatusCode, ApiError> {
-    on_core(&app, move |a| a.plugin_command(&id, &command)).await?.map_err(bad)?;
+    on_core(&app, move |a| a.plugin_command(&id, &command)).await?.map_err(refused("The TV couldn't do that with the plugin. Try again."))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -630,8 +669,11 @@ async fn devices(State(app): State<Shared>, Extension(Paired(device)): Extension
 async fn revoke_device(State(app): State<Shared>, AxPath(id): AxPath<String>) -> Result<StatusCode, ApiError> {
     match app.tokens.revoke(&id) {
         Ok(true) => Ok(StatusCode::NO_CONTENT),
-        Ok(false) => Err(ApiError(StatusCode::NOT_FOUND, "no such device".into())),
-        Err(e) => Err(ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("forgotten, but the TV could not save that, so a restart may bring it back: {e}"))),
+        Ok(false) => Err(ApiError(StatusCode::NOT_FOUND, "The TV had already forgotten that phone.".into())),
+        Err(e) => {
+            tracing::warn!("companion: a forgotten phone could not be saved ({e})");
+            Err(ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Forgotten, but the TV couldn't save that, so a restart could bring it back. Try again.".into()))
+        }
     }
 }
 
@@ -645,12 +687,14 @@ async fn backup(State(app): State<Shared>) -> Result<Response, ApiError> {
 }
 
 async fn restore(State(app): State<Shared>, req: Request) -> Result<StatusCode, ApiError> {
-    let _turn = app.uploads.acquire().await.map_err(|e| bad(e.to_string()))?;
+    let _turn = upload_turn(&app).await?;
     let body = upload_body(req).await?;
-    let json = String::from_utf8(body.to_vec()).map_err(|_| bad("backup is not UTF-8".into()))?;
-    on_core(&app, move |a| a.import_json(&json)).await?.map_err(bad)?;
+    let json = String::from_utf8(body.to_vec()).map_err(|_| bad(NOT_A_BACKUP.into()))?;
+    on_core(&app, move |a| a.import_json(&json)).await?.map_err(refused(NOT_A_BACKUP))?;
     Ok(StatusCode::NO_CONTENT)
 }
+
+const NOT_A_BACKUP: &str = "That file isn't a Lounge backup. Choose a file that Download backup saved.";
 
 #[derive(Deserialize)]
 struct ArtQuery {
@@ -752,7 +796,7 @@ mod tests {
 
     #[test]
     fn device_names_read_well() {
-        assert_eq!(device_name("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"), "iPhone · Safari");
-        assert_eq!(device_name("Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UQ1A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36"), "Pixel 8 · Chrome");
+        assert_eq!(device_name("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"), "Safari on iPhone");
+        assert_eq!(device_name("Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UQ1A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36"), "Chrome on Pixel 8");
     }
 }

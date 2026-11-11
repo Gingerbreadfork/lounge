@@ -1325,6 +1325,7 @@ fn same_tiles(a: &[Tile], b: &[Tile]) -> bool {
             && a.installed_rank == b.installed_rank
             && a.provider == b.provider
             && a.provider_name == b.provider_name
+            && a.hidden == b.hidden
     })
 }
 

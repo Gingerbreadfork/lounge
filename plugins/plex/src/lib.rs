@@ -38,7 +38,7 @@ impl sdk::Plugin for Plex {
                     label: "Server address".into(),
                     kind: SettingKind::Url,
                     required: false,
-                    help: Some("Like http://192.168.0.10:32400. Turn the plugin on and sign in with the code it shows, and this page says what yours is.".into()),
+                    help: Some("Turn the plugin on and sign in with the code it shows, and this page says which address to enter. It looks like http://192.168.0.10:32400.".into()),
                     default: None,
                 },
                 SettingSpec {
@@ -46,7 +46,7 @@ impl sdk::Plugin for Plex {
                     label: "Plex token".into(),
                     kind: SettingKind::Password,
                     required: false,
-                    help: Some("Not needed with a sign-in by code. To skip plex.tv, or for an address of your own, paste one: in Plex Web open any item, Get Info, View XML: the address ends in X-Plex-Token=…, copy that value.".into()),
+                    help: Some("Leave it empty to sign in with a code instead. To skip plex.tv, or to use an address of your own, paste one: in Plex Web open any item, then Get Info, then View XML, and copy the value after X-Plex-Token= at the end of the address.".into()),
                     default: None,
                 },
                 SettingSpec { key: "libraries".into(), label: "Libraries for recently added".into(), kind: SettingKind::Text, required: false, help: Some("Library names separated by commas. Empty means all of them.".into()), default: None },
@@ -266,7 +266,7 @@ impl Access {
     /// Without an address yet, the error says which one to enter.
     fn for_refresh(now_ms: i64) -> Result<Access, String> {
         if let Some(token) = pasted_token() {
-            return Ok(Access { base: host::server_setting("server", "Server address")?, token, by_code: false });
+            return Ok(Access { base: host::server_setting("server", "server address")?, token, by_code: false });
         }
         // With no address yet, the page says which to enter; that is a step to take, not a failure.
         let Some(base) = typed_server() else {
@@ -556,7 +556,7 @@ impl Server {
             _ => {}
         }
         let (machine, name) = identity(&r.body).map_err(|e| {
-            sdk::warn!("{e}");
+            sdk::warn!("unexpected answer from the server's root: {e}");
             sdk::wrong_server("Plex", &probe.base)
         })?;
         Ok(Server { machine, name, ..probe })
@@ -657,8 +657,8 @@ impl Server {
 }
 
 /// The machine identifier and friendly name from the server's root.
-fn identity(body: &str) -> Result<(String, String), String> {
-    let root: Container = serde_json::from_str(body).map_err(|e| format!("unexpected answer from Plex: {e}"))?;
+fn identity(body: &str) -> Result<(String, String), serde_json::Error> {
+    let root: Container = serde_json::from_str(body)?;
     let c = root.media_container;
     Ok((c.machine_identifier.unwrap_or_default(), c.friendly_name.filter(|n| !n.is_empty()).unwrap_or_else(|| "Plex".into())))
 }

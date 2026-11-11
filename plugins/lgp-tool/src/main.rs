@@ -16,8 +16,9 @@
 use ed25519_dalek::{Signer, SigningKey};
 use lounge_plugin_api::{HttpRequest, HttpResponse, Item, ItemKind, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
+use lounge_plugins::PluginError;
 use lounge_plugins::host::{kept, kept_results, Host, Limits, Services, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
-use lounge_plugins::http::{host_of, host_permitted, reach, redact, Fetcher};
+use lounge_plugins::http::{host_of, host_permitted, reach, redact, too_large, Fetcher};
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -87,9 +88,7 @@ fn bundle(args: &[String]) -> Result<(), String> {
 
     // The manifest comes from the module itself unless one is given; either way it must match.
     let host = Host::new(Arc::new(RunServices::default()), Limits::default());
-    let reported = host
-        .manifest_of(&host.load("probe", Manifest::default(), &wasm).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
+    let reported = host.manifest_of(&host.load("probe", Manifest::default(), &wasm).map_err(explained)?).map_err(explained)?;
     let manifest_json = match manifest_path {
         Some(p) => {
             let bytes = std::fs::read(&p).map_err(|e| format!("{p}: {e}"))?;
@@ -138,10 +137,10 @@ fn run(args: &[String]) -> Result<(), String> {
     let host = Host::new(services.clone(), Limits::default());
     let manifest = match manifest {
         Some(m) => m,
-        None => host.manifest_of(&host.load("probe", Manifest::default(), &wasm).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?,
+        None => host.manifest_of(&host.load("probe", Manifest::default(), &wasm).map_err(explained)?).map_err(explained)?,
     };
     let _ = services.manifest.set(manifest.clone());
-    let plugin = host.load(&manifest.id.clone(), manifest, &wasm).map_err(|e| e.to_string())?;
+    let plugin = host.load(&manifest.id.clone(), manifest, &wasm).map_err(explained)?;
     let fuel_used = Arc::new(Mutex::new(None));
     let _ = tracing::subscriber::set_global_default(FuelMeter(fuel_used.clone()));
     let started = std::time::Instant::now();
@@ -282,6 +281,14 @@ fn check_artwork(items: &[Item], manifest: &Manifest, services: &RunServices, do
         out.push(format!("artwork: {} pictures not downloaded; --artwork fetches them as the TV would", urls.len()));
     }
     out
+}
+
+/// An error as the TV words it and, for a module that stopped or cannot run, why.
+fn explained(e: PluginError) -> String {
+    match &e {
+        PluginError::Trap { said, cause } | PluginError::Wasm { said, cause } => format!("{said}\nwhy: {cause}"),
+        _ => e.to_string(),
+    }
 }
 
 fn amount(n: u64) -> String {
@@ -445,7 +452,7 @@ fn fixture(dir: &Path, request: &HttpRequest) -> Result<HttpResponse, String> {
     };
     let limit = Fetcher::new().max_body;
     if bytes.len() > limit {
-        return Err(format!("fetch: the response body is larger than request limit: {limit}"));
+        return Err(too_large(&request.url, limit as u64));
     }
     let (status, headers) = match std::fs::read_to_string(dir.join(format!("{name}.head"))) {
         Ok(head) => parse_head(&head).map_err(|e| format!("{name}.head: {e}"))?,
@@ -567,10 +574,20 @@ mod tests {
         assert_eq!(locked.headers["www-authenticate"], "Digest realm=\"tvheadend\", nonce=\"n\"");
         assert!(fixture(&d, &get("http://a/missing")).unwrap_err().contains("no fixture"));
         std::fs::write(file_for(&d, "http://a/huge", "body"), vec![b'x'; Fetcher::new().max_body + 1]).unwrap();
-        assert!(fixture(&d, &get("http://a/huge")).unwrap_err().contains("larger than"));
+        assert_eq!(fixture(&d, &get("http://a/huge")).unwrap_err(), "http://a/huge sent too much: the body is larger than 8 MB.");
         assert_eq!(parse_head("404").unwrap().0, 404);
         assert!(parse_head("teapot").is_err());
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_module_that_stops_says_why_in_the_terminal() {
+        let stopped = PluginError::Trap { said: "Test stopped partway through.".into(), cause: "out of fuel: the plugin took too long".into() };
+        assert_eq!(explained(stopped), "Test stopped partway through.\nwhy: out of fuel: the plugin took too long");
+        assert_eq!(explained(PluginError::Failed("Add the server address in the plugin's settings.".into())), "Add the server address in the plugin's settings.");
+        let host = Host::new(Arc::new(RunServices::default()), Limits::default());
+        let err = host.load("probe", Manifest::default(), b"not wasm").map_err(explained).err().unwrap();
+        assert!(err.starts_with("The plugin can't run on this version of Lounge. Ask its publisher for a version that can.\nwhy: "), "{err}");
     }
 
     #[test]

@@ -75,7 +75,8 @@ import kotlinx.coroutines.flow.first
 enum class ButtonKind { Primary, Secondary }
 
 /**
- * Pill button (DESIGN.md §7.2): 56 dp tall, label in `title`, focus = scale 1.04 + glow in `light`.
+ * Pill button (DESIGN.md §7.2): 56 dp tall, label in `title`; focus is a 1.04 scale, the glow in
+ * `light` and the tiles' rim, so a focused button reads at a glance.
  */
 @Composable
 fun LoungeButton(
@@ -94,6 +95,7 @@ fun LoungeButton(
     var focused by remember { mutableStateOf(false) }
     val scale = animateFloatAsState(if (focused) 1.04f else 1f, if (focused) motion.snap() else motion.settle(), label = "buttonScale")
     val glow = animateFloatAsState(if (focused) visuals.glowAlpha else 0f, if (focused) motion.snap() else motion.settle(), label = "buttonGlow")
+    val rim = animateFloatAsState(if (focused) 1f else 0f, if (focused) motion.snap() else motion.settle(), label = "buttonRim")
     val background = when (kind) {
         ButtonKind.Primary -> light
         ButtonKind.Secondary -> colors.curtain
@@ -110,8 +112,8 @@ fun LoungeButton(
             .lightGlow(light, { glow.value }, cornerRadius = 28.dp)
             .clip(shape)
             .background(background)
-            .focusRing(colors, { focused }, 28.dp)
             .then(if (kind == ButtonKind.Secondary) Modifier.border(1.dp, colors.curtainEdge, shape) else Modifier)
+            .focusRim(colors, { rim.value }, 28.dp)
             .onFocusChanged { focused = it.isFocused }
             .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .semantics { role = Role.Button }
@@ -409,7 +411,7 @@ fun <T : Any> Presence(item: T?, content: @Composable (item: T, visibleState: Mu
     content(current, visibleState)
 }
 
-/** One toast at a time, shown for four seconds (DESIGN.md §7.4). */
+/** One toast at a time, shown for four seconds or as long as [toastMillis] says (DESIGN.md §7.4). */
 @Stable
 class ToastController {
     var current: String? by mutableStateOf(null)
@@ -437,11 +439,12 @@ class ToastController {
 fun LoungeToastHost(toasts: ToastController, modifier: Modifier = Modifier) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
+    val context = androidx.compose.ui.platform.LocalContext.current
     val text = toasts.current
     LaunchedEffect(text, toasts.version) {
         if (text != null) {
             val v = toasts.version
-            delay(4_000)
+            delay(toastMillis(context, text))
             toasts.clear(v)
         }
     }
@@ -462,8 +465,20 @@ fun LoungeToastHost(toasts: ToastController, modifier: Modifier = Modifier) {
                     .padding(horizontal = 24.dp, vertical = 18.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite },
             ) {
-                Text(shown, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                // Never cut: the end of the sentence is often the fix.
+                Text(shown, style = LoungeTheme.typography.title, color = colors.limelight)
             }
         }
     }
+}
+
+/** Four seconds, and longer for a sentence that takes longer to read, up to ten. */
+fun toastReadingMillis(text: String): Long = (4_000L + (text.length - 60).coerceAtLeast(0) * 50L).coerceAtMost(10_000L)
+
+/** How long a toast stays: its reading time, stretched to whatever the person's accessibility settings ask for. */
+fun toastMillis(context: android.content.Context, text: String): Long {
+    val reading = toastReadingMillis(text)
+    if (android.os.Build.VERSION.SDK_INT < 29) return reading
+    val manager = context.getSystemService(android.view.accessibility.AccessibilityManager::class.java) ?: return reading
+    return manager.getRecommendedTimeoutMillis(reading.toInt(), android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT).toLong()
 }

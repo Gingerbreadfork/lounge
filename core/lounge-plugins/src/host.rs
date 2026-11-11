@@ -158,10 +158,14 @@ impl Host {
 
     /// Compile a module. Fails for anything that is not valid WebAssembly.
     pub fn load(&self, id: &str, manifest: Manifest, wasm: &[u8]) -> Result<LoadedPlugin> {
-        let module = Module::new(&self.engine, wasm).map_err(|e| PluginError::Wasm(e.to_string()))?;
+        let unrunnable = |cause: String| {
+            self.services.log(id, api::LOG_ERROR, &format!("Loading the module failed: {cause}"));
+            PluginError::Wasm { said: format!("{} can't run on this version of Lounge. Ask its publisher for a version that can.", named(&manifest.name)), cause }
+        };
+        let module = Module::new(&self.engine, wasm).map_err(|e| unrunnable(e.to_string()))?;
         for required in [exports::MEMORY, exports::ALLOC, exports::FREE, exports::MANIFEST, exports::REFRESH] {
             if module.get_export(required).is_none() {
-                return Err(PluginError::Wasm(format!("module does not export {required}")));
+                return Err(unrunnable(format!("module does not export {required}")));
             }
         }
         Ok(LoadedPlugin { id: id.to_string(), manifest, module })
@@ -204,7 +208,7 @@ impl Host {
 
     pub fn resolve(&self, plugin: &LoadedPlugin, action: &str) -> Result<Action> {
         if plugin.module.get_export(exports::RESOLVE).is_none() {
-            return Err(PluginError::Failed("plugin cannot resolve actions".into()));
+            return Err(PluginError::Failed(format!("{} can't open that.", named(&plugin.manifest.name))));
         }
         self.outcome(self.call_json(plugin, exports::RESOLVE, Some(&action.to_string()), self.limits.call_time, self.limits.call_result_bytes)?)
     }
@@ -221,6 +225,8 @@ impl Host {
         self.call_json_with(&self.services, plugin, export, input, time, max_result)
     }
 
+    /// Runs `export`. A call that does not finish becomes a sentence for the screens, and why it
+    /// stopped goes to the plugin's log.
     fn call_json_with<I: Serialize, O: DeserializeOwned>(
         &self,
         services: &Arc<dyn Services>,
@@ -230,6 +236,22 @@ impl Host {
         time: Duration,
         max_result: usize,
     ) -> Result<Outcome<O>> {
+        self.run(services, plugin, export, input, time, max_result).map_err(|cause| {
+            self.services.log(&plugin.id, api::LOG_ERROR, &format!("{} stopped: {cause}", call_name(export)));
+            PluginError::Trap { said: stopped(&plugin.manifest.name, export), cause }
+        })
+    }
+
+    /// The call itself; an error says why it stopped, for the log.
+    fn run<I: Serialize, O: DeserializeOwned>(
+        &self,
+        services: &Arc<dyn Services>,
+        plugin: &LoadedPlugin,
+        export: &str,
+        input: Option<&I>,
+        time: Duration,
+        max_result: usize,
+    ) -> std::result::Result<Outcome<O>, String> {
         let started = Instant::now();
         let deadline = started + time;
         // The start function cannot be paused, so it runs on the first slice alone.
@@ -259,49 +281,47 @@ impl Host {
         };
         let mut store = Store::new(&self.engine, state);
         store.limiter(|s| &mut s.limits);
-        store.set_fuel(first_slice).map_err(wasm_err)?;
+        store.set_fuel(first_slice).map_err(|e| e.to_string())?;
 
         let mut linker = Linker::<State>::new(&self.engine);
-        link_host_functions(&mut linker)?;
-        let instance = linker.instantiate_and_start(&mut store, &plugin.module).map_err(wasm_err)?;
-        let memory = instance
-            .get_memory(&store, exports::MEMORY)
-            .ok_or_else(|| PluginError::Wasm("no memory export".into()))?;
+        link_host_functions(&mut linker).map_err(|e| e.to_string())?;
+        let instance = linker.instantiate_and_start(&mut store, &plugin.module).map_err(|e| trap_cause(&e))?;
+        let memory = instance.get_memory(&store, exports::MEMORY).ok_or_else(|| "the module has no memory export".to_string())?;
 
         let packed = match input {
             Some(value) => {
-                let bytes = serde_json::to_vec(value)?;
-                let alloc = instance.get_typed_func::<i32, i32>(&store, exports::ALLOC).map_err(wasm_err)?;
+                let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
+                let alloc = instance.get_typed_func::<i32, i32>(&store, exports::ALLOC).map_err(|e| e.to_string())?;
                 let ptr = call_metered(&mut store, &alloc, bytes.len() as i32, export, time)? as u32;
-                memory.write(&mut store, ptr as usize, &bytes).map_err(|e| PluginError::Wasm(e.to_string()))?;
-                let f = instance.get_typed_func::<(i32, i32), i64>(&store, export).map_err(wasm_err)?;
+                memory.write(&mut store, ptr as usize, &bytes).map_err(|e| e.to_string())?;
+                let f = instance.get_typed_func::<(i32, i32), i64>(&store, export).map_err(|e| e.to_string())?;
                 call_metered(&mut store, &f, (ptr as i32, bytes.len() as i32), export, time)?
             }
             None => {
-                let f = instance.get_typed_func::<(), i64>(&store, export).map_err(wasm_err)?;
+                let f = instance.get_typed_func::<(), i64>(&store, export).map_err(|e| e.to_string())?;
                 call_metered(&mut store, &f, (), export, time)?
             }
         };
         if Instant::now() > deadline {
-            return Err(PluginError::Trap(format!("{export} ran past its {} s limit", time.as_secs())));
+            return Err(past_limit(export, time));
         }
         let (ptr, len) = api::unpack(packed);
         if len == 0 {
-            return Err(PluginError::Failed(format!("{export} returned nothing")));
+            return Err(format!("{export} returned nothing"));
         }
         // The plugin names the range; it is checked against its memory before a byte is allocated.
         let end = (ptr as usize).checked_add(len as usize);
         if len as usize > max_result || end.is_none_or(|end| end > memory.data_size(&store)) {
-            return Err(PluginError::Wasm(format!("{export} returned {len} bytes at {ptr}, outside its memory or over the limit")));
+            return Err(format!("{export} returned {len} bytes at {ptr}, outside its memory or over the limit"));
         }
         let mut out = vec![0u8; len as usize];
-        memory.read(&store, ptr as usize, &mut out).map_err(|e| PluginError::Wasm(e.to_string()))?;
+        memory.read(&store, ptr as usize, &mut out).map_err(|e| e.to_string())?;
         if let Ok(free) = instance.get_typed_func::<(i32, i32), ()>(&store, exports::FREE) {
             let _ = call_metered(&mut store, &free, (ptr as i32, len as i32), export, time);
         }
         let used = self.limits.fuel.saturating_sub(store.get_fuel().unwrap_or(0) + store.data().fuel_reserve);
         tracing::debug!("plugin {} {export}: {} fuel", plugin.id, used);
-        Ok(serde_json::from_slice(&out)?)
+        serde_json::from_slice(&out).map_err(|e| format!("{export} answered with JSON the host can't read: {e}"))
     }
 }
 
@@ -369,44 +389,75 @@ fn encode_answer(response: &Outcome<HttpResponse>, max: usize) -> std::result::R
     }
 }
 
-fn wasm_err(e: wasmi::Error) -> PluginError {
-    PluginError::Wasm(e.to_string())
+/// The plugin's name for a sentence, or a stand-in when its manifest gives none.
+fn named(name: &str) -> &str {
+    let name = name.trim();
+    if name.is_empty() { "The plugin" } else { name }
+}
+
+/// What the screens say when a call to `export` did not finish. A failed refresh is tried again
+/// within a few minutes.
+fn stopped(name: &str, export: &str) -> String {
+    let name = named(name);
+    match export {
+        exports::REFRESH => format!("{name} stopped partway through. It tries again in a few minutes."),
+        exports::RESOLVE => format!("{name} stopped before it could open this. Try again in a moment."),
+        exports::MANIFEST => format!("{name} stopped while Lounge was installing it. Ask its publisher for a version that works."),
+        _ => format!("{name} stopped partway through."),
+    }
+}
+
+/// How the plugin's log names a call.
+fn call_name(export: &str) -> &str {
+    match export {
+        exports::REFRESH => "Refresh",
+        exports::SEARCH => "Search",
+        exports::RESOLVE => "Opening a tile",
+        exports::MANIFEST => "Reading the manifest",
+        other => other,
+    }
+}
+
+const OUT_OF_FUEL: &str = "out of fuel: the plugin took too long";
+
+fn past_limit(export: &str, time: Duration) -> String {
+    format!("{export} ran past its {} s limit", time.as_secs())
 }
 
 /// Runs `f` a slice of fuel at a time, stopping it once its deadline or its fuel is gone.
-fn call_metered<P: WasmParams, R: WasmResults>(store: &mut Store<State>, f: &TypedFunc<P, R>, params: P, export: &str, time: Duration) -> Result<R> {
-    let mut call = f.call_resumable(&mut *store, params).map_err(|e| trap_err(&e))?;
+fn call_metered<P: WasmParams, R: WasmResults>(store: &mut Store<State>, f: &TypedFunc<P, R>, params: P, export: &str, time: Duration) -> std::result::Result<R, String> {
+    let mut call = f.call_resumable(&mut *store, params).map_err(|e| trap_cause(&e))?;
     loop {
         call = match call {
             TypedResumableCall::Finished(results) => return Ok(results),
-            TypedResumableCall::HostTrap(t) => return Err(trap_err(t.host_error())),
+            TypedResumableCall::HostTrap(t) => return Err(trap_cause(t.host_error())),
             TypedResumableCall::OutOfFuel(paused) => {
                 refuel(store, export, time)?;
-                paused.resume(&mut *store).map_err(|e| trap_err(&e))?
+                paused.resume(&mut *store).map_err(|e| trap_cause(&e))?
             }
         };
     }
 }
 
 /// Gives a paused call its next slice, unless its time or its fuel has run out.
-fn refuel(store: &mut Store<State>, export: &str, time: Duration) -> Result<()> {
+fn refuel(store: &mut Store<State>, export: &str, time: Duration) -> std::result::Result<(), String> {
     if Instant::now() > store.data().deadline {
-        return Err(PluginError::Trap(format!("{export} ran past its {} s limit", time.as_secs())));
+        return Err(past_limit(export, time));
     }
     let slice = store.data().fuel_reserve.min(FUEL_SLICE);
     if slice == 0 {
-        return Err(PluginError::Trap("out of fuel: the plugin took too long".into()));
+        return Err(OUT_OF_FUEL.into());
     }
     store.data_mut().fuel_reserve -= slice;
-    let left = store.get_fuel().map_err(wasm_err)?;
-    store.set_fuel(left + slice).map_err(wasm_err)
+    let left = store.get_fuel().map_err(|e| e.to_string())?;
+    store.set_fuel(left + slice).map_err(|e| e.to_string())
 }
 
-fn trap_err(e: &wasmi::Error) -> PluginError {
+fn trap_cause(e: &wasmi::Error) -> String {
     match e.as_trap_code() {
-        Some(wasmi::TrapCode::OutOfFuel) => PluginError::Trap("out of fuel: the plugin took too long".into()),
-        Some(code) => PluginError::Trap(format!("{code:?}")),
-        None => PluginError::Trap(e.to_string()),
+        Some(wasmi::TrapCode::OutOfFuel) => OUT_OF_FUEL.into(),
+        Some(code) => format!("it trapped: {code}"),
+        None => e.to_string(),
     }
 }
 
@@ -511,9 +562,8 @@ fn hand_back(caller: &mut Caller<'_, State>, bytes: &[u8]) -> std::result::Resul
     write_guest(caller, bytes)
 }
 
-fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
+fn link_host_functions(linker: &mut Linker<State>) -> std::result::Result<(), wasmi::errors::LinkerError> {
     let m = api::HOST_MODULE;
-    let err = |e: wasmi::errors::LinkerError| PluginError::Wasm(e.to_string());
 
     linker
         .func_wrap(m, imports::NOW, |mut caller: Caller<'_, State>| -> std::result::Result<i64, wasmi::Error> {
@@ -522,8 +572,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_millis() as i64)
                 .unwrap_or(0))
-        })
-        .map_err(err)?;
+        })?;
 
     linker
         .func_wrap(m, imports::LOG, |mut caller: Caller<'_, State>, level: i32, ptr: i32, len: i32| -> std::result::Result<(), wasmi::Error> {
@@ -535,8 +584,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
                 state.services.log(&state.plugin, level, &msg);
             }
             Ok(())
-        })
-        .map_err(err)?;
+        })?;
 
     linker
         .func_wrap(m, imports::KV_GET, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<i64, wasmi::Error> {
@@ -547,8 +595,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
                 Some(v) => hand_back(&mut caller, &v),
                 None => Ok(0),
             }
-        })
-        .map_err(err)?;
+        })?;
 
     linker
         .func_wrap(m, imports::KV_SET, |mut caller: Caller<'_, State>, kp: i32, kl: i32, vp: i32, vl: i32| -> std::result::Result<(), wasmi::Error> {
@@ -569,8 +616,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
                 st.services.log(&st.plugin, api::LOG_WARN, &format!("store is full: {} keys", st.kv_keys));
             }
             Ok(())
-        })
-        .map_err(err)?;
+        })?;
 
     linker
         .func_wrap(m, imports::KV_DELETE, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<(), wasmi::Error> {
@@ -583,8 +629,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
             st.kv_writes_left -= 1;
             caller.data().services.kv_delete(&caller.data().plugin, &key);
             Ok(())
-        })
-        .map_err(err)?;
+        })?;
 
     linker
         .func_wrap(m, imports::SECRET, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<i64, wasmi::Error> {
@@ -600,8 +645,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
                 Some(v) => hand_back(&mut caller, v.as_bytes()),
                 None => Ok(0),
             }
-        })
-        .map_err(err)?;
+        })?;
 
     linker
         .func_wrap(m, imports::SETTING, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<i64, wasmi::Error> {
@@ -618,8 +662,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
                 Some(v) => hand_back(&mut caller, v.as_bytes()),
                 None => Ok(0),
             }
-        })
-        .map_err(err)?;
+        })?;
 
     linker
         .func_wrap(m, imports::FETCH, |mut caller: Caller<'_, State>, ptr: i32, len: i32| -> std::result::Result<i64, wasmi::Error> {
@@ -643,7 +686,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
             let response: Outcome<HttpResponse> = if let Err(e) = budget {
                 Outcome::Err(e)
             } else if !caller.data().manifest.allows_host_with(&host, &|key| caller.data().services.setting(&caller.data().plugin, key)) {
-                Outcome::Err(format!("host {host} is not in this plugin's allow list"))
+                Outcome::Err(crate::http::not_allowed(&host))
             } else {
                 match caller.data().services.fetch(&caller.data().plugin, &request) {
                     Ok(r) => Outcome::Ok(r),
@@ -653,8 +696,7 @@ fn link_host_functions(linker: &mut Linker<State>) -> Result<()> {
             let bytes = encode_answer(&response, MAX_ANSWER_BYTES).map_err(|e| wasmi::Error::new(e.to_string()))?;
             drop(response);
             hand_back(&mut caller, &bytes)
-        })
-        .map_err(err)?;
+        })?;
 
     Ok(())
 }
@@ -839,6 +881,44 @@ mod tests {
     }
 
     #[test]
+    fn a_plugins_own_error_shows_as_it_wrote_it() {
+        let (host, _) = host();
+        let said = "Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.";
+        let wasm = wat::parse_str(wat_answering(&format!(r#"{{"err":"{said}"}}"#))).unwrap();
+        let manifest = Manifest { id: "tv.lounge.test".into(), name: "Test".into(), version: "1".into(), fetch_hosts: vec!["*".into()], ..Default::default() };
+        let plugin = host.load("tv.lounge.test", manifest, &wasm).unwrap();
+        let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert!(matches!(&err, PluginError::Failed(_)), "{err:?}");
+        assert_eq!(err.to_string(), said);
+    }
+
+    /// Why a call stopped, as the plugin's log gets it.
+    fn cause(e: &PluginError) -> &str {
+        match e {
+            PluginError::Trap { cause, .. } | PluginError::Wasm { cause, .. } => cause,
+            other => panic!("not a trap: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_call_that_stops_says_so_in_a_sentence_and_logs_why() {
+        let (host, services) = host();
+        let spin = module("", "", "(i32.const 8)", "(loop $l (br $l)) (i64.const 0)");
+        let h = Host::new(host.services.clone(), Limits { fuel: 100_000, ..Limits::default() });
+        let manifest = Manifest { name: "Jellyfin".into(), ..Default::default() };
+        let plugin = h.load("x", manifest, &spin).unwrap();
+        let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert_eq!(err.to_string(), "Jellyfin stopped partway through. It tries again in a few minutes.");
+        assert_eq!(services.logs.lock().as_slice(), ["Refresh stopped: out of fuel: the plugin took too long"]);
+
+        let nameless = h.load("x", Manifest::default(), &spin).unwrap();
+        assert!(h.refresh(&nameless, &RefreshContext::default()).unwrap_err().to_string().starts_with("The plugin stopped partway through."));
+        let err = h.load("x", Manifest { name: "Jellyfin".into(), ..Default::default() }, b"not wasm").err().unwrap();
+        assert_eq!(err.to_string(), "Jellyfin can't run on this version of Lounge. Ask its publisher for a version that can.");
+        assert!(matches!(&err, PluginError::Wasm { .. }));
+    }
+
+    #[test]
     fn out_of_fuel_is_a_trap() {
         let (host, _) = host();
         let wasm = wat::parse_str(
@@ -852,7 +932,7 @@ mod tests {
         let h = Host::new(host.services.clone(), Limits { fuel: 100_000, ..Limits::default() });
         let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
         let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-        assert!(matches!(&err, PluginError::Trap(msg) if msg.contains("fuel")), "{err}");
+        assert!(matches!(&err, PluginError::Trap { cause, .. } if cause.contains("fuel")), "{err:?}");
     }
 
     #[test]
@@ -865,7 +945,7 @@ mod tests {
             let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
             let started = Instant::now();
             let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-            assert!(matches!(&err, PluginError::Trap(msg) if msg.contains("limit")), "{err}");
+            assert!(matches!(&err, PluginError::Trap { cause, .. } if cause.contains("limit")), "{err:?}");
             assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
         }
     }
@@ -883,7 +963,7 @@ mod tests {
         );
         let plugin = host.load("x", Manifest::default(), &wasm).unwrap();
         let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-        assert!(matches!(&err, PluginError::Failed(msg) if msg.contains("returned nothing")), "{err}");
+        assert!(matches!(&err, PluginError::Trap { cause, .. } if cause.contains("returned nothing")), "{err:?}");
     }
 
     #[test]
@@ -911,7 +991,7 @@ mod tests {
         let manifest = Manifest { fetch_hosts: vec!["*".into()], ..Default::default() };
         let plugin = h.load("x", manifest, &wasm).unwrap();
         let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-        assert!(matches!(&err, PluginError::Failed(msg) if msg.contains("returned nothing")), "{err}");
+        assert!(matches!(&err, PluginError::Trap { cause, .. } if cause.contains("returned nothing")), "{err:?}");
     }
 
     #[test]
@@ -966,7 +1046,7 @@ mod tests {
         );
         let plugin = host.load("tv.lounge.test", secret_manifest(), &wasm).unwrap();
         let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-        assert!(err.to_string().contains("lg_alloc may not call host functions"), "{err}");
+        assert!(cause(&err).contains("lg_alloc may not call host functions"), "{err:?}");
     }
 
     #[test]
@@ -1003,7 +1083,7 @@ mod tests {
         let plugin = h.load("tv.lounge.test", secret_manifest(), &wasm).unwrap();
         let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
         // Both checks passed: the module got as far as returning nothing.
-        assert!(err.to_string().contains("returned nothing"), "{err}");
+        assert!(cause(&err).contains("returned nothing"), "{err:?}");
     }
 
     #[test]
@@ -1019,9 +1099,9 @@ mod tests {
         );
         let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
         let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-        assert!(err.to_string().contains("returned nothing"), "{err}");
+        assert!(cause(&err).contains("returned nothing"), "{err:?}");
         assert_eq!(services.kv.lock().keys().collect::<Vec<_>>(), ["a"]);
-        assert_eq!(services.logs.lock().as_slice(), ["store is full: 1 keys"]);
+        assert_eq!(services.logs.lock().as_slice(), ["store is full: 1 keys", "Refresh stopped: lg_refresh returned nothing"]);
     }
 
     #[test]
@@ -1039,8 +1119,9 @@ mod tests {
         let plugin = host.load("x", Manifest::default(), &wasm).unwrap();
         let _ = host.refresh(&plugin, &RefreshContext::default());
         let logs = services.logs.lock();
-        assert_eq!(logs.len(), 1);
+        assert_eq!(logs.len(), 2);
         assert_eq!(logs[0], "a".repeat(MAX_LOG_BYTES - 1));
+        assert_eq!(logs[1], "Refresh stopped: lg_refresh returned nothing");
     }
 
     #[test]
@@ -1056,13 +1137,13 @@ mod tests {
         let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
         let started = Instant::now();
         let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-        assert!(err.to_string().contains("fuel"), "{err}");
+        assert!(cause(&err).contains("fuel"), "{err:?}");
         assert!(started.elapsed() < Duration::from_secs(1));
 
         let h = Host::new(host.services.clone(), Limits { refresh_time: Duration::ZERO, ..Limits::default() });
         let plugin = h.load("x", Manifest::default(), &wasm).unwrap();
         let err = h.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-        assert!(err.to_string().contains("time limit"), "{err}");
+        assert!(cause(&err).contains("time limit"), "{err:?}");
     }
 
     #[test]
@@ -1077,7 +1158,7 @@ mod tests {
         );
         let plugin = host.load("x", Manifest::default(), &wasm).unwrap();
         let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-        assert!(err.to_string().contains("longer than"), "{err}");
+        assert!(cause(&err).contains("longer than"), "{err:?}");
     }
 
     #[test]

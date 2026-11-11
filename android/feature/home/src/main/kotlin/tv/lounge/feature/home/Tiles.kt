@@ -109,7 +109,8 @@ private fun Tile.artIsBanner(): Boolean = artworkPath != null && id.startsWith("
  * state (DESIGN.md §6.1). [chrome] adds the title block to landscape tiles, [held] keeps a tile lit
  * while its menu is open, [nudge] is a horizontal offset in px read while drawing. [badged] is
  * false in a row that wears the tile's badge itself, so it is said once. [shown] is false while the
- * tile is kept off screen.
+ * tile is kept off screen. [description] replaces what is read out about it, for a tile whose
+ * words are drawn elsewhere.
  */
 @Composable
 fun TileView(
@@ -128,6 +129,7 @@ fun TileView(
     nudge: (() -> Float)? = null,
     badged: Boolean = true,
     shown: () -> Boolean = { true },
+    description: String? = null,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -170,19 +172,11 @@ fun TileView(
         { seen().let { house.brightness(state(it), light, motion, it) } }
     }
 
-    val description = buildString {
-        append(tile.title)
-        append(", ").append(rowName)
-        tile.subtitle?.let { append(", ").append(it) }
-        when (tile.badge) {
-            Badge.LIVE -> append(", live")
-            Badge.NEW -> append(", new")
-            Badge.CONNECTED -> append(", connected")
-            else -> Unit
-        }
-        if (tile.stagePinned) append(", pinned to the Stage")
-        if (tile.pinned) append(", pinned")
-    }
+    val spoken = description ?: tileDescription(tile, rowName)
+    // A compact tile grows with large text rather than cutting its two lines (DESIGN.md §4.1).
+    val type = LoungeTheme.typography
+    val compactHeight = with(LocalDensity.current) { type.title.lineHeight.toDp() + type.caption.lineHeight.toDp() } + 12.dp
+    val drawn = if (kind == TileKind.COMPACT && compactHeight > size.height) size.copy(height = compactHeight) else size
 
     // The curtain only shows where no picture covers it; an opaque JPEG over it would be pure overdraw.
     val needsCurtain = kind == TileKind.COMPACT || tile.artworkPath == null
@@ -199,9 +193,9 @@ fun TileView(
                 if (it.isFocused) placed[0]?.let { c -> light.set(c, lightColor) }
                 onFocused(it.isFocused, bounds())
             }
-            .tilePress(onClick) { onLongPress(bounds()) }
+            .tilePress(onClick, { onLongPress(bounds()) }, clickLabel = "Open", longPressLabel = if (hasMenu(tile)) "Options" else null)
             .focusable()
-            .semantics { contentDescription = description }
+            .semantics { contentDescription = spoken }
             // Two layers on purpose: the glow redraws every frame of a focus change, and inside the
             // tile's own layer it re-records only this tile. The clip is the inner layer.
             .graphicsLayer {
@@ -209,6 +203,8 @@ fun TileView(
                 scaleX = scale
                 scaleY = scale
                 translationX = nudge?.invoke() ?: 0f
+                // An app hidden from every row sits back until it has focus.
+                if (tile.hidden) alpha = 0.45f + 0.55f * litLevel.value
             }
             .lightGlow(lightColor, glow, cornerRadius = Dimens.tileRadius)
             .graphicsLayer {
@@ -216,14 +212,14 @@ fun TileView(
                 clip = true
             }
             .focusRim(colors, { litLevel.value }, Dimens.tileRadius)
-            .size(size)
+            .size(drawn)
             .then(if (needsCurtain) Modifier.background(colors.curtain) else Modifier),
     ) {
         when (kind) {
             TileKind.POSTER -> PosterContent(tile, filter, size)
             TileKind.LANDSCAPE -> LandscapeContent(tile, filter, brightnessNow, chrome, size, badged, focused)
             TileKind.APP_BANNER -> AppBannerContent(tile, filter, size)
-            TileKind.COMPACT -> CompactContent(tile, filter)
+            TileKind.COMPACT -> CompactContent(tile, filter, drawn, focused)
         }
         // A pinned tile says so where it sits, so the word in the menu has something to point at.
         // The live badge owns the top-right corner, so the mark steps down beside the progress bar.
@@ -233,6 +229,28 @@ fun TileView(
         }
     }
 }
+
+/** What is read out for a tile: "<title>, <row name>, <state>" (DESIGN.md §11). */
+internal fun tileDescription(tile: Tile, rowName: String): String = buildString {
+    append(tile.title)
+    append(", ").append(rowName)
+    tile.subtitle?.let { append(", ").append(spokenEpisodes(it)) }
+    tile.timeLeft?.takeIf { it != tile.subtitle }?.let { append(", ").append(it) }
+    when (tile.badge) {
+        Badge.LIVE -> append(", live")
+        Badge.NEW -> append(", new")
+        Badge.CONNECTED -> append(", connected")
+        else -> Unit
+    }
+    if (tile.stagePinned) append(", pinned to the Stage")
+    if (tile.pinned) append(", pinned")
+}
+
+private val episodeCode = Regex("\\bS(\\d+) E(\\d+)\\b")
+
+/** "S2 E4" as "Season 2, Episode 4", so a screen reader does not spell it out. */
+internal fun spokenEpisodes(text: String): String =
+    text.replace(episodeCode) { "Season ${it.groupValues[1]}, Episode ${it.groupValues[2]}" }
 
 /** A small pin on a `velvet` disc, the same on every tile style (DESIGN.md §7.3). */
 @Composable
@@ -307,15 +325,22 @@ private fun Color.compositeOver(base: Color, amount: Float): Color = Color(
 
 /**
  * A one-line title cut at a word boundary with an ellipsis when it would overflow [width],
- * never mid-word (DESIGN.md §4.2). Measured once per (text, width) and remembered.
+ * never mid-word (DESIGN.md §4.2). Measured once for each text and width, and remembered.
  */
 @Composable
-fun rememberFittedLine(text: String, style: TextStyle, width: Dp): String {
+fun rememberFittedLine(text: String, style: TextStyle, width: Dp): String = rememberFittedLines(text, style, width, 1)
+
+/**
+ * Text that wraps to at most [maxLines] lines within [width] and, when it would need more, is cut
+ * at a word boundary with an ellipsis, never mid-word (DESIGN.md §4.2).
+ */
+@Composable
+fun rememberFittedLines(text: String, style: TextStyle, width: Dp, maxLines: Int): String {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(text, style, width, density) {
+    return remember(text, style, width, density, maxLines) {
         val maxWidth = with(density) { width.roundToPx() }.coerceAtLeast(1)
-        fun overflows(s: String) = measurer.measure(AnnotatedString(s), style, maxLines = 1, softWrap = false, constraints = Constraints(maxWidth = maxWidth)).hasVisualOverflow
+        fun overflows(s: String) = measurer.measure(AnnotatedString(s), style, maxLines = maxLines, softWrap = maxLines > 1, constraints = Constraints(maxWidth = maxWidth)).hasVisualOverflow
         if (!overflows(text)) return@remember text
         var cut = text.lastIndexOf(' ')
         while (cut > 0) {
@@ -365,6 +390,13 @@ private fun LandscapeContent(
     val words = tile.artTitle ?: tile.title
     // A channel's card, lent to what is on: it names the channel, so it is kept readable.
     val card = live && tile.borrowedArt
+    // Where the words sit, measured up from the tile's foot, so the scrim can be deep enough behind each line.
+    val type = LoungeTheme.typography
+    val density = LocalDensity.current
+    val titleLine = if (words.isNotEmpty()) with(density) { type.title.lineHeight.toDp() } + 2.dp else 0.dp
+    val metaLine = if (tile.subtitle != null) with(density) { type.meta.lineHeight.toDp() } else 0.dp
+    val wordsHeight = (if (tile.progress != null) 32.dp else 20.dp) + titleLine + metaLine
+    val plainScrim = (wordsHeight + ScrimFade).coerceAtMost(size.height)
     Box(Modifier.fillMaxSize()) {
         Artwork(tile.artworkPath, filter, LoungeTheme.colors.light(tile.lightArgb).copy(alpha = 0.25f), size)
         if (showText && tile.artworkPath != null) {
@@ -376,7 +408,10 @@ private fun LandscapeContent(
                 // A borrowed banner is a backdrop, not the picture, so its scrim starts higher and ends deeper.
                 tile.borrowedArt ->
                     Brush.verticalGradient(0f to colors.velvet.copy(alpha = 0.10f), 0.35f to colors.velvet.copy(alpha = 0.70f), 1f to colors.velvet.copy(alpha = 0.94f))
-                else -> Brush.verticalGradient(0f to Color.Transparent, 0.45f to colors.velvet.copy(alpha = 0.55f), 1f to colors.velvet.copy(alpha = 0.90f))
+                else -> {
+                    val wordsTop = plainScrim - wordsHeight
+                    wordsScrim(colors.velvet, plainScrim, titleTop = wordsTop.takeIf { titleLine > 0.dp }, metaTop = (wordsTop + titleLine).takeIf { metaLine > 0.dp })
+                }
             }
             Box(
                 Modifier
@@ -386,7 +421,7 @@ private fun LandscapeContent(
                         when {
                             card && words.isEmpty() -> size.height * 0.35f
                             tile.borrowedArt -> size.height
-                            else -> size.height * 0.6f
+                            else -> plainScrim
                         },
                     )
                     .background(scrim),
@@ -430,6 +465,23 @@ private fun LandscapeContent(
     }
 }
 
+/** How far above the words a landscape tile's scrim starts to fall in. */
+private val ScrimFade = 56.dp
+
+/**
+ * The scrim under a landscape tile's words: clear above them, deep enough by [titleTop] for
+ * `limelight` and by [metaTop] for `dust` to reach 4.5 to 1 over white artwork.
+ */
+private fun wordsScrim(velvet: Color, height: Dp, titleTop: Dp?, metaTop: Dp?): Brush {
+    val stops = buildList {
+        add(0f to Color.Transparent)
+        titleTop?.let { add((it / height).coerceIn(0.01f, 0.98f) to velvet.copy(alpha = 0.66f)) }
+        metaTop?.let { add((it / height).coerceIn(0.02f, 0.99f) to velvet.copy(alpha = 0.86f)) }
+        add(1f to velvet.copy(alpha = 0.92f))
+    }.distinctBy { it.first }.sortedBy { it.first }
+    return Brush.verticalGradient(*stops.toTypedArray())
+}
+
 @Composable
 private fun AppBannerContent(tile: Tile, filter: () -> androidx.compose.ui.graphics.ColorFilter?, size: DpSize) {
     val colors = LoungeTheme.colors
@@ -455,9 +507,15 @@ private fun AppBannerContent(tile: Tile, filter: () -> androidx.compose.ui.graph
     }
 }
 
+/** An icon and two lines; both are cut at a word and run across once the tile has held focus a while. */
 @Composable
-private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphics.ColorFilter?) {
+private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphics.ColorFilter?, size: DpSize, focused: Boolean) {
     val colors = LoungeTheme.colors
+    val pinned = tile.pinned || tile.stagePinned
+    val connected = tile.badge == Badge.CONNECTED
+    // The row's padding, the icon, the gaps and whatever trails the words.
+    val wordsWidth = size.width - 32.dp - (if (tile.iconPath != null) 48.dp else 32.dp) - 14.dp -
+        (if (pinned) 15.dp + 14.dp else 0.dp) - (if (connected) 10.dp + 14.dp else 0.dp)
     Row(
         Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -472,22 +530,25 @@ private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphic
             else -> Icon(LoungeIcons.Apps, contentDescription = null, tint = colors.dust, modifier = Modifier.size(32.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text(tile.title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            tile.subtitle?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            RunningTitle(tile.title, LoungeTheme.typography.title, wordsWidth, focused)
+            tile.subtitle?.let { RunningTitle(it, LoungeTheme.typography.caption, wordsWidth, focused, color = colors.dust) }
         }
-        if (tile.pinned || tile.stagePinned) Icon(LoungeIcons.Pin, contentDescription = null, tint = colors.dust, modifier = Modifier.size(15.dp))
-        if (tile.badge == Badge.CONNECTED) tv.lounge.design.Dot(colors.signal)
+        if (pinned) Icon(LoungeIcons.Pin, contentDescription = null, tint = colors.dust, modifier = Modifier.size(15.dp))
+        if (connected) tv.lounge.design.Dot(colors.signal)
     }
 }
 
+/** A badge on a `velvet` plate, as the pin is, so its word reads over a pale picture (DESIGN.md §7.3). */
 @Composable
 private fun TileBadge(badge: Badge?, modifier: Modifier) {
     val colors = LoungeTheme.colors
-    when (badge) {
-        // Reads idle here, so only the badge recomposes for it.
-        Badge.LIVE -> BadgeView("Live", dot = colors.ember, modifier = modifier, idle = LoungeTheme.lightState.idle)
-        Badge.NEW -> BadgeView("New", textColor = colors.houselight, modifier = modifier)
-        else -> Unit
+    if (badge != Badge.LIVE && badge != Badge.NEW) return
+    Box(modifier.background(colors.velvet.copy(alpha = 0.85f), RoundedCornerShape(14.dp)).padding(horizontal = 10.dp, vertical = 2.dp)) {
+        when (badge) {
+            // Reads idle here, so only the badge recomposes for it.
+            Badge.LIVE -> BadgeView("Live", dot = colors.ember, idle = LoungeTheme.lightState.idle)
+            else -> BadgeView("New", textColor = colors.houselight)
+        }
     }
 }
 
@@ -507,8 +568,7 @@ private const val TITLE_RUNS_AFTER_MS = 1_200L
  * [focused] a while, so all of it can be read; with reduced motion it stays cut (DESIGN.md §4.2).
  */
 @Composable
-private fun RunningTitle(text: String, style: TextStyle, width: Dp, focused: Boolean, modifier: Modifier = Modifier) {
-    val colors = LoungeTheme.colors
+private fun RunningTitle(text: String, style: TextStyle, width: Dp, focused: Boolean, modifier: Modifier = Modifier, color: Color = LoungeTheme.colors.limelight) {
     val fitted = rememberFittedLine(text, style, width)
     val cut = fitted != text
     val still = LoungeTheme.motion.reducedMotion
@@ -524,13 +584,13 @@ private fun RunningTitle(text: String, style: TextStyle, width: Dp, focused: Boo
         Text(
             text,
             style = style,
-            color = colors.limelight,
+            color = color,
             maxLines = 1,
             softWrap = false,
             modifier = modifier.width(width).fadedEnds().basicMarquee(iterations = Int.MAX_VALUE, repeatDelayMillis = 1_500, initialDelayMillis = 0, velocity = 72.dp),
         )
     } else {
-        Text(fitted, style = style, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
+        Text(fitted, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
     }
 }
 

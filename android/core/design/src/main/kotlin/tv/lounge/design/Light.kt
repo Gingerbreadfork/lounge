@@ -525,9 +525,9 @@ fun lightsFilter(brightness: Float, saturation: Float): ColorFilter? {
     return ColorFilter.colorMatrix(bright)
 }
 
-/** Text colour that reads on `light`: limelight or velvet (DESIGN.md §3.2). */
+/** Text colour that reads on `light`: velvet or limelight, whichever contrasts more with it (DESIGN.md §3.2). */
 fun textOn(light: Color, colors: LoungeColors): Color =
-    if (contrastRatio(light, colors.velvet) >= 4.5) colors.velvet else colors.limelight
+    if (contrastRatio(light, colors.velvet) >= contrastRatio(light, colors.limelight)) colors.velvet else colors.limelight
 
 fun contrastRatio(a: Color, b: Color): Float {
     fun lum(c: Color): Float {

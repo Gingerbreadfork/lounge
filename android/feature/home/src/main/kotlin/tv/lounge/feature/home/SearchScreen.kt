@@ -31,8 +31,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,9 +72,10 @@ import tv.lounge.design.LoungeTheme
 
 /**
  * Search (DESIGN.md §5.5): the query in display type, results as ordinary rows updated per
- * keystroke. The screen fades up and results reflow rather than jump; before anything is typed the
- * recently opened row fills the space. It searches everything in the snapshot, and the search
- * plugins answer a moment later with a row each.
+ * keystroke. The screen fades up and results reflow rather than jump; before anything is typed
+ * Continue watching and Your apps fill the space. It searches everything in the snapshot, best
+ * matches first, and the search plugins answer a moment later with a row each. The keyboard's
+ * search key puts the keyboard away and lands on the first result.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -105,6 +112,8 @@ fun SearchScreen(
     }
     val leaving = !visibleState.targetState
     val interactive = rememberUpdatedState(!leaving && !covered)
+    val keyboard = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
 
     fun setQuery(text: String) {
         field = TextFieldValue(text, TextRange(text.length))
@@ -153,11 +162,12 @@ fun SearchScreen(
         target.requestWhenReady()
     }
 
-    AnimatedVisibility(visibleState, enter = fadeIn(tween(180)), exit = fadeOut(motion.settle())) {
+    AnimatedVisibility(visibleState, enter = fadeIn(motion.timed(180)), exit = fadeOut(motion.settle())) {
         Column(
             Modifier
                 .fillMaxSize()
                 .background(colors.velvet)
+                .semantics { paneTitle = "Search" }
                 .onPreviewKeyEvent { e ->
                     if (e.isBack() && e.type == KeyEventType.KeyUp && !fieldFocused) { onClose(); true } else false
                 }
@@ -167,7 +177,7 @@ fun SearchScreen(
         ) {
             AnimatedVisibility(
                 visibleState,
-                enter = fadeIn(tween(180, delayMillis = 60)) + slideInVertically(tween(180, delayMillis = 60)) { rise },
+                enter = fadeIn(motion.timed(180, delayMs = 60)) + slideInVertically(motion.timed(180, delayMs = 60)) { rise },
                 exit = fadeOut(motion.settle()),
             ) {
                 Row(
@@ -189,14 +199,19 @@ fun SearchScreen(
                                     textStyle = LoungeTheme.typography.displayL.copy(color = colors.limelight),
                                     cursorBrush = SolidColor(colors.houselight),
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                    keyboardActions = KeyboardActions(onSearch = { }),
+                                    // The keyboard keeps Down while it is up, so its search key is the way to the results.
+                                    keyboardActions = KeyboardActions(onSearch = {
+                                        keyboard?.hide()
+                                        shown.firstOrNull()?.let { row -> scope.launch { requester(row.id, 0).requestWhenReady() } }
+                                    }),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .focusRequester(fieldFocus)
                                         .onFocusChanged {
                                             fieldFocused = it.isFocused
                                             if (it.isFocused) lastResult.tileId = null
-                                        },
+                                        }
+                                        .semantics { contentDescription = "Search your TV" },
                                 )
                             }
                         }
@@ -204,8 +219,8 @@ fun SearchScreen(
                         Text(
                             when {
                                 query.isBlank() -> "Type with the remote. Results update as you type."
-                                results.isEmpty() -> "Nothing matches \"$query\" yet."
-                                else -> "Press down for the results."
+                                results.isEmpty() -> "Nothing matches “$query” yet."
+                                else -> "The keyboard's search key, or Down, takes you to the results."
                             },
                             style = LoungeTheme.typography.meta,
                             color = colors.dust,
@@ -234,9 +249,9 @@ fun SearchScreen(
                         heldTileId = heldTileId,
                         heldRowId = heldRowId,
                         modifier = Modifier.animateItem(
-                            fadeInSpec = tween(120),
+                            fadeInSpec = motion.timed(120),
                             placementSpec = tween(motion.travelMs, easing = motion.travelEasing),
-                            fadeOutSpec = tween(90),
+                            fadeOutSpec = motion.timed(90),
                         ),
                     )
                 }
@@ -255,31 +270,90 @@ private class LastResult {
     var index = 0
 }
 
-private fun search(snapshot: HomeSnapshot, query: String): List<CoreRow> {
-    val q = query.trim().lowercase()
-    if (q.isEmpty()) return emptyList()
-    val tokens = q.split(Regex("\\s+")).filter { it.isNotEmpty() }
-    fun matches(tile: Tile): Boolean {
-        val hay = (tile.title + " " + (tile.subtitle ?: "")).lowercase()
-        return tokens.all { hay.contains(it) }
+/**
+ * Every row the snapshot can answer from, best matches first within each, and the rows in order of
+ * their best match. Your apps and every app make one row called Apps, which leads when an app's
+ * name starts with what was typed. Hidden rows and hidden apps are searched too: hiding takes
+ * something off the home, not out of reach.
+ */
+internal fun search(snapshot: HomeSnapshot, query: String): List<CoreRow> {
+    val tokens = searchWords(query)
+    if (tokens.isEmpty()) return emptyList()
+    val home = snapshot.rows + snapshot.hiddenRows
+    val apps = (home.filter { it.id == "apps" }.flatMap { it.tiles } + snapshot.allApps).distinctBy { it.id }
+    val sources = buildList {
+        add(CoreRow(id = "allapps", title = "Apps", kind = TileKind.APP_BANNER, size = RowSize.M, badge = null, tiles = apps, note = null))
+        continueRow(snapshot, home.firstOrNull { it.id == "continue" })?.let(::add)
+        addAll(home.filter { it.id != "apps" && it.id != "continue" && !it.id.startsWith("notice:") })
     }
     val seen = HashSet<String>()
-    // Hidden rows are searched too: hiding Games takes it off the home, not out of reach. Every
-    // app comes last, so one already found in Your apps is not shown twice.
-    val allApps = CoreRow(id = "allapps", title = "All apps", kind = TileKind.APP_BANNER, size = RowSize.M, badge = null, tiles = snapshot.allApps)
-    return (snapshot.rows + snapshot.hiddenRows + allApps).mapNotNull { row ->
+    val found = sources.mapNotNull { row ->
         // A tile that only opens search or another screen would lead away from the result, and
         // one that opens nothing is no result at all.
-        val hits = row.tiles.filter { matches(it) && it.action.isNotEmpty() && !it.action.startsWith("control:") && seen.add(it.id) }
-        if (hits.isEmpty()) null else row.copy(tiles = hits)
+        val hits = row.tiles
+            .mapNotNull { t -> matchScore(t.title, t.subtitle, tokens)?.takeIf { t.action.isNotEmpty() && !t.action.startsWith("control:") && seen.add(t.id) }?.let { t to it } }
+            .sortedByDescending { it.second }
+        if (hits.isEmpty()) null else row.copy(tiles = hits.map { it.first }) to hits.first().second
     }
+    val appsLead = found.firstOrNull { it.first.id == "allapps" }?.second == TITLE_START
+    return found.sortedWith(compareByDescending<Pair<CoreRow, Int>> { appsLead && it.first.id == "allapps" }.thenByDescending { it.second }).map { it.first }
 }
 
-/** What was opened lately: the head of Continue watching, then the apps most used, as one row each. */
+private const val TITLE_START = 3
+private const val WORD_START = 2
+private const val ANYWHERE = 1
+
+private val wordBreak = Regex("[^\\p{L}\\p{N}]+")
+private val episodeWord = Regex("[se]\\d+|s\\d+e\\d+")
+private val accents = Regex("[\\p{Mn}'’]+")
+
+/** Lower case without accents or apostrophes, so "pokemon" finds "Pokémon" and "greys" finds "Grey's". */
+private fun plain(text: String): String = accents.replace(java.text.Normalizer.normalize(text.lowercase(), java.text.Normalizer.Form.NFD), "")
+
+/** What was typed, as the words to look for. */
+internal fun searchWords(query: String): List<String> = plain(query).split(wordBreak).filter { it.isNotEmpty() }
+
+/**
+ * How well a tile matches every word typed, or null when one matches nothing: 3 when its title
+ * starts with what was typed, 2 when each word starts a word of the title, 1 when a word sits
+ * inside the title or starts a word of the second line. Episode codes such as "S5" never match,
+ * and a single letter never matches the second line.
+ */
+internal fun matchScore(title: String, subtitle: String?, tokens: List<String>): Int? {
+    val t = plain(title)
+    val titleWords = t.split(wordBreak).filter { it.isNotEmpty() }
+    val lineWords = subtitle?.let { plain(it).split(wordBreak).filter { w -> w.isNotEmpty() && !episodeWord.matches(w) } }.orEmpty()
+    if (t.startsWith(tokens.joinToString(" ")) || titleWords.joinToString(" ").startsWith(tokens.joinToString(" "))) return TITLE_START
+    var score = WORD_START
+    for (token in tokens) {
+        score = minOf(
+            score,
+            when {
+                titleWords.any { it.startsWith(token) } -> WORD_START
+                t.contains(token) -> ANYWHERE
+                token.length > 1 && lineWords.any { it.startsWith(token) } -> ANYWHERE
+                else -> return null
+            },
+        )
+    }
+    return score
+}
+
+/**
+ * Continue watching as one row: what the Stage strip has to continue, then the row after it, which
+ * starts where the strip leaves off.
+ */
+private fun continueRow(snapshot: HomeSnapshot, row: CoreRow?): CoreRow? {
+    val tiles = (snapshot.stage.strip.filter { it.provider != null } + row?.tiles.orEmpty().filter { !it.id.startsWith("notice:") }).distinctBy { it.id }
+    if (tiles.isEmpty()) return null
+    return CoreRow(id = "continue", title = "Continue watching", kind = TileKind.LANDSCAPE, size = RowSize.M, badge = null, tiles = tiles, note = null)
+}
+
+/** Before anything is typed: the head of Continue watching, then Your apps, as one row each. */
 private fun recentlyOpened(snapshot: HomeSnapshot): List<CoreRow> {
     val out = ArrayList<CoreRow>(2)
-    snapshot.rows.firstOrNull { it.id == "continue" && it.tiles.isNotEmpty() && !it.tiles.first().id.startsWith("notice:") }?.let {
-        out += it.copy(id = "recent:continue", title = "Recently watched", tiles = it.tiles.take(6))
+    continueRow(snapshot, snapshot.rows.firstOrNull { it.id == "continue" })?.let {
+        out += it.copy(id = "recent:continue", tiles = it.tiles.take(6))
     }
     snapshot.rows.firstOrNull { it.id == "apps" && it.tiles.any { t -> !t.id.startsWith("control:") } }?.let {
         out += it.copy(id = "recent:apps", title = "Your apps", tiles = it.tiles.filter { t -> !t.id.startsWith("control:") }.take(6))

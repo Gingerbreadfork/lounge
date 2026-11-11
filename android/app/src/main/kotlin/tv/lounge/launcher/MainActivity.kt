@@ -56,7 +56,6 @@ import tv.lounge.design.colors
 import tv.lounge.design.systemReducedMotion
 import tv.lounge.design.toArgbInt
 import tv.lounge.core.DeviceTier
-import tv.lounge.core.reason
 import tv.lounge.feature.home.HomeScreen
 import tv.lounge.feature.home.OtherHome
 import tv.lounge.feature.home.RecoveryReason
@@ -198,6 +197,10 @@ class MainActivity : ComponentActivity() {
             val requests = combine(tvCollects.receiveAsFlow(), enabledChannels) { _, enabled -> enabled }
             tvProvider.snapshots(requests).collect { records -> guarded("TV listings") { core.ingestPrograms(records) } }
         }
+        // The phone's d-pad, Back and Menu need Lounge in front or Power Setup, and the platform
+        // refuses them with the reason when neither is there.
+        platform.inFront = { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+        platform.keysForOtherApps = { power.status.value is tv.lounge.power.PowerStatus.Ready }
         lifecycleScope.launch {
             platform.commands.collect { cmd ->
                 when (cmd) {
@@ -218,7 +221,11 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch(Dispatchers.IO) {
             for (action in remoteKeys) {
-                runCatching { power.run(action) }.onFailure { android.util.Log.w("Lounge", "key through Power Setup: ${it.message}") }
+                runCatching { power.run(action) }.onFailure {
+                    android.util.Log.w("Lounge", "key through Power Setup: ${it.message}")
+                    // A connection that has gone is found out now, so the next key is refused with the reason.
+                    runCatching { power.refresh() }
+                }
             }
         }
         lifecycleScope.launch {
@@ -290,24 +297,23 @@ class MainActivity : ComponentActivity() {
         choreographer.postFrameCallback(callback)
     }
 
+    /** Settings and the setup steps say where they are going before they ask; this only opens it. */
     private fun requestAccess(name: String) {
         when (name) {
             "tv_listings" -> tvListingsRequest.launch("android.permission.READ_TV_LISTINGS")
-            "notifications" -> openSettings(
-                android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS,
-                "Allow notification access for Lounge in Settings, then come back.",
-            )
-            "usage" -> openSettings(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS, "Allow usage access for Lounge in Settings.")
+            "notifications" -> openSettings(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            "usage" -> openSettings(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
         }
     }
 
-    private fun openSettings(action: String, fallbackHint: String) {
+    /** Opens a system screen, or Lounge's own page in the TV's settings when there is no such screen. False when neither opens. */
+    private fun openSettings(action: String): Boolean {
         val intent = android.content.Intent(action).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (intent.resolveActivity(packageManager) != null) {
-            runCatching { startActivity(intent) }.onFailure { android.widget.Toast.makeText(this, fallbackHint, android.widget.Toast.LENGTH_LONG).show() }
-        } else {
-            android.widget.Toast.makeText(this, fallbackHint, android.widget.Toast.LENGTH_LONG).show()
-        }
+        val details = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val opened = intent.resolveActivity(packageManager) != null && runCatching { startActivity(intent) }.isSuccess
+        if (opened) return true
+        android.util.Log.w("Lounge", "no screen for $action")
+        return action != android.provider.Settings.ACTION_SETTINGS && runCatching { startActivity(details) }.isSuccess
     }
 
     /** Stands in for the home when the core will not open: try again, start fresh, or leave for another home. */
@@ -327,13 +333,12 @@ class MainActivity : ComponentActivity() {
                         error is CoreException.Storage -> RecoveryReason.Storage
                         else -> RecoveryReason.Other
                     },
-                    detail = error?.reason,
                     otherHomes = otherHomes,
                     onTryAgain = { fresh ->
                         val failed = withContext(Dispatchers.IO) { app.reopenCore(fresh) }
                         if (failed == null) recreate() else problem.value = failed
                     },
-                    onOpenSettings = { openSettings(android.provider.Settings.ACTION_SETTINGS, "Open Settings from the TV's own menu.") },
+                    onOpenSettings = { openSettings(android.provider.Settings.ACTION_SETTINGS) },
                     onOtherHome = ::openOtherHome,
                 )
             }
@@ -355,16 +360,16 @@ class MainActivity : ComponentActivity() {
             .map { OtherHome(it.activityInfo.packageName, it.loadLabel(packageManager).toString(), it.activityInfo.packageName in enabled) }
     }
 
-    private fun openOtherHome(home: OtherHome) {
+    private fun openOtherHome(home: OtherHome): Boolean {
         val intent = if (home.enabled) {
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(home.packageName)
         } else {
             // Android's page for the app has the button that turns it back on.
             Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", home.packageName, null))
         }
-        runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure {
-            android.widget.Toast.makeText(this, "Open Settings, then Apps, to find ${home.label}.", android.widget.Toast.LENGTH_LONG).show()
-        }
+        return runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { android.util.Log.w("Lounge", "could not open ${home.packageName}", it) }
+            .isSuccess
     }
 
     /** The first-party plugins ship in the APK; (re)install them once per APK build. */

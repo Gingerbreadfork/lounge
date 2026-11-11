@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -43,6 +44,8 @@ class Prefs(private val context: Context) {
         val reducedMotion: Boolean? = null,
         val showMobileApps: Boolean = false,
         val onboardingDone: Boolean = false,
+        /** The setup step reached, so setup left unfinished comes back where it was. */
+        val onboardingStep: Int = 0,
         val companionEnabled: Boolean = false,
         /** The home's background: "still" for the light field, or the id of an abstract scene drawn live. */
         val backdrop: String = STILL_BACKDROP,
@@ -60,6 +63,7 @@ class Prefs(private val context: Context) {
             reducedMotion = p[REDUCED_MOTION],
             showMobileApps = p[SHOW_MOBILE_APPS] ?: false,
             onboardingDone = p[ONBOARDING_DONE] ?: false,
+            onboardingStep = p[ONBOARDING_STEP] ?: 0,
             companionEnabled = p[COMPANION_ENABLED] ?: false,
             backdrop = p[BACKDROP] ?: STILL_BACKDROP,
             allAppsSort = p[ALL_APPS_SORT] ?: SORT_AZ,
@@ -106,6 +110,7 @@ class Prefs(private val context: Context) {
     suspend fun setSounds(on: Boolean) { context.dataStore.edit { it[SOUNDS] = on } }
     suspend fun setLiteMode(on: Boolean?) { context.dataStore.edit { if (on == null) it.remove(LITE_MODE) else it[LITE_MODE] = on } }
     suspend fun setOnboardingDone(done: Boolean) { context.dataStore.edit { it[ONBOARDING_DONE] = done } }
+    suspend fun setOnboardingStep(step: Int) { context.dataStore.edit { it[ONBOARDING_STEP] = step } }
     suspend fun setReducedMotion(on: Boolean?) { context.dataStore.edit { if (on == null) it.remove(REDUCED_MOTION) else it[REDUCED_MOTION] = on } }
 
     companion object {
@@ -117,6 +122,7 @@ class Prefs(private val context: Context) {
         private val SOUNDS = booleanPreferencesKey("sounds")
         private val LITE_MODE = booleanPreferencesKey("lite_mode")
         private val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+        private val ONBOARDING_STEP = intPreferencesKey("onboarding_step")
         private val REDUCED_MOTION = booleanPreferencesKey("reduced_motion")
         private val SHOW_MOBILE_APPS = booleanPreferencesKey("show_mobile_apps")
         private val BUNDLED_PLUGINS_STAMP = longPreferencesKey("bundled_plugins_stamp")

@@ -5,7 +5,7 @@ use crate::{
     StageSpotlight, State, Tile, TileKind,
 };
 use lounge_graph::{DeepLink, Graph, Item, ItemKind};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Lookups a build needs more than once, computed once per build.
 pub(crate) struct BuildIndex<'a> {
@@ -13,6 +13,11 @@ pub(crate) struct BuildIndex<'a> {
     previews: Vec<(i64, String, Vec<&'a Item>)>,
     plugin_names: HashMap<&'a str, &'a str>,
     habits: &'a HashMap<String, [u32; 24]>,
+    /// What the Stage strip shows, in order, so Continue watching can start after it.
+    stage: Vec<&'a Item>,
+    /// Plugins whose last refresh failed, so their rows say they show what was kept.
+    offline: HashSet<String>,
+    clock_24h: bool,
 }
 
 impl<'a> BuildIndex<'a> {
@@ -22,11 +27,18 @@ impl<'a> BuildIndex<'a> {
             previews: state.graph.preview_channels(),
             plugin_names: state.plugins.iter().map(|p| (p.id.as_str(), p.manifest.name.as_str())).collect(),
             habits: &state.habits,
+            stage: state.graph.stage_candidates(STAGE_CAP),
+            offline: offline_plugins(state),
+            clock_24h: state.clock_24h,
         }
     }
 
     fn airing(&self, ch: &Item) -> Option<&'a Item> {
         ch.channel_id.and_then(|id| self.airing.get(&id).copied())
+    }
+
+    fn on_stage(&self, id: &str) -> bool {
+        self.stage.iter().any(|it| it.id == id)
     }
 
     /// The plugin's name as its manifest gives it, or its id when it is not installed.
@@ -35,10 +47,22 @@ impl<'a> BuildIndex<'a> {
     }
 }
 
+/// The plugins that are on and whose last refresh ended in an error or a question.
+fn offline_plugins(state: &State) -> HashSet<String> {
+    if !state.plugins.iter().any(|p| p.enabled) {
+        return HashSet::new();
+    }
+    state.store.plugins().unwrap_or_default().into_iter().filter(|r| r.enabled && r.last_error.is_some()).map(|r| r.id).collect()
+}
+
 pub(crate) const STAGE_CAP: usize = 6;
 const NOTICE_TV_LISTINGS: &str = "notice:tv_listings";
 /// The row of plugins suggested for the apps on the TV.
 const NOTICE_PLUGINS: &str = "notice:plugins";
+/// Beside the header of a plugin's row while its last refresh failed (DESIGN.md §8).
+const OFFLINE_NOTE: &str = "Offline, showing what we have";
+/// The second line of an app hidden from every row, where All apps and search still list it.
+const HIDDEN_APP: &str = "Hidden from every row";
 
 /// The notice that suggests setting a plugin up.
 pub(crate) fn plugin_notice(plugin: &str) -> String {
@@ -131,7 +155,7 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
                     .map(|r| r.title.clone())
                     .unwrap_or_else(|| rid.to_string());
                 let n = graph.plugin_row(pid, rid).len();
-                (title, n, format!("{name} · {}", counted(n, "title", "titles", "nothing yet")))
+                (title, n, format!("{name}, {}", counted(n, "title", "titles", "nothing yet")))
             } else if let Some(cid) = id.strip_prefix("channel:") {
                 let cid: i64 = cid.parse().unwrap_or(0);
                 let found = previews.iter().find(|(id, _, _)| *id == cid);
@@ -145,8 +169,16 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
                 };
                 let (n, detail) = match id.as_str() {
                     "continue" => {
-                        let n = graph.continue_watching().len();
-                        (n, counted(n, "title", "titles", "Nothing to continue yet"))
+                        // The row holds what the Stage strip does not already show.
+                        let all = graph.continue_watching();
+                        let stage = graph.stage_candidates(STAGE_CAP);
+                        let n = all.iter().filter(|it| !stage.iter().any(|s| s.id == it.id)).count();
+                        let detail = if n == 0 && !all.is_empty() {
+                            format!("{}, all on the Stage", counted(all.len(), "title", "titles", ""))
+                        } else {
+                            counted(n, "title", "titles", "Nothing to continue yet")
+                        };
+                        (n, detail)
                     }
                     "apps" => {
                         let (pinned, recent) = graph.your_apps_counts();
@@ -265,12 +297,12 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
     let now = now_ms();
     let hour_local = local_hour(now, utc_offset_minutes);
     let index = BuildIndex::new(state, now);
-    let all_apps = graph.all_apps();
+    let every_app = graph.every_app();
     let mut rows = Vec::new();
     let mut hidden_rows = Vec::new();
     for row_id in effective_row_order(state) {
         let built = if let Some(rest) = row_id.strip_prefix("plugin:") {
-            plugin_row(state, rest)
+            plugin_row(state, &index, rest)
         } else if let Some(id) = row_id.strip_prefix("channel:") {
             id.parse::<i64>().ok().and_then(|cid| channel_row(graph, &index, cid))
         } else {
@@ -288,7 +320,7 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
     if !suggested.is_empty() {
         // Under Continue watching, which is where what they bring would show.
         let at = rows.iter().position(|r| r.id == "continue" || r.id == NOTICE_TV_LISTINGS).map_or(0, |i| i + 1);
-        rows.insert(at, Row { id: NOTICE_PLUGINS.to_string(), title: "Plugins for your apps".to_string(), kind: TileKind::Compact, size: RowSize::L, badge: None, tiles: suggested });
+        rows.insert(at, Row { id: NOTICE_PLUGINS.to_string(), title: "Plugins for your apps".to_string(), kind: TileKind::Compact, size: RowSize::L, badge: None, tiles: suggested, note: None });
     }
     if let Some(version) = &state.update {
         let id = format!("notice:update:{version}");
@@ -302,7 +334,7 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
         stage: build_stage(state, &index, now, hour_local, config),
         rows,
         hidden_rows,
-        all_apps: ranked_app_tiles(graph, &all_apps),
+        all_apps: ranked_app_tiles(graph, &every_app),
         now_playing: state.now_playing.clone(),
         wallpapers: graph
             .wallpapers()
@@ -337,18 +369,20 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
                     None
                 };
             }
-            ("Continue watching", TileKind::Landscape, RowSize::M, None, items.into_iter().take(ROW_TILES).collect())
+            // The Stage strip already shows the first of them, so the row starts after it.
+            let rest = items.into_iter().filter(|it| !index.on_stage(&it.id)).take(ROW_TILES).collect();
+            ("Continue watching", TileKind::Landscape, RowSize::M, None, rest)
         }
         "apps" => {
             // The row ends with the way to every app, and stands even with no pins and no recent
             // apps, so that way is never lost.
-            let total = graph.all_apps().len();
+            let total = graph.every_app().len();
             if total == 0 {
                 return None;
             }
             let mut tiles: Vec<Tile> = graph.your_apps().iter().map(|it| tile_for(graph, it, TileKind::AppBanner)).collect();
             tiles.push(all_apps_tile(total));
-            return Some(Row { id: row_id.to_string(), title: "Your apps".to_string(), kind: TileKind::AppBanner, size: RowSize::M, badge: None, tiles });
+            return Some(Row { id: row_id.to_string(), title: "Your apps".to_string(), kind: TileKind::AppBanner, size: RowSize::M, badge: None, tiles, note: None });
         }
         "games" => ("Games", TileKind::Landscape, RowSize::M, Some(Badge::Controller), graph.games()),
         "live" => {
@@ -363,6 +397,7 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
                 size: RowSize::M,
                 badge: Some(Badge::Live),
                 tiles: channels.iter().take(ROW_TILES).map(|ch| live_tile(graph, index.airing(ch), ch, now)).collect(),
+                note: None,
             });
         }
         "tvcontrols" => {
@@ -383,6 +418,7 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
                 size: RowSize::M,
                 badge: None,
                 tiles,
+                note: None,
             });
         }
         _ => return None,
@@ -397,11 +433,12 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
         size,
         badge,
         tiles: items.iter().map(|it| provided(tile_for(graph, it, kind), graph, index, it)).collect(),
+        note: None,
     })
 }
 
 /// One plugin row ("<plugin id>:<row id>") with the items the plugin put there, if the plugin is on.
-fn plugin_row(state: &State, key: &str) -> Option<Row> {
+fn plugin_row(state: &State, index: &BuildIndex, key: &str) -> Option<Row> {
     let graph = &state.graph;
     // Plugin ids never hold a colon; row ids may.
     let (pid, rid) = key.split_once(':')?;
@@ -423,6 +460,7 @@ fn plugin_row(state: &State, key: &str) -> Option<Row> {
         size: RowSize::M,
         badge: None,
         tiles: items.iter().take(ROW_TILES).map(|it| tile_for(graph, it, kind)).collect(),
+        note: index.offline.contains(&p.id).then(|| OFFLINE_NOTE.to_string()),
     })
 }
 
@@ -445,13 +483,16 @@ fn channel_row(graph: &Graph, index: &BuildIndex, channel_id: i64) -> Option<Row
         size: RowSize::M,
         badge: None,
         tiles: items.iter().take(ROW_TILES).map(|it| tile_for(graph, it, kind)).collect(),
+        note: None,
     })
 }
 
 /// A notice tile for each plugin that is off while an app it is for is on the TV, until the
-/// plugin is turned on or the notice dismissed. Pressing one opens the plugin's page.
+/// plugin is turned on or the notice dismissed. Pressing one opens the plugin's page. An app that
+/// already fills Continue watching is offered its plugin only for the rows the plugin adds.
 fn plugin_suggestions(state: &State) -> Vec<Tile> {
     let graph = &state.graph;
+    let continuing = graph.continue_watching();
     state
         .plugins
         .iter()
@@ -462,12 +503,19 @@ fn plugin_suggestions(state: &State) -> Vec<Tile> {
                 return None;
             }
             // An app the person hid is one they do not want to hear about.
-            let app = p.manifest.for_apps.iter().find_map(|package| graph.get(&format!("app:{package}"))).filter(|app| !graph.is_hidden(&app.id))?;
+            let (package, app) = p
+                .manifest
+                .for_apps
+                .iter()
+                .find_map(|package| graph.get(&format!("app:{package}")).map(|app| (package.as_str(), app)))
+                .filter(|(_, app)| !graph.is_hidden(&app.id))?;
+            let fills = continuing.iter().any(|it| it.provider() == Some(package));
+            let subtitle = if fills { what_it_adds(&p.manifest)? } else { "See what you were watching".to_string() };
             Some(Tile {
                 id,
                 kind: TileKind::Compact,
-                title: format!("Set up the {} plugin", p.manifest.name),
-                subtitle: Some(format!("See what you were watching in {}", app.title)),
+                title: format!("Set up {}", p.manifest.name),
+                subtitle: Some(subtitle),
                 artwork_path: None,
                 icon_path: app.artwork.logo.clone(),
                 light_argb: lounge_graph::color::HOUSELIGHT,
@@ -482,9 +530,41 @@ fn plugin_suggestions(state: &State) -> Vec<Tile> {
                 installed_rank: None,
                 provider: None,
                 provider_name: None,
+                hidden: false,
+                time_left: None,
             })
         })
         .collect()
+}
+
+/// What a plugin's rows add, as "Adds recently added and favourites"; none when it has no rows.
+fn what_it_adds(manifest: &lounge_plugin_api::Manifest) -> Option<String> {
+    let rows: Vec<String> = manifest.rows.iter().map(|r| row_words(&r.title, &manifest.name)).filter(|w| !w.is_empty()).collect();
+    match rows.as_slice() {
+        [] => None,
+        [one] => Some(format!("Adds {one}")),
+        [rest @ .., last] => Some(format!("Adds {} and {last}", rest.join(", "))),
+    }
+}
+
+/// A row's title as words inside a sentence: "Recently added on Jellyfin" from Jellyfin becomes
+/// "recently added". A first word with capitals of its own, such as YouTube, keeps them.
+fn row_words(title: &str, plugin: &str) -> String {
+    let mut words = title.trim();
+    for joiner in [" on ", " from ", " in "] {
+        let suffix = format!("{joiner}{plugin}");
+        let cut = words.len().saturating_sub(suffix.len());
+        if cut > 0 && words.get(cut..).is_some_and(|tail| tail.eq_ignore_ascii_case(&suffix)) {
+            words = &words[..cut];
+            break;
+        }
+    }
+    let first = words.split_whitespace().next().unwrap_or("");
+    if first.chars().skip(1).any(char::is_uppercase) {
+        return words.to_string();
+    }
+    let mut chars = words.chars();
+    chars.next().map(|c| c.to_lowercase().chain(chars).collect()).unwrap_or_default()
 }
 
 fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &str) -> Row {
@@ -513,7 +593,10 @@ fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &s
             installed_rank: None,
             provider: None,
             provider_name: None,
+            hidden: false,
+            time_left: None,
         }],
+        note: None,
     }
 }
 
@@ -564,6 +647,8 @@ fn all_apps_tile(count: usize) -> Tile {
         installed_rank: None,
         provider: None,
         provider_name: None,
+        hidden: false,
+        time_left: None,
     }
 }
 
@@ -587,6 +672,8 @@ fn tv_controls_tile(config: &CoreConfig) -> Tile {
         installed_rank: None,
         provider: None,
         provider_name: None,
+        hidden: false,
+        time_left: None,
     }
 }
 
@@ -597,10 +684,8 @@ fn live_tile(graph: &Graph, airing: Option<&Item>, ch: &Item, now: i64) -> Tile 
     match airing {
         Some(prog) => {
             tile.title = prog.title.clone();
-            tile.subtitle = Some(match prog.airing_end_ms {
-                Some(end) => left_text(end - now),
-                None => channel_label(ch),
-            });
+            tile.time_left = prog.airing_end_ms.map(|end| left_text(end - now));
+            tile.subtitle = Some(tile.time_left.clone().unwrap_or_else(|| channel_label(ch)));
             tile.progress = elapsed(prog, now);
             if prog.artwork.landscape.is_some() {
                 tile.artwork_path = prog.artwork.landscape.clone();
@@ -705,6 +790,8 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         },
         _ => it.subtitle.clone(),
     };
+    let hidden = graph.is_hidden(&it.id);
+    let subtitle = if hidden && it.kind == ItemKind::App { Some(HIDDEN_APP.to_string()) } else { subtitle };
     Tile {
         id: it.id.clone(),
         kind,
@@ -731,6 +818,8 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         installed_rank: None,
         provider: None,
         provider_name: None,
+        hidden,
+        time_left: it.progress.and_then(|p| remaining_text(it, p)),
     }
 }
 
@@ -782,18 +871,18 @@ fn season_episode_long(it: &Item) -> Option<String> {
 
 fn build_stage(state: &State, index: &BuildIndex, now: i64, hour_local: u32, config: &CoreConfig) -> Stage {
     let graph = &state.graph;
-    let candidates = graph.stage_candidates(STAGE_CAP);
+    let candidates = &index.stage;
     let mut spotlights = Vec::with_capacity(candidates.len() + 1);
     let mut strip = Vec::with_capacity(candidates.len() + 1);
-    for it in candidates {
-        spotlights.push(spotlight_for(graph, &index, it, now, hour_local));
+    for &it in candidates {
+        spotlights.push(spotlight_for(graph, index, it, now, hour_local));
         let kind = if it.kind == ItemKind::App { TileKind::AppBanner } else { TileKind::Landscape };
         let tile = if it.kind == ItemKind::Channel { live_tile(graph, index.airing(it), it, now) } else { provided(tile_for(graph, it, kind), graph, index, it) };
         strip.push(tile);
     }
     // With Your apps off the home, the strip ends with the way to every app instead.
-    if !row_shown(state, "apps") && !graph.all_apps().is_empty() {
-        let tile = all_apps_tile(graph.all_apps().len());
+    if !row_shown(state, "apps") && !graph.every_app().is_empty() {
+        let tile = all_apps_tile(graph.every_app().len());
         spotlights.push(StageSpotlight {
             id: tile.id.clone(),
             kind: crate::SpotlightKind::App,
@@ -822,8 +911,8 @@ fn build_stage(state: &State, index: &BuildIndex, now: i64, hour_local: u32, con
             id: "device:tv".to_string(),
             kind: crate::SpotlightKind::Device,
             category: "Your TV".to_string(),
-            title: config.device_name.clone(),
-            lines: vec!["Power, input and sound, over HDMI-CEC".to_string()],
+            title: "TV controls".to_string(),
+            lines: vec!["Turn the TV on, switch inputs and change the sound".to_string()],
             progress: None,
             artwork_path: None,
             backdrop_path: None,
@@ -990,7 +1079,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
         explanation: {
             let source_name = it.source.strip_prefix("plugin:").map(|id| index.plugin_name(id)).unwrap_or_else(|| it.source.clone());
             let habit = it.package().and_then(|p| index.habits.get(p));
-            lounge_graph::rank::explanation(it, now, hour_local, &source_name, habit)
+            lounge_graph::rank::explanation(it, now, hour_local, &source_name, habit, index.clock_24h)
         },
         framed,
         art_aspect: it.art_aspect,
@@ -1011,17 +1100,19 @@ fn remaining_text(it: &Item, progress: f32) -> Option<String> {
     Some(left_text(left_ms))
 }
 
+/// "23 minutes left", "1 hour 20 minutes left": durations are spelled out (DESIGN.md §10).
 fn left_text(left_ms: i64) -> String {
     let minutes = (left_ms as f64 / 60_000.0).round() as i64;
-    match minutes {
-        m if m <= 0 => "Almost finished".to_string(),
-        1 => "1 minute left".to_string(),
-        m if m < 60 => format!("{m} minutes left"),
-        m => {
-            let h = m / 60;
-            let rest = m % 60;
-            if rest == 0 { format!("{h} h left") } else { format!("{h} h {rest} min left") }
-        }
+    if minutes <= 0 {
+        return "Almost finished".to_string();
+    }
+    let (h, m) = (minutes / 60, minutes % 60);
+    let hours = counted(h as usize, "hour", "hours", "");
+    let mins = counted(m as usize, "minute", "minutes", "");
+    match (h, m) {
+        (0, _) => format!("{mins} left"),
+        (_, 0) => format!("{hours} left"),
+        _ => format!("{hours} {mins} left"),
     }
 }
 
@@ -1173,6 +1264,138 @@ fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
 mod tests {
     use super::*;
 
+    fn config() -> CoreConfig {
+        CoreConfig {
+            data_dir: String::new(),
+            cache_dir: String::new(),
+            tier: crate::DeviceTier::B,
+            utc_offset_minutes: 0,
+            has_tv_controls: false,
+            device_name: "TV".into(),
+            screen_width: 1920,
+            screen_height: 1080,
+        }
+    }
+
+    fn state(graph: Graph, plugins: Vec<crate::plugins::PluginEntry>) -> State {
+        State {
+            graph,
+            store: lounge_store::Store::open_in_memory().unwrap(),
+            revision: 1,
+            art_dir: std::path::PathBuf::new(),
+            art_threads: 1,
+            art_pool: None,
+            permissions: crate::Permissions { tv_listings: true, notifications: true, usage: true },
+            now_playing: None,
+            update: None,
+            loaded: true,
+            plugins,
+            habits: Default::default(),
+            playing: Default::default(),
+            pending_art: Default::default(),
+            last_programs: Vec::new(),
+            clock_24h: false,
+        }
+    }
+
+    /// A resume point from `app`, watched `ago` before now.
+    fn resume(id: &str, app: &str, ago: i64) -> Item {
+        let mut it = Item::content(id, ItemKind::Resume, "tvprovider", id, DeepLink::ViewUri(format!("app://{id}")));
+        it.owner = Some(app.into());
+        it.last_used_ms = Some(now_ms() - ago);
+        it
+    }
+
+    #[test]
+    fn continue_watching_starts_after_what_the_stage_shows() {
+        let mut g = Graph::default();
+        let items = (0..9).map(|i| resume(&format!("wn:{i}"), &format!("tv.app{}", i % 3), i * 60_000)).collect();
+        g.replace_source("tvprovider", items);
+        let snap = build(&state(g, Vec::new()), &config(), 0);
+        let strip: Vec<&str> = snap.stage.strip.iter().map(|t| t.id.as_str()).collect();
+        let row = snap.rows.iter().find(|r| r.id == "continue").expect("a row for the rest");
+        assert_eq!(strip.len() + row.tiles.len(), 9);
+        assert!(row.tiles.iter().all(|t| !strip.contains(&t.id.as_str())), "{strip:?}");
+
+        // With everything on the Stage there is no row at all, and the editor says why.
+        let mut g = Graph::default();
+        g.replace_source("tvprovider", vec![resume("wn:a", "tv.a", 0), resume("wn:b", "tv.b", 60_000)]);
+        let s = state(g, Vec::new());
+        assert!(build(&s, &config(), 0).rows.iter().all(|r| r.id != "continue"));
+        let info = row_infos(&s, &config()).into_iter().find(|r| r.id == "continue").unwrap();
+        assert_eq!((info.count, info.detail.as_str()), (0, "2 titles, all on the Stage"));
+    }
+
+    #[test]
+    fn a_hidden_app_stays_in_all_apps_and_says_so() {
+        let mut g = Graph::default();
+        g.replace_source("apps", vec![Item::app("tv.a", "Main", "Alpha"), Item::app("tv.b", "Main", "Beta")]);
+        g.hide("app:tv.a");
+        let snap = build(&state(g, Vec::new()), &config(), 0);
+        let alpha = snap.all_apps.iter().find(|t| t.id == "app:tv.a").expect("still in All apps");
+        assert!(alpha.hidden);
+        assert_eq!(alpha.subtitle.as_deref(), Some(HIDDEN_APP));
+        assert!(!snap.all_apps.iter().find(|t| t.id == "app:tv.b").unwrap().hidden);
+        let apps = snap.rows.iter().find(|r| r.id == "apps").unwrap();
+        assert!(apps.tiles.iter().all(|t| t.id != "app:tv.a"));
+        assert_eq!(apps.tiles.last().unwrap().subtitle.as_deref(), Some("2 apps"));
+    }
+
+    #[test]
+    fn a_plugin_is_offered_for_what_its_app_does_not_bring() {
+        let plugin = |rows: Vec<lounge_plugin_api::RowSpec>| crate::plugins::PluginEntry {
+            id: "tv.lounge.jellyfin".into(),
+            manifest: lounge_plugin_api::Manifest { id: "tv.lounge.jellyfin".into(), name: "Jellyfin".into(), for_apps: vec!["org.jellyfin".into()], rows, ..Default::default() },
+            enabled: false,
+        };
+        let rows = vec![lounge_plugin_api::RowSpec { id: "recent".into(), title: "Recently added on Jellyfin".into(), style: lounge_plugin_api::RowStyle::Poster }];
+        let offered = |g: Graph, rows: Vec<lounge_plugin_api::RowSpec>| {
+            build(&state(g, vec![plugin(rows)]), &config(), 0).rows.into_iter().find(|r| r.id == NOTICE_PLUGINS).map(|r| r.tiles[0].clone())
+        };
+        let mut g = Graph::default();
+        g.replace_source("apps", vec![Item::app("org.jellyfin", "Main", "Jellyfin")]);
+        let tile = offered(g.clone(), rows.clone()).expect("offered while the app brings nothing");
+        assert_eq!((tile.title.as_str(), tile.subtitle.as_deref()), ("Set up Jellyfin", Some("See what you were watching")));
+
+        // Once the app fills Continue watching itself, the plugin is offered for its rows alone.
+        g.replace_source("tvprovider", vec![resume("wn:1", "org.jellyfin", 0)]);
+        let tile = offered(g.clone(), rows).expect("offered for its rows");
+        assert_eq!(tile.subtitle.as_deref(), Some("Adds recently added"));
+        assert!(offered(g, Vec::new()).is_none(), "a plugin with nothing more to add is not offered");
+    }
+
+    #[test]
+    fn a_plugin_row_whose_refresh_failed_says_it_shows_what_was_kept() {
+        let id = "tv.lounge.jellyfin";
+        let manifest = lounge_plugin_api::Manifest {
+            id: id.into(),
+            name: "Jellyfin".into(),
+            rows: vec![lounge_plugin_api::RowSpec { id: "recent".into(), title: "Recently added".into(), style: lounge_plugin_api::RowStyle::Poster }],
+            ..Default::default()
+        };
+        let mut g = Graph::default();
+        let mut film = Item::content("plugin:tv.lounge.jellyfin:recent:1", ItemKind::Program, "plugin:tv.lounge.jellyfin", "Static Bloom", DeepLink::None);
+        film.row = Some("recent".into());
+        g.upsert(film);
+        let s = state(g, vec![crate::plugins::PluginEntry { id: id.into(), manifest: manifest.clone(), enabled: true }]);
+        let row = lounge_store::PluginRow {
+            id: id.into(),
+            manifest_json: serde_json::to_string(&manifest).unwrap(),
+            publisher: String::new(),
+            enabled: true,
+            built_in: true,
+            installed_ms: 0,
+            last_refresh_ms: None,
+            last_error: None,
+            last_success_ms: None,
+        };
+        s.store.plugin_upsert(&row).unwrap();
+        let note = |s: &State| build(s, &config(), 0).rows.into_iter().find(|r| r.id.starts_with("plugin:")).unwrap().note;
+        assert_eq!(note(&s), None);
+        s.store.plugin_set_refresh(id, 1, Some("Jellyfin didn't answer")).unwrap();
+        assert_eq!(note(&s).as_deref(), Some(OFFLINE_NOTE));
+    }
+
     #[test]
     fn a_session_without_pictures_wears_its_apps_banner() {
         let mut g = Graph::default();
@@ -1252,8 +1475,21 @@ mod tests {
         assert_eq!(left_text(20_000), "Almost finished");
         assert_eq!(left_text(60_000), "1 minute left");
         assert_eq!(left_text(23 * 60_000), "23 minutes left");
-        assert_eq!(left_text(95 * 60_000), "1 h 35 min left");
-        assert_eq!(left_text(120 * 60_000), "2 h left");
+        assert_eq!(left_text(95 * 60_000), "1 hour 35 minutes left");
+        assert_eq!(left_text(120 * 60_000), "2 hours left");
+        assert_eq!(left_text(61 * 60_000), "1 hour 1 minute left");
+    }
+
+    #[test]
+    fn a_plugin_s_rows_read_as_what_it_adds() {
+        let row = |title: &str| lounge_plugin_api::RowSpec { id: title.to_lowercase(), title: title.into(), style: lounge_plugin_api::RowStyle::Poster };
+        let mut m = lounge_plugin_api::Manifest { name: "Jellyfin".into(), ..Default::default() };
+        assert_eq!(what_it_adds(&m), None);
+        m.rows = vec![row("Recently added on Jellyfin"), row("Favourites on Jellyfin")];
+        assert_eq!(what_it_adds(&m).as_deref(), Some("Adds recently added and favourites"));
+        m.rows.push(row("YouTube picks"));
+        assert_eq!(what_it_adds(&m).as_deref(), Some("Adds recently added, favourites and YouTube picks"));
+        assert_eq!(row_words("Jellyfin", "Jellyfin"), "jellyfin");
     }
 
     #[test]

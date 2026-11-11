@@ -83,7 +83,7 @@ impl sdk::Plugin for Simkl {
                     label: "Open with the TV's own search".into(),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("Off: Lounge searches your apps and plugins for the title. On: the TV's search, which on Google TV lists where it streams. A result of Lounge's search always opens the TV's search.".into()),
+                    help: Some("On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it. A result of Lounge's search always opens the TV's search.".into()),
                     default: Some("false".into()),
                 },
                 SettingSpec {
@@ -91,7 +91,7 @@ impl sdk::Plugin for Simkl {
                     label: "Search all of Simkl".into(),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("Off: Lounge's search finds titles on your Simkl lists, with no request. On: it asks Simkl's whole catalogue, which counts against Simkl's daily allowance for your account.".into()),
+                    help: Some("On, Lounge's search asks Simkl's whole catalogue, which counts against your account's daily allowance. Off, it finds titles on your Simkl lists without asking Simkl.".into()),
                     default: Some("false".into()),
                 },
             ],
@@ -209,7 +209,7 @@ impl sdk::Plugin for Simkl {
                 let followed: HashSet<u64> = lists.all().filter(|t| t.kind == kind).map(|t| t.id).collect();
                 match calendar.update(kind, &followed, now) {
                     Ok(()) => {}
-                    Err(e) if e.contains("budget") => break,
+                    Err(e) if e == host::BUDGET_SPENT => break,
                     Err(e) => sdk::warn!("calendar: {e}"),
                 }
             }
@@ -408,7 +408,7 @@ struct Client {
 impl Client {
     /// A signed-in client, or the one sentence the plugin's page should show to get there.
     fn connect(now_ms: i64) -> Result<Client, String> {
-        let client_id = host::required_setting("client_id", "Client ID")?.trim().to_string();
+        let client_id = host::required_setting("client_id", "client ID")?.trim().to_string();
         let token = match Token::load(&client_id) {
             Some(t) if !t.due(now_ms) => t,
             Some(t) => match renew(&client_id, &t, now_ms) {
@@ -1114,7 +1114,7 @@ impl ArtCache {
                 art
             }
             Err(e) => {
-                if e.contains("budget") {
+                if e == host::BUDGET_SPENT {
                     self.lookups_left = 0;
                 }
                 sdk::info!("summary {id}: {e}");
@@ -1732,6 +1732,8 @@ mod tests {
         assert!(items[0].action.view.is_some());
         let d = Device { device_code: "x".into(), user_code: "BDWP-HQPK".into(), verification_uri: "https://simkl.com/pin".into(), expires_ms: 0 };
         assert_eq!(instruction(&d), "Sign in: on your phone open simkl.com/pin and enter BDWP-HQPK, then press Refresh now here.");
+        // Off the TV no setting is filled in, so the first one asked for is named.
+        assert_eq!(Client::connect(0).err().as_deref(), Some("Add the client ID in the plugin's settings."));
         let e = error_of(r#"{"error":"invalid_token","code":401,"message":"Access token has expired"}"#);
         assert_eq!(e.error, "invalid_token");
         let token = |expires_ms| Token { access: "a".into(), refresh: "r".into(), expires_ms, client_id: String::new() };

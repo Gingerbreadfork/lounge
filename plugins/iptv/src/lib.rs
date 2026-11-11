@@ -32,9 +32,9 @@ impl sdk::Plugin for Iptv {
             refresh_minutes: 60,
             rows: Vec::new(),
             settings: vec![
-                SettingSpec { key: "playlist_url".into(), label: "Playlist URL (M3U)".into(), kind: SettingKind::SecretUrl, required: true, help: Some("The .m3u or .m3u8 playlist your provider gave you.".into()), default: None },
-                SettingSpec { key: "epg_url".into(), label: "Guide URL (XMLTV)".into(), kind: SettingKind::SecretUrl, required: false, help: Some("Optional. Plain or .gz XMLTV. Without one, the guide the playlist names is used, or an Xtream provider's own.".into()), default: None },
-                SettingSpec { key: "group".into(), label: "Only this group".into(), kind: SettingKind::Text, required: false, help: Some("Optional group-title filter, for very large playlists.".into()), default: None },
+                SettingSpec { key: "playlist_url".into(), label: "Playlist address (M3U)".into(), kind: SettingKind::SecretUrl, required: true, help: Some("The .m3u or .m3u8 playlist your provider gave you.".into()), default: None },
+                SettingSpec { key: "epg_url".into(), label: "Guide address (XMLTV)".into(), kind: SettingKind::SecretUrl, required: false, help: Some("Leave it empty to use the guide the playlist names, or an Xtream provider's own. Plain or .gz XMLTV both work.".into()), default: None },
+                SettingSpec { key: "group".into(), label: "Only this group".into(), kind: SettingKind::Text, required: false, help: Some("Shows only the channels in this group, for very large playlists.".into()), default: None },
             ],
             homepage: None,
             self_signed_servers: false,
@@ -45,14 +45,14 @@ impl sdk::Plugin for Iptv {
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         // Provider links often carry the account's user name and password, so both are secrets.
-        let playlist_url = host::secret("playlist_url").filter(|v| !v.trim().is_empty()).ok_or("Playlist URL is not set")?;
+        let playlist_url = host::secret("playlist_url").filter(|v| !v.trim().is_empty()).ok_or_else(|| sdk::not_set("playlist address"))?;
         let group = host::setting("group");
         let text = playlist(&playlist_url)?;
         let (channels, total) = parse_m3u(&text, group.as_deref(), sdk::MAX_ITEMS);
         if channels.is_empty() {
             return Err(match group {
                 Some(g) => format!("The playlist has no channels in the group \"{g}\". Check the group's name in the plugin's settings."),
-                None => "The playlist has no channels. Check the playlist URL in the plugin's settings.".into(),
+                None => "The playlist has no channels. Check the playlist address in the plugin's settings.".into(),
             });
         }
         if total > channels.len() {
@@ -106,8 +106,8 @@ fn playlist_error(url: &str, status: Option<u16>) -> String {
     let at = sdk::address(url);
     let host = at.split(['/', '?']).next().unwrap_or_default();
     match status {
-        Some(s) => format!("The playlist server at {host} answered with error {s}. Check the playlist URL, then try again."),
-        None => format!("The playlist server didn't answer at {host}. Check the playlist URL, then try again."),
+        Some(s) => format!("The playlist server at {host} answered with error {s}. Check the playlist address, then try again."),
+        None => format!("The playlist server didn't answer at {host}. Check the playlist address, then try again."),
     }
 }
 
@@ -115,7 +115,7 @@ fn playlist_error(url: &str, status: Option<u16>) -> String {
 fn guide(url: &str, channels: &[Channel], ctx: &RefreshContext, budget: usize) -> Result<Vec<Item>, String> {
     let response = host::fetch(&HttpRequest::get(url))?;
     if !response.ok() {
-        return Err(format!("HTTP {} for the guide", response.status));
+        return Err(format!("the guide answered with error {}", response.status));
     }
     let bytes = sdk::body_bytes(response);
     let window = (ctx.now_ms, ctx.now_ms + i64::from(ctx.window_hours.max(1)) * 3_600_000);
@@ -998,9 +998,9 @@ mod tests {
     #[test]
     fn a_failed_playlist_names_only_its_server() {
         let url = "http://me:secret@iptv.example.com:8080/get.php?username=me&password=secret";
-        assert_eq!(playlist_error(url, Some(403)), "The playlist server at iptv.example.com:8080 answered with error 403. Check the playlist URL, then try again.");
-        assert_eq!(playlist_error("https://lists.example.org/me.m3u", None), "The playlist server didn't answer at lists.example.org. Check the playlist URL, then try again.");
-        assert_eq!(playlist(url).err().as_deref(), Some("The playlist server didn't answer at iptv.example.com:8080. Check the playlist URL, then try again."));
+        assert_eq!(playlist_error(url, Some(403)), "The playlist server at iptv.example.com:8080 answered with error 403. Check the playlist address, then try again.");
+        assert_eq!(playlist_error("https://lists.example.org/me.m3u", None), "The playlist server didn't answer at lists.example.org. Check the playlist address, then try again.");
+        assert_eq!(playlist(url).err().as_deref(), Some("The playlist server didn't answer at iptv.example.com:8080. Check the playlist address, then try again."));
     }
 
     #[test]

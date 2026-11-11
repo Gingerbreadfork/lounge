@@ -340,7 +340,7 @@ fn sign_in(method: &SignIn, now_ms: i64) -> Result<String, String> {
 }
 
 fn sign_in_with_password(email: &str) -> Result<String, String> {
-    let password = host::secret("password").filter(|p| !p.is_empty()).ok_or("Password is not set. Leave the email empty too to sign in with a code instead.")?;
+    let password = host::secret("password").filter(|p| !p.is_empty()).ok_or_else(|| format!("{} To sign in with a code instead, leave the email empty too.", sdk::not_set("password")))?;
     let body = post("login", serde_json::json!({ "type": "Login", "email": email, "password": password, "facebook": false }))?;
     match answer::<AuthResult>(&body, "login")? {
         Ok(auth) => {
@@ -1084,6 +1084,6 @@ mod tests {
         assert_eq!(cinemeta_search("  ", 12, &|_| Action::default()).unwrap().len(), 0);
         assert_eq!(instruction("47X0"), "Sign in: on your phone open link.stremio.com/47X0 and sign in to Stremio, then press Refresh now here.");
         assert!(matches!(sign_in_method(), SignIn::Code));
-        assert_eq!(sign_in_with_password("a@b.c").err().as_deref(), Some("Password is not set. Leave the email empty too to sign in with a code instead."));
+        assert_eq!(sign_in_with_password("a@b.c").err().as_deref(), Some("Add the password in the plugin's settings. To sign in with a code instead, leave the email empty too."));
     }
 }

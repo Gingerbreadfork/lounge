@@ -1,11 +1,13 @@
-//! The companion server's view of the core: snapshots, actions, layout, plugins, backup.
+//! The companion server's view of the core: snapshots, actions, layout, plugins, backup. Every
+//! failure it hands the phone is a sentence with the cause and the fix.
 
-use crate::{engine, now_ms, plugins, worker, CompanionStatus, Inner, PairingInfo};
-use lounge_companion::{AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, NamedRef, RowRef, SourceRef};
+use crate::{engine, now_ms, plugins, worker, CompanionStatus, CoreError, Inner, PairingInfo};
+use lounge_companion::{sentence_or, AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, NamedRef, RowRef, SourceRef};
 use lounge_graph::Layout;
 use lounge_plugins::http::{Fetcher, Reach};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 struct CoreActions {
@@ -14,8 +16,51 @@ struct CoreActions {
 
 impl CoreActions {
     fn inner(&self) -> Result<Arc<Inner>, String> {
-        self.inner.upgrade().ok_or_else(|| "the launcher is shutting down".to_string())
+        self.inner.upgrade().ok_or_else(|| "Lounge on the TV is restarting. Try again in a moment.".to_string())
     }
+}
+
+const NOT_SAVED: &str = "The TV couldn't save that. Check it has free space, then try again.";
+/// How long a search from the phone waits for Lounge to come to the front.
+const FRONT_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
+const NOT_A_BACKUP: &str = "That file isn't a Lounge backup. Choose a file that Download backup saved.";
+
+/// What the phone reads when a tile, link or control fails on the TV.
+fn failed_to(inner: &Inner, action: &str, e: CoreError) -> String {
+    let (verb, target) = action.split_once(':').unwrap_or((action, ""));
+    match e {
+        CoreError::UnknownAction { .. } => "That isn't on the TV's home screen any more. Choose it again from what the TV shows now.".into(),
+        CoreError::Platform { detail } => match verb {
+            "open" => {
+                let title = inner.state.lock().graph.get(target).map(|it| it.title.clone());
+                let fallback = match title {
+                    Some(title) => format!("Couldn't open {title}. Is its app still installed?"),
+                    None => "Couldn't open that. Is its app still installed?".to_string(),
+                };
+                sentence_or(&detail, &fallback)
+            }
+            "url" => sentence_or(&detail, "Nothing on the TV can open that link. Install an app for it, then try again."),
+            "media" => sentence_or(&detail, "The TV couldn't control what is playing. Try it from the TV."),
+            _ => sentence_or(&detail, "The TV couldn't do that. Try it from the TV."),
+        },
+        // A plugin's error is its own sentence, which may name a server by its address.
+        CoreError::Plugin { detail } if plugin_sentence(&detail) => detail,
+        other => sentence_or(&other.to_string(), "The TV couldn't do that. Try it from the TV."),
+    }
+}
+
+fn plugin_sentence(detail: &str) -> bool {
+    let d = detail.trim();
+    d.chars().next().is_some_and(char::is_uppercase) && d.ends_with(['.', '?']) && d.len() <= 400
+}
+
+/// A plugin that would not install, in words.
+fn not_installed(e: String) -> String {
+    if e.contains("signature") {
+        tracing::warn!("companion: plugin install refused ({e})");
+        return "That plugin's signature doesn't check out, so the TV won't install it. Get it again from its publisher.".into();
+    }
+    sentence_or(&e, "That file isn't a Lounge plugin, or it was damaged on the way. Get it again, then install it.")
 }
 
 pub(crate) fn start(inner: &Arc<Inner>, port: u16) -> Result<(), String> {
@@ -39,28 +84,42 @@ pub(crate) fn status(inner: &Arc<Inner>) -> CompanionStatus {
             url: lounge_companion::local_ip().map(|ip| format!("http://{ip}:{}", c.port)),
             port: c.port,
             paired: c.paired_devices() as u32,
+            pairing: c.live_pairing(now_ms()).and_then(|info| match pictured(inner, info) {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    tracing::warn!("companion: the pairing QR code could not be drawn ({e})");
+                    None
+                }
+            }),
         },
-        None => CompanionStatus { running: false, url: None, port: 0, paired: 0 },
+        None => CompanionStatus { running: false, url: None, port: 0, paired: 0, pairing: None },
     }
 }
 
 pub(crate) fn pairing(inner: &Arc<Inner>) -> Result<PairingInfo, String> {
     let slot = inner.companion.lock();
-    let c = slot.as_ref().ok_or_else(|| "the companion is not running".to_string())?;
-    let ip = lounge_companion::local_ip().ok_or_else(|| "the TV is not on a network".to_string())?;
+    let c = slot.as_ref().ok_or_else(|| "The phone companion is off. Turn it on, then try again.".to_string())?;
+    let ip = lounge_companion::local_ip().ok_or_else(|| "The TV isn't on a network. Connect it to your Wi-Fi, then try again.".to_string())?;
     let base = format!("http://{ip}:{}", c.port);
     let info = c.new_pairing(&base, now_ms())?;
+    pictured(inner, info)
+}
+
+/// A pairing with its QR picture on disk, drawn once per code. One live code at a time: earlier
+/// codes' pictures go, so nothing can read a link off them.
+fn pictured(inner: &Inner, info: lounge_companion::PairingInfo) -> Result<PairingInfo, String> {
     let dir = PathBuf::from(&inner.config.cache_dir).join("companion");
-    // One live code at a time: earlier codes' QR pictures go, so nothing can read a token off them.
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for e in entries.flatten() {
-            if e.file_name().to_string_lossy().starts_with("pair-") {
-                let _ = std::fs::remove_file(e.path());
+    let png = dir.join(format!("pair-{}-{}.png", info.code, info.expires_ms));
+    if !png.exists() {
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for e in entries.flatten() {
+                if e.file_name().to_string_lossy().starts_with("pair-") {
+                    let _ = std::fs::remove_file(e.path());
+                }
             }
         }
+        lounge_companion::qr_png(&info.url, &png, 12).map_err(|e| e.to_string())?;
     }
-    let png = dir.join(format!("pair-{}.png", info.code));
-    lounge_companion::qr_png(&info.url, &png, 12).map_err(|e| e.to_string())?;
     Ok(PairingInfo { code: info.code, url: info.url, qr_png_path: png.to_string_lossy().into_owned(), expires_ms: info.expires_ms })
 }
 
@@ -138,7 +197,7 @@ impl CompanionActions for CoreActions {
 
     fn perform(&self, action: &str) -> Result<(), String> {
         let inner = self.inner()?;
-        engine::perform(&inner, action).map_err(|e| e.to_string())
+        engine::perform(&inner, action).map_err(|e| failed_to(&inner, action, e))
     }
 
     fn launch(&self, package: &str) -> Result<(), String> {
@@ -154,7 +213,26 @@ impl CompanionActions for CoreActions {
     }
 
     fn search(&self, query: &str) -> Result<(), String> {
-        self.inner()?.platform.control(format!("search:{query}")).map_err(|e| e.to_string())
+        let inner = self.inner()?;
+        // Search opens inside Lounge, so with another app in front Lounge comes forward first. The
+        // search waits until Lounge is in front, so its arrival home cannot close the search again.
+        let mut in_front = inner.screen_on.load(Ordering::Relaxed);
+        if !in_front {
+            if let Err(e) = inner.platform.send_key("home".to_string()) {
+                tracing::warn!("companion: could not bring Lounge forward for a search ({e})");
+            }
+            let deadline = std::time::Instant::now() + FRONT_WAIT;
+            while !in_front && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                in_front = inner.screen_on.load(Ordering::Relaxed);
+            }
+        }
+        inner.platform.control(format!("search:{query}")).map_err(|e| e.to_string())?;
+        if in_front {
+            Ok(())
+        } else {
+            Err("The search is open in Lounge, but another app is still in front on the TV. Press Home to see it.".into())
+        }
     }
 
     fn layout(&self) -> LayoutDoc {
@@ -195,7 +273,10 @@ impl CompanionActions for CoreActions {
                 layout.dismissed_notices = dismissed.into_iter().collect();
             }
             layout.normalise();
-            state.store.save_layout(&layout).map_err(|e| e.to_string())?;
+            state.store.save_layout(&layout).map_err(|e| {
+                tracing::warn!("companion: layout not saved ({e})");
+                NOT_SAVED.to_string()
+            })?;
             let new_channels = layout.enabled_channels.difference(&state.graph.layout.enabled_channels).next().is_some();
             state.graph.layout = layout;
             if new_channels {
@@ -211,7 +292,7 @@ impl CompanionActions for CoreActions {
     }
 
     fn install_plugin(&self, path: &Path) -> Result<String, String> {
-        let info = self.inner()?.plugin_install(path, false)?;
+        let info = self.inner()?.plugin_install(path, false).map_err(not_installed)?;
         serde_json::to_string(&info).map_err(|e| e.to_string())
     }
 
@@ -222,12 +303,15 @@ impl CompanionActions for CoreActions {
             "disable" => inner.plugin_switch(id, false),
             "refresh" => {
                 if !inner.state.lock().plugins.iter().any(|p| p.id == id) {
-                    return Err("plugin is not installed".into());
+                    return Err("That plugin isn't installed any more.".into());
                 }
                 inner.plugins.refresh_now(id);
             }
-            "remove" => inner.plugin_remove(id)?,
-            other => return Err(format!("unknown command {other}")),
+            "remove" => inner.plugin_remove(id).map_err(|e| sentence_or(&e, "The TV couldn't remove that plugin. Try again."))?,
+            other => {
+                tracing::warn!("companion: unknown plugin command {other}");
+                return Err("Lounge on the TV doesn't know that command. Update Lounge, then try again.".into());
+            }
         }
         Ok(())
     }
@@ -282,16 +366,22 @@ impl CompanionActions for CoreActions {
     }
 
     fn import_json(&self, json: &str) -> Result<(), String> {
-        let backup: Backup = serde_json::from_str(json).map_err(|e| format!("not a Lounge backup: {e}"))?;
+        let backup: Backup = serde_json::from_str(json).map_err(|e| {
+            tracing::warn!("companion: not a backup ({e})");
+            NOT_A_BACKUP.to_string()
+        })?;
         if backup.version != 1 {
-            return Err(format!("backup version {} is not supported", backup.version));
+            return Err("That backup comes from a newer Lounge. Update Lounge on the TV, then restore it.".into());
         }
         let inner = self.inner()?;
         let mut layout = backup.layout.clone();
         layout.normalise();
         {
             let mut state = inner.state.lock();
-            state.store.save_layout(&layout).map_err(|e| e.to_string())?;
+            state.store.save_layout(&layout).map_err(|e| {
+                tracing::warn!("companion: restored layout not saved ({e})");
+                NOT_SAVED.to_string()
+            })?;
             state.graph.layout = layout;
             // Only settings an installed plugin declares, and never a secret, which no backup
             // carries; each goes through the rule that keeps passwords with their server.
@@ -329,10 +419,19 @@ impl CompanionActions for CoreActions {
         // A bundle the person linked from the phone may come from the internet or the home
         // network, but the link must not reach the TV's own services.
         let reach = Reach { whole_home: true, ..Reach::default() };
-        let fetched = Fetcher::guarded(reach)
-            .download(url, dir, 16 * 1024 * 1024, std::time::Duration::from_secs(20), &|_| true)
-            .map_err(|e| e.to_string())?;
-        std::fs::rename(&fetched.path, into).map_err(|e| e.to_string())
+        let fetched = Fetcher::guarded(reach).download(url, dir, 16 * 1024 * 1024, std::time::Duration::from_secs(20), &|_| true).map_err(|e| {
+            let e = e.to_string();
+            tracing::warn!("companion: plugin download failed ({e})");
+            if e.contains("this device") {
+                "That link leads back to the TV itself. Use a link to the plugin on the internet or another device.".to_string()
+            } else {
+                "The TV couldn't download that link. Check the address, then try again.".to_string()
+            }
+        })?;
+        std::fs::rename(&fetched.path, into).map_err(|e| {
+            tracing::warn!("companion: downloaded plugin not kept ({e})");
+            NOT_SAVED.to_string()
+        })
     }
 }
 
@@ -349,7 +448,7 @@ mod tests {
         let actions = CoreActions { inner: Weak::new() };
         for url in [format!("http://127.0.0.1:{port}/a.lgp"), format!("http://localhost:{port}/a.lgp")] {
             let err = actions.download(&url, &dir.path().join("a.lgp")).unwrap_err();
-            assert!(err.contains("this device"), "{url}: {err}");
+            assert!(err.contains("the TV itself"), "{url}: {err}");
         }
         assert!(listener.accept().is_err(), "a request reached the TV");
     }
@@ -368,6 +467,100 @@ mod tests {
         fn play_stream(&self, _: String, _: String, _: Option<i64>) -> Result<(), crate::PlatformError> { Ok(()) }
         fn send_key(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
         fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+    }
+
+    /// Remembers the keys and controls it is sent, in order.
+    #[derive(Default)]
+    struct Recorder(parking_lot::Mutex<Vec<String>>);
+
+    impl crate::Platform for Recorder {
+        fn launch_app(&self, _: String, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn view_uri(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn switch_input(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn tune(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn control(&self, command: String) -> Result<(), crate::PlatformError> {
+            self.0.lock().push(format!("control {command}"));
+            Ok(())
+        }
+        fn open_app_info(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn media_command(&self, _: String, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn request_permission(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn play_stream(&self, _: String, _: String, _: Option<i64>) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn send_key(&self, key: String) -> Result<(), crate::PlatformError> {
+            self.0.lock().push(format!("key {key}"));
+            Ok(())
+        }
+        fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+    }
+
+    #[test]
+    fn a_search_from_the_phone_brings_lounge_forward_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let platform = Arc::new(Recorder::default());
+        let core = crate::Core::open(test_config(dir.path()), platform.clone()).unwrap();
+        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
+
+        actions.search("bear").unwrap();
+        assert_eq!(*platform.0.lock(), ["control search:bear"]);
+
+        // Behind another app: Home first, and the search once Lounge is in front.
+        platform.0.lock().clear();
+        core.set_screen_state(false);
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                assert_eq!(*platform.0.lock(), ["key home"]);
+                core.set_screen_state(true);
+            });
+            actions.search("bear").unwrap();
+        });
+        assert_eq!(*platform.0.lock(), ["key home", "control search:bear"]);
+
+        // When Lounge does not come forward, the phone is told where the search is.
+        platform.0.lock().clear();
+        core.set_screen_state(false);
+        let err = actions.search("bear").unwrap_err();
+        assert!(err.starts_with("The search is open in Lounge"), "{err}");
+        assert_eq!(*platform.0.lock(), ["key home", "control search:bear"]);
+    }
+
+    #[test]
+    fn the_tv_reads_the_code_that_pairs_now_with_its_picture() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        start(&core.inner, 0).unwrap();
+        assert_eq!(status(&core.inner).pairing, None);
+
+        let made = |core: &crate::Core| core.inner.companion.lock().as_ref().unwrap().new_pairing("http://tv:8787", now_ms()).unwrap();
+        let first = made(&core);
+        let shown = status(&core.inner).pairing.unwrap();
+        assert_eq!((shown.code.as_str(), shown.url.as_str()), (first.code.as_str(), first.url.as_str()));
+        assert!(Path::new(&shown.qr_png_path).exists());
+        // Read again, the same picture is kept rather than drawn anew.
+        assert_eq!(status(&core.inner).pairing.unwrap().qr_png_path, shown.qr_png_path);
+
+        // A new code's picture replaces the old one.
+        made(&core);
+        let next = status(&core.inner).pairing.unwrap();
+        assert_ne!(next.qr_png_path, shown.qr_png_path);
+        assert!(Path::new(&next.qr_png_path).exists() && !Path::new(&shown.qr_png_path).exists());
+    }
+
+    #[test]
+    fn a_failed_tile_is_explained_in_words() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        let platform_said = |detail: &str| CoreError::Platform { detail: detail.into() };
+        assert_eq!(failed_to(&core.inner, "open:app:com.netflix.ninja", platform_said("No launch intent for com.netflix.ninja")), "Couldn't open that. Is its app still installed?");
+        assert_eq!(failed_to(&core.inner, "media:tv.a:next", platform_said("That app is not playing anything")), "That app is not playing anything.");
+        assert_eq!(
+            failed_to(&core.inner, "open:wn:1", CoreError::UnknownAction { action: "open:wn:1".into() }),
+            "That isn't on the TV's home screen any more. Choose it again from what the TV shows now."
+        );
+        let plugin_said = |detail: &str| CoreError::Plugin { detail: detail.into() };
+        let jellyfin = "Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.";
+        assert_eq!(failed_to(&core.inner, "open:plugin:jf:1", plugin_said(jellyfin)), jellyfin);
+        assert_eq!(failed_to(&core.inner, "open:plugin:jf:1", plugin_said("the plugin is turned off or not installed")), "The TV couldn't do that. Try it from the TV.");
     }
 
     fn test_config(dir: &std::path::Path) -> crate::CoreConfig {
@@ -455,13 +648,15 @@ mod tests {
         let last = apps.tiles.last().unwrap();
         assert_eq!((last.title.as_str(), last.subtitle.as_deref(), last.action.as_str()), ("All apps", Some("2 apps"), "control:allapps"));
 
-        // A hidden app leaves the screen's list too.
+        // A hidden app leaves Your apps but stays on the screen's list, marked hidden.
         core.command(crate::LayoutCommand::HideItem { id: "app:tv.b".into() });
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while core.snapshot().all_apps.len() > 1 && std::time::Instant::now() < deadline {
+        while !core.snapshot().all_apps.iter().any(|t| t.hidden) && std::time::Instant::now() < deadline {
             std::thread::sleep(std::time::Duration::from_millis(15));
         }
-        assert_eq!(core.snapshot().all_apps.len(), 1);
+        let snap = core.snapshot();
+        assert_eq!(snap.all_apps.iter().map(|t| (t.id.as_str(), t.hidden)).collect::<Vec<_>>(), [("app:tv.a", false), ("app:tv.b", true)]);
+        assert!(snap.rows.iter().find(|r| r.id == "apps").unwrap().tiles.iter().all(|t| t.id != "app:tv.b"));
         assert!(core.home_rows().iter().all(|r| r.id != "allapps"));
     }
 
@@ -478,11 +673,14 @@ mod tests {
         };
         core.inner.state.lock().graph.replace_source("tvprovider", vec![watching("wn:1", "tv.canal", "News", 20), watching("wn:2", "tv.plex", "Severance", 10)]);
         core.inner.enqueue_job(worker::Job::Rebuild);
-        // The row's tiles once there are `count` of them, or as last seen.
+        // What there is to continue, on the Stage strip and then in the row after it, once there
+        // are `count` of them, or as last seen.
         let tiles_when = |count: usize| {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
             loop {
-                let tiles = core.snapshot().rows.iter().find(|r| r.id == "continue").map(|r| r.tiles.clone()).unwrap_or_default();
+                let snap = core.snapshot();
+                let row = snap.rows.iter().find(|r| r.id == "continue").map(|r| r.tiles.clone()).unwrap_or_default();
+                let tiles: Vec<crate::Tile> = snap.stage.strip.iter().filter(|t| t.provider.is_some()).cloned().chain(row).collect();
                 if tiles.len() == count || std::time::Instant::now() > deadline {
                     return tiles;
                 }
@@ -604,8 +802,8 @@ mod tests {
         put_apps(&core, &[("tv.other", true), ("tv.plex", true)]);
         assert!(suggested(&rows_when(&core, suggested)));
         let tile = core.snapshot().rows.iter().find(|r| r.id == "notice:plugins").unwrap().tiles[0].clone();
-        assert_eq!((tile.id.as_str(), tile.title.as_str(), tile.action.as_str()), ("notice:plugin:tv.example.plex", "Set up the Plex plugin", "control:plugin:tv.example.plex"));
-        assert_eq!(tile.subtitle.as_deref(), Some("See what you were watching in TV.PLEX"));
+        assert_eq!((tile.id.as_str(), tile.title.as_str(), tile.action.as_str()), ("notice:plugin:tv.example.plex", "Set up Plex", "control:plugin:tv.example.plex"));
+        assert_eq!(tile.subtitle.as_deref(), Some("See what you were watching"));
 
         // Dismissed, it stays away; so does one the person turns off themselves.
         core.command(crate::LayoutCommand::DismissNotice { id: tile.id.clone() });

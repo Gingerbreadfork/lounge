@@ -45,7 +45,7 @@ impl sdk::Plugin for Immich {
     }
 
     fn refresh(_ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let link = host::required_setting("link", "Shared album link")?;
+        let link = host::required_setting("link", "shared album link")?;
         let (base, name) = parse_link(&link)?;
         let password = host::secret("password").filter(|p| !p.is_empty());
         let max = host::setting("max").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(60).clamp(1, 300);
@@ -318,11 +318,11 @@ pub fn parse_link(link: &str) -> Result<(String, String), String> {
     let (base, name) = match (link.split_once("/share/"), link.split_once("/s/")) {
         (Some((base, rest)), _) => (base, Some(token(rest)).filter(|k| !k.is_empty()).map(|k| format!("key={k}"))),
         (None, Some((base, rest))) => (base, Some(token(rest)).filter(|k| !k.is_empty()).map(|k| format!("slug={k}"))),
-        (None, None) => return Err("That is not a shared link: it should contain /share/ or /s/ followed by the link's name".into()),
+        (None, None) => return Err("That isn't a shared album link, which has /share/ or /s/ in it. Copy the link again from Immich's Share menu into the plugin's settings.".into()),
     };
     match name {
         Some(name) if base.starts_with("http://") || base.starts_with("https://") => Ok((base.to_string(), name)),
-        _ => Err("That is not a shared link: it should look like https://photos.example.com/share/AbC123".into()),
+        _ => Err("That isn't a shared album link, which looks like https://photos.example.com/share/AbC123. Copy the link again from Immich's Share menu into the plugin's settings.".into()),
     }
 }
 

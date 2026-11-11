@@ -67,6 +67,13 @@ struct Pending {
     expires_ms: i64,
 }
 
+/// The one live code, keyed by its digits, and the address its links point at.
+#[derive(Default)]
+struct Live {
+    codes: HashMap<String, Pending>,
+    base_url: Option<String>,
+}
+
 #[derive(Default)]
 struct Lockouts {
     by_address: HashMap<IpAddr, Guesses>,
@@ -77,7 +84,7 @@ struct Lockouts {
 pub struct TokenStore {
     path: PathBuf,
     devices: Mutex<Vec<Device>>,
-    pending: Mutex<HashMap<String, Pending>>,
+    pending: Mutex<Live>,
     lockouts: Mutex<Lockouts>,
     /// Ticks whenever a device is forgotten, so its open sockets can close at once.
     revoked: tokio::sync::watch::Sender<()>,
@@ -99,7 +106,7 @@ impl TokenStore {
             Err(_) => Vec::new(),
         };
         let revoked = tokio::sync::watch::channel(()).0;
-        TokenStore { path, devices: Mutex::new(devices), pending: Mutex::new(HashMap::new()), lockouts: Mutex::new(Lockouts::default()), revoked, unsaved: AtomicBool::new(false) }
+        TokenStore { path, devices: Mutex::new(devices), pending: Mutex::new(Live::default()), lockouts: Mutex::new(Lockouts::default()), revoked, unsaved: AtomicBool::new(false) }
     }
 
     fn save(&self, devices: &[Device]) -> Result<(), String> {
@@ -128,7 +135,7 @@ impl TokenStore {
             .iter()
             .map(|d| {
                 serde_json::json!({
-                    "id": d.id, "name": d.name, "createdMs": d.created_ms, "lastSeenMs": d.last_seen_ms,
+                    "id": d.id, "name": readable_name(&d.name), "createdMs": d.created_ms, "lastSeenMs": d.last_seen_ms,
                     "current": current == Some(d.id.as_str()),
                 })
             })
@@ -142,14 +149,30 @@ impl TokenStore {
     /// A new six-digit code, and a URL whose page pairs by itself when opened. Any earlier code
     /// stops working: one live code at a time.
     pub fn new_pairing(&self, base_url: &str, now_ms: i64) -> Result<PairingInfo, String> {
-        let failed = || "the TV's random number source failed, so no code was made".to_string();
-        let (link, token) = (random_token().ok_or_else(failed)?, random_token().ok_or_else(failed)?);
-        let code = format!("{:06}", random_u32().ok_or_else(failed)? % 1_000_000);
-        let expires_ms = now_ms + CODE_TTL_MS;
-        let mut pending = self.pending.lock();
-        pending.clear();
-        pending.insert(code.clone(), Pending { link: link.clone(), token, expires_ms });
-        Ok(PairingInfo { url: format!("{base_url}/#token={link}"), code, link, expires_ms })
+        let mut live = self.pending.lock();
+        live.base_url = Some(base_url.to_string());
+        replace_code(&mut live, base_url, now_ms)
+    }
+
+    /// The code and link that pair a phone now, if one is live.
+    pub fn live_pairing(&self, now_ms: i64) -> Option<PairingInfo> {
+        let live = self.pending.lock();
+        let base_url = live.base_url.as_deref()?;
+        live.codes.iter().find(|(_, p)| p.expires_ms >= now_ms).map(|(code, p)| PairingInfo {
+            code: code.clone(),
+            link: p.link.clone(),
+            url: format!("{base_url}/#token={}", p.link),
+            expires_ms: p.expires_ms,
+        })
+    }
+
+    /// A code that was just used is replaced at once, so the TV never shows one that is spent.
+    fn renew(&self, live: &mut Live, now_ms: i64) {
+        if let Some(base_url) = live.base_url.clone()
+            && let Err(e) = replace_code(live, &base_url, now_ms)
+        {
+            tracing::warn!("companion: no new pairing code ({e})");
+        }
     }
 
     /// Exchange a code for its token and register the device. Wrong codes lock out the address
@@ -165,7 +188,14 @@ impl TokenStore {
                 return Err(RedeemError::LockedOut);
             }
         }
-        let pending = self.pending.lock().remove(code).filter(|p| p.expires_ms >= now_ms);
+        let pending = {
+            let mut live = self.pending.lock();
+            let found = live.codes.remove(code).filter(|p| p.expires_ms >= now_ms);
+            if found.is_some() {
+                self.renew(&mut live, now_ms);
+            }
+            found
+        };
         match pending {
             Some(pending) => {
                 self.lockouts.lock().by_address.remove(&from);
@@ -198,10 +228,11 @@ impl TokenStore {
     /// URL, where a picture or a browser's history can keep it, so it works once and is never a
     /// token itself.
     pub fn redeem_link(&self, link: &str, device_name: &str, now_ms: i64) -> Result<String, RedeemError> {
-        let mut pending = self.pending.lock();
-        let code = pending.iter().find(|(_, p)| p.link == link && p.expires_ms >= now_ms).map(|(c, _)| c.clone()).ok_or(RedeemError::Wrong)?;
-        let used = pending.remove(&code).ok_or(RedeemError::Wrong)?;
-        drop(pending);
+        let mut live = self.pending.lock();
+        let code = live.codes.iter().find(|(_, p)| p.link == link && p.expires_ms >= now_ms).map(|(c, _)| c.clone()).ok_or(RedeemError::Wrong)?;
+        let used = live.codes.remove(&code).ok_or(RedeemError::Wrong)?;
+        self.renew(&mut live, now_ms);
+        drop(live);
         self.register(&used.token, device_name, now_ms).map_err(RedeemError::NotSaved)?;
         Ok(used.token)
     }
@@ -283,12 +314,16 @@ impl TokenStore {
         saved.map(|()| true)
     }
 
-    /// Forgets every device at once, with the same caveat as [`TokenStore::revoke`].
+    /// Forgets every device at once, with the same caveat as [`TokenStore::revoke`]. The live
+    /// code is replaced too, so a phone that saw it cannot pair with it afterwards.
     pub fn revoke_all(&self) -> Result<(), String> {
         let mut devices = self.devices.lock();
         devices.clear();
         let saved = self.save(&devices);
-        self.pending.lock().clear();
+        let mut live = self.pending.lock();
+        live.codes.clear();
+        self.renew(&mut live, now_ms());
+        drop(live);
         self.revoked.send_replace(());
         saved
     }
@@ -301,6 +336,29 @@ impl TokenStore {
     pub fn revocations(&self) -> tokio::sync::watch::Receiver<()> {
         self.revoked.subscribe()
     }
+}
+
+/// Puts a fresh code and link in place of whatever was live.
+fn replace_code(live: &mut Live, base_url: &str, now_ms: i64) -> Result<PairingInfo, String> {
+    let failed = || "the TV's random number source failed, so no code was made".to_string();
+    let (link, token) = (random_token().ok_or_else(failed)?, random_token().ok_or_else(failed)?);
+    let code = format!("{:06}", random_u32().ok_or_else(failed)? % 1_000_000);
+    let expires_ms = now_ms + CODE_TTL_MS;
+    live.codes.clear();
+    live.codes.insert(code.clone(), Pending { link: link.clone(), token, expires_ms });
+    Ok(PairingInfo { url: format!("{base_url}/#token={link}"), code, link, expires_ms })
+}
+
+/// A phone's name as the list shows it, "Safari on iPhone", also for one saved as "iPhone · Safari".
+fn readable_name(name: &str) -> String {
+    match name.split_once(" · ") {
+        Some((device, browser)) => format!("{browser} on {device}"),
+        None => name.to_string(),
+    }
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
 fn hash(token: &str) -> String {
@@ -400,20 +458,55 @@ mod tests {
     }
 
     #[test]
+    fn a_used_code_is_replaced_at_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = TokenStore::open(dir.path());
+        assert!(store.live_pairing(0).is_none());
+        let first = store.new_pairing("http://tv:8787", 0).unwrap();
+        assert_eq!(store.live_pairing(10).map(|p| p.code), Some(first.code.clone()));
+
+        // Scanned by one phone, the TV's next read has a new code and link for the next phone.
+        store.redeem_link(&first.link, "Pixel", 20).unwrap();
+        let second = store.live_pairing(30).unwrap();
+        assert_ne!(second.link, first.link);
+        assert_eq!(second.url, format!("http://tv:8787/#token={}", second.link));
+        assert!(second.expires_ms >= 20 + CODE_TTL_MS);
+        assert!(store.redeem(&second.code, "iPhone", PHONE, 40).is_ok());
+        let third = store.live_pairing(50).unwrap();
+        assert_ne!(third.link, second.link);
+        assert_eq!(store.count(), 2);
+
+        // Forgetting every phone also retires the code they could have seen.
+        store.revoke_all().unwrap();
+        let fourth = store.live_pairing(now_ms()).unwrap();
+        assert_ne!(fourth.link, third.link);
+        assert!(store.redeem_link(&third.link, "Camera", now_ms()).is_err());
+
+        // An expired code is not live, and nothing replaces it until the TV asks.
+        assert!(store.live_pairing(fourth.expires_ms + 1).is_none());
+    }
+
+    #[test]
+    fn phones_are_listed_by_browser_and_device() {
+        assert_eq!(readable_name("iPhone · Safari"), "Safari on iPhone");
+        assert_eq!(readable_name("Safari on iPhone"), "Safari on iPhone");
+    }
+
+    #[test]
     fn a_qr_link_pairs_once_and_expires() {
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::open(dir.path());
         let p = store.new_pairing("http://tv:8787", 0).unwrap();
         assert!(store.redeem_link(&p.link, "Phone", CODE_TTL_MS + 1).is_err());
         let p2 = store.new_pairing("http://tv:8787", CODE_TTL_MS + 1).unwrap();
-        let token = store.redeem_link(&p2.link, "Pixel 8 · Chrome", CODE_TTL_MS + 10).unwrap();
+        let token = store.redeem_link(&p2.link, "Chrome on Pixel 8", CODE_TTL_MS + 10).unwrap();
         assert_ne!(token, p2.link);
         assert!(store.authenticate(&p2.link, CODE_TTL_MS + 20).is_none());
         assert!(store.redeem_link(&p2.link, "Camera", CODE_TTL_MS + 20).is_err());
         assert!(store.redeem(&p2.code, "Camera", PHONE, CODE_TTL_MS + 20).is_err());
         assert!(store.authenticate(&token, 2 * CODE_TTL_MS + 10).is_some());
         assert_eq!(store.count(), 1);
-        assert_eq!(store.devices(None)[0]["name"], "Pixel 8 · Chrome");
+        assert_eq!(store.devices(None)[0]["name"], "Chrome on Pixel 8");
     }
 
     #[test]

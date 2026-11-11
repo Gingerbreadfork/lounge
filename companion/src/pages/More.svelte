@@ -1,10 +1,15 @@
 <script lang="ts">
   import { api, type Device, type Diagnostics } from '../lib/api';
-  import { act, app, quiet, toast, unpair } from '../lib/state.svelte';
+  import Confirm from '../lib/Confirm.svelte';
+  import { act, app, done, quiet, unpair } from '../lib/state.svelte';
+  import { ago, span } from '../lib/words';
 
   let diag = $state<Diagnostics | null>(null);
   let devices = $state<Device[]>([]);
+  /** A backup chosen to restore, waiting for the person to say it may replace the TV's layout. */
+  let chosen = $state<File | null>(null);
   let restoring = $state(false);
+  let picker = $state<HTMLInputElement>();
 
   $effect(() => {
     load();
@@ -15,43 +20,34 @@
     diag = (await quiet(() => api.diagnostics())) ?? diag;
     devices = (await quiet(() => api.devices())) ?? devices;
   }
-  async function restore(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0];
+  function choose(e: Event) {
+    const input = e.target as HTMLInputElement;
+    chosen = input.files?.[0] ?? null;
+    input.value = '';
+  }
+  async function restore() {
+    const file = chosen;
     if (!file) return;
     restoring = true;
-    const text = await file.text();
-    await act('Layout and settings restored on the TV', () => api.restore(text));
+    if (await done('Layout and settings restored on the TV', async () => api.restore(await file.text()))) chosen = null;
     restoring = false;
-    (e.target as HTMLInputElement).value = '';
   }
-  async function revoke(d: Device) {
-    const done = await act(d.current ? 'This phone is no longer paired' : `${d.name} forgotten`, () => api.revokeDevice(d.id).then(() => true));
-    if (!done) return;
-    if (d.current) unpair(); else load();
+  async function forget(d: Device) {
+    const forgotten = await done(d.current ? 'The TV has forgotten this phone' : `${d.name} forgotten`, () => api.revokeDevice(d.id));
+    if (!forgotten) return;
+    if (d.current) unpair(null);
+    else load();
   }
   /** The TV forgets this phone first, so its token stops working there too; the phone only lets
    *  go of it once the TV has. */
-  async function unpairThisPhone() {
+  async function forgetThisPhone() {
     const list = await act('', () => api.devices());
-    if (!list) return;
-    const mine = list.find((d) => d.current);
-    if (mine) await revoke(mine);
-    else unpair();
+    const mine = list?.find((d) => d.current);
+    if (mine) await forget(mine);
+    else if (list) unpair(null);
   }
   function bytes(n: number) {
     return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
-  }
-  function duration(ms: number) {
-    const m = Math.floor(ms / 60000);
-    if (m < 1) return 'under a minute';
-    if (m < 60) return `${m} min`;
-    const h = Math.floor(m / 60);
-    return h < 48 ? `${h} h ${m % 60} min` : `${Math.floor(h / 24)} days`;
-  }
-  function ago(ms: number) {
-    if (!ms) return 'never';
-    const d = Date.now() - ms;
-    return d < 60000 ? 'just now' : `${duration(d)} ago`;
   }
   let rows = $derived.by(() => {
     const d = diag;
@@ -59,13 +55,13 @@
     const n = (k: string) => Number(d[k] ?? 0);
     return [
       ['Items on the home screen', String(n('items'))],
-      ['Plugins', `${n('plugins')} installed · ${n('pluginsEnabled')} on`],
+      ['Plugins', `${n('plugins')} installed, ${n('pluginsEnabled')} on`],
       ['Last rebuild took', `${n('lastBuildMs')} ms`],
-      ['Last change arrived', ago(n('lastIngestMs'))],
+      ['Last change arrived', n('lastIngestMs') ? ago(n('lastIngestMs')) : 'never'],
       ['Database', bytes(n('databaseBytes'))],
       ['Work waiting', n('queueDepth') === 0 ? 'none' : String(n('queueDepth'))],
       ['Calls into the core', String(n('ffiCalls'))],
-      ['Running for', duration(n('uptimeMs'))],
+      ['Running for', span(n('uptimeMs'))],
       ['Snapshot revision', String(n('revision'))],
       ['Device tier', String(d['tier'] ?? '')],
     ] as [string, string][];
@@ -80,8 +76,15 @@
     <p class="caption">Your layout, hidden items, pins and plugin settings as one JSON file. Passwords and private addresses are not included.</p>
     <div class="actions">
       <a class="btn" href={api.backupUrl()} download="lounge-backup.json">Download backup</a>
-      <label class="btn">{restoring ? 'Restoring…' : 'Restore from file'}<input type="file" accept="application/json,.json" onchange={restore} hidden /></label>
+      {#if chosen}
+        <Confirm label={restoring ? 'Restoring…' : `Restore ${chosen.name}`} confirm="Yes, replace the TV's layout" disabled={restoring} onconfirm={restore} />
+        <button class="btn ghost" disabled={restoring} onclick={() => (chosen = null)}>Not now</button>
+      {:else}
+        <button class="btn" onclick={() => picker?.click()}>Restore from file</button>
+      {/if}
+      <input type="file" accept="application/json,.json" onchange={choose} hidden bind:this={picker} />
     </div>
+    {#if chosen}<p class="caption" role="status">Restoring replaces the TV's rows, pins and hidden items with the ones in the file.</p>{/if}
   </section>
 
   <section class="section">
@@ -89,15 +92,15 @@
     <div class="list">
       {#each devices as d (d.id)}
         <div class="list-row">
-          <div class="grow"><div class="title">{d.name}{d.current ? ' (this phone)' : ''}</div><div class="caption">last seen {new Date(d.lastSeenMs).toLocaleString()}</div></div>
-          <button class="btn ghost" onclick={() => revoke(d)}>Forget</button>
+          <div class="grow"><div class="title">{d.name}</div><div class="caption">{d.current ? 'This phone' : `Seen ${ago(d.lastSeenMs)}`}</div></div>
+          {#if !d.current}<Confirm quiet label="Forget" confirm="Yes, forget it" onconfirm={() => forget(d)} />{/if}
         </div>
       {/each}
     </div>
   </section>
 
   <section class="section">
-    <div class="section-head"><h3>Diagnostics</h3><span class="caption">updates every 5 s</span></div>
+    <div class="section-head"><h3>Diagnostics</h3><span class="caption">updates every 5 seconds</span></div>
     {#if diag}
       <div class="card diag">
         {#each rows as [k, v] (k)}
@@ -112,7 +115,7 @@
   <section class="section">
     <div class="section-head"><h3>About</h3></div>
     <p class="caption">Lounge {app.state?.device.version ?? ''} on {app.state?.device.model ?? 'this TV'}. Everything on this page goes between this phone and the TV over your own network.</p>
-    <button class="btn ghost danger" onclick={unpairThisPhone}>Unpair this phone</button>
+    <Confirm quiet label="Forget this phone" confirm="Yes, forget this phone" onconfirm={forgetThisPhone} />
   </section>
 </main>
 

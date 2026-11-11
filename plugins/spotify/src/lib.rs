@@ -38,7 +38,7 @@ const MINUTE_MS: i64 = 60_000;
 const DAY_MS: i64 = 86_400_000;
 const PAUSE: &str = "Spotify is asking for a pause between requests. It tries again on the next refresh.";
 const QUOTA: &str = "Spotify's daily allowance for this app is used up. It comes back tomorrow.";
-const SIGNED_OUT: &str = "Spotify no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now.";
+const SIGNED_OUT: &str = "Spotify no longer accepts this sign-in. Press Refresh now to sign in again.";
 
 impl sdk::Plugin for Spotify {
     fn manifest() -> Manifest {
@@ -53,7 +53,7 @@ impl sdk::Plugin for Spotify {
             refresh_minutes: 15,
             rows: vec![
                 RowSpec { id: "recent".into(), title: "Recently played on Spotify".into(), style: RowStyle::Landscape },
-                RowSpec { id: "playlists".into(), title: "Your Spotify playlists".into(), style: RowStyle::Landscape },
+                RowSpec { id: "playlists".into(), title: "Your playlists on Spotify".into(), style: RowStyle::Landscape },
                 RowSpec { id: "albums".into(), title: "Saved albums on Spotify".into(), style: RowStyle::Landscape },
                 RowSpec { id: "podcasts".into(), title: "Your podcasts on Spotify".into(), style: RowStyle::Landscape },
                 RowSpec { id: "picks".into(), title: "Your picks on Spotify".into(), style: RowStyle::Landscape },
@@ -72,7 +72,7 @@ impl sdk::Plugin for Spotify {
                     label: "Spotify Client ID".into(),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some(format!("For your own listening, playlists, albums and podcasts. At developer.spotify.com/dashboard, signed in with a Premium account, create an app: tick Web API and give it the redirect URI {REDIRECT_URI}, exactly. Paste its Client ID here. If another account will listen, add it under User Management. The sign-in link then appears here and on the TV.")),
+                    help: Some(format!("To show your own listening, playlists, albums and podcasts, make an app at Spotify and paste its Client ID here. At developer.spotify.com/dashboard, signed in with a Premium account, create an app: tick Web API and give it the redirect URI {REDIRECT_URI}, exactly. If another account will listen, add it under User Management. The sign-in link then appears here and on the TV.")),
                     default: None,
                 },
                 SettingSpec {
@@ -80,7 +80,7 @@ impl sdk::Plugin for Spotify {
                     label: "Sign-in address".into(),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("After you agree on the sign-in page, Spotify sends the browser to a page that can't be reached. That is expected: copy the whole address of that page and paste it here.".into()),
+                    help: Some("Paste the whole address of the page Spotify sends you to after you sign in. After you agree on the sign-in page, the browser goes to a page that can't be reached; that is expected, so copy its address from the address bar.".into()),
                     default: None,
                 },
                 SettingSpec { key: "recent".into(), label: "Recently played row".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
@@ -99,7 +99,7 @@ impl sdk::Plugin for Spotify {
         let links = parse_links(&host::setting("links").unwrap_or_default());
         let account = Account::connect(ctx.now_ms)?;
         if account.is_none() && links.is_empty() {
-            return Err("Nothing to show yet: paste some Spotify links, or a Client ID for your account, in the plugin's settings".into());
+            return Err("Nothing to show yet. Paste some Spotify links, or a Client ID for your account, in the plugin's settings.".into());
         }
         let mut items = Vec::new();
         let mut failures = Vec::new();
@@ -305,7 +305,7 @@ fn instruction(client_id: &str, verifier: &str, again: bool) -> String {
     let after = "After you agree, copy the whole address of the page that can't be reached into the Sign-in address setting.";
     let link = authorize_url(client_id, verifier);
     let say = format!(
-        "{why}Sign in on your phone: in Lounge's companion app open Plugins, then Spotify, and tap the link there, or open {}. {after}",
+        "{why}Sign in on your phone: in the phone companion open Plugins, then Spotify, and tap the link there, or open {}. {after}",
         link.strip_prefix("https://").unwrap_or(&link)
     );
     sdk::ask(sdk::Ask { say, link: Some(link), code: None, after: Some(after.into()), watch: false })
@@ -356,7 +356,7 @@ impl Account {
                     }
                     Err(Refusal::Failed(e)) => {
                         sdk::warn!("could not renew the sign-in ({e})");
-                        return Err(format!("Could not renew the Spotify sign-in ({e}). It tries again on the next refresh."));
+                        return Err(format!("Couldn't renew the Spotify sign-in. {e}"));
                     }
                 },
                 None if pasted == Pasted::Declined => {
@@ -442,7 +442,10 @@ fn renew(client_id: &str, old: &Token, now_ms: i64) -> Result<Token, Refusal> {
     }
     let (status, body) = token_post(&[("client_id", client_id), ("grant_type", "refresh_token"), ("refresh_token", &old.refresh)]).map_err(Refusal::Failed)?;
     if (200..300).contains(&status) {
-        let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| Refusal::Failed(e.to_string()))?;
+        let t: TokenAnswer = serde_json::from_str(&body).map_err(|e| {
+            sdk::warn!("unexpected renewal answer: {e}");
+            Refusal::Failed(sdk::unreadable("Spotify", ACCOUNTS))
+        })?;
         return Ok(save_token(t, &old.refresh, client_id, old.signed_in_ms, now_ms));
     }
     let e: OAuthError = serde_json::from_str(&body).unwrap_or_default();
@@ -450,8 +453,11 @@ fn renew(client_id: &str, old: &Token, now_ms: i64) -> Result<Token, Refusal> {
     // does not know is a setting to fix while the session waits.
     match e.error.as_str() {
         "invalid_grant" => Err(Refusal::Refused(format!("HTTP {status} {}", e.error_description))),
-        "invalid_client" => Err(Refusal::Failed("Spotify does not know this Client ID; check it in the plugin's settings".into())),
-        _ => Err(Refusal::Failed(format!("HTTP {status} {} {}", e.error, e.error_description))),
+        "invalid_client" => Err(Refusal::Failed("Spotify doesn't know this Client ID. Check it in the plugin's settings.".into())),
+        _ => {
+            sdk::warn!("renewal refused: HTTP {status} {} {}", e.error, e.error_description);
+            Err(Refusal::Failed(sdk::online_error("Spotify", status)))
+        }
     }
 }
 
@@ -472,7 +478,7 @@ impl Client {
                         host::kv_delete(TOKEN_KEY);
                         return Err(SIGNED_OUT.into());
                     }
-                    Err(Refusal::Failed(e)) => return Err(format!("Could not renew the Spotify sign-in ({e}). It tries again on the next refresh.")),
+                    Err(Refusal::Failed(e)) => return Err(format!("Couldn't renew the Spotify sign-in. {e}")),
                 },
                 401 => return Err(SIGNED_OUT.into()),
                 429 => {
@@ -533,11 +539,9 @@ fn refused_why(body: &str) -> String {
     if lower.contains("registered") {
         "Spotify's app is in development mode and this account is not on its list. Add the account under User Management in the app's dashboard.".into()
     } else if lower.contains("premium") {
-        "Spotify needs the account that made the app to have Premium.".into()
-    } else if said.is_empty() {
-        "Spotify refused the request. Check the app in the developer dashboard.".into()
+        "Spotify needs the account that made the app to have Premium. Make the app with a Premium account, then paste its Client ID in the plugin's settings.".into()
     } else {
-        format!("Spotify refused: {said}")
+        "Spotify refused the request. Check the app in the developer dashboard.".into()
     }
 }
 
@@ -884,7 +888,7 @@ impl Contexts {
             } else if l.uri.ends_with(":collection") {
                 lookups += 1;
                 let count = client.get_json::<Count>("/me/tracks?limit=1").ok().and_then(|c| c.total);
-                Some(KnownContext { name: "Liked Songs".into(), subtitle: count.map(|n| format!("{n} songs")), image: None, fetched_ms: now_ms, refused: false })
+                Some(KnownContext { name: "Liked Songs".into(), subtitle: count.map(songs), image: None, fetched_ms: now_ms, refused: false })
             } else {
                 continue;
             };
@@ -933,9 +937,12 @@ impl Contexts {
     }
 }
 
-fn playlist_subtitle(owner: Option<&str>, songs: Option<u32>) -> String {
-    let count = songs.map(|n| if n == 1 { "1 song".to_string() } else { format!("{n} songs") });
-    match (owner.filter(|o| !o.is_empty()), count) {
+fn songs(n: u32) -> String {
+    if n == 1 { "1 song".to_string() } else { format!("{n} songs") }
+}
+
+fn playlist_subtitle(owner: Option<&str>, count: Option<u32>) -> String {
+    match (owner.filter(|o| !o.is_empty()), count.map(songs)) {
         (Some(owner), Some(count)) => format!("{owner}, {count}"),
         (Some(owner), None) => owner.to_string(),
         (None, Some(count)) => count,
@@ -1199,6 +1206,7 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!((items[0].id.as_str(), items[0].subtitle.as_deref(), items[0].row.as_deref()), ("playlist:p1", Some("Me, 1 song"), Some("playlists")));
         assert_eq!(playlist_subtitle(None, None), "Playlist");
+        assert_eq!(playlist_subtitle(None, Some(2)), "2 songs");
 
         let saved: Page<SavedAlbum> = serde_json::from_str(r#"{"items":[{"added_at":"2026-11-08T10:00:00Z","album":{"id":"a1","name":"Album One","uri":"spotify:album:a1","images":[{"url":"https://i.scdn.co/a1","width":640}],"artists":[{"name":"Band"}]}}]}"#).unwrap();
         let album = album_item(saved.present().into_iter().next().unwrap(), 1).unwrap();
@@ -1233,7 +1241,7 @@ mod tests {
         let url = authorize_url("abc123", "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk");
         assert!(url.starts_with("https://accounts.spotify.com/authorize?response_type=code&client_id=abc123&scope=user-read-recently-played%20"));
         assert!(url.contains("&redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Fcallback&code_challenge_method=S256&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&show_dialog=true"));
-        assert!(instruction("abc123", "v", true).starts_with("Spotify ends every sign-in after six months, so it is time to sign in again. Sign in on your phone: in Lounge's companion app"));
+        assert!(instruction("abc123", "v", true).starts_with("Spotify ends every sign-in after six months, so it is time to sign in again. Sign in on your phone: in the phone companion open Plugins"));
         // The host cuts an address with a scheme down to its path and keeps 1000 bytes of an error.
         let said = instruction("0123456789abcdef0123456789abcdef", "v", true);
         assert!(!said.contains("://"), "{said}");
@@ -1251,8 +1259,8 @@ mod tests {
     #[test]
     fn spotifys_refusals_are_read_as_text_or_json() {
         assert_eq!(refused_why("Check settings on https://developer.spotify.com/dashboard, the user may not be registered."), "Spotify's app is in development mode and this account is not on its list. Add the account under User Management in the app's dashboard.");
-        assert_eq!(refused_why("Active premium subscription required for the owner of the app"), "Spotify needs the account that made the app to have Premium.");
-        assert_eq!(refused_why(r#"{"error":{"status":403,"message":"Forbidden"}}"#), "Spotify refused: Forbidden");
+        assert_eq!(refused_why("Active premium subscription required for the owner of the app"), "Spotify needs the account that made the app to have Premium. Make the app with a Premium account, then paste its Client ID in the plugin's settings.");
+        assert_eq!(refused_why(r#"{"error":{"status":403,"message":"Forbidden"}}"#), "Spotify refused the request. Check the app in the developer dashboard.");
         assert_eq!(refused_why(""), "Spotify refused the request. Check the app in the developer dashboard.");
     }
 
@@ -1279,6 +1287,7 @@ mod tests {
         client.paused = true;
         assert_eq!(client.get_json::<Page<Playlist>>("/me/playlists").err().as_deref(), Some(PAUSE));
         assert!(Account::connect(0).unwrap().is_none());
+        assert_eq!(<Spotify as sdk::Plugin>::refresh(&RefreshContext::default()).err().as_deref(), Some("Nothing to show yet. Paste some Spotify links, or a Client ID for your account, in the plugin's settings."));
         let manifest = <Spotify as sdk::Plugin>::manifest();
         assert!(manifest.settings.iter().all(|s| !s.required));
         assert!(manifest.fetch_hosts.iter().any(|h| h == "open.spotify.com"));

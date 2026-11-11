@@ -11,5 +11,29 @@ export const words = {
   hide: 'Hide',
   hideDetail: 'Off every row until you show it',
   hideAllFromDetail: 'Off Continue watching until you show it',
+  hideRow: 'Hide this row',
   hideRowDetail: 'The Layout tab brings it back',
 };
+
+function counted(n: number, one: string) {
+  return `${n} ${one}${n === 1 ? '' : 's'}`;
+}
+
+/** A length of time in words: "under a minute", "5 minutes", "2 hours 5 minutes", "3 days". */
+export function span(ms: number): string {
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return 'under a minute';
+  if (m < 60) return counted(m, 'minute');
+  const h = Math.floor(m / 60);
+  if (h < 48) return m % 60 ? `${counted(h, 'hour')} ${counted(m % 60, 'minute')}` : counted(h, 'hour');
+  return counted(Math.floor(h / 24), 'day');
+}
+
+/** How long ago `ms` was, in words: "just now", "3 minutes ago", "2 hours ago", "4 days ago". */
+export function ago(ms: number): string {
+  const m = Math.floor((Date.now() - ms) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${counted(m, 'minute')} ago`;
+  if (m < 1440) return `${counted(Math.floor(m / 60), 'hour')} ago`;
+  return `${counted(Math.floor(m / 1440), 'day')} ago`;
+}

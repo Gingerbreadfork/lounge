@@ -25,7 +25,7 @@ pub trait Plugin {
         Ok(Vec::new())
     }
     fn resolve(_action: &str) -> Result<Action, String> {
-        Err("this plugin does not resolve actions".to_string())
+        Err("This plugin can't open that.".to_string())
     }
 }
 
@@ -199,17 +199,33 @@ pub mod host {
         let (p, l) = pass(&req);
         let out = take(unsafe { raw::fetch(p, l) }).ok_or_else(|| "no response from host".to_string())?;
         drop(req);
-        crate::wire::read_response(out).map_err(|e| if e.contains("body is larger than") { TOO_LARGE.to_string() } else { crate::redact(&e) })
+        crate::wire::read_response(out).map_err(refusal)
+    }
+
+    /// The host's refusal of a fetch as the plugin reads it: the two limits as their constants,
+    /// anything else with its addresses redacted.
+    pub(crate) fn refusal(e: String) -> String {
+        if e.contains("body is larger than") {
+            TOO_LARGE.to_string()
+        } else if e.starts_with("fetch budget ") {
+            BUDGET_SPENT.to_string()
+        } else {
+            crate::redact(&e)
+        }
     }
 
     /// The error `fetch` returns when an answer is bigger than the host lets a plugin read.
-    pub const TOO_LARGE: &str = "the answer is larger than the 8 MB a plugin may read";
+    pub const TOO_LARGE: &str = "The answer is larger than the 8 MB a plugin may read.";
+
+    /// The error `fetch` returns once a call has made all the requests, or waited all the time,
+    /// the host allows it.
+    pub const BUDGET_SPENT: &str = "The plugin reached the most it may fetch in one refresh, so it stopped early. It tries again in a few minutes.";
 
     /// GET a URL and return the body, failing on non-2xx.
     pub fn get_text(url: &str) -> Result<String, String> {
         let r = fetch(&HttpRequest::get(url))?;
         if !r.ok() {
-            return Err(format!("HTTP {} for {}", r.status, crate::redact_url(url)));
+            return Err(format!("{} answered with error {}. Check the address, then try again.", crate::address(url), r.status));
         }
         Ok(if r.body_base64.is_some() { String::from_utf8_lossy(&crate::body_bytes(r)).into_owned() } else { r.body })
     }
@@ -253,8 +269,10 @@ pub mod host {
         take(unsafe { raw::setting(p, l) }).and_then(|v| String::from_utf8(v).ok()).filter(|s| !s.trim().is_empty())
     }
 
+    /// A setting's value, or [crate::not_set] for `label`, the field's name as it reads inside a
+    /// sentence, such as "server address".
     pub fn required_setting(key: &str, label: &str) -> Result<String, String> {
-        setting(key).ok_or_else(|| format!("{label} is not set"))
+        setting(key).ok_or_else(|| crate::not_set(label))
     }
 
     /// A server address from setting `key`, as [crate::server_address] tidies it.
@@ -516,9 +534,15 @@ pub fn online_error(service: &str, status: u16) -> String {
     format!("{service} answered with error {status}. Try again later.")
 }
 
+/// The error for a setting still to fill in. `label` is the field's name as it reads inside a
+/// sentence, such as "server address".
+pub fn not_set(label: &str) -> String {
+    format!("Add the {label} in the plugin's settings.")
+}
+
 /// [`host::fetch`] from the `service` at `server`. A server that cannot be reached gives
-/// [`didnt_answer`] and the cause goes to the log; [`host::TOO_LARGE`] and a used-up fetch
-/// budget come back unchanged, so callers can still tell them apart.
+/// [`didnt_answer`] and the cause goes to the log; [`host::TOO_LARGE`] and
+/// [`host::BUDGET_SPENT`] come back unchanged, so callers can still tell them apart.
 pub fn fetch_from(service: &str, server: &str, request: &HttpRequest) -> Result<HttpResponse, String> {
     fetch_or(request, || didnt_answer(service, server))
 }
@@ -530,7 +554,7 @@ pub fn fetch_online(service: &str, request: &HttpRequest) -> Result<HttpResponse
 
 fn fetch_or(request: &HttpRequest, unreachable: impl FnOnce() -> String) -> Result<HttpResponse, String> {
     host::fetch(request).map_err(|e| {
-        if e == host::TOO_LARGE || e.starts_with("fetch budget ") {
+        if e == host::TOO_LARGE || e == host::BUDGET_SPENT {
             return e;
         }
         warn!("{e}");
@@ -873,6 +897,10 @@ mod helper_tests {
         assert_eq!(unreadable("Plex", "http://nas:32400"), "Plex at nas:32400 sent a reply this plugin can't read.");
         assert_eq!(offline("Trakt"), "Trakt didn't answer. Check the TV's internet connection, then try again.");
         assert_eq!(online_error("Twitch", 502), "Twitch answered with error 502. Try again later.");
+        assert_eq!(not_set("server address"), "Add the server address in the plugin's settings.");
+        assert_eq!(host::refusal("fetch budget for this call is used up".into()), host::BUDGET_SPENT);
+        assert_eq!(host::refusal("the body is larger than a plugin may read once encoded".into()), host::TOO_LARGE);
+        assert_eq!(host::refusal("http://x.tv/live?user=u didn't answer".into()), "http://x.tv/live?… didn't answer");
         // Off the TV there is no host, so every fetch fails as an unreachable server would.
         assert_eq!(
             fetch_from("Emby", "http://192.168.0.20:8096", &HttpRequest::get("http://192.168.0.20:8096/emby/Users/u")).err().as_deref(),
@@ -906,8 +934,9 @@ mod helper_tests {
         let r = wire::read_response(b64).unwrap();
         assert_eq!(body_bytes(r), [0x1f, 0x8b, 0, 255]);
 
-        let err = wire::read_response(br#"{"err":"host evil.com is not in the plugin's allow list"}"#.to_vec()).unwrap_err();
-        assert!(err.contains("allow list"));
+        let refusal = "This plugin may not reach evil.com, which isn't on its allow list. Check the addresses in its settings.";
+        let err = wire::read_response(format!(r#"{{"err":"{refusal}"}}"#).into_bytes()).unwrap_err();
+        assert_eq!(err, refusal);
         assert!(wire::read_response(br#"{"ok":{"status":200,"body":"\x"}}"#.to_vec()).is_err());
     }
 

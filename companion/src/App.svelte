@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { AWAY, light, onLight } from './lib/api';
   import { app, go } from './lib/state.svelte';
   import Home from './pages/Home.svelte';
   import Remote from './pages/Remote.svelte';
@@ -15,17 +16,29 @@
     { page: 'more', label: 'More', d: 'M5 12h.01 M12 12h.01 M19 12h.01' },
   ] as const;
 
-  // The light follows what is on the TV: the spotlight's palette tints the companion's accent.
+  // The light follows what is on the TV: the spotlight's palette tints the companion's accent,
+  // and without one the room's own lamp stands in.
   $effect(() => {
     const sp = app.state?.snapshot?.stage.spotlights[0];
-    const light = sp ? `#${((sp.lightArgb >>> 0) & 0xffffff).toString(16).padStart(6, '0')}` : '#f2b263';
-    document.documentElement.style.setProperty('--light', light);
+    const root = document.documentElement.style;
+    if (sp) {
+      const l = light(sp.lightArgb);
+      root.setProperty('--light', l);
+      root.setProperty('--on-light', onLight(l));
+    } else {
+      root.removeProperty('--light');
+      root.removeProperty('--on-light');
+    }
   });
 </script>
 
 {#if app.route.page === 'pair' || !app.paired}
   <Pair />
 {:else}
+  <div class="away-region" role="status">
+    {#if app.away}<p class="away">{AWAY}</p>{/if}
+  </div>
+
   {#if app.route.page === 'home'}<Home />
   {:else if app.route.page === 'remote'}<Remote />
   {:else if app.route.page === 'layout'}<Layout />
@@ -33,8 +46,8 @@
   {:else}<More />{/if}
 
   <nav class="tabs" aria-label="Sections">
-    {#each tabs as t}
-      <button class="tab" class:active={app.route.page === t.page} onclick={() => go(t.page)} aria-current={app.route.page === t.page ? 'page' : undefined}>
+    {#each tabs as t (t.page)}
+      <button class="tab" class:active={app.route.page === t.page} onclick={() => go(t.page, undefined, { replace: true })} aria-current={app.route.page === t.page ? 'page' : undefined}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={t.d} /></svg>
         {t.label}
       </button>
@@ -42,6 +55,11 @@
   </nav>
 {/if}
 
-{#if app.toast}
-  <div class="toast" role="status">{app.toast}</div>
-{/if}
+<div class="toast-region" role="status">
+  {#if app.toast}<div class="toast">{app.toast}</div>{/if}
+</div>
+
+<style>
+  .away-region { position: fixed; top: calc(env(safe-area-inset-top) + 8px); left: var(--side-l); right: var(--side-r); z-index: 25; pointer-events: none; }
+  .away { background: var(--curtain); border: 1px solid var(--curtain-edge); border-left: 3px solid var(--houselight); border-radius: 14px; padding: 12px 16px; font-weight: 600; box-shadow: 0 12px 32px -16px rgb(0 0 0 / 0.8); }
+</style>

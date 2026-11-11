@@ -26,7 +26,7 @@ impl Bundle {
         // Opening a zip builds a record for every file its directory lists, so a small upload
         // listing hundreds of thousands is turned away first.
         if declared_entries(&mut file)? > MAX_ENTRIES {
-            return Err(PluginError::Bundle("the bundle lists too many files".into()));
+            return Err(PluginError::Bundle("it lists too many files".into()));
         }
         let mut zip = zip::ZipArchive::new(file).map_err(|e| PluginError::Bundle(e.to_string()))?;
         let manifest_json = entry(&mut zip, "manifest.json", 256 * 1024)?;
@@ -85,14 +85,14 @@ impl Bundle {
 fn entry(zip: &mut zip::ZipArchive<std::fs::File>, name: &str, max: usize) -> Result<Vec<u8>> {
     let mut f = zip
         .by_name(name)
-        .map_err(|_| PluginError::Bundle(format!("{name} missing")))?;
+        .map_err(|_| PluginError::Bundle(format!("{name} is missing")))?;
     if f.size() as usize > max {
-        return Err(PluginError::Bundle(format!("{name} too large")));
+        return Err(PluginError::Bundle(format!("{name} is too large")));
     }
     let mut buf = Vec::with_capacity((f.size() as usize).min(max));
     f.by_ref().take(max as u64 + 1).read_to_end(&mut buf)?;
     if buf.len() > max {
-        return Err(PluginError::Bundle(format!("{name} too large")));
+        return Err(PluginError::Bundle(format!("{name} is too large")));
     }
     Ok(buf)
 }
@@ -101,8 +101,8 @@ fn key_bytes<const N: usize>(raw: &[u8], what: &str) -> Result<[u8; N]> {
     let bytes: Vec<u8> = if raw.len() == N {
         raw.to_vec()
     } else {
-        let text = std::str::from_utf8(raw).map_err(|_| PluginError::Bundle(format!("{what} malformed")))?;
-        hex::decode(text.trim()).map_err(|_| PluginError::Bundle(format!("{what} malformed")))?
+        let text = std::str::from_utf8(raw).map_err(|_| PluginError::Bundle(format!("{what} is malformed")))?;
+        hex::decode(text.trim()).map_err(|_| PluginError::Bundle(format!("{what} is malformed")))?
     };
     bytes.try_into().map_err(|_| PluginError::Bundle(format!("{what} has the wrong length")))
 }
@@ -116,8 +116,8 @@ fn declared_entries(file: &mut std::fs::File) -> Result<u16> {
     let mut buf = vec![0u8; tail as usize];
     file.read_exact(&mut buf)?;
     file.seek(SeekFrom::Start(0))?;
-    let at = buf.windows(4).rposition(|w| w == [0x50, 0x4b, 0x05, 0x06]).ok_or_else(|| PluginError::Bundle("not a zip file".into()))?;
-    let count = buf.get(at + 10..at + 12).ok_or_else(|| PluginError::Bundle("not a zip file".into()))?;
+    let at = buf.windows(4).rposition(|w| w == [0x50, 0x4b, 0x05, 0x06]).ok_or_else(|| PluginError::Bundle("it is not a zip file".into()))?;
+    let count = buf.get(at + 10..at + 12).ok_or_else(|| PluginError::Bundle("it is not a zip file".into()))?;
     Ok(u16::from_le_bytes([count[0], count[1]]))
 }
 

@@ -13,7 +13,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
-import android.widget.Toast
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -194,7 +193,7 @@ class UpdateManager(
                     if (now - installingSince > INSTALL_TIMEOUT_MS) {
                         Log.w(TAG, "updates: the install of ${s.release.tag} never finished")
                         noteFailure(s.release, final = false)
-                        _state.value = UpdateState.Failed("The install did not finish", s.release, now)
+                        _state.value = UpdateState.Failed("The install didn't finish. Lounge tries again later.", s.release, now)
                     }
                     return
                 }
@@ -253,7 +252,10 @@ class UpdateManager(
                     else -> readyIfDownloaded(release) ?: UpdateState.Available(release)
                 }
             },
-            onFailure = { if (quiet) before else UpdateState.Failed(it.message ?: "Could not reach GitHub", null, now) },
+            onFailure = {
+                Log.w(TAG, "updates: the check failed: $it")
+                if (quiet) before else UpdateState.Failed(failureText(it), null, now)
+            },
         )
         _state.value = next
         return next
@@ -270,8 +272,9 @@ class UpdateManager(
             val next = result.fold(
                 onSuccess = { (file, hash) -> UpdateState.Ready(release, file, hash, currentPath()) },
                 onFailure = {
+                    Log.w(TAG, "updates: the download failed: $it")
                     noteFailure(release, final = false)
-                    UpdateState.Failed(it.message ?: "The download failed", release, System.currentTimeMillis())
+                    UpdateState.Failed(failureText(it), release, System.currentTimeMillis())
                 },
             )
             _state.value = next
@@ -303,7 +306,7 @@ class UpdateManager(
         runCatching { verify(ready.file, ready.sha256, ready.release) }.onFailure { e ->
             Log.w(TAG, "updates: ${ready.file.name} failed its check: ${e.message}")
             ready.file.delete()
-            return fail(e.message ?: "The update did not check out", e is NotInstallable)
+            return fail(failureText(e), e is NotInstallable)
         }
         val profile = downloadedProfile(ready.release)
         _state.value = UpdateState.Installing(ready.release)
@@ -330,10 +333,13 @@ class UpdateManager(
                 return _state.value
             }
             Log.w(TAG, "updates: Power Setup install failed: ${r.exceptionOrNull()?.message ?: r.getOrNull()?.output}")
-            if (!canRequestInstalls()) return fail("Power Setup could not install it", false)
+            if (!canRequestInstalls()) return fail("Power Setup couldn't install the update. Try again, or allow Lounge to install apps.", false)
         }
         runCatching { commitSession(ready.release, ready.file, ready.sha256, silent = path == InstallPath.Silent, profile = profile) }
-            .onFailure { fail(it.message ?: "The install failed", false) }
+            .onFailure {
+                Log.w(TAG, "updates: the session failed: $it")
+                fail(if (it is UpdateProblem) it.message.orEmpty() else "Android couldn't start the install. Try again.", false)
+            }
         return _state.value
     }
 
@@ -363,17 +369,15 @@ class UpdateManager(
 
     /**
      * Android's "install unknown apps" switch for Lounge. TV settings show the whole list rather
-     * than Lounge's own page, so a hint says what to switch on; coming back with it allowed
-     * carries on with the install.
+     * than Lounge's own page, so the row that leads here says what to switch on; coming back with
+     * it allowed carries on with the install. False when the TV has no such screen.
      */
-    fun openInstallPermission(activity: Activity) {
+    fun openInstallPermission(activity: Activity): Boolean {
         val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
-        runCatching { activity.startActivity(intent) }
-            .onSuccess {
-                awaitingPermission = true
-                Toast.makeText(activity, "Switch on Lounge in this list, then press Back", Toast.LENGTH_LONG).show()
-            }
+        return runCatching { activity.startActivity(intent) }
+            .onSuccess { awaitingPermission = true }
             .onFailure { Log.w(TAG, "updates: no unknown-sources screen") }
+            .isSuccess
     }
 
     /** The person started this install from Lounge, so it opens again once Android has replaced it. */
@@ -449,7 +453,7 @@ class UpdateManager(
      * newer than it and the version [release] names.
      */
     private fun verify(file: File, sha256: String, release: Release) {
-        if (sha256(file) != sha256) throw IllegalStateException("The update changed after it was checked")
+        if (sha256(file) != sha256) throw UpdateProblem("The update changed after it was checked, so Lounge threw it away. It downloads it again later.")
         checkPackage(file, release)
     }
 
@@ -465,7 +469,7 @@ class UpdateManager(
     }
 
     /** A release that can never install here, whatever is tried again. */
-    private class NotInstallable(message: String) : IllegalStateException(message)
+    private class NotInstallable(what: String) : UpdateProblem("$what. Lounge waits for the next release.")
 
     private var failures: Failures
         get() = Failures(prefs.getString(KEY_FAILED_TAG, null), prefs.getInt(KEY_FAILED_TRIES, 0))
@@ -477,7 +481,7 @@ class UpdateManager(
         if (release != null) failures = failures.after(release.tag, final)
     }
 
-    private fun gaveUpMessage(release: Release): String = "Lounge ${release.version} did not install here, so it waits for the next release"
+    private fun gaveUpMessage(release: Release): String = "Lounge ${release.version} didn't install on this TV, so it waits for the next release."
 
     private fun archiveInfo(file: File): PackageInfo? {
         // Signatures too: some versions only read an archive's certificates when asked for them.
@@ -510,7 +514,7 @@ class UpdateManager(
 
     /** Copies the APK where `pm` can read it and checks the copy, right before it is installed. */
     private fun stage(file: File, sha256: String, release: Release): File {
-        val dir = stagingDir()?.apply { mkdirs() } ?: throw IllegalStateException("There is no shared storage for Power Setup to read from")
+        val dir = stagingDir()?.apply { mkdirs() } ?: throw UpdateProblem("Power Setup couldn't reach the update on the TV's storage.")
         val staged = File(dir, file.name)
         file.copyTo(staged, overwrite = true)
         try {
@@ -554,8 +558,8 @@ class UpdateManager(
             when (conn.responseCode) {
                 200 -> conn.inputStream.bufferedReader().readText().let { Release.parse(it) to it }
                 404 -> null to null
-                403, 429 -> throw IllegalStateException("GitHub is limiting checks from this network; it will try again later")
-                else -> throw IllegalStateException("GitHub answered HTTP ${conn.responseCode}")
+                403, 429 -> throw UpdateProblem("GitHub is limiting checks from this network. Lounge tries again later.")
+                else -> throw UpdateProblem("GitHub didn't answer as expected. Lounge tries again later.").also { Log.w(TAG, "updates: GitHub answered HTTP ${conn.responseCode}") }
             }
         } finally {
             conn.disconnect()
@@ -565,7 +569,7 @@ class UpdateManager(
     /** The APK and the hash it was checked against. */
     private suspend fun fetchApk(release: Release): Pair<File, String> = withContext(Dispatchers.IO) {
         val expected = release.sha256 ?: listedHash(release, release.apkName)
-            ?: throw IllegalStateException("The release has no checksum for ${release.apkName}")
+            ?: throw UpdateProblem("This release has no checksum to check the download against, so Lounge won't install it.")
         val target = fileFor(release)
         var lastReported = 0f
         // A body that never ends must not fill the storage.
@@ -606,7 +610,7 @@ class UpdateManager(
         val partial = File(target.path + ".part")
         val conn = open(url)
         try {
-            if (conn.responseCode != 200) throw IllegalStateException("The download answered HTTP ${conn.responseCode}")
+            if (conn.responseCode != 200) throw UpdateProblem("GitHub didn't send the update. Lounge tries again later.").also { Log.w(TAG, "updates: the download answered HTTP ${conn.responseCode}") }
             val length = conn.contentLengthLong
             val digest = MessageDigest.getInstance("SHA-256")
             conn.inputStream.use { input ->
@@ -616,7 +620,7 @@ class UpdateManager(
                     while (true) {
                         val n = input.read(buf)
                         if (n < 0) break
-                        if (done + n > limit) throw IllegalStateException("The download is larger than its release says")
+                        if (done + n > limit) throw UpdateProblem("The download was larger than its release says, so Lounge stopped it. It tries again later.")
                         out.write(buf, 0, n)
                         digest.update(buf, 0, n)
                         done += n
@@ -624,8 +628,8 @@ class UpdateManager(
                     }
                 }
             }
-            if (digest.digest().toHex() != expected) throw IllegalStateException("The download did not match its checksum")
-            if (!partial.renameTo(target)) throw IllegalStateException("Could not keep the download")
+            if (digest.digest().toHex() != expected) throw UpdateProblem("The download didn't match its checksum, so Lounge threw it away. It tries again later.")
+            if (!partial.renameTo(target)) throw UpdateProblem("Lounge couldn't keep the download. Free some space on the TV, then try again.")
         } finally {
             partial.delete()
             conn.disconnect()
@@ -778,11 +782,11 @@ class UpdateManager(
                 // An install that fails with no profile in it clears the suspicion of one. A cancel says nothing either way.
                 if (!pendingProfile && status != PackageInstaller.STATUS_FAILURE_ABORTED) prefs.edit().remove(KEY_PROFILE_SUSPECT).remove(KEY_PROFILE_NAMED).apply()
                 val text = when (status) {
-                    PackageInstaller.STATUS_FAILURE_ABORTED -> "The install was cancelled"
-                    PackageInstaller.STATUS_FAILURE_BLOCKED -> "Android blocked the install"
-                    PackageInstaller.STATUS_FAILURE_STORAGE -> "Not enough storage for the update"
-                    PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "This update does not fit this device"
-                    else -> message ?: "The install failed"
+                    PackageInstaller.STATUS_FAILURE_ABORTED -> "The install was cancelled. Choose Try again to install it."
+                    PackageInstaller.STATUS_FAILURE_BLOCKED -> "Android blocked the install. Try again, or connect Power Setup to install it."
+                    PackageInstaller.STATUS_FAILURE_STORAGE -> "There isn't enough storage for the update. Free some space on the TV, then try again."
+                    PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "This update doesn't work on this TV. Lounge waits for the next release."
+                    else -> "Android couldn't install the update. Try again."
                 }
                 Log.w(TAG, "updates: install status $status: $message")
                 val final = status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE || status == PackageInstaller.STATUS_FAILURE_CONFLICT || status == PackageInstaller.STATUS_FAILURE_INVALID
@@ -874,6 +878,20 @@ class UpdateManager(
 
         private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
     }
+}
+
+/** A failure whose message is already a sentence for the screen. */
+internal open class UpdateProblem(message: String) : IllegalStateException(message)
+
+/** A failed check or download as a sentence that says what happens next; the raw reason goes to the log. */
+internal fun failureText(e: Throwable): String = when (e) {
+    is UpdateProblem -> e.message.orEmpty()
+    is java.net.UnknownHostException, is java.net.ConnectException, is java.net.NoRouteToHostException ->
+        "Lounge couldn't reach GitHub. Check the TV's internet connection; it tries again later."
+    is java.net.SocketTimeoutException -> "GitHub took too long to answer. Lounge tries again later."
+    is javax.net.ssl.SSLException -> "Lounge couldn't connect to GitHub safely. Check that the TV's date and time are right, then try again."
+    is java.io.IOException -> "The connection to GitHub dropped. Lounge tries again later."
+    else -> "The update didn't go through. Lounge tries again later."
 }
 
 /** Android's answer to an install session. */

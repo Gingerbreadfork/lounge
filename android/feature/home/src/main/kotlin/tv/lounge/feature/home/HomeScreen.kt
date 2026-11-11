@@ -144,9 +144,17 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     }
     // Coming back from another app counts as input; the Home key that brings Lounge back never reaches Compose.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { state.touched() }
-    // First run: the persisted snapshot paints first, then the setup steps come up over it.
-    LaunchedEffect(uiPrefs.loaded, uiPrefs.onboardingDone) {
-        if (uiPrefs.loaded && !uiPrefs.onboardingDone && state.overlay == Overlay.None) {
+    // The core writes times as the TV's clock shows them; the setting may have changed while away.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        val is24Hour = android.text.format.DateFormat.is24HourFormat(context)
+        scope.launch(Dispatchers.IO) { core.setClock24h(is24Hour) }
+    }
+    // First run: the persisted snapshot paints first, then the setup steps come up over it. Until
+    // they are finished they come back whenever nothing else is open.
+    val onboardingDone = rememberUpdatedState(uiPrefs.onboardingDone)
+    var setupFinished by remember { mutableStateOf(false) }
+    LaunchedEffect(uiPrefs.loaded, uiPrefs.onboardingDone, state.overlay == Overlay.None) {
+        if (uiPrefs.loaded && !uiPrefs.onboardingDone && !setupFinished && state.overlay == Overlay.None) {
             delay(900)
             state.overlay = Overlay.Onboarding
         }
@@ -331,16 +339,18 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                         state.stageChosen = false
                     }
                     state.lastHomeAt = now
-                    clearOverlays()
-                    goToStage(snap = true)
+                    // Setup steps not yet finished stay up at the step reached.
+                    if (state.overlay != Overlay.Onboarding || onboardingDone.value) {
+                        clearOverlays()
+                        goToStage(snap = true)
+                    }
                 }
             }
         }
     }
 
     fun openMenu(tile: Tile, rowId: String, anchor: Rect, returnFocus: FocusRequester) {
-        // A tile that only opens a screen has nothing to pin or hide.
-        if (tile.id.startsWith("control:")) return
+        if (!hasMenu(tile)) return
         val resolved = if (anchor != Rect.Zero) anchor else if (light.center.isSpecified) {
             Rect(light.center.x - 100f, light.center.y - 60f, light.center.x + 100f, light.center.y + 60f)
         } else {
@@ -366,31 +376,45 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     // A tile hidden or unpinned while it had focus leaves its row: focus moves to its neighbour,
     // or to the row that took its place.
     val rowIds = remember { arrayOf(emptyList<String>()) }
+    suspend fun placeRowFocus(before: List<String>) {
+        val rowId = state.focusedRowId ?: return
+        val tileId = state.focusedTileId ?: return
+        when (val next = rowFocusAfter(before, snapshot.rows, rowId, tileId, state.focusedTileIndex)) {
+            // Still there, perhaps elsewhere in its row: the index follows it, and the row
+            // scrolls to it if it moved out of view.
+            is RowFocus.Stays -> {
+                state.focusedTileIndex = next.index
+                val list = state.rowListState(rowId)
+                if (list.layoutInfo.visibleItemsInfo.none { it.key == tileId }) list.scrollToItem(next.index)
+            }
+            // The new tile is named first, so the way back in is open to it.
+            is RowFocus.Neighbour -> {
+                state.focusedTileId = snapshot.rows.firstOrNull { it.id == rowId }?.tiles?.getOrNull(next.index)?.id
+                state.rowRequester(rowId, next.index).requestWhenReady()
+            }
+            is RowFocus.NextRow -> {
+                state.focusedTileId = null
+                state.focusRow(next.rowId)
+            }
+            RowFocus.Stage -> {
+                state.focusedTileId = null
+                goToStage()
+            }
+        }
+    }
+
+    /** Whether the row tile that has focus has just left its row, leaving focus nowhere. */
+    fun focusedTileGone(): Boolean {
+        val id = state.focusedTileId ?: return false
+        val row = snapshot.rows.firstOrNull { it.id == state.focusedRowId }
+        return row == null || row.tiles.none { it.id == id }
+    }
     LaunchedEffect(snapshot) {
         val before = rowIds[0]
         rowIds[0] = snapshot.rows.map { it.id }
         if (state.overlay != Overlay.None) return@LaunchedEffect
         when (state.region) {
-            FocusRegion.Rows -> {
-                val rowId = state.focusedRowId ?: return@LaunchedEffect
-                val tileId = state.focusedTileId ?: return@LaunchedEffect
-                val rows = snapshot.rows
-                val row = rows.firstOrNull { it.id == rowId }
-                val at = row?.tiles?.indexOfFirst { it.id == tileId } ?: -1
-                if (at >= 0) {
-                    // Still there, perhaps elsewhere in its row: the index follows it, and the row
-                    // scrolls to it if it moved out of view.
-                    state.focusedTileIndex = at
-                    val list = state.rowListState(rowId)
-                    if (list.layoutInfo.visibleItemsInfo.none { it.key == tileId }) list.scrollToItem(at)
-                    return@LaunchedEffect
-                }
-                when {
-                    row != null && row.tiles.isNotEmpty() -> state.rowRequester(rowId, state.focusedTileIndex.coerceIn(0, row.tiles.lastIndex)).requestWhenReady()
-                    rows.isNotEmpty() -> state.focusRow(rows[before.indexOf(rowId).coerceIn(0, rows.lastIndex)].id)
-                    else -> goToStage()
-                }
-            }
+            FocusRegion.Rows -> placeRowFocus(before)
             FocusRegion.Stage -> {
                 val strip = snapshot.stage.strip
                 if (state.playbillFocused || strip.isEmpty()) return@LaunchedEffect
@@ -437,6 +461,11 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 onEnter = {
                     if (hasStrip && state.overlay == Overlay.None && state.region == FocusRegion.Stage) {
                         runCatching { state.stripFocus().requestFocus() }
+                    } else if (state.overlay == Overlay.None && state.region == FocusRegion.Rows && focusedTileGone()) {
+                        // A focused tile that left its row would let focus come back in at the top
+                        // bar; it goes to the tile's neighbour instead.
+                        cancelFocusChange()
+                        scope.launch { placeRowFocus(rowIds[0]) }
                     }
                 }
             }
@@ -448,19 +477,29 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 } else if (e.type == KeyEventType.KeyUp) {
                     uiSounds?.repeating = false
                 }
-                if (e.isBack() && state.overlay == Overlay.None) {
-                    if (e.type == KeyEventType.KeyUp) {
-                        when (state.region) {
-                            FocusRegion.Rows, FocusRegion.TopBar -> {
-                                close()
-                                goToStage()
+                when {
+                    e.isBack() && state.overlay == Overlay.None -> {
+                        if (e.type == KeyEventType.KeyUp) {
+                            when (homeBack(state.region, state.playbillFocused)) {
+                                HomeBack.ToStage -> {
+                                    close()
+                                    goToStage()
+                                }
+                                HomeBack.ToStrip -> scope.launch { state.focusStrip() }
+                                HomeBack.Stay -> Unit
                             }
-                            FocusRegion.Stage -> if (state.playbillFocused) scope.launch { state.focusStrip() }
                         }
+                        true
                     }
-                    true
-                } else {
-                    false
+                    // A controller's Start searches and its Select opens Settings (DESIGN.md §11).
+                    (e.key == Key.ButtonStart || e.key == Key.ButtonSelect) && state.overlay == Overlay.None -> {
+                        if (e.type == KeyEventType.KeyUp) {
+                            uiSounds?.open()
+                            openOverlay(if (e.key == Key.ButtonStart) Overlay.Search else Overlay.QuickSettings)
+                        }
+                        true
+                    }
+                    else -> false
                 }
             },
     ) {
@@ -585,6 +624,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                         onPrimary = { sp -> uiSounds?.open(); perform(sp.primary.action, sp.title) },
                         onSecondary = { sp -> uiSounds?.open(); sp.secondary?.let { s -> perform(s.action, sp.title) } },
                         onBandFocused = { uiSounds?.tick(); goToStage() },
+                        onStart = { uiSounds?.open(); openOverlay(Overlay.Onboarding) },
                     )
                 }
             }
@@ -628,7 +668,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                         onHomeChanged = { isDefaultHome = isDefaultHome(context) },
                         say = ::say,
                         open = { next -> uiSounds?.open(); openSheet(next) },
-                        closeAll = { closeOverlay() },
+                        forget = { gone -> state.sheetTrail.removeAll { it == gone } },
                     )
                 }
             }
@@ -636,7 +676,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
 
         Presence(if (overlay == Overlay.Guide) Unit else null) { _, visibleState ->
             GuideSheet(
-                core = core,
+                loadGuide = { from -> core.guide(from, 3u) },
                 visibleState = visibleState,
                 onTune = { action -> uiSounds?.open(); perform(action, "that channel") },
                 onDismiss = { closeOverlay() },
@@ -706,6 +746,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                     canMoveRight = indexInRow(ov.rowId, ov.tile.id).let { at -> at >= 0 && (homeRow?.tiles?.getOrNull(at + 1)?.pinned == true) },
                     isStagePinned = ov.tile.stagePinned,
                     onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say("Hidden from every row") },
+                    onShow = { core.command(LayoutCommand.UnhideItem(ov.tile.id)); say("Shown on every row again") },
                     onHideAllFrom = {
                         ov.tile.provider?.let { core.command(LayoutCommand.MuteProvider(it)) }
                         say("Everything from ${ov.tile.providerName} hidden. Settings, Rows brings it back")
@@ -757,12 +798,21 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 uiPrefs = uiPrefs,
                 power = power,
                 visibleState = visibleState,
+                say = ::say,
                 onDone = {
                     close()
+                    val again = uiPrefs.onboardingDone
+                    setupFinished = true
                     scope.launch { prefs.setOnboardingDone(true) }
                     isDefaultHome = isDefaultHome(context)
-                    clearOverlays()
-                    goToStage()
+                    if (again) {
+                        // Run again from Settings, so it ends on the row that started it.
+                        state.sheetLeft = Overlay.Onboarding
+                        state.overlay = Overlay.QuickSettings
+                    } else {
+                        clearOverlays()
+                        goToStage()
+                    }
                 },
             )
         }
@@ -772,6 +822,11 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
 
     LaunchedEffect(hasStrip) {
         if (hasStrip && state.region == FocusRegion.Stage && state.overlay == Overlay.None) state.focusStrip()
+    }
+    // An empty home has no strip; its Start button takes focus instead.
+    val emptyHome = snapshot.revision > 0uL && snapshot.stage.spotlights.isEmpty()
+    LaunchedEffect(emptyHome) {
+        if (emptyHome && state.region == FocusRegion.Stage && state.overlay == Overlay.None) state.playbillFocus.requestWhenReady()
     }
 
     // Any Back the UI didn't consume still means "home": never let it reach the Activity.
@@ -828,16 +883,34 @@ private fun Overlay.sheetDepth(): Int = when (this) {
 private fun rowTitle(snapshot: HomeSnapshot, rowId: String): String =
     snapshot.rows.firstOrNull { it.id == rowId }?.title ?: if (rowId == "stage") "the Stage" else "the home screen"
 
-/** Errors as sentences a viewer can act on, never a stack trace or an intent dump (DESIGN.md §8). */
+/**
+ * A failure to open [title] as a sentence with its cause and its fix (DESIGN.md §7.4, §10). The
+ * raw reason goes to the log only; one not known here gets a plain sentence, never its own text.
+ */
 internal fun friendlyError(e: Throwable, title: String): String {
     val m = e.reason
+    android.util.Log.w("Lounge", "couldn't open $title: $m")
+    return friendlyReason(e, m, title)
+}
+
+/** The sentence for [reason], the failure's own words, kept apart from the log so it can be tested. */
+internal fun friendlyReason(e: Throwable, reason: String, title: String): String {
+    val m = reason.lowercase()
     return when {
-        "No Activity found" in m || "ActivityNotFound" in m -> "Nothing on this TV can open $title. Is its app still installed?"
-        "not installed" in m -> "$title isn't installed on this TV."
-        "did not answer" in m -> "$title's source didn't answer. Check that it is running, then try again."
-        "permission" in m.lowercase() -> "Lounge needs permission for that. Settings has the switch."
-        m.isBlank() || m.length > 120 -> "Couldn't open $title."
-        else -> m
+        e is tv.lounge.core.CoreException.DiskFull -> "The TV's storage is full. Free some space in the TV's settings, then try again."
+        e is tv.lounge.core.CoreException.UnknownAction -> "$title isn't on this TV any more. Its app may have removed it."
+        "no activity found" in m || "activitynotfound" in m || "no launch intent" in m || "nothing can open" in m ->
+            "Nothing on this TV can open $title. Is its app still installed?"
+        "not installed" in m -> "$title isn't installed on this TV. Install it from the Play Store, then try again."
+        "no video player" in m -> "Nothing on this TV can play $title. Install VLC or another video player, then try again."
+        "notification access" in m -> "Lounge can't reach what's playing yet. In Settings, turn on Now playing."
+        "not playing" in m -> "That app has stopped playing. Open it to start something again."
+        "did not answer" in m || "didn't answer" in m -> "$title's source didn't answer. Check that it is running, then try again."
+        "busy" in m -> "The TV is busy. Try again in a moment."
+        "won't open that link" in m || "not one lounge can open" in m -> "Lounge can't open $title from here. Open it from its app instead."
+        "permission" in m || "not allowed" in m || "security" in m -> "Android didn't let Lounge open $title. Open it from its app instead."
+        e is tv.lounge.core.CoreException.Plugin -> "$title's plugin stopped partway through. Try again in a moment."
+        else -> "Couldn't open $title. Try again in a moment."
     }
 }
 
@@ -876,7 +949,8 @@ private fun SheetContent(
     onHomeChanged: () -> Unit,
     say: (String) -> Unit,
     open: (Overlay) -> Unit,
-    closeAll: () -> Unit,
+    /** Takes a sheet that no longer has anything to show out of the way back. */
+    forget: (Overlay) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -886,9 +960,6 @@ private fun SheetContent(
         Overlay.QuickSettings -> {
             val backdrops by produceState(emptyList<ShaderStyle>()) { value = withContext(Dispatchers.IO) { ShaderStyles.all(context, core) } }
             val liveBackdrops = LoungeTheme.visuals.shaderWallpaper && !LoungeTheme.motion.reducedMotion
-            val tvListings = remember { hasTvListings(context) }
-            val notifications = remember { hasNotificationAccess(context) }
-            val usage = remember { hasUsageAccess(context) }
             // Both wait on the core, which may still be loading, so they are read off the main thread.
             val enabledChannels by produceState(0) { value = withContext(Dispatchers.IO) { core.availableChannels().count { it.enabled } } }
             val enabledPlugins by produceState(0) { value = withContext(Dispatchers.IO) { core.plugins().count { it.enabled } } }
@@ -910,9 +981,6 @@ private fun SheetContent(
                 reducedMotion = reduced,
                 showMobileApps = showMobile,
                 isDefaultHome = isDefaultHome,
-                tvListings = tvListings,
-                notifications = notifications,
-                usage = usage,
                 enabledChannels = enabledChannels,
                 enabledPlugins = enabledPlugins,
                 diagnostics = { core.diagnostics() },
@@ -921,7 +989,9 @@ private fun SheetContent(
                 onSetLite = { on -> scope.launch { prefs.setLiteMode(on) } },
                 onSetReducedMotion = { on -> scope.launch { prefs.setReducedMotion(on) } },
                 onSetShowMobileApps = { on -> scope.launch { prefs.setShowMobileApps(on) } },
-                onRequestPermission = { name -> closeAll(); scope.launch { withContext(Dispatchers.IO) { core.perform("permission:$name") } } },
+                // Settings stays open: Android's dialog comes up over it, and the rows read again on return.
+                onRequestPermission = { name -> scope.launch { withContext(Dispatchers.IO) { core.perform("permission:$name") } } },
+                say = say,
                 onChannels = { open(Overlay.Channels) },
                 onRows = { open(Overlay.Rows) },
                 rowsSummary = rowsSummary,
@@ -935,7 +1005,7 @@ private fun SheetContent(
                 powerStatus = powerStatus,
                 onAmbient = { open(Overlay.Ambient) },
                 onSetupAgain = { open(Overlay.Onboarding) },
-                ambientOn = remember { power.currentScreensaver?.contains(context.packageName) == true },
+                screensaver = { screensaverName(power, context) },
                 onUpdates = { open(Overlay.Updates) },
                 updateStatus = updateStatusWord(updateState, updateAuto),
                 firstFocus = first,
@@ -1040,7 +1110,8 @@ private fun SheetContent(
         is Overlay.PluginDetail -> PluginDetailSheet(
             core = core,
             pluginId = overlay.id,
-            onRemoved = { open(Overlay.Plugins) },
+            // The page of a removed plugin has nothing to go back to.
+            onRemoved = { open(Overlay.Plugins); forget(overlay) },
             firstFocus = first,
         )
         Overlay.HomeRole -> {
@@ -1055,8 +1126,8 @@ private fun SheetContent(
                 onDoItNow = {
                     scope.launch {
                         runCatching { power.runAll(takeHome.ifEmpty { listOf(power.homeRole) }) }
-                            .onSuccess { r -> if (!r.ok) say(r.output.ifBlank { "That did not work" }) }
-                            .onFailure { say(it.message ?: "That did not work") }
+                            .onSuccess { if (!isDefaultHome(context)) say(HOME_NOT_TAKEN) }
+                            .onFailure { say((it as? tv.lounge.power.PrivilegedException)?.message ?: HOME_NOT_TAKEN) }
                         onHomeChanged()
                     }
                 },
@@ -1088,6 +1159,7 @@ private fun StageSlot(
     onPrimary: (StageSpotlight) -> Unit,
     onSecondary: (StageSpotlight) -> Unit,
     onBandFocused: () -> Unit,
+    onStart: () -> Unit,
 ) {
     val uiSounds = LoungeTheme.sounds
     val motion = LoungeTheme.motion
@@ -1139,5 +1211,6 @@ private fun StageSlot(
         onPrimary = onPrimary,
         onSecondary = onSecondary,
         onBandFocused = onBandFocused,
+        onStart = onStart,
     )
 }

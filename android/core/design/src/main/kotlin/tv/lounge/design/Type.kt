@@ -154,6 +154,7 @@ data class LoungeTypography(
                 lineHeightStyle = centred,
                 fontFeatureSettings = "tnum",
             ),
+            // Tabular figures: captions carry guide times and channel numbers (DESIGN.md §4.2).
             caption = TextStyle(
                 fontFamily = LoungeFonts.figtree(500),
                 fontWeight = FontWeight(500),
@@ -162,6 +163,7 @@ data class LoungeTypography(
                 letterSpacing = 0.01.em,
                 platformStyle = noPadding,
                 lineHeightStyle = centred,
+                fontFeatureSettings = "tnum",
             ),
         )
 

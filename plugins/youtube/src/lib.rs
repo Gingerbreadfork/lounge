@@ -53,7 +53,7 @@ impl sdk::Plugin for YouTube {
             refresh_minutes: 30,
             rows: vec![
                 RowSpec { id: "new".into(), title: "New on YouTube".into(), style: RowStyle::Landscape },
-                RowSpec { id: "playlists".into(), title: "Your YouTube playlists".into(), style: RowStyle::Landscape },
+                RowSpec { id: "playlists".into(), title: "Your playlists on YouTube".into(), style: RowStyle::Landscape },
                 RowSpec { id: "liked".into(), title: "Liked on YouTube".into(), style: RowStyle::Landscape },
             ],
             settings: vec![
@@ -62,7 +62,7 @@ impl sdk::Plugin for YouTube {
                     label: "Channels".into(),
                     kind: SettingKind::List,
                     required: false,
-                    help: Some("Channel links, @handles or ids (UC…), playlist links or ids (PL…), one per line or separated by commas. A Google Takeout export of your subscriptions, the CSV file, can be pasted in whole. Not needed with a sign-in below.".into()),
+                    help: Some("The channels and playlists to follow, as links, @handles or ids, one per line or separated by commas. A channel's id starts with UC and a playlist's with PL. A Google Takeout export of your subscriptions, the CSV file, can be pasted in whole. Not needed with a sign-in below.".into()),
                     default: None,
                 },
                 SettingSpec {
@@ -70,7 +70,7 @@ impl sdk::Plugin for YouTube {
                     label: "Google Client ID".into(),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("For your subscriptions, playlists and likes. At console.cloud.google.com make a project, enable the YouTube Data API v3, set the OAuth consent screen to External and publish it, then make an OAuth client of the type TVs and Limited Input devices and copy its Client ID and Client secret here. This page then shows a code to enter on your phone.".into()),
+                    help: Some("To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here. At console.cloud.google.com make a project, enable the YouTube Data API v3, set the OAuth consent screen to External and publish it, then make an OAuth client of the type TVs and Limited Input devices. This page then shows a code to enter on your phone.".into()),
                     default: None,
                 },
                 SettingSpec { key: "client_secret".into(), label: "Google Client secret".into(), kind: SettingKind::Password, required: false, help: None, default: None },
@@ -96,7 +96,7 @@ impl sdk::Plugin for YouTube {
         };
         let account = Account::connect(ctx.now_ms, &mut budget)?;
         if sources.is_empty() && account.is_none() {
-            return Err("Nothing to show yet: add a channel link or id, or a Google Client ID, in the plugin's settings".into());
+            return Err("Nothing to show yet. Add a channel link or id, or a Google Client ID, in the plugin's settings.".into());
         }
         let per_source = number_setting("per_source", 4).clamp(1, 15) as usize;
         let days = number_setting("days", 30).clamp(0, 3_650);
@@ -340,7 +340,7 @@ impl Account {
         let Some(client_id) = host::setting("client_id").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) else {
             return Ok(None);
         };
-        let secret = host::secret("client_secret").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or("Google Client secret is not set")?;
+        let secret = host::secret("client_secret").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or_else(|| sdk::not_set("Google Client secret"))?;
         let saved: Option<Token> = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice(&v).ok());
         let token = match saved {
             Some(t) if t.expires_ms - now_ms > 5 * MINUTE_MS => t,
@@ -625,7 +625,7 @@ impl Client {
     /// One page of the API, or the sentence for what stopped it.
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str, budget: &mut Budget) -> Result<T, String> {
         if !budget.spend() {
-            return Err("fetch budget for this refresh is used up".into());
+            return Err(host::BUDGET_SPENT.into());
         }
         let r = sdk::fetch_online("YouTube", &HttpRequest::get(format!("{API}/{path}")).header("Authorization", &format!("Bearer {}", self.token)).header("Accept", "application/json"))?;
         let name = path.split('?').next().unwrap_or(path);
@@ -975,7 +975,7 @@ fn resolve_named(sources: Vec<Source>, budget: &mut Budget, failures: &mut Vec<(
             continue;
         }
         if !budget.spend() {
-            failures.push((format!("channel {name}"), "no fetches left this time; it is looked up next time".into()));
+            failures.push((format!("channel {name}"), format!("This refresh fetched all it may, so {name} is looked up on the next one.")));
             continue;
         }
         match channel_page_id(&name) {
@@ -1008,7 +1008,7 @@ fn channel_page_id(name: &str) -> Result<String, String> {
         s if !(200..300).contains(&s) => Err(sdk::online_error("YouTube", s)),
         _ => {
             let html = if r.body_base64.is_some() { String::from_utf8_lossy(&sdk::body_bytes(r)).into_owned() } else { r.body };
-            channel_id_in(&html).ok_or_else(|| format!("YouTube's page for {name} does not say which channel it is. Use the channel's id (starts with UC) instead."))
+            channel_id_in(&html).ok_or_else(|| format!("YouTube's page for {name} doesn't say which channel it is. Use the channel's id, which starts with UC, instead."))
         }
     }
 }
@@ -1235,7 +1235,7 @@ mod tests {
         assert_eq!(budget.left(), 0);
         assert_eq!(failures.len(), 2);
         assert_eq!(failures[0].0, "channel @one");
-        assert_eq!(failures[1].1, "no fetches left this time; it is looked up next time");
+        assert_eq!(failures[1].1, "This refresh fetched all it may, so @two is looked up on the next one.");
     }
 
     #[test]
@@ -1357,7 +1357,7 @@ mod tests {
         assert!(!b.spend());
         assert_eq!(b.left(), 0);
         let client = Client { token: "t".into() };
-        assert_eq!(client.get_json::<Page<Playlist>>("playlists?mine=true", &mut b).err().as_deref(), Some("fetch budget for this refresh is used up"));
+        assert_eq!(client.get_json::<Page<Playlist>>("playlists?mine=true", &mut b).err().as_deref(), Some(host::BUDGET_SPENT));
     }
 
     #[test]
@@ -1365,6 +1365,7 @@ mod tests {
         let mut budget = Budget::new(FETCH_BUDGET);
         assert!(Account::connect(0, &mut budget).unwrap().is_none());
         assert_eq!(budget.left(), FETCH_BUDGET);
+        assert_eq!(<YouTube as sdk::Plugin>::refresh(&RefreshContext::default()).err().as_deref(), Some("Nothing to show yet. Add a channel link or id, or a Google Client ID, in the plugin's settings."));
         assert!(<YouTube as sdk::Plugin>::manifest().settings.iter().all(|s| !s.required));
     }
 }
