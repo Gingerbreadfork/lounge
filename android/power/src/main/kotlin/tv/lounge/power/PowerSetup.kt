@@ -7,7 +7,10 @@ import android.content.pm.PackageManager
 import android.provider.Settings
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -55,12 +59,20 @@ class PowerSetup(private val context: Context) {
     private val _status = MutableStateFlow<PowerStatus>(PowerStatus.Unavailable("Checking USB debugging…"))
     private val _log = MutableStateFlow<List<PowerLogEntry>>(emptyList())
     private val _results = MutableStateFlow<Map<String, PowerResult>>(emptyMap())
+    private val _running = MutableStateFlow<Set<String>>(emptySet())
+    private val _applied = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    /** Outlives every sheet, so work begun in one is finished and kept after Back. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _accessGranted = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     val status: StateFlow<PowerStatus> = _status.asStateFlow()
     val log: StateFlow<List<PowerLogEntry>> = _log.asStateFlow()
     /** How each action last went while Lounge has been running, by action id. */
     val results: StateFlow<Map<String, PowerResult>> = _results.asStateFlow()
+    /** The actions [start] is running now, by id. */
+    val running: StateFlow<Set<String>> = _running.asStateFlow()
+    /** Whether what each setup action sets up is so, by action id, as [recheck] last read it. */
+    val applied: StateFlow<Map<String, Boolean>> = _applied.asStateFlow()
     /** Emits after one of Lounge's own accesses has been granted, so the app can read them again. */
     val accessGranted: SharedFlow<Unit> = _accessGranted.asSharedFlow()
     val packageName: String get() = context.packageName
@@ -144,6 +156,32 @@ class PowerSetup(private val context: Context) {
             if (!last.ok) break
         }
         return last
+    }
+
+    /**
+     * Runs [action] in Power Setup's own scope, so it finishes and keeps its result after the sheet
+     * that asked has closed. One still running is not started again.
+     */
+    fun start(action: PowerAction) {
+        var fresh = false
+        _running.update { ids -> fresh = action.id !in ids; ids + action.id }
+        if (!fresh) return
+        scope.launch {
+            try {
+                runCatching { run(action) }
+                recheck()
+            } finally {
+                _running.update { it - action.id }
+            }
+        }
+    }
+
+    /** Runs [block] to its end in Power Setup's own scope, even when the sheet that asked closes first. */
+    suspend fun <T> finish(block: suspend () -> T): T = scope.async { block() }.await()
+
+    /** Reads again what is already so on the TV, for [applied]. */
+    suspend fun recheck() = withContext(Dispatchers.IO) {
+        _applied.value = (setupActions + normalAnimations).mapNotNull { a -> isApplied(a)?.let { a.id to it } }.toMap()
     }
 
     /** Runs one whitelisted action; the result goes to the log either way. */

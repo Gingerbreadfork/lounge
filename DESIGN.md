@@ -319,8 +319,8 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
   Open Developer options, under numbered steps for turning on USB debugging and one sentence on
   what stays on afterwards and what turning it off would stop. Under "What it can do", each action is a row (its title, with Run, Done or
   Failed as the value) followed by its reason in `caption` and the exact shell command in a monospace `velvet` box, so
-  nothing runs that the person has not read. An action already in effect reads Done, and each keeps
-  its last result after the sheet closes; Faster system animations has Normal system animations as
+  nothing runs that the person has not read. An action already in effect reads Done; one still
+  running when the sheet closes carries on, and each keeps its last result; Faster system animations has Normal system animations as
   its undo. Forget this connection sits last and asks again; the footnote shows the key fingerprint
   the device's prompt displays.
 - **TV controls sheet**: the privileged rows first (Wake the TV and switch to me, TV power,

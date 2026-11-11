@@ -88,20 +88,22 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
     val scope = rememberCoroutineScope()
     val status by power.status.collectAsStateWithLifecycle()
     val results by power.results.collectAsStateWithLifecycle()
-    val running = remember { mutableStateMapOf<String, Boolean>() }
+    // Power Setup runs the actions and keeps how each went, so both outlive this sheet.
+    val running by power.running.collectAsStateWithLifecycle()
+    val applied by power.applied.collectAsStateWithLifecycle()
     var pairing by remember { mutableStateOf(false) }
     var forgetting by remember { mutableStateOf(false) }
     // Forgetting the key makes a new one, so the fingerprint is read again on every status change.
     val fingerprint by produceState<String?>(null, status) { value = power.fingerprint() }
-    // What is already so on the TV, read again after any action runs and on return to Lounge.
+    // What is already so on the TV is read again on return to Lounge; an action reads it as it finishes.
     var checks by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { checks++ }
-    val homeActions by produceState(emptyList<PowerAction>(), checks) {
+    LaunchedEffect(checks) { power.recheck() }
+    val homeActions by produceState(emptyList<PowerAction>(), checks, running) {
         value = withContext(Dispatchers.IO) { power.takeHome().filter { it.id.startsWith("home_off_") } + power.giveBackHome() }
     }
-    val applied by produceState(emptyMap<String, Boolean>(), checks, homeActions) {
-        value = withContext(Dispatchers.IO) { (power.setupActions + power.normalAnimations).mapNotNull { a -> power.isApplied(a)?.let { a.id to it } }.toMap() }
-    }
+    val isHome = applied[power.homeRole.id]
+    LaunchedEffect(isHome) { onHomeRoleChanged() }
     // The undo for faster animations stays on offer once it has been shown, so focus never loses its row.
     var offerUndo by remember { mutableStateOf(false) }
     if (applied[power.normalAnimations.id] == false) offerUndo = true
@@ -114,22 +116,10 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
         }
     }
 
-    fun run(action: PowerAction) {
-        if (running[action.id] == true) return
-        running[action.id] = true
-        scope.launch {
-            // Power Setup keeps how it went, for this sheet and the next time it opens.
-            runCatching { power.run(action) }
-            running.remove(action.id)
-            checks++
-            if (action.id.startsWith("home")) onHomeRoleChanged()
-        }
-    }
-
     fun stateOf(action: PowerAction): RunState? {
         val last = results[action.id]
         return when {
-            running[action.id] == true -> RunState.Running
+            action.id in running -> RunState.Running
             applied[action.id] == true -> RunState.Done(last?.takeIf { it.ok }?.output.orEmpty())
             last != null && !last.ok -> RunState.Failed(last.output)
             applied[action.id] == false -> null
@@ -205,7 +195,7 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
                 power.quickAnimations -> if (offerUndo) listOf(it, power.normalAnimations) else listOf(it)
                 else -> listOf(it)
             }
-        }.forEach { action -> ActionRow(action, stateOf(action), enabled = ready) { run(action) } }
+        }.forEach { action -> ActionRow(action, stateOf(action), enabled = ready) { power.start(action) } }
     }
 
     if (ready) {

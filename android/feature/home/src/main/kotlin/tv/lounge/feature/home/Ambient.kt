@@ -414,14 +414,17 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
     LaunchedEffect(Unit) { power.refresh() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { name = screensaverName(power, context) }
 
-    /** Runs a switch, then reads the TV's setting again; [block] returns what to say when it did not take. */
+    /**
+     * Runs a switch, then reads the TV's setting again; [block] returns what to say when it did not
+     * take. Power Setup sees it through, so the screensaver before is saved even after Back.
+     */
     fun run(block: suspend () -> String?) {
         if (busy) return
         busy = true
         error = null
         scope.launch {
             error = try {
-                block()
+                power.finish(block)
             } catch (e: PrivilegedException) {
                 e.message
             }
