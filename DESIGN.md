@@ -307,7 +307,8 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
   "Turn on" follows the last field. A field is a row: OK opens the keyboard on it, and Done or
   Back returns to the row. A help of up to about three lines shows whole; a longer one shows its
   first sentence and "Your phone shows the full steps." A plugin its update turned off
-  names the hosts the update asks to reach and offers "Allow and turn on".
+  names the hosts the update asks to reach and offers "Allow and turn on"; a later update that no
+  longer asks for them turns it back on.
 - **Phone companion sheet**: the switch row titled Phone companion, then the QR code at 300 px on
   `limelight`, "Or type this code" and the six digits in `display-l` grouped in threes, the address
   in `caption`, New code, and Paired phones, whose "forget every phone" asks again. A code or QR is

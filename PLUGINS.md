@@ -461,7 +461,8 @@ key, so a new key means your users have to remove and reinstall. `lgp-tool bundl
 again is an update: the module and manifest are replaced, settings and the key-value store are
 kept, and the plugin refreshes. An update must not carry an older `version`, which is compared
 number by number, and one whose `fetch_hosts` asks for more than before, or that newly sets
-`self_signed_servers`, is turned off until the person turns it on again.
+`self_signed_servers`, is turned off until the person turns it on again, or until a later update
+no longer asks for it.
 
 ## Limits
 

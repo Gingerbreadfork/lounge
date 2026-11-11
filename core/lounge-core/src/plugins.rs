@@ -1097,7 +1097,7 @@ impl Inner {
         if turned_off {
             self.plugin_set_enabled(&row.id, false);
         }
-        let info = {
+        let (mut info, released) = {
             let mut state = self.state.lock();
             state.store.plugin_upsert(&row).map_err(|e| e.to_string())?;
             // Kept for the screens until the person allows it, together with what an earlier
@@ -1105,14 +1105,21 @@ impl Inner {
             let before = if row.enabled { Vec::new() } else { held_back(&state.store, &row.id) };
             let held = if turned_off || !before.is_empty() { still_held(&before, &added, &manifest) } else { Vec::new() };
             set_held_back(&state.store, &row.id, &held);
+            let released = !before.is_empty() && held.is_empty();
             let rows = state.store.plugins().map_err(|e| e.to_string())?;
             state.plugins = entries_from_rows(&rows);
             let settings = state.store.plugin_settings(&row.id).map_err(|e| e.to_string())?;
             let stored = rows.into_iter().find(|r| r.id == row.id).unwrap_or(row.clone());
             let mut info = info_for(&stored, &manifest, &settings, 0);
             info.update_asks_to_reach = held;
-            info
+            (info, released)
         };
+        // Only an update's ask kept it off, and this update asks for nothing the person has not allowed.
+        if released {
+            push_log(&self.plugins.logs, &info.id, 1, "turned back on: this update asks to reach nothing new");
+            self.plugin_set_enabled(&info.id, true);
+            info.enabled = true;
+        }
         if info.enabled {
             self.plugins.refresh_now(&info.id);
         }
