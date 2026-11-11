@@ -436,15 +436,18 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
     fun switch() {
         when {
             ours && ready -> run {
-                val r = power.run(power.restoreScreensaver(prefs.previousScreensaver.first(), prefs.previousScreensaverEnabled.first()))
-                if (r.ok && power.currentScreensaver?.contains(context.packageName) != true) null else NOT_TAKEN
+                // Lounge's own is never the one before, whatever was saved.
+                val before = prefs.previousScreensaver.first()?.takeUnless { it.contains(context.packageName) }
+                val r = power.run(power.restoreScreensaver(before, prefs.previousScreensaverEnabled.first()))
+                if (r.ok && screensaverName(power, context) != "Lounge") null else NOT_TAKEN
             }
             ready -> run {
                 val previous = power.currentScreensaver
                 val r = power.run(power.useAmbient)
-                // The one before is kept only once the switch has happened, so a failed one cannot lose it.
-                val took = power.currentScreensaver?.contains(context.packageName) == true
-                if (took) {
+                // The one before is kept only once the switch has happened, so a failed one cannot lose
+                // it, and never when it is Lounge's own with the screensaver turned off.
+                val took = screensaverName(power, context) == "Lounge"
+                if (took && previous?.contains(context.packageName) != true) {
                     prefs.setPreviousScreensaver(previous)
                     prefs.setPreviousScreensaverEnabled(PowerSetup.previousScreensaverEnabled(r.output))
                 }
