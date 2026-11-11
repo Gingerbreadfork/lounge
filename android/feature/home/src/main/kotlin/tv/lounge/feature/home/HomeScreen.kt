@@ -259,6 +259,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         state.sheetTrail.clear()
         state.sheetLeft = null
         state.pendingSearch = null
+        state.setupFromSettings = false
     }
 
     /** Opens [next] from the home, remembering what had focus so closing it can go back there. */
@@ -677,7 +678,11 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                         isDefaultHome = isDefaultHome,
                         onHomeChanged = { isDefaultHome = isDefaultHome(context) },
                         say = ::say,
-                        open = { next -> uiSounds?.open(); openSheet(next) },
+                        open = { next ->
+                            uiSounds?.open()
+                            if (next == Overlay.Onboarding) state.setupFromSettings = true
+                            openSheet(next)
+                        },
                         forget = { gone -> state.sheetTrail.removeAll { it == gone } },
                     )
                 }
@@ -811,12 +816,13 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 say = ::say,
                 onDone = {
                     close()
-                    val again = uiPrefs.onboardingDone
+                    val again = state.setupFromSettings
+                    state.setupFromSettings = false
                     setupFinished = true
                     scope.launch { prefs.setOnboardingDone(true) }
                     isDefaultHome = isDefaultHome(context)
                     if (again) {
-                        // Run again from Settings, so it ends on the row that started it.
+                        // Opened from Settings, so it ends on the row that started it.
                         state.sheetLeft = Overlay.Onboarding
                         state.overlay = Overlay.QuickSettings
                     } else {

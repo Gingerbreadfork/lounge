@@ -97,6 +97,9 @@ class HomeState(private val tierA: Boolean = true) {
     /** The sheet Back last left, so the sheet under it can focus the row that opened it. */
     var sheetLeft: Overlay? = null
 
+    /** Whether the setup steps on show were opened from Settings, and so end back there; not read by composition. */
+    var setupFromSettings = false
+
     /** The requester for whatever has focus on the home now. */
     fun currentFocus(): FocusRequester? = when (region) {
         FocusRegion.TopBar -> topBar.last
