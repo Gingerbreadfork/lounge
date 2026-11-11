@@ -401,16 +401,16 @@ pub fn stream_items(s: &Stream, avatar: Option<&str>, app: &str, now_ms: i64) ->
         action: action.clone(),
         ..Default::default()
     };
-    let mut lines = Vec::new();
-    if !s.game_name.trim().is_empty() {
-        lines.push(s.game_name.trim().to_string());
-    }
-    lines.push(watching(s.viewer_count));
+    // A game's name is written as its makers write it; the count leads only when it stands alone.
+    let facts = match s.game_name.trim() {
+        "" => sentence_case(&watching(s.viewer_count)),
+        game => format!("{game}, {}", watching(s.viewer_count)),
+    };
     let live = Item {
         id: format!("live:{}", if s.id.is_empty() { s.user_login.clone() } else { s.id.clone() }),
         kind: ItemKind::Schedule,
         title: if s.title.trim().is_empty() { name.clone() } else { clip(s.title.trim(), 90) },
-        subtitle: Some(sentence_case(&lines.join(", "))),
+        subtitle: Some(facts),
         channel_id: Some(s.user_login.clone()),
         channel_name: Some(name),
         start_ms: Some(parse_iso8601(&s.started_at).unwrap_or(now_ms)),
@@ -490,6 +490,7 @@ mod tests {
         let quiet = |game: &str| Stream { user_login: "x".into(), game_name: game.into(), ..Default::default() };
         assert_eq!(stream_items(&quiet(""), None, DEFAULT_APP, 0)[1].subtitle.as_deref(), Some("Nobody watching yet"));
         assert_eq!(stream_items(&quiet("Chess"), None, DEFAULT_APP, 0)[1].subtitle.as_deref(), Some("Chess, nobody watching yet"));
+        assert_eq!(stream_items(&quiet("osu!"), None, DEFAULT_APP, 0)[1].subtitle.as_deref(), Some("osu!, nobody watching yet"));
     }
 
     #[test]

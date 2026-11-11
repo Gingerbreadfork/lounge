@@ -40,7 +40,7 @@ impl sdk::Plugin for Kodi {
                     label: "Kodi address".into(),
                     kind: SettingKind::Url,
                     required: true,
-                    help: Some("Like http://192.168.0.20:8080, or http://localhost:8080 when Kodi runs on this TV. In Kodi, open Settings, Services, Control and turn on Allow remote control via HTTP.".into()),
+                    help: Some("Like http://192.168.0.20:8080, or http://localhost:8080 for Kodi on this TV. In Kodi's Settings, Services, Control, turn on Allow remote control via HTTP.".into()),
                     default: None,
                 },
                 SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: false, help: Some("Kodi's default is kodi.".into()), default: Some("kodi".into()) },
@@ -643,6 +643,14 @@ fn take_turns<T>(a: impl IntoIterator<Item = T>, b: impl IntoIterator<Item = T>)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_address_help_fits_the_tv_whole() {
+        let manifest = <Kodi as sdk::Plugin>::manifest();
+        let help = manifest.settings.iter().find(|s| s.key == "server").and_then(|s| s.help.clone()).unwrap();
+        assert!(help.chars().count() <= 160, "{} characters", help.chars().count());
+        assert!(help.contains("Allow remote control via HTTP"));
+    }
 
     #[test]
     fn kodi_on_this_tv_is_reached_through_localhost() {
