@@ -489,7 +489,8 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
     var keyboardLeft by remember { mutableStateOf(false) }
     LaunchedEffect(editing) {
         if (!editing) return@LaunchedEffect
-        // A keyboard never seen to come up cannot be seen to leave, and Back then works as below.
+        // Only a keyboard seen to come up for this edit is seen to leave it; otherwise Back works as below.
+        snapshotFlow { keyboardUp.value }.first { !it }
         snapshotFlow { keyboardUp.value }.first { it }
         snapshotFlow { keyboardUp.value }.first { !it }
         keyboardLeft = true
