@@ -184,23 +184,25 @@ class PowerSetup(private val context: Context) {
         _applied.value = (setupActions + normalAnimations).mapNotNull { a -> isApplied(a)?.let { a.id to it } }.toMap()
     }
 
-    /** Runs one whitelisted action; the result goes to the log either way. */
+    /** Runs one whitelisted action. A failure's raw reason goes to the log, and its sentence to [results]. */
     suspend fun run(action: PowerAction): ShellResult {
         // After a restart nothing is known until checked; with a key or Shizuku there, check now.
         val backend = backend() ?: (if (hasKey || shizuku.installed) refresh().let { backend() } else null)
-            ?: throw PrivilegedException(NOT_CONNECTED).also { keepResult(action, PowerResult(false, it.message.orEmpty())) }
+            ?: throw PrivilegedException(NOT_CONNECTED).also { keepResult(action, PowerResult(false, "", it.message)) }
         return try {
             val r = backend.run(action.command, action.timeoutMs)
             record(PowerLogEntry(System.currentTimeMillis(), action.title, action.command, r, null))
-            keepResult(action, PowerResult(r.ok, r.output.ifBlank { if (r.ok) "" else "exit ${r.exitCode}" }))
+            if (!r.ok) android.util.Log.w("Lounge", "power setup: ${action.id} exited ${r.exitCode}: ${r.output.take(LOGGED_OUTPUT)}")
+            keepResult(action, PowerResult(r.ok, r.output, if (r.ok) null else failureSentence(r.output)))
             if (r.ok && (action == tvListings || action == notificationAccess || action == usageAccess)) _accessGranted.tryEmit(Unit)
             r
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             val failure = e as? PrivilegedException ?: PrivilegedException("Power Setup couldn't run that. Try again.", e)
+            android.util.Log.w("Lounge", "power setup: ${action.id} did not run", e)
             record(PowerLogEntry(System.currentTimeMillis(), action.title, action.command, null, listOfNotNull(failure.message, failure.cause?.message).joinToString(": ")))
-            keepResult(action, PowerResult(false, failure.message.orEmpty()))
+            keepResult(action, PowerResult(false, "", failure.message))
             // A lost connection or a timeout says nothing about the pairing; only a refused key does.
             if (backend === adb && e is KeyNotApprovedException) _status.value = PowerStatus.NotPaired
             throw failure
@@ -381,6 +383,22 @@ class PowerSetup(private val context: Context) {
         const val DEBUGGING_OFF = "USB debugging is off. Turn it on in Developer options, then come back."
         const val SHIZUKU_WAITING = "Shizuku is installed but hasn't allowed Lounge yet. Choose Use Shizuku instead, or turn on USB debugging."
         const val NOT_CONNECTED = "Power Setup isn't connected. In Settings, open Power Setup and choose Connect."
+
+        /** How much of a failed command's output is logged. */
+        private const val LOGGED_OUTPUT = 400
+
+        /** A command that exited with an error, as a sentence chosen by what it printed. */
+        fun failureSentence(output: String): String {
+            val o = output.lowercase()
+            return when {
+                "securityexception" in o || "permission denial" in o || "not allowed" in o ->
+                    "This TV doesn't let USB debugging do that. Look in Developer options for a setting that allows it, then try again."
+                "unknown command" in o || "can't find service" in o || "no shell command implementation" in o ->
+                    "This TV's version of Android has no command for that, so Lounge can't do it here."
+                "protected package" in o -> "Android protects that app, so it can't be turned off."
+                else -> "The TV didn't do that. Try again."
+            }
+        }
 
         private val REMOTE_KEYS = mapOf(
             android.view.KeyEvent.KEYCODE_DPAD_UP to "KEYCODE_DPAD_UP",

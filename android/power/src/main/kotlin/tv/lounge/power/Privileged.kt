@@ -22,8 +22,8 @@ open class PrivilegedException(message: String, cause: Throwable? = null) : Exce
 /** The daemon answered but does not know Lounge's key: the one failure that means pairing again. */
 class KeyNotApprovedException : PrivilegedException("This TV no longer allows Lounge. In Settings, open Power Setup and choose Connect.")
 
-/** How an action last went: [output] is what the shell printed, or why it could not run. */
-data class PowerResult(val ok: Boolean, val output: String)
+/** How an action last went: [output] is what the shell printed, and [said] is a failure as a sentence for the screen. */
+data class PowerResult(val ok: Boolean, val output: String, val said: String? = null)
 
 /** One way of running a shell command with shell-user rights. */
 interface Privileged {

@@ -25,6 +25,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -42,11 +43,11 @@ import tv.lounge.power.PowerSetup
 import tv.lounge.power.PowerStatus
 import tv.lounge.power.PrivilegedException
 
-/** How one action went, under its row. */
+/** How one action went, under its row; `output` is what its command printed. */
 private sealed interface RunState {
     data object Running : RunState
     data class Done(val output: String) : RunState
-    data class Failed(val reason: String) : RunState
+    data class Failed(val reason: String, val output: String = "") : RunState
 }
 
 /** What staying on means, said before anyone turns USB debugging on for Power Setup. */
@@ -121,7 +122,7 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
         return when {
             action.id in running -> RunState.Running
             applied[action.id] == true -> RunState.Done(last?.takeIf { it.ok }?.output.orEmpty())
-            last != null && !last.ok -> RunState.Failed(last.output)
+            last != null && !last.ok -> RunState.Failed(last.said ?: PowerSetup.failureSentence(last.output), last.output)
             applied[action.id] == false -> null
             last != null -> RunState.Done(last.output)
             else -> null
@@ -247,11 +248,18 @@ private fun ActionRow(action: PowerAction, state: RunState?, enabled: Boolean, o
         )
         Column(Modifier.padding(start = 20.dp, end = 4.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
             Text(action.detail, style = LoungeTheme.typography.caption, color = colors.dust)
+            val printed = when (state) {
+                is RunState.Done -> state.output
+                is RunState.Failed -> state.output
+                else -> ""
+            }.trim()
+            val mono = LoungeTheme.typography.caption.copy(fontFamily = FontFamily.Monospace)
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.velvet).padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(action.command, style = LoungeTheme.typography.caption.copy(fontFamily = FontFamily.Monospace), color = colors.houselight, maxLines = 3)
+                Text(action.command, style = mono, color = colors.houselight, maxLines = 3)
+                // What the command printed stays in its box; the row itself speaks in sentences.
+                if (printed.isNotEmpty()) Text(printed, style = mono, color = colors.dust, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
-            if (state is RunState.Failed) Text(state.reason.lineSequence().firstOrNull().orEmpty(), style = LoungeTheme.typography.caption, color = colors.ember, maxLines = 2)
-            if (state is RunState.Done && state.output.isNotBlank()) Text(state.output.lineSequence().firstOrNull().orEmpty(), style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 2)
+            if (state is RunState.Failed) Text(state.reason, style = LoungeTheme.typography.caption, color = colors.ember)
         }
     }
 }

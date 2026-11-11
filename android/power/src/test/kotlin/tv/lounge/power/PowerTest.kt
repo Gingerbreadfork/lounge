@@ -120,6 +120,18 @@ class PowerTest {
     }
 
     @Test
+    fun aFailedCommandIsSaidInASentence() {
+        val refused = "Exception occurred while executing 'grant':\njava.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS."
+        assertTrue(PowerSetup.failureSentence(refused).startsWith("This TV doesn't let USB debugging do that."))
+        assertTrue(PowerSetup.failureSentence("cmd: Can't find service: hdmi_control").startsWith("This TV's version of Android has no command for that"))
+        assertEquals("Android protects that app, so it can't be turned off.", PowerSetup.failureSentence("Error: java.lang.IllegalArgumentException: Cannot disable a protected package: com.x"))
+        // Nothing the shell printed is passed on.
+        for (raw in listOf("", "Error: unknown failure 0x7f", "Failure [INSTALL_FAILED_VERSION_DOWNGRADE]")) {
+            assertEquals("The TV didn't do that. Try again.", PowerSetup.failureSentence(raw))
+        }
+    }
+
+    @Test
     fun homeCommandsNameTheUserAndQuoteThePackage() {
         assertEquals("pm disable-user --user 0 'com.google.android.apps.tv.launcherx'", PowerSetup.disableCommand("com.google.android.apps.tv.launcherx", 0))
         assertEquals("pm enable --user 10 'a'\\''b'", PowerSetup.enableCommand("a'b", 10))
