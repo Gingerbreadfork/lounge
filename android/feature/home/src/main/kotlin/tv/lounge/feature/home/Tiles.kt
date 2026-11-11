@@ -244,6 +244,7 @@ internal fun tileDescription(tile: Tile, rowName: String): String = buildString 
     }
     if (tile.stagePinned) append(", pinned to the Stage")
     if (tile.pinned) append(", pinned")
+    if (tile.hidden) append(", hidden from every row")
 }
 
 private val episodeCode = Regex("\\bS(\\d+) E(\\d+)\\b")
@@ -500,8 +501,8 @@ private fun AppBannerContent(tile: Tile, filter: () -> androidx.compose.ui.graph
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(tile.title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                // Only the All apps tile has a line under its name: how many it opens onto.
-                tile.subtitle?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1) }
+                // Two tiles have a line under the name: All apps says how many it opens onto, a hidden app that it is hidden.
+                (tile.subtitle ?: "Hidden".takeIf { tile.hidden })?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1) }
             }
         }
     }

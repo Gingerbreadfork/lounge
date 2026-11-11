@@ -61,8 +61,6 @@ const NOTICE_TV_LISTINGS: &str = "notice:tv_listings";
 const NOTICE_PLUGINS: &str = "notice:plugins";
 /// Beside the header of a plugin's row while its last refresh failed (DESIGN.md §8).
 const OFFLINE_NOTE: &str = "Offline, showing what we have";
-/// The second line of an app hidden from every row, where All apps and search still list it.
-const HIDDEN_APP: &str = "Hidden from every row";
 
 /// The notice that suggests setting a plugin up.
 pub(crate) fn plugin_notice(plugin: &str) -> String {
@@ -790,8 +788,6 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         },
         _ => it.subtitle.clone(),
     };
-    let hidden = graph.is_hidden(&it.id);
-    let subtitle = if hidden && it.kind == ItemKind::App { Some(HIDDEN_APP.to_string()) } else { subtitle };
     Tile {
         id: it.id.clone(),
         kind,
@@ -818,7 +814,8 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         installed_rank: None,
         provider: None,
         provider_name: None,
-        hidden,
+        // The screens draw and say this themselves; as a second line it would be searched like a title.
+        hidden: graph.is_hidden(&it.id),
         time_left: it.progress.and_then(|p| remaining_text(it, p)),
     }
 }
@@ -1334,7 +1331,7 @@ mod tests {
         let snap = build(&state(g, Vec::new()), &config(), 0);
         let alpha = snap.all_apps.iter().find(|t| t.id == "app:tv.a").expect("still in All apps");
         assert!(alpha.hidden);
-        assert_eq!(alpha.subtitle.as_deref(), Some(HIDDEN_APP));
+        assert_eq!(alpha.subtitle, None);
         assert!(!snap.all_apps.iter().find(|t| t.id == "app:tv.b").unwrap().hidden);
         let apps = snap.rows.iter().find(|r| r.id == "apps").unwrap();
         assert!(apps.tiles.iter().all(|t| t.id != "app:tv.a"));

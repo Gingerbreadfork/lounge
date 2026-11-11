@@ -83,6 +83,10 @@ class FocusRulesTest {
         val snapshot = testSnapshot(strip = listOf(onStage), allApps = listOf(hidden))
         assertEquals(listOf("continue"), search(snapshot, "sev").map { it.id })
         assertEquals(listOf("app:x"), search(snapshot, "xb").single().tiles.map { it.id })
+        // Being hidden is a state the tile wears and says, not words to be found by.
+        assertTrue(search(snapshot, "hi").isEmpty())
+        assertTrue(search(snapshot, "ro").isEmpty())
+        assertEquals("Xbox, All apps, hidden from every row", tileDescription(hidden, "All apps"))
     }
 
     @Test
