@@ -124,7 +124,8 @@ pub struct LayoutPatch {
     pub dismissed_notices: Option<Vec<String>>,
 }
 
-/// Everything the API can do, provided by the core.
+/// Everything the API can do, provided by the core. An `Err` is a sentence the page shows as it
+/// is, so the implementer words every failure; see [`sentence_or`] for text it did not write.
 pub trait CompanionActions: Send + Sync {
     fn device_info(&self) -> DeviceInfo;
     /// The current `HomeSnapshot` as JSON.
@@ -154,9 +155,16 @@ pub trait CompanionActions: Send + Sync {
     fn download(&self, url: &str, into: &Path) -> Result<(), String>;
 }
 
-/// What the phone shows for a failure: `detail` when it already reads as a sentence, otherwise
-/// `fallback`, with `detail` kept for the log. A colon, an exception, a package name or a
-/// lower-case start marks text written for a developer.
+/// Whether `text` is a sentence written for a screen: a capital first, a full stop or question
+/// mark last, and no longer than a few lines. An address or a title with a colon may sit inside it.
+pub fn reads_as_sentence(text: &str) -> bool {
+    let t = text.trim();
+    t.chars().next().is_some_and(char::is_uppercase) && t.ends_with(['.', '?']) && t.len() <= 400
+}
+
+/// What the phone shows for a failure nobody worded, such as Android's own text: `detail` when it
+/// still reads as a sentence, otherwise `fallback`, with `detail` kept for the log. A colon, an
+/// exception, a package name or a lower-case start marks text written for a developer.
 pub fn sentence_or(detail: &str, fallback: &str) -> String {
     let d = detail.trim();
     let package = |w: &str| {
@@ -281,6 +289,22 @@ mod tests {
         for raw in ["platform: busy", "No launch intent for com.netflix.ninja", "busy", "Permission Denial: starting Intent", "SecurityException", ""] {
             assert_eq!(sentence_or(raw, fallback), fallback, "{raw}");
         }
+    }
+
+    #[test]
+    fn a_sentence_someone_wrote_may_name_a_title_or_an_address() {
+        for written in [
+            "Couldn't open Alien: Earth. Is its app still installed?",
+            "Jellyfin didn't answer at nas.local:8096. Check the server, then try again.",
+            "Lounge couldn't read or write the plugin's files: No space left on device (os error 28). Check that the TV has free space, then try again.",
+            "The server at nas.local:8096 didn't answer like a Jellyfin server. Check the server address in the plugin's settings.",
+        ] {
+            assert!(reads_as_sentence(written), "{written}");
+        }
+        for raw in ["No space left on device (os error 28)", "nas.local:8096 didn't answer.", "platform: busy", "no", ""] {
+            assert!(!reads_as_sentence(raw), "{raw}");
+        }
+        assert!(!reads_as_sentence(&format!("A{}.", "a".repeat(400))));
     }
 
     #[test]

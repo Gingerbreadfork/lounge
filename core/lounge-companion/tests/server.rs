@@ -16,8 +16,9 @@ impl CompanionActions for Fake {
     fn snapshot_json(&self) -> String {
         "{}".into()
     }
-    fn perform(&self, _: &str) -> Result<(), String> {
-        Ok(())
+    /// An action of `fail:` and some words fails with those words.
+    fn perform(&self, action: &str) -> Result<(), String> {
+        action.strip_prefix("fail:").map_or(Ok(()), |said| Err(said.to_string()))
     }
     fn launch(&self, _: &str) -> Result<(), String> {
         Ok(())
@@ -258,6 +259,32 @@ fn a_used_code_is_replaced_and_a_late_phone_is_told_what_to_do() {
     let fresh = companion.live_pairing(now()).unwrap();
     assert_ne!(fresh.code, shown.code);
     assert_eq!(status(&post_pair(port, &host, "code", &fresh.code)), 200);
+}
+
+#[test]
+fn a_sentence_the_tv_wrote_reaches_the_phone_as_it_is() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let token = pair(&companion, &host);
+    let told = |said: &str| {
+        let body = serde_json::json!({ "action": format!("fail:{said}") }).to_string();
+        let request = format!("POST /api/open HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+        json_body(&exchange(port, &request))["error"].as_str().unwrap_or_default().to_string()
+    };
+    // A title with a colon, a server by its name and the plugin host's own words all pass.
+    for said in [
+        "Couldn't open Alien: Earth. Is its app still installed?",
+        "Jellyfin didn't answer at nas.local:8096. Check the server, then try again.",
+        "Lounge couldn't read or write the plugin's files: No space left on device (os error 28). Check that the TV has free space, then try again.",
+    ] {
+        assert_eq!(told(said), said);
+    }
+    // Text nobody worded stays in the log.
+    for raw in ["No space left on device (os error 28)", "platform: busy", "no"] {
+        assert_eq!(told(raw), "The TV couldn't open that. Try it from the TV.");
+    }
 }
 
 #[test]

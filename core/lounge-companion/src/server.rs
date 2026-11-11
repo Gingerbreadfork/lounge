@@ -6,7 +6,7 @@
 //! can show is a sentence that says the cause and the fix; the raw reason goes to the log.
 
 use crate::auth::{PairingInfo, TokenStore};
-use crate::{sentence_or, CompanionActions, CompanionError, LayoutPatch};
+use crate::{reads_as_sentence, CompanionActions, CompanionError, LayoutPatch};
 use axum::body::Bytes;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, DefaultBodyLimit, FromRequest, Path as AxPath, Query, Request, State};
@@ -380,9 +380,16 @@ fn bad(e: String) -> ApiError {
     ApiError(StatusCode::BAD_REQUEST, e)
 }
 
-/// A failure the launcher reported, as a sentence: its own when it wrote one, else `fallback`.
+/// A failure the launcher reported. It words its own, so a sentence passes as it is; anything
+/// else goes to the log and the page reads `fallback`.
 fn refused(fallback: &'static str) -> impl FnOnce(String) -> ApiError {
-    move |e| bad(sentence_or(&e, fallback))
+    move |e| {
+        if reads_as_sentence(&e) {
+            return bad(e);
+        }
+        tracing::warn!("companion: {e}");
+        bad(fallback.to_string())
+    }
 }
 
 const USED_CODE: &str = "That code has been used or has expired. Choose New code on the TV and try again.";

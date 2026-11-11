@@ -414,7 +414,7 @@ impl PluginManager {
                 // The APK vouches for the plugins it carries, so its copy replaces one an earlier
                 // APK installed even when another machine signed it.
                 if !(built_in && prev.built_in) {
-                    return Err(format!("{} is signed by a different publisher than the installed version", bundle.manifest.name));
+                    return Err(format!("This copy of {} is signed by a different publisher than the installed one, so Lounge won't replace it. Remove the installed one first if you trust this file.", bundle.manifest.name));
                 }
                 tracing::info!("built-in plugin {} changed publisher from {} to {}", bundle.manifest.id, prev.publisher, bundle.publisher_hex());
             }
@@ -422,19 +422,21 @@ impl PluginManager {
             if let Some(old) = &installed
                 && older(&bundle.manifest.version, &old.version)
             {
-                return Err(format!("{} {} is installed already, newer than this {}", bundle.manifest.name, old.version, bundle.manifest.version));
+                return Err(format!("The installed {} {} is newer than this {}, so there is nothing to update.", bundle.manifest.name, old.version, bundle.manifest.version));
             }
         }
         // The module must describe itself the same way the bundle does.
         let probe = self.host.load(&bundle.manifest.id, bundle.manifest.clone(), &bundle.wasm).map_err(|e| e.to_string())?;
         let reported = self.host.manifest_of(&probe).map_err(|e| e.to_string())?;
         if reported.id != bundle.manifest.id || reported.version != bundle.manifest.version {
-            return Err("the plugin module does not match its manifest".into());
+            return Err("This plugin's module doesn't match its manifest. Ask its publisher for a corrected one.".into());
         }
         let dir = self.plugin_dir(&bundle.manifest.id).ok_or_else(|| format!("invalid plugin id {:?}", bundle.manifest.id))?;
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        std::fs::write(dir.join("plugin.wasm"), &bundle.wasm).map_err(|e| e.to_string())?;
-        std::fs::write(dir.join("manifest.json"), &bundle.manifest_json).map_err(|e| e.to_string())?;
+        // A file that will not write is said in the host's words, not the system's.
+        let not_kept = |e: std::io::Error| lounge_plugins::PluginError::Io(e).to_string();
+        std::fs::create_dir_all(&dir).map_err(not_kept)?;
+        std::fs::write(dir.join("plugin.wasm"), &bundle.wasm).map_err(not_kept)?;
+        std::fs::write(dir.join("manifest.json"), &bundle.manifest_json).map_err(not_kept)?;
         self.loaded.lock().insert(bundle.manifest.id.clone(), Arc::new(probe));
         self.fetchers.forget(&bundle.manifest.id);
         // An update that asks to reach more is turned off until the person allows it again. The

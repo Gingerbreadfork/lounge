@@ -2,7 +2,7 @@
 //! failure it hands the phone is a sentence with the cause and the fix.
 
 use crate::{engine, now_ms, plugins, worker, CompanionStatus, CoreError, Inner, PairingInfo};
-use lounge_companion::{sentence_or, AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, NamedRef, RowRef, SourceRef};
+use lounge_companion::{reads_as_sentence, sentence_or, AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, NamedRef, RowRef, SourceRef};
 use lounge_graph::Layout;
 use lounge_plugins::http::{Fetcher, Reach};
 use serde::{Deserialize, Serialize};
@@ -44,23 +44,23 @@ fn failed_to(inner: &Inner, action: &str, e: CoreError) -> String {
             _ => sentence_or(&detail, "The TV couldn't do that. Try it from the TV."),
         },
         // A plugin's error is its own sentence, which may name a server by its address.
-        CoreError::Plugin { detail } if plugin_sentence(&detail) => detail,
+        CoreError::Plugin { detail } if reads_as_sentence(&detail) => detail,
         other => sentence_or(&other.to_string(), "The TV couldn't do that. Try it from the TV."),
     }
 }
 
-fn plugin_sentence(detail: &str) -> bool {
-    let d = detail.trim();
-    d.chars().next().is_some_and(char::is_uppercase) && d.ends_with(['.', '?']) && d.len() <= 400
-}
-
-/// A plugin that would not install, in words.
+/// A plugin that would not install, in words. The plugin host and the installer word their own
+/// failures, which pass as they are; anything else is for the log.
 fn not_installed(e: String) -> String {
     if e.contains("signature") {
         tracing::warn!("companion: plugin install refused ({e})");
         return "That plugin's signature doesn't check out, so the TV won't install it. Get it again from its publisher.".into();
     }
-    sentence_or(&e, "That file isn't a Lounge plugin, or it was damaged on the way. Get it again, then install it.")
+    if reads_as_sentence(&e) {
+        return e;
+    }
+    tracing::warn!("companion: plugin not installed ({e})");
+    "That file isn't a Lounge plugin, or it was damaged on the way. Get it again, then install it.".into()
 }
 
 pub(crate) fn start(inner: &Arc<Inner>, port: u16) -> Result<(), String> {
@@ -201,15 +201,16 @@ impl CompanionActions for CoreActions {
     }
 
     fn launch(&self, package: &str) -> Result<(), String> {
-        self.inner()?.platform.launch_app(package.to_string(), String::new()).map_err(|e| e.to_string())
+        let launched = self.inner()?.platform.launch_app(package.to_string(), String::new());
+        launched.map_err(|e| sentence_or(&e.to_string(), "The TV couldn't open that app. Is it still installed?"))
     }
 
     fn send_key(&self, key: &str) -> Result<(), String> {
-        self.inner()?.platform.send_key(key.to_string()).map_err(|e| e.to_string())
+        self.inner()?.platform.send_key(key.to_string()).map_err(|e| sentence_or(&e.to_string(), "The TV didn't take that key. Try again."))
     }
 
     fn type_text(&self, text: &str) -> Result<(), String> {
-        self.inner()?.platform.type_text(text.to_string()).map_err(|e| e.to_string())
+        self.inner()?.platform.type_text(text.to_string()).map_err(|e| sentence_or(&e.to_string(), "The TV didn't take the text. Try again."))
     }
 
     fn search(&self, query: &str) -> Result<(), String> {
@@ -227,7 +228,7 @@ impl CompanionActions for CoreActions {
                 in_front = inner.screen_on.load(Ordering::Relaxed);
             }
         }
-        inner.platform.control(format!("search:{query}")).map_err(|e| e.to_string())?;
+        inner.platform.control(format!("search:{query}")).map_err(|e| sentence_or(&e.to_string(), "The TV couldn't start the search. Try again."))?;
         if in_front {
             Ok(())
         } else {
@@ -547,6 +548,19 @@ mod tests {
     }
 
     #[test]
+    fn a_plugin_that_will_not_install_says_why_in_the_host_s_own_words() {
+        let no_room = lounge_plugins::PluginError::Io(std::io::Error::other("No space left on device (os error 28)")).to_string();
+        assert_eq!(not_installed(no_room.clone()), no_room);
+        let not_a_bundle = lounge_plugins::PluginError::Bundle("no manifest.json inside".into()).to_string();
+        assert_eq!(not_installed(not_a_bundle.clone()), not_a_bundle);
+        assert!(not_installed(lounge_plugins::PluginError::Signature.to_string()).starts_with("That plugin's signature doesn't check out"));
+        // Text nobody worded never reaches the phone.
+        for raw in ["No space left on device (os error 28)", "database is locked", "UNIQUE constraint failed: plugins.id"] {
+            assert!(not_installed(raw.into()).starts_with("That file isn't a Lounge plugin"), "{raw}");
+        }
+    }
+
+    #[test]
     fn a_failed_tile_is_explained_in_words() {
         let dir = tempfile::tempdir().unwrap();
         let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
@@ -557,6 +571,12 @@ mod tests {
             failed_to(&core.inner, "open:wn:1", CoreError::UnknownAction { action: "open:wn:1".into() }),
             "That isn't on the TV's home screen any more. Choose it again from what the TV shows now."
         );
+        // A title with a colon in it still makes a sentence the phone shows.
+        let alien = lounge_graph::Item::content("wn:9", lounge_graph::ItemKind::Resume, "tvprovider", "Alien: Earth", lounge_graph::DeepLink::ViewUri("wn:9".into()));
+        core.inner.state.lock().graph.replace_source("tvprovider", vec![alien]);
+        let said = failed_to(&core.inner, "open:wn:9", platform_said("No Activity found to handle Intent { act=android.intent.action.VIEW }"));
+        assert_eq!(said, "Couldn't open Alien: Earth. Is its app still installed?");
+        assert!(reads_as_sentence(&said));
         let plugin_said = |detail: &str| CoreError::Plugin { detail: detail.into() };
         let jellyfin = "Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.";
         assert_eq!(failed_to(&core.inner, "open:plugin:jf:1", plugin_said(jellyfin)), jellyfin);
