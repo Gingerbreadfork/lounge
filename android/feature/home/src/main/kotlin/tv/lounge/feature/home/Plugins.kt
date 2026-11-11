@@ -4,10 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +26,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.Modifier
@@ -59,6 +63,7 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -407,6 +412,9 @@ internal fun agoText(ms: Long, now: Long): String {
     }
 }
 
+/** How long after the keyboard goes away a Back still belongs to the press that sent it away. */
+private const val KEYBOARD_BACK_MS = 300L
+
 /** About three lines of `caption` in the sheet: help this long reads whole. */
 private const val SHORT_HELP = 160
 
@@ -425,6 +433,7 @@ internal fun shortHelp(text: String): String {
  * a row, and OK opens the keyboard on it; Done, Back or leaving saves it. Passwords are masked;
  * toggles are a row. Text typed on the phone goes into the focused field.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusRequester, alsoFocus: FocusRequester?, onCommit: (String?) -> Unit, onToggle: (Boolean) -> Unit) {
     val colors = LoungeTheme.colors
@@ -468,13 +477,33 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
         commit()
         editing = false
         keyboard?.hide()
-        rowFocus.value.requestFocus()
+        // The row may be on its way out with its sheet, and then has no focus to take.
+        runCatching { rowFocus.value.requestFocus() }
     }
-    // While the keyboard's field is open, Back returns to the row rather than closing the sheet.
+    // Back with the keyboard up goes to the keyboard, which only puts itself away. Its going away
+    // ends the edit, so that one press also returns to the row.
+    val keyboardUp = rememberUpdatedState(WindowInsets.isImeVisible)
+    var keyboardLeft by remember { mutableStateOf(false) }
+    LaunchedEffect(editing) {
+        if (!editing) return@LaunchedEffect
+        // A keyboard never seen to come up cannot be seen to leave, and Back then works as below.
+        snapshotFlow { keyboardUp.value }.first { it }
+        snapshotFlow { keyboardUp.value }.first { !it }
+        keyboardLeft = true
+        stopEditing()
+    }
+    LaunchedEffect(keyboardLeft) {
+        if (keyboardLeft) {
+            delay(KEYBOARD_BACK_MS)
+            keyboardLeft = false
+        }
+    }
+    // While the field is open with the keyboard already away, Back returns to the row rather than
+    // closing the sheet. The press that put the keyboard away is not passed on to the sheet either.
     val sheetBack = LocalSheetBack.current
-    DisposableEffect(editing) {
-        val handler = { stopEditing(); true }
-        if (editing) sheetBack.handler = handler
+    DisposableEffect(editing, keyboardLeft) {
+        val handler = { if (editing) stopEditing(); true }
+        if (editing || keyboardLeft) sheetBack.handler = handler
         onDispose { if (sheetBack.handler === handler) sheetBack.handler = null }
     }
     val label = setting.label + if (setting.required) "" else " (optional)"
