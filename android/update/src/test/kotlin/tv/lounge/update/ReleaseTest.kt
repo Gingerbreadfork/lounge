@@ -174,11 +174,42 @@ class ReleaseTest {
 
     @Test
     fun failuresAreSaidAsSentencesWithWhatHappensNext() {
-        assertEquals("Lounge couldn't reach GitHub. Check the TV's internet connection; it tries again later.", failureText(java.net.UnknownHostException("api.github.com")))
-        assertEquals("GitHub took too long to answer. Lounge tries again later.", failureText(java.net.SocketTimeoutException("Read timed out")))
-        assertEquals("The connection to GitHub dropped. Lounge tries again later.", failureText(java.io.EOFException()))
-        assertEquals("Already a sentence.", failureText(UpdateProblem("Already a sentence.")))
-        assertFalse(failureText(IllegalStateException("java.lang.NullPointerException")).contains("java"))
+        fun said(e: Throwable, next: Next) = failureCause(e).let { (cause, settled) -> UpdateState.Failed(cause, next.takeUnless { settled }, null, 0L).message }
+        assertEquals("Lounge couldn't reach GitHub. Check the TV's internet connection. Lounge tries again later.", said(java.net.UnknownHostException("api.github.com"), Next.Later))
+        assertEquals("GitHub took too long to answer. Lounge tries again later.", said(java.net.SocketTimeoutException("Read timed out"), Next.Later))
+        assertEquals("The connection to GitHub dropped. Lounge tries again later.", said(java.io.EOFException(), Next.Later))
+        assertEquals("Already a sentence.", said(UpdateProblem("Already a sentence.", settled = true), Next.Later))
+        assertFalse(said(IllegalStateException("java.lang.NullPointerException"), Next.Later).contains("java"))
+        // Nothing is promised that will not happen: no later try with the checks off or once Lounge has given up.
+        assertEquals(Next.Later, nextAfter(auto = true, gaveUp = false))
+        assertEquals(Next.WhenAsked, nextAfter(auto = false, gaveUp = false))
+        assertEquals(Next.NextRelease, nextAfter(auto = true, gaveUp = true))
+        assertEquals(Next.NextRelease, nextAfter(auto = false, gaveUp = true))
+        assertEquals("The connection to GitHub dropped. Try again when you are ready.", said(java.io.EOFException(), Next.WhenAsked))
+        assertEquals("GitHub didn't send the update. Lounge waits for the next release.", said(UpdateProblem("GitHub didn't send the update."), Next.NextRelease))
+    }
+
+    @Test
+    fun aFileThatWillNotWriteIsNotBlamedOnTheNetwork() {
+        val full = runCatching { onStorage { throw java.io.IOException("write failed: ENOSPC (No space left on device)") } }.exceptionOrNull()!!
+        assertEquals(NOT_STORED to false, failureCause(full))
+        assertTrue(full.cause is java.io.IOException)
+        assertEquals("kept", onStorage { "kept" })
+        assertFalse(NOT_STORED.contains("GitHub"))
+    }
+
+    @Test
+    fun anInstallAndroidWillNeverTakeDoesNotSayTryAgain() {
+        for (status in listOf(android.content.pm.PackageInstaller.STATUS_FAILURE_INCOMPATIBLE, android.content.pm.PackageInstaller.STATUS_FAILURE_CONFLICT, android.content.pm.PackageInstaller.STATUS_FAILURE_INVALID)) {
+            val problem = installProblem(status)
+            assertTrue(installNeverWorks(status) && problem.settled)
+            assertFalse(problem.message!!, problem.message!!.contains("Try again", ignoreCase = true))
+            assertTrue(problem.message!!.endsWith("Lounge waits for the next release."))
+        }
+        // One that could go better says what the person can do, or leaves the ending to what happens next.
+        assertTrue(installProblem(android.content.pm.PackageInstaller.STATUS_FAILURE_STORAGE).message!!.contains("Free some space"))
+        val other = installProblem(android.content.pm.PackageInstaller.STATUS_FAILURE)
+        assertEquals("Android couldn't install the update." to false, other.message to other.settled)
     }
 
     @Test
