@@ -120,6 +120,16 @@ class PowerTest {
     }
 
     @Test
+    fun aFailedConnectKeepsItsReasonUntilSomethingChanges() {
+        val failed = PowerStatus.Failed(AdbBackend.TLS)
+        assertEquals(failed, PowerSetup.keptFailure(PowerStatus.NotPaired, failed))
+        assertEquals(PowerStatus.NotPaired, PowerSetup.keptFailure(PowerStatus.NotPaired, null))
+        assertEquals(PowerStatus.Ready("adb"), PowerSetup.keptFailure(PowerStatus.Ready("adb"), failed))
+        val off = PowerStatus.Unavailable(PowerSetup.DEBUGGING_OFF)
+        assertEquals(off, PowerSetup.keptFailure(off, failed))
+    }
+
+    @Test
     fun aFailedCommandIsSaidInASentence() {
         val refused = "Exception occurred while executing 'grant':\njava.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS."
         assertTrue(PowerSetup.failureSentence(refused).startsWith("This TV doesn't let USB debugging do that."))

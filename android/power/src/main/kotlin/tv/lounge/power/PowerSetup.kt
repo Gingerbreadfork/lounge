@@ -56,6 +56,8 @@ class PowerSetup(private val context: Context) {
     private val shizuku = ShizukuBackend()
     private val lock = Mutex()
     private val giveUpAt = AtomicLong(Long.MAX_VALUE)
+    /** Why the last Connect failed, shown until the next try or a connection. */
+    @Volatile private var pairFailure: PowerStatus.Failed? = null
     private val _status = MutableStateFlow<PowerStatus>(PowerStatus.Unavailable("Checking USB debugging…"))
     private val _log = MutableStateFlow<List<PowerLogEntry>>(emptyList())
     private val _results = MutableStateFlow<Map<String, PowerResult>>(emptyMap())
@@ -93,8 +95,10 @@ class PowerSetup(private val context: Context) {
             adb.available() -> PowerStatus.Ready("adb")
             else -> PowerStatus.NotPaired
         }
-        _status.value = s
-        s
+        val shown = keptFailure(s, pairFailure)
+        if (shown !is PowerStatus.Failed) pairFailure = null
+        _status.value = shown
+        shown
     }
 
     /**
@@ -107,10 +111,11 @@ class PowerSetup(private val context: Context) {
                 return@withContext PowerStatus.Unavailable(DEBUGGING_OFF).also { _status.value = it }
             }
             giveUpAt.set(Long.MAX_VALUE)
+            pairFailure = null
             val outcome = AdbClient(keys).connect(onWaitingForUser = { _status.value = PowerStatus.WaitingForApproval }, giveUpAt = giveUpAt)
             val s = when (outcome) {
                 is AdbClient.Outcome.Online -> { outcome.connection.close(); PowerStatus.Ready("adb") }
-                AdbClient.Outcome.Refused -> PowerStatus.Unavailable(AdbBackend.UNREACHABLE)
+                AdbClient.Outcome.Refused -> PowerStatus.Failed(AdbBackend.UNREACHABLE)
                 AdbClient.Outcome.Unknown, AdbClient.Outcome.Denied -> PowerStatus.NotPaired
                 is AdbClient.Outcome.TlsRequired -> PowerStatus.Failed(AdbBackend.TLS)
                 is AdbClient.Outcome.NotThisDevice -> PowerStatus.Failed(AdbBackend.NOT_THIS_TV)
@@ -122,6 +127,7 @@ class PowerSetup(private val context: Context) {
                 is AdbClient.Outcome.Error -> outcome.detail
                 else -> null
             }?.let { android.util.Log.w("Lounge", "power setup: $it") }
+            pairFailure = s as? PowerStatus.Failed
             _status.value = s
             s
         }
@@ -139,6 +145,7 @@ class PowerSetup(private val context: Context) {
     /** Forgets the key so the device prompts again next time, and how each action went with it. */
     fun forget() {
         keys.forget()
+        pairFailure = null
         _results.value = emptyMap()
         _status.value = PowerStatus.NotPaired
     }
@@ -418,6 +425,10 @@ class PowerSetup(private val context: Context) {
 
         /** Home screens whose whole app is off. One with only its activity off, as a finished setup leaves it, is left alone. */
         fun switchedOff(homes: List<HomeApp>): List<HomeApp> = homes.filter { !it.appEnabled }
+
+        /** What a status check shows: [found], or [failure] from the last Connect while the TV is still only waiting to be paired. */
+        fun keptFailure(found: PowerStatus, failure: PowerStatus.Failed?): PowerStatus =
+            if (found == PowerStatus.NotPaired && failure != null) failure else found
 
         /** The action that undoes [id], or null when it has none. */
         fun oppositeOf(id: String): String? = when {

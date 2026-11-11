@@ -392,6 +392,7 @@ private fun StepPower(power: PowerSetup, context: Context, choiceFocus: FocusReq
                 is PowerStatus.Unavailable -> "Turn on USB debugging first"
                 else -> "Connect Power Setup"
             },
+            subtitle = (status as? PowerStatus.Failed)?.reason,
             value = when (status) {
                 is PowerStatus.Ready -> "USB debugging"
                 PowerStatus.WaitingForApproval -> "Look at the prompt"
