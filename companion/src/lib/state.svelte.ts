@@ -44,15 +44,15 @@ function hashOf(page: Route['page'], id?: string) {
 export function go(page: Route['page'], id?: string, { replace = false } = {}) {
   if (app.route.page !== page || app.route.id !== id) {
     if (replace) history.replaceState(null, '', hashOf(page, id));
-    else history.pushState({ back: true }, '', hashOf(page, id));
+    else history.pushState({ from: hashOf(app.route.page, app.route.id) }, '', hashOf(page, id));
     app.route = { page, id };
   }
   window.scrollTo(0, 0);
 }
 
-/** Back to `page`: the step before when it led here, else straight to it. */
+/** Back to `page`: one step back when this page was opened from it, else straight to it. */
 export function goBack(page: Route['page']) {
-  if (history.state?.back) history.back();
+  if (history.state?.from === hashOf(page)) history.back();
   else go(page, undefined, { replace: true });
 }
 
