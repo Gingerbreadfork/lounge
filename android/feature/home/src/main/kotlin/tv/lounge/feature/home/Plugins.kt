@@ -439,9 +439,20 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
     val colors = LoungeTheme.colors
     val visuals = LoungeTheme.visuals
     val also = if (alsoFocus != null) Modifier.focusRequester(alsoFocus) else Modifier
+    val label = setting.label + if (setting.required) "" else " (optional)"
     if (setting.kind == "toggle") {
         val on = (setting.value ?: setting.defaultValue) == "true"
-        SheetRow(icon = null, title = setting.label, value = if (on) "On" else "Off", accent = if (on) colors.signal else colors.dust, onClick = { onToggle(!on) }, focusRequester = focusRequester, modifier = also)
+        SheetRow(
+            icon = null,
+            title = label,
+            subtitle = setting.help?.let { shortHelp(it) },
+            subtitleLines = WHOLE,
+            value = if (on) "On" else "Off",
+            accent = if (on) colors.signal else colors.dust,
+            onClick = { onToggle(!on) },
+            focusRequester = focusRequester,
+            modifier = also,
+        )
         return
     }
     // A secret is never shown back; a password is also masked while it is typed.
@@ -506,7 +517,6 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
         if (editing || keyboardLeft) sheetBack.handler = handler
         onDispose { if (sheetBack.handler === handler) sheetBack.handler = null }
     }
-    val label = setting.label + if (setting.required) "" else " (optional)"
     val placeholder = when {
         secret && setting.hasValue -> "•••••••• (saved)"
         setting.defaultValue != null -> setting.defaultValue!!

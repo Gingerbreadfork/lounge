@@ -203,7 +203,6 @@
                 onblur={() => commit(current!, st.key)}
                 autocapitalize="off" spellcheck="false"
               ></textarea>
-              {#if st.help}<p class="caption">{#each linked(st.help, true) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
             {:else}
               <input
                 id={st.key}
@@ -215,8 +214,8 @@
                 onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                 autocapitalize="off" autocorrect="off" spellcheck="false"
               />
-              {#if st.help}<p class="caption">{#each linked(st.help, true) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
             {/if}
+            {#if st.help}<p class="caption">{#each linked(st.help, true) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
           </div>
         {/each}
       </section>
