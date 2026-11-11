@@ -1049,7 +1049,7 @@ private fun SheetContent(
             onPreview = { open(Overlay.AmbientPreview) },
             firstFocus = first,
         )
-        Overlay.PowerSetup -> PowerSetupSheet(power = power, onHomeRoleChanged = onHomeChanged, firstFocus = first)
+        Overlay.PowerSetup -> PowerSetupSheet(power = power, onHomeRoleChanged = onHomeChanged, say = say, firstFocus = first)
         Overlay.TvControls -> TvControlsSheet(
             power = power,
             deviceName = android.os.Build.MODEL,
@@ -1136,6 +1136,7 @@ private fun SheetContent(
             pluginId = overlay.id,
             // The page of a removed plugin has nothing to go back to.
             onRemoved = { open(Overlay.Plugins); forget(overlay) },
+            say = say,
             firstFocus = first,
         )
         Overlay.HomeRole -> {

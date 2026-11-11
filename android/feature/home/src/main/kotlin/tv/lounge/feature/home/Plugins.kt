@@ -163,7 +163,7 @@ private fun statusColour(p: PluginInfo) = with(LoungeTheme.colors) {
  * empty required field, and offers Turn on after the last one.
  */
 @Composable
-fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit, firstFocus: FocusRequester) {
+fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit, say: (String) -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
     var info by remember { mutableStateOf<PluginInfo?>(null) }
     var loaded by remember { mutableStateOf(false) }
@@ -319,7 +319,11 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
                     if (!confirming) {
                         confirming = true
                     } else {
-                        scope.launch { withContext(Dispatchers.IO) { core.removePlugin(p.id) }; onRemoved() }
+                        scope.launch {
+                            withContext(Dispatchers.IO) { core.removePlugin(p.id) }
+                            say("${p.name} removed")
+                            onRemoved()
+                        }
                     }
                 },
             )

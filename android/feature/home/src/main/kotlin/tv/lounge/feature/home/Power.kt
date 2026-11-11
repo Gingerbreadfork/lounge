@@ -85,7 +85,7 @@ private fun glyphFor(action: PowerAction): ImageVector = when {
  * shows what is already so and how it last went.
  */
 @Composable
-fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus: FocusRequester) {
+fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, say: (String) -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -217,6 +217,7 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
                 } else {
                     forgetting = false
                     power.forget()
+                    say("Connection forgotten")
                     scope.launch { firstFocus.requestWhenReady() }
                 }
             },
