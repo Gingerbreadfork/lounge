@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -114,7 +115,10 @@ class PowerSetup(private val context: Context) {
             pairFailure = null
             val outcome = AdbClient(keys).connect(onWaitingForUser = { _status.value = PowerStatus.WaitingForApproval }, giveUpAt = giveUpAt)
             val s = when (outcome) {
-                is AdbClient.Outcome.Online -> { outcome.connection.close(); PowerStatus.Ready("adb") }
+                is AdbClient.Outcome.Online -> {
+                    outcome.connection.close()
+                    if (keyKept()) PowerStatus.Ready("adb") else PowerStatus.Failed(ALLOWED_ONCE)
+                }
                 AdbClient.Outcome.Refused -> PowerStatus.Failed(AdbBackend.UNREACHABLE)
                 AdbClient.Outcome.Unknown, AdbClient.Outcome.Denied -> PowerStatus.NotPaired
                 is AdbClient.Outcome.TlsRequired -> PowerStatus.Failed(AdbBackend.TLS)
@@ -131,6 +135,23 @@ class PowerSetup(private val context: Context) {
             _status.value = s
             s
         }
+    }
+
+    /**
+     * Whether the TV knows Lounge's key on a new connection. A prompt allowed without "Always allow"
+     * lets in only the connection that asked, and Android saves a kept key a moment after the prompt closes.
+     */
+    private suspend fun keyKept(): Boolean {
+        repeat(KEY_CHECKS) { attempt ->
+            if (attempt > 0) delay(KEY_CHECK_GAP_MS)
+            when (val o = AdbClient(keys).connect(presentKey = false, connectTimeoutMs = 1_500)) {
+                is AdbClient.Outcome.Online -> { o.connection.close(); return true }
+                AdbClient.Outcome.Unknown, AdbClient.Outcome.Denied -> Unit
+                // Not reaching the daemon says nothing about the key; the first action finds out.
+                else -> return true
+            }
+        }
+        return false
     }
 
     fun requestShizuku(requestCode: Int) = shizuku.requestPermission(requestCode)
@@ -390,9 +411,14 @@ class PowerSetup(private val context: Context) {
         const val DEBUGGING_OFF = "USB debugging is off. Turn it on in Developer options, then come back."
         const val SHIZUKU_WAITING = "Shizuku is installed but hasn't allowed Lounge yet. Choose Use Shizuku instead, or turn on USB debugging."
         const val NOT_CONNECTED = "Power Setup isn't connected. In Settings, open Power Setup and choose Connect."
+        const val ALLOWED_ONCE = "The TV allowed Lounge just this once. Choose Connect again, and tick “Always allow” on the TV's prompt."
 
         /** How much of a failed command's output is logged. */
         private const val LOGGED_OUTPUT = 400
+
+        /** How many times, and how far apart, Connect looks for a key the TV kept. */
+        private const val KEY_CHECKS = 4
+        private const val KEY_CHECK_GAP_MS = 500L
 
         /** A command that exited with an error, as a sentence chosen by what it printed. */
         fun failureSentence(output: String): String {

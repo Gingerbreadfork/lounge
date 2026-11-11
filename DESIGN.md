@@ -320,7 +320,9 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
 - **Power Setup sheet**: heading, one status sentence, then a single row that is the only thing
   to do right now: Connect (houselight), Waiting for you to allow it…, Connected (signal), or
   Open Developer options, under numbered steps for turning on USB debugging and one sentence on
-  what stays on afterwards and what turning it off would stop. Under "What it can do", each action is a row (its title, with Run, Done,
+  what stays on afterwards and what turning it off would stop. A prompt allowed without "Always
+  allow" lets in only that one connection, so the status then says to choose Connect again and
+  tick it. Under "What it can do", each action is a row (its title, with Run, Done,
   Failed or Didn't take as the value) followed by its reason in `caption` and the exact shell command in a monospace `velvet` box, so
   nothing runs that the person has not read. What the command printed follows it in the same box in
   `dust`; a failure is a sentence under the box in `ember`, and its raw reason goes to the log. Didn't take
