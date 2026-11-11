@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.focusable
@@ -246,7 +247,9 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             p.settings.forEach { s ->
                 SettingField(
                     setting = s,
-                    focusRequester = if (startAtField && s.key == missing?.key) firstFocus else focusOf(s.key),
+                    focusRequester = focusOf(s.key),
+                    // The page opens on the first field still to fill in.
+                    alsoFocus = firstFocus.takeIf { startAtField && s.key == missing?.key },
                     onCommit = { value -> scope.launch { writes.withLock { withContext(Dispatchers.IO) { core.setPluginSetting(p.id, s.key, value) } } } },
                     onToggle = { on -> scope.launch { writes.withLock { withContext(Dispatchers.IO) { core.setPluginSetting(p.id, s.key, if (on) "true" else "false") } } } },
                 )
@@ -423,12 +426,13 @@ internal fun shortHelp(text: String): String {
  * toggles are a row. Text typed on the phone goes into the focused field.
  */
 @Composable
-private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusRequester, onCommit: (String?) -> Unit, onToggle: (Boolean) -> Unit) {
+private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusRequester, alsoFocus: FocusRequester?, onCommit: (String?) -> Unit, onToggle: (Boolean) -> Unit) {
     val colors = LoungeTheme.colors
     val visuals = LoungeTheme.visuals
+    val also = if (alsoFocus != null) Modifier.focusRequester(alsoFocus) else Modifier
     if (setting.kind == "toggle") {
         val on = (setting.value ?: setting.defaultValue) == "true"
-        SheetRow(icon = null, title = setting.label, value = if (on) "On" else "Off", accent = if (on) colors.signal else colors.dust, onClick = { onToggle(!on) }, focusRequester = focusRequester)
+        SheetRow(icon = null, title = setting.label, value = if (on) "On" else "Off", accent = if (on) colors.signal else colors.dust, onClick = { onToggle(!on) }, focusRequester = focusRequester, modifier = also)
         return
     }
     // A secret is never shown back; a password is also masked while it is typed.
@@ -446,6 +450,9 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
     val keyboard = LocalSoftwareKeyboardController.current
     val editor = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
+    // Read when an edit ends, which may be a later composition than the one it began in.
+    val rowFocus = rememberUpdatedState(focusRequester)
+    val save = rememberUpdatedState(onCommit)
     PhoneTextInput(active = focused) { typed ->
         val next = field.text + typed
         field = TextFieldValue(next, TextRange(next.length))
@@ -454,14 +461,14 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
         val text = field.text
         if (text != committed) {
             committed = text
-            onCommit(text.ifBlank { null })
+            save.value(text.ifBlank { null })
         }
     }
     fun stopEditing() {
         commit()
         editing = false
         keyboard?.hide()
-        focusRequester.requestFocus()
+        rowFocus.value.requestFocus()
     }
     // While the keyboard's field is open, Back returns to the row rather than closing the sheet.
     val sheetBack = LocalSheetBack.current
@@ -494,6 +501,7 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
                 .background(if (focused) colors.curtainEdge else colors.velvet)
                 .focusRim(colors, { if (focused) 1f else 0f }, 12.dp)
                 .focusRequester(focusRequester)
+                .then(also)
                 .onFocusChanged {
                     if (rowFocused && !it.isFocused && !editing) commit()
                     rowFocused = it.isFocused
