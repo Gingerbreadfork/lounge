@@ -213,7 +213,7 @@ fun menuItemsFor(
         return items
     }
     if (tile.hidden) {
-        items += MenuItem(PinWords.SHOW, LoungeIcons.Hide, detail = PinWords.SHOW_DETAIL, onSelect = onShow)
+        items += MenuItem(PinWords.SHOW, LoungeIcons.Show, detail = PinWords.SHOW_DETAIL, onSelect = onShow)
         if (isApp) {
             items += MenuItem("App info", LoungeIcons.Info, onSelect = onAppInfo)
             items += MenuItem("Open in Play Store", LoungeIcons.Play, onSelect = onPlay)

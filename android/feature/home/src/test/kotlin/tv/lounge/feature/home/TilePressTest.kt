@@ -4,7 +4,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performKeyInput
@@ -20,7 +23,7 @@ import tv.lounge.core.TileKind
 import tv.lounge.design.Lights
 import tv.lounge.design.LoungeTheme
 
-/** What a press and a hold do on a tile. */
+/** What a press and a hold do on a tile, and what a screen reader is offered. */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
 class TilePressTest {
@@ -68,5 +71,19 @@ class TilePressTest {
         show(testTile("control:allapps", "All apps", action = "control:allapps"))
         hold()
         rule.runOnIdle { assertEquals(1 to 0, presses to menus) }
+    }
+
+    @Test
+    fun aTileThatOpensNothingOffersNoPressToAScreenReader() {
+        show(testTile("plugin:weather:now", "18 degrees now", action = ""))
+        rule.onNode(isFocused())
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick))
+            .assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+    }
+
+    @Test
+    fun aTileThatOpensSomethingOffersThePress() {
+        show(testTile("app:tv.a", "Alpha"))
+        rule.onNode(isFocused()).assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick))
     }
 }

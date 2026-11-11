@@ -553,7 +553,7 @@ private fun StageStrip(
                     size = DpSize(Dimens.stripTileWidth, Dimens.stripTileHeight),
                     lights = lights,
                     rowName = "the Stage",
-                    description = spotlight?.let(::spotlightDescription),
+                    description = spotlight?.let { spotlightDescription(it, pinned = tile.stagePinned) },
                     focusRequester = stripRequester(index),
                     onFocused = { focused, _ -> if (focused) onStripFocused(index, tile) },
                     onClick = { onStripClick(tile) },
@@ -569,8 +569,8 @@ private fun StageStrip(
 }
 
 /** What is read out for a strip tile: the playbill's words, "The Bear, Continue watching, Season 2, Episode 4, 23 minutes left". */
-internal fun spotlightDescription(sp: StageSpotlight): String =
-    (listOf(sp.title, sp.category) + sp.lines + listOfNotNull(sp.source?.let { "on $it" }, sp.explanation))
+internal fun spotlightDescription(sp: StageSpotlight, pinned: Boolean = false): String =
+    (listOf(sp.title, sp.category) + sp.lines + listOfNotNull(sp.source?.let { "on $it" }, sp.explanation, "pinned to the Stage".takeIf { pinned }))
         .filter { it.isNotBlank() }
         .joinToString(", ") { spokenEpisodes(it) }
 

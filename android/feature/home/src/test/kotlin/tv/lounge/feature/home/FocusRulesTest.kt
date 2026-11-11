@@ -155,6 +155,18 @@ class FocusRulesTest {
     }
 
     @Test
+    fun aStripTileIsReadAsThePlaybillSaysItAndSaysWhenItIsPinned() {
+        val sp = tv.lounge.core.StageSpotlight(
+            id = "wn:1", kind = tv.lounge.core.SpotlightKind.CONTENT, category = "Continue watching", title = "The Bear", lines = listOf("S2 E4"),
+            progress = null, artworkPath = null, backdropPath = null, iconPath = null, lightArgb = 0u,
+            primary = tv.lounge.core.StageAction(label = "Continue", action = "open:wn:1"), secondary = null, explanation = null,
+            framed = false, artAspect = 0f, glowArgb = emptyList(), focalY = 0.5f, source = "Netflix", sourceIconPath = null,
+        )
+        assertEquals("The Bear, Continue watching, Season 2, Episode 4, on Netflix", spotlightDescription(sp))
+        assertEquals("The Bear, Continue watching, Season 2, Episode 4, on Netflix, pinned to the Stage", spotlightDescription(sp, pinned = true))
+    }
+
+    @Test
     fun onlyTilesWithSomethingToPinOrHideHaveAMenu() {
         assertTrue(hasMenu(testTile("app:tv.a")))
         assertFalse(hasMenu(testTile("control:allapps")))

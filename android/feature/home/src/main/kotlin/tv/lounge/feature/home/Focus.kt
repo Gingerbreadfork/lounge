@@ -134,38 +134,39 @@ private val menuKeys = setOf(Key.Menu, Key.ButtonY)
 private val backKeys = setOf(Key.Back, Key.Escape, Key.ButtonB)
 
 /**
- * D-pad centre for tiles: a short press selects; holding it, or the Menu or controller Y key,
- * opens the tile menu. `combinedClickable` cannot see key long-presses, so this reads the repeated
- * KeyDowns. The press lives in a node, so a recomposition between KeyDown and KeyUp keeps it.
- * Accessibility services press through the same node: [clickLabel] names the press, and the hold
- * is offered as an action only when [longPressLabel] names it.
+ * D-pad centre for tiles: a short press selects, and holding it, or the Menu or controller Y key,
+ * is the hold. It reads the repeated KeyDowns in a node, so a recomposition mid-press keeps the
+ * press. Accessibility services are offered the press as [clickLabel] unless the tile [opens]
+ * nothing, and the hold only when [longPressLabel] names it.
  */
-fun Modifier.tilePress(onClick: () -> Unit, onLongPress: () -> Unit, clickLabel: String? = null, longPressLabel: String? = null): Modifier =
-    this then TilePressElement(onClick, onLongPress, clickLabel, longPressLabel)
+fun Modifier.tilePress(onClick: () -> Unit, onLongPress: () -> Unit, clickLabel: String? = null, longPressLabel: String? = null, opens: Boolean = true): Modifier =
+    this then TilePressElement(onClick, onLongPress, clickLabel, longPressLabel, opens)
 
 private class TilePressElement(
     val onClick: () -> Unit,
     val onLongPress: () -> Unit,
     val clickLabel: String?,
     val longPressLabel: String?,
+    val opens: Boolean,
 ) : ModifierNodeElement<TilePressNode>() {
-    override fun create() = TilePressNode(onClick, onLongPress, clickLabel, longPressLabel)
+    override fun create() = TilePressNode(onClick, onLongPress, clickLabel, longPressLabel, opens)
 
     override fun update(node: TilePressNode) {
         node.press = onClick
         node.hold = onLongPress
-        if (node.clickLabel != clickLabel || node.longPressLabel != longPressLabel) {
+        if (node.clickLabel != clickLabel || node.longPressLabel != longPressLabel || node.opens != opens) {
             node.clickLabel = clickLabel
             node.longPressLabel = longPressLabel
+            node.opens = opens
             node.invalidateSemantics()
         }
     }
 
     override fun equals(other: Any?): Boolean =
         other is TilePressElement && other.onClick === onClick && other.onLongPress === onLongPress &&
-            other.clickLabel == clickLabel && other.longPressLabel == longPressLabel
+            other.clickLabel == clickLabel && other.longPressLabel == longPressLabel && other.opens == opens
 
-    override fun hashCode(): Int = ((31 * onClick.hashCode() + onLongPress.hashCode()) * 31 + clickLabel.hashCode()) * 31 + longPressLabel.hashCode()
+    override fun hashCode(): Int = (((31 * onClick.hashCode() + onLongPress.hashCode()) * 31 + clickLabel.hashCode()) * 31 + longPressLabel.hashCode()) * 31 + opens.hashCode()
 }
 
 private class TilePressNode(
@@ -173,9 +174,10 @@ private class TilePressNode(
     var hold: () -> Unit,
     var clickLabel: String?,
     var longPressLabel: String?,
+    var opens: Boolean,
 ) : Modifier.Node(), KeyInputModifierNode, FocusEventModifierNode, SemanticsModifierNode {
     override fun SemanticsPropertyReceiver.applySemantics() {
-        onClick(label = clickLabel) { press(); true }
+        if (opens) onClick(label = clickLabel) { press(); true }
         longPressLabel?.let { label -> onLongClick(label = label) { hold(); true } }
     }
 

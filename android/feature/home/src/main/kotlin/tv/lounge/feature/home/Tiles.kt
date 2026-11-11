@@ -195,7 +195,7 @@ fun TileView(
                 onFocused(it.isFocused, bounds())
             }
             // Held on a tile with no menu, OK is a press like any other.
-            .tilePress(onClick, { if (menu) onLongPress(bounds()) else onClick() }, clickLabel = "Open", longPressLabel = if (menu) "Options" else null)
+            .tilePress(onClick, { if (menu) onLongPress(bounds()) else onClick() }, clickLabel = "Open", longPressLabel = if (menu) "Options" else null, opens = tile.action.isNotEmpty())
             .focusable()
             .semantics { contentDescription = spoken }
             // Two layers on purpose: the glow redraws every frame of a focus change, and inside the
@@ -205,13 +205,13 @@ fun TileView(
                 scaleX = scale
                 scaleY = scale
                 translationX = nudge?.invoke() ?: 0f
-                // An app hidden from every row sits back until it has focus.
-                if (tile.hidden) alpha = 0.45f + 0.55f * litLevel.value
             }
             .lightGlow(lightColor, glow, cornerRadius = Dimens.tileRadius)
             .graphicsLayer {
                 this.shape = shape
                 clip = true
+                // An app hidden from every row sits back until it has focus. On this layer, so the glow outside it is not cut off.
+                if (tile.hidden) alpha = 0.45f + 0.55f * litLevel.value
             }
             .focusRim(colors, { litLevel.value }, Dimens.tileRadius)
             .size(drawn)
@@ -516,8 +516,14 @@ private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphic
     val colors = LoungeTheme.colors
     val pinned = tile.pinned || tile.stagePinned
     val connected = tile.badge == Badge.CONNECTED
-    // The row's padding, the icon, the gaps and whatever trails the words.
-    val wordsWidth = size.width - 32.dp - (if (tile.iconPath != null) 48.dp else 32.dp) - 14.dp -
+    // A tile to read that brings no picture is its words alone.
+    val icon = when {
+        tile.iconPath != null -> 48.dp
+        tile.action.isEmpty() && !tile.id.startsWith("device:") && !tile.id.startsWith("notice:") -> 0.dp
+        else -> 32.dp
+    }
+    // The row's padding, the icon and its gap, and whatever trails the words.
+    val wordsWidth = size.width - 32.dp - (if (icon > 0.dp) icon + 14.dp else 0.dp) -
         (if (pinned) 15.dp + 14.dp else 0.dp) - (if (connected) 10.dp + 14.dp else 0.dp)
     Row(
         Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -528,8 +534,7 @@ private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphic
             tile.iconPath != null -> FilteredPicture(tile.iconPath!!, filter, null, DpSize(48.dp, 48.dp), ContentScale.Fit, Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
             tile.id.startsWith("device:") -> Icon(LoungeIcons.Tv, contentDescription = null, tint = colors.houselight, modifier = Modifier.size(32.dp))
             tile.id.startsWith("notice:") -> Icon(LoungeIcons.Info, contentDescription = null, tint = colors.houselight, modifier = Modifier.size(32.dp))
-            // A tile to read that brings no picture is its words alone.
-            tile.action.isEmpty() -> Unit
+            icon == 0.dp -> Unit
             else -> Icon(LoungeIcons.Apps, contentDescription = null, tint = colors.dust, modifier = Modifier.size(32.dp))
         }
         Column(Modifier.weight(1f)) {
@@ -573,7 +578,9 @@ private const val TITLE_RUNS_AFTER_MS = 1_200L
 @Composable
 private fun RunningTitle(text: String, style: TextStyle, width: Dp, focused: Boolean, modifier: Modifier = Modifier, color: Color = LoungeTheme.colors.limelight) {
     val fitted = rememberFittedLine(text, style, width)
-    val cut = fitted != text
+    // One long word cannot be cut at a word, so the drawn line says whether it was cut short.
+    var clipped by remember(text, style, width) { mutableStateOf(false) }
+    val cut = fitted != text || clipped
     val still = LoungeTheme.motion.reducedMotion
     var running by remember { mutableStateOf(false) }
     LaunchedEffect(focused, cut, still) {
@@ -593,7 +600,7 @@ private fun RunningTitle(text: String, style: TextStyle, width: Dp, focused: Boo
             modifier = modifier.width(width).fadedEnds().basicMarquee(iterations = Int.MAX_VALUE, repeatDelayMillis = 1_500, initialDelayMillis = 0, velocity = 72.dp),
         )
     } else {
-        Text(fitted, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
+        Text(fitted, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier, onTextLayout = { clipped = it.hasVisualOverflow })
     }
 }
 

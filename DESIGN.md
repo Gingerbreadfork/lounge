@@ -394,7 +394,7 @@ No sound on Home, on scroll end, or on errors (the toast is enough).
 
 - Every tile's content description: "<title>, <row name>, <state>" (e.g. "The Bear, Continue watching, 23 minutes left").
 - Overlays announce their heading on open; toasts are live regions.
-- Tiles, sheet rows and buttons can be pressed by accessibility services; a tile with a menu offers it as "Options". Episode codes are read as words ("Season 2, Episode 4"), and a strip tile is read as the playbill says it.
+- Tiles, sheet rows and buttons can be pressed by accessibility services; a tile with a menu offers it as "Options", and a tile that opens nothing offers no press. Episode codes are read as words ("Season 2, Episode 4"), and a strip tile is read as the playbill says it, with "pinned to the Stage" when it is.
 - High-contrast theme: `velvet` → `#000000`, `dust` → `#D5CBD1`, glow alpha doubled, focus adds a 3 px `limelight` ring (the one case where a ring is allowed, because the user asked for it).
 - Reduced motion: section 6.2.
 - Text scale to 1.3× without clipping; at 1.3× the playbill drops the explanation line, and above it the title keeps to one line and the secondary button goes.
