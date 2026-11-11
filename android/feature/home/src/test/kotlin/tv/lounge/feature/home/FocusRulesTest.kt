@@ -113,6 +113,16 @@ class FocusRulesTest {
     }
 
     @Test
+    fun aPairingFailureIsTheCoresSentenceWhenItWroteOne() {
+        for (written in listOf("The TV isn't on a network. Connect it to your Wi-Fi, then try again.", "The phone companion is off. Turn it on, then try again.")) {
+            assertTrue(readsAsSentence(written))
+        }
+        for (raw in listOf("the TV's random number source failed, so no code was made", "io: No space left on device (os error 28)", "")) {
+            assertFalse(readsAsSentence(raw))
+        }
+    }
+
+    @Test
     fun theProgrammeOnAirSaysSoInWords() {
         val start = 1_700_000_000_000L
         val on = GuideProgramme(id = "p", title = "News", subtitle = null, startMs = start, endMs = start + 1_800_000, isNow = true)

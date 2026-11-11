@@ -722,7 +722,7 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
     var forgotten by remember { mutableStateOf(false) }
     // Starting binds a port and a new code writes its picture, so the server's calls run off the main thread.
     suspend fun newCode() {
-        withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; error = null }.onFailure { error = pairingProblem(it) }
+        withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; error = null }.onFailure { pairing = null; error = pairingProblem(it) }
     }
     suspend fun refresh() {
         val before = status
@@ -764,7 +764,10 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
     val s = status
     if (enabled) {
         val p = pairing
-        if (s != null && s.running && p != null) {
+        val why = error
+        if (why != null) {
+            Text(why, style = LoungeTheme.typography.meta, color = colors.ember)
+        } else if (s != null && s.running && p != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Box(Modifier.size(300.dp).clip(RoundedCornerShape(16.dp)).background(colors.limelight)) {
                     coil3.compose.AsyncImage(model = p.qrPngPath, contentDescription = "Pairing code", modifier = Modifier.fillMaxSize())
@@ -782,8 +785,6 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
                 title = "New code",
                 onClick = { scope.launch { newCode() } },
             )
-        } else if (error != null) {
-            Text(error!!, style = LoungeTheme.typography.meta, color = colors.ember)
         } else {
             Text("Starting…", style = LoungeTheme.typography.meta, color = colors.dust)
         }
@@ -837,15 +838,11 @@ internal fun companionStartProblem(e: Throwable): String {
     }
 }
 
-/** Why no pairing code could be made, with what to do; the raw reason goes to the log. */
+/** Why no pairing code could be made: the core's own sentence when it wrote one, with the raw reason in the log. */
 internal fun pairingProblem(e: Throwable): String {
     val why = e.reason
     android.util.Log.w("Lounge", "companion: $why")
-    return when {
-        "not on a network" in why -> "This TV isn't connected to a network, so a phone can't reach it. Connect it to your Wi-Fi, then come back."
-        "not running" in why -> "The phone companion has stopped. Turn it off and on again."
-        else -> "Lounge couldn't make a pairing code. Choose New code to try again."
-    }
+    return if (readsAsSentence(why)) why.trim() else "Lounge couldn't make a pairing code. Turn the phone companion off and on again."
 }
 
 /**

@@ -549,7 +549,7 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
             // A phone that paired has used the code on screen, so the next phone gets a fresh one.
             val p = pairing
             if (p == null || p.expiresMs < System.currentTimeMillis() || (paired >= 0 && s.paired.toLong() != paired)) {
-                withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; failed = null }.onFailure { failed = pairingProblem(it) }
+                withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; failed = null }.onFailure { pairing = null; failed = pairingProblem(it) }
             }
             paired = s.paired.toLong()
             delay(2_000)
