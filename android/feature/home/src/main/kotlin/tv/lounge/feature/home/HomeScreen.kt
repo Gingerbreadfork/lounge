@@ -897,6 +897,8 @@ internal fun friendlyError(e: Throwable, title: String): String {
 internal fun friendlyReason(e: Throwable, reason: String, title: String): String {
     val m = reason.lowercase()
     return when {
+        // A plugin's own sentence, and the host's for one that stopped, show as written.
+        e is tv.lounge.core.CoreException.Plugin && readsAsSentence(reason) -> reason.trim()
         e is tv.lounge.core.CoreException.DiskFull -> "The TV's storage is full. Free some space in the TV's settings, then try again."
         e is tv.lounge.core.CoreException.UnknownAction -> "$title isn't on this TV any more. Its app may have removed it."
         "no activity found" in m || "activitynotfound" in m || "no launch intent" in m || "nothing can open" in m ->
@@ -912,6 +914,12 @@ internal fun friendlyReason(e: Throwable, reason: String, title: String): String
         e is tv.lounge.core.CoreException.Plugin -> "$title's plugin stopped partway through. Try again in a moment."
         else -> "Couldn't open $title. Try again in a moment."
     }
+}
+
+/** Whether [text] is already a sentence for the screen: a capital first, a full stop or question mark last. */
+internal fun readsAsSentence(text: String): Boolean {
+    val t = text.trim()
+    return t.firstOrNull()?.isUpperCase() == true && (t.endsWith('.') || t.endsWith('?')) && t.length <= 400
 }
 
 internal fun hasTvListings(context: android.content.Context): Boolean =

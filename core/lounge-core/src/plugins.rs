@@ -786,6 +786,9 @@ pub(crate) fn spawn(
         .expect("spawn plugin thread");
 }
 
+/// What a press says when its tile's plugin has been turned off or removed since the tile was drawn.
+pub(crate) const NOT_RUNNING: &str = "Its plugin is turned off or no longer installed. Turn the plugin on, then try again.";
+
 fn answer(inner: &Arc<Inner>, job: PluginJob) {
     match job {
         PluginJob::Refresh(id) => run_refresh(inner, &id),
@@ -793,7 +796,7 @@ fn answer(inner: &Arc<Inner>, job: PluginJob) {
             let entry = inner.state.lock().plugins.iter().find(|p| p.id == plugin && p.enabled).cloned();
             let result = match entry {
                 Some(e) => inner.plugins.resolve(&e, &action),
-                None => Err("the plugin is turned off or not installed".into()),
+                None => Err(NOT_RUNNING.into()),
             };
             let _ = reply.send(result);
         }

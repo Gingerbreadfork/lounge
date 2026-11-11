@@ -91,8 +91,20 @@ class FocusRulesTest {
         assertEquals("Nothing on this TV can open Netflix. Is its app still installed?", launch)
         val unknown = CoreException.UnknownAction("open:wn:42")
         assertEquals("Alien: Earth isn't on this TV any more. Its app may have removed it.", friendlyReason(unknown, "no such item or action: open:wn:42", "Alien: Earth"))
-        val plugin = CoreException.Plugin("plugin trapped: out of fuel: the plugin took too long")
-        assertEquals("Static Bloom's plugin stopped partway through. Try again in a moment.", friendlyReason(plugin, plugin.detail, "Static Bloom"))
+        // A plugin's sentence and the host's show as written, whatever words they hold.
+        for (written in listOf(
+            "Kodi has no episodes of this show. Update Kodi's library, then try again.",
+            "Kodi stopped before it could open this. Try again in a moment.",
+            "Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.",
+            "Its plugin is turned off or no longer installed. Turn the plugin on, then try again.",
+        )) {
+            assertEquals(written, friendlyReason(CoreException.Plugin(written), written, "The Bear"))
+        }
+        // What is not a sentence is worded here.
+        val late = CoreException.Plugin("tv.lounge.kodi did not answer in time")
+        assertEquals("The Bear's source didn't answer. Check that it is running, then try again.", friendlyReason(late, late.detail, "The Bear"))
+        val gone = CoreException.Plugin("plugin thread is gone")
+        assertEquals("Static Bloom's plugin stopped partway through. Try again in a moment.", friendlyReason(gone, gone.detail, "Static Bloom"))
         // Text not known here never reaches the screen.
         val odd = RuntimeException("java.lang.IllegalStateException: Binder transaction failed at 0x7f")
         val said = friendlyReason(odd, odd.message!!, "The Bear")

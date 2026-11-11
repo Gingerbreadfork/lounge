@@ -560,7 +560,8 @@ mod tests {
         let plugin_said = |detail: &str| CoreError::Plugin { detail: detail.into() };
         let jellyfin = "Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.";
         assert_eq!(failed_to(&core.inner, "open:plugin:jf:1", plugin_said(jellyfin)), jellyfin);
-        assert_eq!(failed_to(&core.inner, "open:plugin:jf:1", plugin_said("the plugin is turned off or not installed")), "The TV couldn't do that. Try it from the TV.");
+        assert_eq!(failed_to(&core.inner, "open:plugin:jf:1", plugin_said(plugins::NOT_RUNNING)), plugins::NOT_RUNNING);
+        assert_eq!(failed_to(&core.inner, "open:plugin:jf:1", plugin_said("plugin thread is gone")), "The TV couldn't do that. Try it from the TV.");
     }
 
     fn test_config(dir: &std::path::Path) -> crate::CoreConfig {
