@@ -89,7 +89,7 @@ import tv.lounge.power.PrivilegedException
 
 private const val STEPS = 5
 
-private const val HOME_NOT_TAKEN_SETUP = "Android didn't make Lounge the home screen. Try again, or in Settings open Default home screen for other ways."
+internal const val HOME_NOT_TAKEN_SETUP = "Android didn't make Lounge the home screen. Try again, or in Settings open Default home screen for other ways."
 
 /**
  * First run: five full-screen steps, one question each, a heading and one primary button; progress

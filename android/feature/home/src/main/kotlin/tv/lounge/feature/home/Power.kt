@@ -48,6 +48,8 @@ private sealed interface RunState {
     data object Running : RunState
     data class Done(val output: String) : RunState
     data class Failed(val reason: String, val output: String = "") : RunState
+    /** It ran without an error and the TV still says otherwise; [next] is what to do about it. */
+    data class DidntTake(val next: String, val output: String = "") : RunState
 }
 
 /** What staying on means, said before anyone turns USB debugging on for Power Setup. */
@@ -123,6 +125,7 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, firstFocus
             action.id in running -> RunState.Running
             applied[action.id] == true -> RunState.Done(last?.takeIf { it.ok }?.output.orEmpty())
             last != null && !last.ok -> RunState.Failed(last.said ?: PowerSetup.failureSentence(last.output), last.output)
+            applied[action.id] == false && last != null -> RunState.DidntTake(notTaken(action, power, homeActions.any { it.id.startsWith("home_off_") }), last.output)
             applied[action.id] == false -> null
             last != null -> RunState.Done(last.output)
             else -> null
@@ -236,11 +239,12 @@ private fun ActionRow(action: PowerAction, state: RunState?, enabled: Boolean, o
                 RunState.Running -> "Running…"
                 is RunState.Done -> "Done"
                 is RunState.Failed -> "Failed"
+                is RunState.DidntTake -> "Didn't take"
                 null -> if (enabled) "Run" else "Connect first"
             },
             accent = when (state) {
                 is RunState.Done -> colors.signal
-                is RunState.Failed -> colors.ember
+                is RunState.Failed, is RunState.DidntTake -> colors.ember
                 RunState.Running -> colors.houselight
                 null -> colors.dust
             },
@@ -251,6 +255,7 @@ private fun ActionRow(action: PowerAction, state: RunState?, enabled: Boolean, o
             val printed = when (state) {
                 is RunState.Done -> state.output
                 is RunState.Failed -> state.output
+                is RunState.DidntTake -> state.output
                 else -> ""
             }.trim()
             val mono = LoungeTheme.typography.caption.copy(fontFamily = FontFamily.Monospace)
@@ -260,8 +265,16 @@ private fun ActionRow(action: PowerAction, state: RunState?, enabled: Boolean, o
                 if (printed.isNotEmpty()) Text(printed, style = mono, color = colors.dust, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
             if (state is RunState.Failed) Text(state.reason, style = LoungeTheme.typography.caption, color = colors.ember)
+            if (state is RunState.DidntTake) Text(state.next, style = LoungeTheme.typography.caption, color = colors.ember)
         }
     }
+}
+
+/** What to do about [action] when it ran without an error and changed nothing; [homesFirst] when a home to turn off is listed below. */
+private fun notTaken(action: PowerAction, power: PowerSetup, homesFirst: Boolean): String = when {
+    action.id != power.homeRole.id -> "The TV ran this, but nothing changed. Try again."
+    homesFirst -> "The TV still opens its own home first. Turn it off below."
+    else -> HOME_NOT_TAKEN_SETUP
 }
 
 /** A TV control that did not work, as a sentence with what to try. */
@@ -308,13 +321,13 @@ fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Un
     fun valueFor(action: PowerAction, idle: String? = null) = when (runs[action.id]) {
         RunState.Running -> "Sending…"
         is RunState.Done -> "Sent"
-        is RunState.Failed -> "Didn't work"
+        is RunState.Failed, is RunState.DidntTake -> "Didn't work"
         null -> idle
     }
     fun reasonFor(action: PowerAction) = (runs[action.id] as? RunState.Failed)?.reason
     fun accentFor(action: PowerAction) = when (runs[action.id]) {
         is RunState.Done -> colors.signal
-        is RunState.Failed -> colors.ember
+        is RunState.Failed, is RunState.DidntTake -> colors.ember
         RunState.Running -> colors.houselight
         null -> colors.dust
     }

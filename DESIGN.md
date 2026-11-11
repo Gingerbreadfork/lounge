@@ -317,10 +317,12 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
 - **Power Setup sheet**: heading, one status sentence, then a single row that is the only thing
   to do right now: Connect (houselight), Waiting for you to allow it…, Connected (signal), or
   Open Developer options, under numbered steps for turning on USB debugging and one sentence on
-  what stays on afterwards and what turning it off would stop. Under "What it can do", each action is a row (its title, with Run, Done or
-  Failed as the value) followed by its reason in `caption` and the exact shell command in a monospace `velvet` box, so
+  what stays on afterwards and what turning it off would stop. Under "What it can do", each action is a row (its title, with Run, Done,
+  Failed or Didn't take as the value) followed by its reason in `caption` and the exact shell command in a monospace `velvet` box, so
   nothing runs that the person has not read. What the command printed follows it in the same box in
-  `dust`; a failure is a sentence under the box in `ember`, and its raw reason goes to the log. An action already in effect reads Done; one still
+  `dust`; a failure is a sentence under the box in `ember`, and its raw reason goes to the log. Didn't take
+  is for an action that ran without an error while the TV still says otherwise, with what to do
+  next under it. An action already in effect reads Done; one still
   running when the sheet closes carries on, and each keeps its last result; Faster system animations has Normal system animations as
   its undo. Forget this connection sits last and asks again; the footnote shows the key fingerprint
   the device's prompt displays.
