@@ -170,8 +170,6 @@ impl Server {
         let r = sdk::fetch_from(self.name, &self.url, &req).map_err(|e| {
             if e == host::TOO_LARGE {
                 format!("{} sent more than this plugin can read in one go. Try again later.", self.name)
-            } else if e == host::BUDGET_SPENT {
-                "Too much was asked for this refresh; the rest comes with the next.".to_string()
             } else {
                 e
             }

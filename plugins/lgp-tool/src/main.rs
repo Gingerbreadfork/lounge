@@ -103,14 +103,14 @@ fn bundle(args: &[String]) -> Result<(), String> {
     reported.validate()?;
     let key = load_key(key_path)?;
     let sig = key.sign(&Bundle::signed_bytes(&manifest_json, &wasm));
-    Bundle::write(Path::new(out), &manifest_json, &wasm, key.verifying_key().as_bytes(), &sig.to_bytes()).map_err(|e| e.to_string())?;
+    Bundle::write(Path::new(out), &manifest_json, &wasm, key.verifying_key().as_bytes(), &sig.to_bytes()).map_err(at(out))?;
     println!("{out}: {} v{} ({} bytes of wasm), publisher {}", reported.id, reported.version, wasm.len(), hex::encode(key.verifying_key().as_bytes()));
     Ok(())
 }
 
 fn inspect(args: &[String]) -> Result<(), String> {
     let path = args.first().ok_or(USAGE)?;
-    let b = Bundle::read(Path::new(path)).map_err(|e| e.to_string())?;
+    let b = Bundle::read(Path::new(path)).map_err(at(path))?;
     b.verify().map_err(|e| e.to_string())?;
     println!("{}", serde_json::to_string_pretty(&b.manifest).map_err(|e| e.to_string())?);
     println!("publisher {}\nsignature ok, {} bytes of wasm", b.publisher_hex(), b.wasm.len());
@@ -120,7 +120,7 @@ fn inspect(args: &[String]) -> Result<(), String> {
 fn run(args: &[String]) -> Result<(), String> {
     let path = args.first().ok_or(USAGE)?;
     let (manifest, wasm) = if path.ends_with(".lgp") {
-        let b = Bundle::read(Path::new(path)).map_err(|e| e.to_string())?;
+        let b = Bundle::read(Path::new(path)).map_err(at(path))?;
         b.verify().map_err(|e| e.to_string())?;
         (Some(b.manifest), b.wasm)
     } else {
@@ -268,7 +268,9 @@ fn check_artwork(items: &[Item], manifest: &Manifest, services: &RunServices, do
                 problems.push(format!("  {}: {:.1} MB, over the {} MB a tile's picture may be", redact(url), size as f64 / 1_048_576.0, MAX_ARTWORK_BYTES / 1_048_576));
             }
         } else if download && let Err(e) = fetcher.download(url, &dir, MAX_ARTWORK_BYTES, std::time::Duration::from_secs(20), &permitted) {
-            problems.push(format!("  {}: {e}", redact(url)));
+            // The TV's sentence usually names the address itself.
+            let (address, said) = (redact(url), e.to_string());
+            problems.push(if said.contains(&address) { format!("  {said}") } else { format!("  {address}: {said}") });
         }
     }
     let _ = std::fs::remove_dir_all(&dir);
@@ -281,6 +283,15 @@ fn check_artwork(items: &[Item], manifest: &Manifest, services: &RunServices, do
         out.push(format!("artwork: {} pictures not downloaded; --artwork fetches them as the TV would", urls.len()));
     }
     out
+}
+
+/// A bundle error for whoever runs the tool: a file that will not read or write is named by its
+/// path, where the TV would give advice about its own storage.
+fn at(path: &str) -> impl Fn(PluginError) -> String + '_ {
+    move |e| match e {
+        PluginError::Io(io) => format!("{path}: {io}"),
+        other => other.to_string(),
+    }
 }
 
 /// An error as the TV words it and, for a module that stopped or cannot run, why.
@@ -578,6 +589,16 @@ mod tests {
         assert_eq!(parse_head("404").unwrap().0, 404);
         assert!(parse_head("teapot").is_err());
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_bundle_that_is_not_there_is_named_by_its_path() {
+        let missing = Bundle::read(Path::new("/nowhere/missing.lgp")).err().unwrap();
+        let said = at("missing.lgp")(missing);
+        assert!(said.starts_with("missing.lgp: "), "{said}");
+        assert!(!said.contains("free space"), "{said}");
+        // What is wrong inside a bundle is still said as the TV says it.
+        assert_eq!(at("x.lgp")(PluginError::Signature), PluginError::Signature.to_string());
     }
 
     #[test]

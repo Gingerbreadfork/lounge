@@ -975,7 +975,7 @@ fn resolve_named(sources: Vec<Source>, budget: &mut Budget, failures: &mut Vec<(
             continue;
         }
         if !budget.spend() {
-            failures.push((format!("channel {name}"), format!("This refresh fetched all it may, so {name} is looked up on the next one.")));
+            failures.push((format!("channel {name}"), host::BUDGET_SPENT.to_string()));
             continue;
         }
         match channel_page_id(&name) {
@@ -1235,7 +1235,7 @@ mod tests {
         assert_eq!(budget.left(), 0);
         assert_eq!(failures.len(), 2);
         assert_eq!(failures[0].0, "channel @one");
-        assert_eq!(failures[1].1, "This refresh fetched all it may, so @two is looked up on the next one.");
+        assert_eq!(failures[1].1, host::BUDGET_SPENT);
     }
 
     #[test]

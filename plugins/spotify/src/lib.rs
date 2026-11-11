@@ -39,6 +39,7 @@ const DAY_MS: i64 = 86_400_000;
 const PAUSE: &str = "Spotify is asking for a pause between requests. It tries again on the next refresh.";
 const QUOTA: &str = "Spotify's daily allowance for this app is used up. It comes back tomorrow.";
 const SIGNED_OUT: &str = "Spotify no longer accepts this sign-in. Press Refresh now to sign in again.";
+const NARROW_SIGN_IN: &str = "Spotify says this sign-in doesn't cover what the plugin reads. Press Refresh now to sign in again.";
 
 impl sdk::Plugin for Spotify {
     fn manifest() -> Manifest {
@@ -501,7 +502,14 @@ impl Client {
                 sdk::warn!("unexpected answer for {what}: {e}");
                 sdk::unreadable("Spotify", API)
             }),
-            403 => Err(refused_why(&r.body)),
+            403 => {
+                let why = refused_why(&r.body);
+                // A sign-in that covers too little is given up, so the next refresh asks for a new one.
+                if why == NARROW_SIGN_IN {
+                    host::kv_delete(TOKEN_KEY);
+                }
+                Err(why)
+            }
             s => {
                 sdk::warn!("HTTP {s} for {what}");
                 Err(sdk::online_error("Spotify", s))
@@ -540,6 +548,8 @@ fn refused_why(body: &str) -> String {
         "Spotify's app is in development mode and this account is not on its list. Add the account under User Management in the app's dashboard.".into()
     } else if lower.contains("premium") {
         "Spotify needs the account that made the app to have Premium. Make the app with a Premium account, then paste its Client ID in the plugin's settings.".into()
+    } else if lower.contains("scope") {
+        NARROW_SIGN_IN.into()
     } else {
         "Spotify refused the request. Check the app in the developer dashboard.".into()
     }
@@ -1262,6 +1272,7 @@ mod tests {
         assert_eq!(refused_why("Active premium subscription required for the owner of the app"), "Spotify needs the account that made the app to have Premium. Make the app with a Premium account, then paste its Client ID in the plugin's settings.");
         assert_eq!(refused_why(r#"{"error":{"status":403,"message":"Forbidden"}}"#), "Spotify refused the request. Check the app in the developer dashboard.");
         assert_eq!(refused_why(""), "Spotify refused the request. Check the app in the developer dashboard.");
+        assert_eq!(refused_why(r#"{"error":{"status":403,"message":"Insufficient client scope"}}"#), NARROW_SIGN_IN);
     }
 
     #[test]

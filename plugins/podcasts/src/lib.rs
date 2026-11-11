@@ -148,7 +148,7 @@ impl sdk::Plugin for Podcasts {
         let fetched = match fetch_feed(url, None, RESOLVE_TIMEOUT_MS) {
             Ok(Fetched::Body(body)) => body,
             Ok(Fetched::Unchanged) => return Err(OUT_OF_DATE.into()),
-            Err(FeedError::Budget) => return Err("Too much was asked for at once. Try again in a moment.".into()),
+            Err(FeedError::Budget) => return Err(host::BUDGET_SPENT.into()),
             Err(FeedError::Gone(e) | FeedError::TooLarge(e) | FeedError::Other(e)) => return Err(e.replace(" Check the link in the plugin's settings.", "")),
         };
         let show = parse_feed(&fetched.text, url);
