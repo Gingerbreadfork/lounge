@@ -725,12 +725,12 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
         withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; error = null }.onFailure { pairing = null; error = pairingProblem(it) }
     }
     suspend fun refresh() {
-        val before = status
         val s = withContext(Dispatchers.IO) { core.companionStatus() }
         status = s
-        // A phone that paired has used the code on screen, so the next phone gets a fresh one.
-        val paired = before != null && before.running && s.paired != before.paired
-        if (s.running && (paired || pairing == null || pairing!!.expiresMs < System.currentTimeMillis())) newCode()
+        if (!s.running) return
+        // The core replaces a used code at once, so a new one is asked for only when it offers none.
+        val live = s.livePairing()
+        if (live != null) { pairing = live; error = null } else newCode()
     }
     LaunchedEffect(enabled) {
         if (enabled) {
@@ -827,6 +827,9 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
         "Add the page to your phone's home screen to open it quickly.",
     )
 }
+
+/** The code that pairs a phone at the TV's address now, or null when a new one has to be made. */
+internal fun CompanionStatus.livePairing(): PairingInfo? = pairing?.takeIf { p -> url?.let { p.url.startsWith(it) } == true }
 
 /** Why the companion could not start, with what to do; the raw reason goes to the log. */
 internal fun companionStartProblem(e: Throwable): String {

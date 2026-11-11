@@ -17,16 +17,6 @@ val Throwable.reason: String
         else -> message ?: javaClass.simpleName
     }
 
-/** The companion's failure to start, worded for the TV: the cause and what to do about it. */
-fun companionFailure(e: Throwable): String {
-    android.util.Log.w("Lounge", "companion: ${e.reason}")
-    return if ("in use" in e.reason) {
-        "Another app on this TV is using port ${CoreClient.COMPANION_PORT}, so the phone companion can't start. Close that app, then try again."
-    } else {
-        "The phone companion couldn't start. Turn it off and on again, and restart the TV if that doesn't help."
-    }
-}
-
 /**
  * Adapter over the generated [Core]: exposes [HomeSnapshot]s as a [StateFlow] and keeps the
  * generated types out of the UI layer's constructors.

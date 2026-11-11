@@ -542,16 +542,17 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
                 failed = companionStartProblem(it)
                 return@LaunchedEffect
             }
-        var paired = -1L
         while (true) {
             val s = withContext(Dispatchers.IO) { core.companionStatus() }
             url = s.url
-            // A phone that paired has used the code on screen, so the next phone gets a fresh one.
-            val p = pairing
-            if (p == null || p.expiresMs < System.currentTimeMillis() || (paired >= 0 && s.paired.toLong() != paired)) {
+            // The core replaces a used code at once, so a new one is asked for only when it offers none.
+            val live = s.livePairing()
+            if (live != null) {
+                pairing = live
+                failed = null
+            } else {
                 withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; failed = null }.onFailure { pairing = null; failed = pairingProblem(it) }
             }
-            paired = s.paired.toLong()
             delay(2_000)
         }
     }

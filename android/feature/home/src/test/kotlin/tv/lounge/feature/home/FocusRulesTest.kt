@@ -123,6 +123,17 @@ class FocusRulesTest {
     }
 
     @Test
+    fun theCodeShownIsTheOneTheCoreOffersAtThisAddress() {
+        val code = tv.lounge.core.PairingInfo(code = "123456", url = "http://192.168.0.20:8787/#token=abc", qrPngPath = "/cache/pair.png", expiresMs = 1L)
+        val status = tv.lounge.core.CompanionStatus(running = true, url = "http://192.168.0.20:8787", port = 8787u, paired = 0u, pairing = code)
+        assertEquals(code, status.livePairing())
+        // None to show, off the network, or made for an address the TV has since left.
+        assertNull(status.copy(pairing = null).livePairing())
+        assertNull(status.copy(url = null).livePairing())
+        assertNull(status.copy(url = "http://192.168.0.31:8787").livePairing())
+    }
+
+    @Test
     fun theProgrammeOnAirSaysSoInWords() {
         val start = 1_700_000_000_000L
         val on = GuideProgramme(id = "p", title = "News", subtitle = null, startMs = start, endMs = start + 1_800_000, isNow = true)
