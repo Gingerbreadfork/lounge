@@ -436,7 +436,7 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
         val on = (setting.value ?: setting.defaultValue) == "true"
         SheetRow(
             icon = null,
-            title = label,
+            title = setting.label,
             subtitle = setting.help?.let { shortHelp(it) },
             subtitleLines = WHOLE,
             value = if (on) "On" else "Off",

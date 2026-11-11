@@ -188,7 +188,7 @@
         <div class="section-head"><h3>Settings</h3></div>
         {#each current.settings as st (st.key)}
           <div class="field">
-            <label for={st.key}>{st.label}{st.required ? '' : ' (optional)'}</label>
+            <label for={st.key}>{st.label}{st.required || st.kind === 'toggle' ? '' : ' (optional)'}</label>
             {#if st.kind === 'toggle'}
               {@const on = (st.value ?? st.defaultValue) === 'true'}
               <button id={st.key} class="list-row" role="switch" aria-checked={on} aria-label={st.label} onclick={() => act('Saved', () => api.pluginSetting(current!.id, st.key, on ? 'false' : 'true')).then(load)}>
