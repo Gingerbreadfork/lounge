@@ -225,7 +225,7 @@ pub mod host {
     pub fn get_text(url: &str) -> Result<String, String> {
         let r = fetch(&HttpRequest::get(url))?;
         if !r.ok() {
-            return Err(format!("{} answered with error {}. Check the address, then try again.", crate::address(url), r.status));
+            return Err(format!("The server at {} answered with error {}. Check the address, then try again.", crate::address(url), r.status));
         }
         Ok(if r.body_base64.is_some() { String::from_utf8_lossy(&crate::body_bytes(r)).into_owned() } else { r.body })
     }
@@ -516,7 +516,7 @@ pub fn answered_error(service: &str, url: &str, status: u16) -> String {
 /// The error for an address where something other than `service` answered.
 pub fn wrong_server(service: &str, url: &str) -> String {
     let a = if service.starts_with(['A', 'E', 'I', 'O', 'U']) { "an" } else { "a" };
-    format!("{} didn't answer like {a} {service} server. Check the server address in the plugin's settings.", address(url))
+    format!("The server at {} didn't answer like {a} {service} server. Check the server address in the plugin's settings.", address(url))
 }
 
 /// The error for an answer from `service` at `url` that the plugin cannot read.
@@ -892,8 +892,8 @@ mod helper_tests {
         assert_eq!(address("http://192.168.0.20:8096?api_key=k"), "192.168.0.20:8096?…");
         assert_eq!(didnt_answer("Jellyfin", "http://192.168.0.20:8096"), "Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.");
         assert_eq!(answered_error("Jellyfin", "http://192.168.0.20:8096/", 503), "Jellyfin at 192.168.0.20:8096 answered with error 503. Check the server, then try again.");
-        assert_eq!(wrong_server("Jellyfin", "http://nas:8096"), "nas:8096 didn't answer like a Jellyfin server. Check the server address in the plugin's settings.");
-        assert_eq!(wrong_server("Emby", "http://nas:8096"), "nas:8096 didn't answer like an Emby server. Check the server address in the plugin's settings.");
+        assert_eq!(wrong_server("Jellyfin", "http://nas:8096"), "The server at nas:8096 didn't answer like a Jellyfin server. Check the server address in the plugin's settings.");
+        assert_eq!(wrong_server("Emby", "http://nas:8096"), "The server at nas:8096 didn't answer like an Emby server. Check the server address in the plugin's settings.");
         assert_eq!(unreadable("Plex", "http://nas:32400"), "Plex at nas:32400 sent a reply this plugin can't read.");
         assert_eq!(offline("Trakt"), "Trakt didn't answer. Check the TV's internet connection, then try again.");
         assert_eq!(online_error("Twitch", 502), "Twitch answered with error 502. Try again later.");

@@ -181,7 +181,10 @@ longer.
 An error the plugin returns is shown on the TV and the phone exactly as the plugin wrote it: on
 the plugin's page for a refresh, and as a message on the TV when a `resolve` fails. Write it as a
 sentence with the cause and the fix ("Jellyfin didn't answer at 192.168.0.20:8096. Check the
-server, then try again."), and put the raw cause in the log. When the module itself stops, out of
+server, then try again."), and put the raw cause in the log. A failed `resolve` shows as written
+only when it reads as a sentence: it starts with a capital letter, ends with a full stop or a
+question mark and is at most 400 characters. So lead with a word and put an address after it
+("The server at nas:8096 didn't answer like a Jellyfin server."). When the module itself stops, out of
 fuel or time or on a trap, the TV says the plugin stopped partway through and the log says why.
 
 A refresh that cannot go on until the person does something says so instead of failing:

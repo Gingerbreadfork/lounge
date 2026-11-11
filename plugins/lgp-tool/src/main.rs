@@ -574,7 +574,7 @@ mod tests {
         assert_eq!(locked.headers["www-authenticate"], "Digest realm=\"tvheadend\", nonce=\"n\"");
         assert!(fixture(&d, &get("http://a/missing")).unwrap_err().contains("no fixture"));
         std::fs::write(file_for(&d, "http://a/huge", "body"), vec![b'x'; Fetcher::new().max_body + 1]).unwrap();
-        assert_eq!(fixture(&d, &get("http://a/huge")).unwrap_err(), "http://a/huge sent too much: the body is larger than 8 MB.");
+        assert_eq!(fixture(&d, &get("http://a/huge")).unwrap_err(), "The server at http://a/huge sent too much: the body is larger than 8 MB.");
         assert_eq!(parse_head("404").unwrap().0, 404);
         assert!(parse_head("teapot").is_err());
         let _ = std::fs::remove_dir_all(&d);

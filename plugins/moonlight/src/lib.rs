@@ -600,8 +600,8 @@ impl Pc {
     /// The error for a PC that has never answered, with what to check.
     fn unreachable_error(&self) -> String {
         match self.reach {
-            Reach::NotAllowed => format!("{} can't be reached by that name. Use the PC's IP address, or a name ending in .local or .lan.", self.address.host),
-            Reach::Fine => format!("{} didn't answer. Check that the PC is on and Sunshine is running, then try again.", self.address.key()),
+            Reach::NotAllowed => format!("The PC at {} can't be reached by that name. Use its IP address, or a name ending in .local or .lan.", self.address.host),
+            Reach::Fine => format!("The PC at {} didn't answer. Check that it is on and Sunshine is running, then try again.", self.address.key()),
         }
     }
 }

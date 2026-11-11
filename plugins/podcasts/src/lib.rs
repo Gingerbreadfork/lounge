@@ -252,13 +252,13 @@ fn fetch_feed_once(url: &str, cached: Option<&Show>, partial: bool, timeout_ms: 
             FeedError::Budget
         } else {
             sdk::warn!("{e}");
-            FeedError::Other(format!("{} didn't answer. Check the link in the plugin's settings and the TV's connection.", sdk::address(url)))
+            FeedError::Other(format!("The feed at {} didn't answer. Check the link in the plugin's settings and the TV's connection.", sdk::address(url)))
         }
     })?;
     match r.status {
         304 => Ok(Fetched::Unchanged),
         404 | 410 => Err(FeedError::Gone(format!("There is no feed at {} any more. Check the link in the plugin's settings.", sdk::address(url)))),
-        s if !(200..300).contains(&s) => Err(FeedError::Other(format!("{} answered with error {s}. Try again later.", sdk::address(url)))),
+        s if !(200..300).contains(&s) => Err(FeedError::Other(format!("The feed at {} answered with error {s}. Try again later.", sdk::address(url)))),
         s => {
             let header = |name: &str| r.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.trim().to_string()).filter(|v| !v.is_empty());
             let etag = header("etag");
@@ -497,7 +497,7 @@ fn resolve_sources(sources: Vec<Source>, budget: &mut Budget, failures: &mut Vec
                     Ok(Fetched::Body(body)) => {
                         let listed = opml_feeds(&body.text);
                         if listed.is_empty() {
-                            failures.push(format!("{} holds no podcast feeds. Check the link in the plugin's settings.", sdk::address(&url)));
+                            failures.push(format!("The list at {} holds no podcast feeds. Check the link in the plugin's settings.", sdk::address(&url)));
                         } else {
                             opml_known.insert(url.clone(), listed.clone());
                             host::kv_set(OPML_KEY, serde_json::to_string(&opml_known).unwrap_or_default().as_bytes());
@@ -638,7 +638,7 @@ impl FeedCache {
                     let mut show = parse_feed(&body.text, &f.url);
                     if show.episodes.is_empty() {
                         if show.title.is_empty() {
-                            failures.push(format!("{} is not a podcast feed. Check the link in the plugin's settings.", sdk::address(&f.url)));
+                            failures.push(format!("The link {} is not a podcast feed. Check it in the plugin's settings.", sdk::address(&f.url)));
                             if let Some(id) = &f.apple_id {
                                 gone.push(id.clone());
                             }
@@ -1303,7 +1303,7 @@ mod tests {
         assert!(gone.is_empty());
         assert_eq!(budget.fetches, FEEDS_PER_REFRESH);
         assert_eq!(failures.len(), 1);
-        assert!(failures[0].starts_with("feeds.example/new didn't answer."), "{}", failures[0]);
+        assert!(failures[0].starts_with("The feed at feeds.example/new didn't answer."), "{}", failures[0]);
         assert!(!cache.shows.contains_key("https://feeds.example/gone"));
         assert_eq!(cache.shows["https://feeds.example/kept"].episodes.len(), 4);
         assert_eq!(cache.shows["https://feeds.example/kept"].fetched_ms, 500);
@@ -1316,7 +1316,7 @@ mod tests {
 
     #[test]
     fn errors_say_what_to_check() {
-        assert_eq!(<Podcasts as sdk::Plugin>::resolve("latest:https://feeds.example/x").err().as_deref(), Some("feeds.example/x didn't answer. Check the link in the plugin's settings and the TV's connection.".replace(" Check the link in the plugin's settings.", "").as_str()));
+        assert_eq!(<Podcasts as sdk::Plugin>::resolve("latest:https://feeds.example/x").err().as_deref(), Some("The feed at feeds.example/x didn't answer. Check the link in the plugin's settings and the TV's connection."));
         assert_eq!(<Podcasts as sdk::Plugin>::resolve("other").err().as_deref(), Some(OUT_OF_DATE));
         assert_eq!(<Podcasts as sdk::Plugin>::search("  ", 12).unwrap().len(), 0);
         assert!(<Podcasts as sdk::Plugin>::manifest().settings.iter().all(|s| !s.required));

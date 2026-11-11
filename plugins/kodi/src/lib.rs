@@ -405,7 +405,7 @@ impl Server {
             }
             sdk::warn!("{e}");
             if e.contains("leads to this device itself") {
-                format!("{} is this TV's own address, which a plugin may not use. For Kodi on this TV, set the address to {}.", redact_url(&self.base), on_localhost(&self.base))
+                format!("The address {} is this TV's own, which a plugin may not use. For Kodi on this TV, set the address to {}.", redact_url(&self.base), on_localhost(&self.base))
             } else {
                 format!("Kodi didn't answer at {}. Check that it is running and allows remote control over HTTP, then try again.", sdk::address(&self.base))
             }
