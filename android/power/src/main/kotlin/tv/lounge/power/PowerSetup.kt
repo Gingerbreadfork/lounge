@@ -124,9 +124,10 @@ class PowerSetup(private val context: Context) {
         }
     }
 
-    /** Forgets the key so the device prompts again next time. */
+    /** Forgets the key so the device prompts again next time, and how each action went with it. */
     fun forget() {
         keys.forget()
+        _results.value = emptyMap()
         _status.value = PowerStatus.NotPaired
     }
 
@@ -174,7 +175,7 @@ class PowerSetup(private val context: Context) {
     }
 
     private fun keepResult(action: PowerAction, result: PowerResult) {
-        _results.update { it + (action.id to result) }
+        _results.update { withResult(it, action.id, result) }
     }
 
     /**
@@ -361,6 +362,19 @@ class PowerSetup(private val context: Context) {
 
         /** Home screens whose whole app is off. One with only its activity off, as a finished setup leaves it, is left alone. */
         fun switchedOff(homes: List<HomeApp>): List<HomeApp> = homes.filter { !it.appEnabled }
+
+        /** The action that undoes [id], or null when it has none. */
+        fun oppositeOf(id: String): String? = when {
+            id.startsWith("home_off_") -> "home_on_" + id.removePrefix("home_off_")
+            id.startsWith("home_on_") -> "home_off_" + id.removePrefix("home_on_")
+            id == "animations" -> "animations_reset"
+            id == "animations_reset" -> "animations"
+            else -> null
+        }
+
+        /** [results] with [id]'s new [result]. A success drops the result of the action it undoes, which no longer holds. */
+        fun withResult(results: Map<String, PowerResult>, id: String, result: PowerResult): Map<String, PowerResult> =
+            (if (result.ok) results - listOfNotNull(oppositeOf(id)).toSet() else results) + (id to result)
 
         fun homeCommand(component: String, userId: Int) = "cmd package set-home-activity --user $userId $component"
         fun grantCommand(packageName: String, permission: String, userId: Int) = "pm grant --user $userId $packageName $permission"

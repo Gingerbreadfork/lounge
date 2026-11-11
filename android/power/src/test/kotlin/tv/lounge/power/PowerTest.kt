@@ -107,6 +107,19 @@ class PowerTest {
     }
 
     @Test
+    fun aSuccessDropsWhatItUndoes() {
+        val done = PowerResult(true, "")
+        val off = PowerSetup.withResult(emptyMap(), "home_off_com.x", done)
+        assertEquals(setOf("home_off_com.x"), off.keys)
+        // Turned back on, the home is no longer off.
+        assertEquals(setOf("home_on_com.x"), PowerSetup.withResult(off, "home_on_com.x", done).keys)
+        // A failure undoes nothing.
+        assertEquals(setOf("home_off_com.x", "home_on_com.x"), PowerSetup.withResult(off, "home_on_com.x", PowerResult(false, "exit 1")).keys)
+        assertEquals(setOf("animations_reset"), PowerSetup.withResult(mapOf("animations" to done), "animations_reset", done).keys)
+        assertEquals(setOf("animations", "usage"), PowerSetup.withResult(mapOf("animations" to done), "usage", done).keys)
+    }
+
+    @Test
     fun homeCommandsNameTheUserAndQuoteThePackage() {
         assertEquals("pm disable-user --user 0 'com.google.android.apps.tv.launcherx'", PowerSetup.disableCommand("com.google.android.apps.tv.launcherx", 0))
         assertEquals("pm enable --user 10 'a'\\''b'", PowerSetup.enableCommand("a'b", 10))
