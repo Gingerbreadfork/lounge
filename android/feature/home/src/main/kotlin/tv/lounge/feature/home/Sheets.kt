@@ -39,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -160,7 +161,13 @@ fun <K : Any> RightSheet(
                         Column(
                             Modifier.onFocusChanged {
                                 contentHasFocus = it.hasFocus
-                                if (!it.hasFocus && live && !leaving) scope.launch { anchor.requestWhenReady() }
+                                // Focus leaves the rows for an instant as it moves between them; the anchor takes it only if it stays gone.
+                                if (!it.hasFocus && live && !leaving) {
+                                    scope.launch {
+                                        withFrameNanos { }
+                                        if (!contentHasFocus) anchor.requestWhenReady()
+                                    }
+                                }
                             },
                         ) { CompositionLocalProvider(LocalSheetBack provides back) { content(firstFocus, shown) } }
                         // A sheet coming back mid-swap is still composed, so focus follows the live copy.
