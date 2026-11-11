@@ -164,6 +164,9 @@ class AndroidPlatform(private val context: Context) : Platform {
     /** Set by the shell: whether Lounge's own window is in front. */
     @Volatile var inFront: () -> Boolean = { true }
 
+    /** Set by the home screen: whether one of Lounge's text fields is open to take text. */
+    @Volatile var fieldOpen: () -> Boolean = { false }
+
     /** Set by the shell: whether Power Setup can press keys for another app in front. */
     @Volatile var keysForOtherApps: () -> Boolean = { false }
 
@@ -220,9 +223,10 @@ class AndroidPlatform(private val context: Context) : Platform {
         }
     }
 
-    /** Text from the phone lands only in a field open in Lounge, so it needs Lounge in front. */
+    /** Text from the phone lands only in a field open in Lounge, so it needs Lounge in front with a field open. */
     override fun typeText(text: String) {
         if (!inFront()) throw PlatformException.Failed("Another app is in front, and the phone types only into Lounge. Press Home, then try again.")
+        if (!fieldOpen()) throw PlatformException.Failed("Open Search or a field in Lounge first.")
         if (!_commands.tryEmit(UiCommand.TypeText(text))) throw PlatformException.Failed(BUSY)
     }
 

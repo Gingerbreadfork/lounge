@@ -1,6 +1,8 @@
 package tv.lounge.feature.home
 
 import androidx.compose.ui.input.key.Key
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -135,6 +137,21 @@ class FocusRulesTest {
         assertNull(status.copy(pairing = null).livePairing())
         assertNull(status.copy(url = null).livePairing())
         assertNull(status.copy(url = "http://192.168.0.31:8787").livePairing())
+    }
+
+    @Test
+    fun textFromThePhoneNeedsAFieldOpenToTakeIt() = kotlinx.coroutines.runBlocking {
+        val typed = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
+        val phone = PhoneText(typed)
+        assertFalse(phone.fieldOpen)
+        val got = ArrayList<String>()
+        val field = launch(kotlinx.coroutines.Dispatchers.Unconfined) { phone.into { got += it } }
+        assertTrue(phone.fieldOpen)
+        typed.emit("bear")
+        kotlinx.coroutines.yield()
+        assertEquals(listOf("bear"), got)
+        field.cancelAndJoin()
+        assertFalse(phone.fieldOpen)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package tv.lounge.feature.home
 
 import android.os.SystemClock
+import java.util.concurrent.atomic.AtomicInteger
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.BringIntoViewSpec
@@ -246,16 +247,32 @@ fun Modifier.trapFocus(leaving: Boolean): Modifier = focusProperties {
 fun KeyEvent.isBack(): Boolean = key in backKeys && !nativeKeyEvent.isCanceled &&
     (nativeKeyEvent.flags and android.view.KeyEvent.FLAG_CANCELED_LONG_PRESS) == 0
 
-/** Text typed on the phone, for the Lounge text field that has focus. */
-val LocalPhoneText = staticCompositionLocalOf<Flow<String>> { emptyFlow() }
+/** Text [typed] on the phone, for the Lounge text field in use, and whether any field is taking it. */
+class PhoneText(val typed: Flow<String> = emptyFlow()) {
+    private val taking = AtomicInteger(0)
+
+    /** Whether a field is open to take text now, so the phone is not told that text landed nowhere. */
+    val fieldOpen: Boolean get() = taking.get() > 0
+
+    internal suspend fun into(onText: (String) -> Unit) {
+        taking.incrementAndGet()
+        try {
+            typed.collect { onText(it) }
+        } finally {
+            taking.decrementAndGet()
+        }
+    }
+}
+
+val LocalPhoneText = staticCompositionLocalOf { PhoneText() }
 
 /** While [active], hands each piece of text typed on the phone to [onText]. */
 @Composable
 fun PhoneTextInput(active: Boolean, onText: (String) -> Unit) {
-    val texts = LocalPhoneText.current
+    val phone = LocalPhoneText.current
     val latest = rememberUpdatedState(onText)
-    LaunchedEffect(active, texts) {
-        if (active) texts.collect { latest.value(it) }
+    LaunchedEffect(active, phone) {
+        if (active) phone.into { latest.value(it) }
     }
 }
 

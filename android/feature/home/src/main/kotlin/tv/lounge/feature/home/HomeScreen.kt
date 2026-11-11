@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -315,7 +316,13 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
 
     // Text from the phone goes to Lounge's focused text field, and only while Lounge is in front.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val phoneText = remember { MutableSharedFlow<String>(extraBufferCapacity = 8) }
+    val typed = remember { MutableSharedFlow<String>(extraBufferCapacity = 8) }
+    val phoneText = remember { PhoneText(typed) }
+    // The phone is refused text while no field is open to take it.
+    DisposableEffect(platform, phoneText) {
+        platform.fieldOpen = { phoneText.fieldOpen }
+        onDispose { platform.fieldOpen = { false } }
+    }
     LaunchedEffect(Unit) {
         platform.commands.collect { cmd ->
             when (cmd) {
@@ -326,7 +333,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 UiCommand.OpenAllApps -> if (state.overlay == Overlay.None && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { uiSounds?.open(); openOverlay(Overlay.AllApps) }
                 is UiCommand.OpenPlugin -> if (state.overlay == Overlay.None && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { uiSounds?.open(); openOverlay(Overlay.PluginDetail(cmd.id)) }
                 is UiCommand.RequestPermission, is UiCommand.Key -> Unit
-                is UiCommand.TypeText -> if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) phoneText.tryEmit(cmd.text)
+                is UiCommand.TypeText -> if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) typed.tryEmit(cmd.text)
                 is UiCommand.Search -> {
                     state.pendingSearch = cmd.query
                     if (state.overlay != Overlay.Search) openOverlay(Overlay.Search)
