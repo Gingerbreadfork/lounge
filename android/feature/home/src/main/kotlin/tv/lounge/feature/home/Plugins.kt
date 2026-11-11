@@ -76,6 +76,7 @@ import tv.lounge.design.Hairline
 import tv.lounge.design.LocalSwapSlotActive
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.Words
 import tv.lounge.design.focusRim
 import tv.lounge.design.lightGlow
 
@@ -326,7 +327,7 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
     }
     SheetFootnote(
         "It can reach ${reachText(p)}.",
-        "It refreshes every ${minutesText(p.refreshMinutes.toLong())} while the TV is on.",
+        "It refreshes every ${Words.counted(p.refreshMinutes.toLong(), "minute", "minutes")} while the TV is on.",
         "Updates are taken only from its publisher, whose key starts ${p.publisher.take(8).chunked(4).joinToString(" ")}.",
     )
 }
@@ -392,7 +393,7 @@ private fun StatusLine(p: PluginInfo) {
     val colors = LoungeTheme.colors
     val (text, color) = when {
         p.enabled && p.lastError != null -> p.lastError!! to colors.ember
-        p.enabled && p.lastRefreshMs != null -> "${if (p.items == 1u) "1 item" else "${p.items} items"}, refreshed ${agoText(p.lastRefreshMs!!, System.currentTimeMillis())}" to colors.signal
+        p.enabled && p.lastRefreshMs != null -> "${if (p.items == 1u) "1 item" else "${p.items} items"}, refreshed ${Words.ago(System.currentTimeMillis() - p.lastRefreshMs!!)}" to colors.signal
         p.enabled -> "Fetching for the first time…" to colors.dust
         !p.configured -> "Fill in the settings below, then turn it on." to colors.houselight
         // Off and ready: the switch row below says so.
@@ -401,24 +402,11 @@ private fun StatusLine(p: PluginInfo) {
     Text(text, style = LoungeTheme.typography.meta, color = color)
 }
 
-/** How long ago [ms] was at [now], in words. */
-internal fun agoText(ms: Long, now: Long): String {
-    val minutes = (now - ms) / 60_000
-    return when {
-        minutes < 1 -> "just now"
-        minutes < 60 -> "${minutesText(minutes)} ago"
-        minutes < 1440 -> (minutes / 60).let { if (it == 1L) "1 hour ago" else "$it hours ago" }
-        else -> (minutes / 1440).let { if (it == 1L) "1 day ago" else "$it days ago" }
-    }
-}
-
 /** How long after the keyboard goes away a Back still belongs to the press that sent it away. */
 private const val KEYBOARD_BACK_MS = 300L
 
 /** About three lines of `caption` in the sheet: help this long reads whole. */
 private const val SHORT_HELP = 160
-
-private fun minutesText(minutes: Long): String = if (minutes == 1L) "1 minute" else "$minutes minutes"
 
 /** A setting's help as the TV shows it: whole when short, else its first sentence and a pointer to the phone. */
 internal fun shortHelp(text: String): String {

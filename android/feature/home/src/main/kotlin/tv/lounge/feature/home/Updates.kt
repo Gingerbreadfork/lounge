@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import tv.lounge.design.Hairline
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.Words
 import tv.lounge.update.InstallPath
 import tv.lounge.update.UpdateManager
 import tv.lounge.update.UpdateState
@@ -37,7 +38,7 @@ fun updateStatusWord(state: UpdateState, auto: Boolean): String = when (state) {
     is UpdateState.Idle -> if (auto) "On" else "Manual"
 }
 
-private fun ago(ms: Long): String = if (ms <= 0) "never" else agoText(ms, System.currentTimeMillis())
+private fun ago(ms: Long): String = if (ms <= 0) "never" else Words.ago(System.currentTimeMillis() - ms)
 
 /** What OK on a row that opens Android's list of apps allowed to install says first. */
 private const val INSTALL_HINT = "OK opens Android's list: turn on Lounge there, then press Back"

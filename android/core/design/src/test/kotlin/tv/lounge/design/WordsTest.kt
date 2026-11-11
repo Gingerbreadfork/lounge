@@ -19,23 +19,14 @@ class WordsTest {
     }
 
     @Test
-    fun durationsAreSpelledOut() {
-        assertEquals("1 minute", Words.duration(20_000))
-        assertEquals("23 minutes", Words.duration(23 * minute))
-        assertEquals("1 hour", Words.duration(60 * minute))
-        assertEquals("1 hour 20 minutes", Words.duration(80 * minute))
-        assertEquals("2 hours 1 minute", Words.duration(121 * minute))
-        assertEquals("23 minutes left", Words.left(23 * minute))
-        assertEquals("Almost finished", Words.left(10_000))
-    }
-
-    @Test
-    fun agoReadsLikeTheCore() {
+    fun agoReadsAsItDoesOnThePhone() {
         assertEquals("just now", Words.ago(30_000))
+        assertEquals("just now", Words.ago(-5 * minute))
+        assertEquals("1 minute ago", Words.ago(minute))
         assertEquals("3 minutes ago", Words.ago(3 * minute))
-        assertEquals("an hour ago", Words.ago(90 * minute))
+        assertEquals("1 hour ago", Words.ago(61 * minute))
         assertEquals("5 hours ago", Words.ago(5 * 60 * minute))
-        assertEquals("yesterday", Words.ago(30 * 60 * minute))
+        assertEquals("1 day ago", Words.ago(30 * 60 * minute))
         assertEquals("3 days ago", Words.ago(3 * 24 * 60 * minute))
     }
 

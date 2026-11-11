@@ -8,8 +8,8 @@ import java.time.LocalTime
 import java.time.ZoneId
 
 /**
- * How Lounge writes times, durations and counts, so every screen says them the same way
- * (DESIGN.md §10): clocks follow the TV's 24-hour setting and durations are spelled out.
+ * How Lounge writes times and counts, so every screen says them the same way (DESIGN.md §10):
+ * clocks follow the TV's 24-hour setting and lengths of time are spelled out.
  */
 object Words {
     /** "21:42" on a 24-hour clock, else "9:42 pm"; without [period] just "9:42", as the top bar shows it. */
@@ -23,31 +23,14 @@ object Words {
     fun clock(epochMs: Long, is24Hour: Boolean, zone: ZoneId = ZoneId.systemDefault(), period: Boolean = true): String =
         clock(Instant.ofEpochMilli(epochMs).atZone(zone).toLocalTime(), is24Hour, period)
 
-    /** "1 hour 20 minutes", "23 minutes", to the nearest minute and never less than one. */
-    fun duration(ms: Long): String {
-        val minutes = ((ms + 30_000) / 60_000).coerceAtLeast(1)
-        val hours = counted(minutes / 60, "hour", "hours")
-        val rest = counted(minutes % 60, "minute", "minutes")
-        return when {
-            minutes < 60 -> rest
-            minutes % 60 == 0L -> hours
-            else -> "$hours $rest"
-        }
-    }
-
-    /** "23 minutes left", "1 hour 20 minutes left", or "Almost finished" in the last half minute. */
-    fun left(ms: Long): String = if (ms < 30_000) "Almost finished" else "${duration(ms)} left"
-
-    /** "just now", "3 minutes ago", "an hour ago", "5 hours ago", "yesterday" or "3 days ago". */
+    /** How long ago something [ms] old was, as the phone says it: "just now", "3 minutes ago", "1 hour ago", "2 days ago". */
     fun ago(ms: Long): String {
         val minutes = (ms / 60_000).coerceAtLeast(0)
         return when {
-            minutes < 2 -> "just now"
-            minutes < 60 -> "$minutes minutes ago"
-            minutes < 120 -> "an hour ago"
-            minutes < 24 * 60 -> "${minutes / 60} hours ago"
-            minutes < 48 * 60 -> "yesterday"
-            else -> "${minutes / (24 * 60)} days ago"
+            minutes < 1 -> "just now"
+            minutes < 60 -> "${counted(minutes, "minute", "minutes")} ago"
+            minutes < 24 * 60 -> "${counted(minutes / 60, "hour", "hours")} ago"
+            else -> "${counted(minutes / (24 * 60), "day", "days")} ago"
         }
     }
 

@@ -19,14 +19,4 @@ class PluginWordsTest {
         assertEquals("Open plex.tv/link on your phone.", shortHelp("Open plex.tv/link on your phone."))
         assertEquals("Leave it empty to use the default", shortHelp("  Leave it empty to use the default "))
     }
-
-    @Test
-    fun timeAgoIsSpelledOut() {
-        val now = 10L * 24 * 3_600_000
-        assertEquals("just now", agoText(now - 30_000, now))
-        assertEquals("1 minute ago", agoText(now - 60_000, now))
-        assertEquals("3 minutes ago", agoText(now - 3 * 60_000, now))
-        assertEquals("1 hour ago", agoText(now - 61 * 60_000, now))
-        assertEquals("2 days ago", agoText(now - 2 * 24 * 3_600_000, now))
-    }
 }
