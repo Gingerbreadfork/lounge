@@ -2,7 +2,7 @@
   import { api, type Plugin } from '../lib/api';
   import Confirm from '../lib/Confirm.svelte';
   import { act, app, done, go, goBack, quiet, toast } from '../lib/state.svelte';
-  import { ago } from '../lib/words';
+  import { ago, counted } from '../lib/words';
 
   let { id }: { id?: string } = $props();
   let plugins = $state<Plugin[]>([]);
@@ -103,8 +103,9 @@
     if (p.enabled && p.ask) return { text: p.ask.link || p.ask.code ? 'Sign in' : 'Needs setup', cls: 'ask' };
     if (p.enabled && p.lastError) return { text: 'Problem', cls: 'bad' };
     if (p.enabled) return { text: 'On', cls: 'on' };
-    if (!p.configured) return { text: 'Needs setup', cls: '' };
+    // As on the TV, an update's ask comes before a setting still to fill in.
     if (p.updateAsksToReach?.length) return { text: 'Turned off by its update', cls: 'ask' };
+    if (!p.configured) return { text: 'Needs setup', cls: '' };
     return { text: 'Off', cls: '' };
   }
   function joined(parts: string[]) {
@@ -169,10 +170,10 @@
         <p class="signal">{current.items === 1 ? '1 item' : `${current.items} items`}, refreshed {ago(current.lastRefreshMs)}</p>
       {:else if current.enabled}
         <p class="dust">Fetching for the first time…</p>
-      {:else if !current.configured}
-        <p class="houselight">Fill in the settings, then turn it on.</p>
       {:else if current.updateAsksToReach?.length}
         <p class="houselight">Turned off by its update, which also asks to reach {joined(current.updateAsksToReach)}.</p>
+      {:else if !current.configured}
+        <p class="houselight">Fill in the settings, then turn it on.</p>
       {:else}
         <p class="dust">Off</p>
       {/if}
@@ -229,12 +230,12 @@
     </section>
 
     <section class="section">
-      <p class="caption">Can connect to: {reachText(current)}. Signed by {current.publisher.slice(0, 16)}… Refreshes every {current.refreshMinutes} min while the TV is on.</p>
+      <p class="caption">It can reach {reachText(current)}. It refreshes every {counted(current.refreshMinutes, 'minute')} while the TV is on. Updates are taken only from its publisher, whose key starts {current.publisher.slice(0, 4)} {current.publisher.slice(4, 8)}.</p>
       {#if !current.builtIn}<Confirm label="Remove plugin" confirm="Yes, remove it and its settings" onconfirm={() => command(current!, 'remove')} />{/if}
     </section>
   {:else}
     <header class="page-head"><div><p class="meta">{app.state?.device.name ?? 'Your TV'}</p><h1>Plugins</h1></div></header>
-    <p class="dust">Each plugin runs in its own sandbox on the TV and adds rows, channels or guide data.</p>
+    <p class="dust">They add rows, channels and guide data from your services. Each plugin can reach only the places it names, and sees only its own settings.</p>
 
     <section class="list">
       {#each plugins as p (p.id)}

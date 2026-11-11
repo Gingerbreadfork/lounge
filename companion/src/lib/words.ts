@@ -15,7 +15,8 @@ export const words = {
   hideRowDetail: 'The Layout tab brings it back',
 };
 
-function counted(n: number, one: string) {
+/** A count with its noun: "1 minute", "15 minutes". */
+export function counted(n: number, one: string) {
   return `${n} ${one}${n === 1 ? '' : 's'}`;
 }
 

@@ -54,15 +54,15 @@
     if (!d) return [] as [string, string][];
     const n = (k: string) => Number(d[k] ?? 0);
     return [
-      ['Items on the home screen', String(n('items'))],
+      ['Things Lounge knows about', String(n('items'))],
       ['Plugins', `${n('plugins')} installed, ${n('pluginsEnabled')} on`],
       ['Last rebuild took', `${n('lastBuildMs')} ms`],
       ['Last change arrived', n('lastIngestMs') ? ago(n('lastIngestMs')) : 'never'],
-      ['Database', bytes(n('databaseBytes'))],
+      ['Saved data', bytes(n('databaseBytes'))],
       ['Work waiting', n('queueDepth') === 0 ? 'none' : String(n('queueDepth'))],
-      ['Calls into the core', String(n('ffiCalls'))],
+      ['Requests answered', String(n('ffiCalls'))],
       ['Running for', span(n('uptimeMs'))],
-      ['Snapshot revision', String(n('revision'))],
+      ['Home screen version', String(n('revision'))],
       ['Device tier', String(d['tier'] ?? '')],
     ] as [string, string][];
   });
