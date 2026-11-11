@@ -120,6 +120,22 @@ class PowerTest {
     }
 
     @Test
+    fun didntTakeOnlyWhenTheCheckRightAfterFoundNoChange() {
+        val done = PowerResult(true, "")
+        val ran = mapOf("home" to done)
+        val notTaken = PowerSetup.withTook(ran, "home", false).getValue("home")
+        assertTrue(PowerSetup.didntTake(false, notTaken))
+        assertFalse(PowerSetup.didntTake(true, notTaken))
+        // It took, and something else undid it later.
+        val took = PowerSetup.withTook(ran, "home", true).getValue("home")
+        assertFalse(PowerSetup.didntTake(false, took))
+        // Nothing was read after it ran.
+        assertFalse(PowerSetup.didntTake(false, done))
+        val failed = mapOf("home" to PowerResult(false, "exit 1"))
+        assertEquals(failed, PowerSetup.withTook(failed, "home", false))
+    }
+
+    @Test
     fun aFailedConnectKeepsItsReasonUntilSomethingChanges() {
         val failed = PowerStatus.Failed(AdbBackend.TLS)
         assertEquals(failed, PowerSetup.keptFailure(PowerStatus.NotPaired, failed))

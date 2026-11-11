@@ -125,7 +125,7 @@ fun PowerSetupSheet(power: PowerSetup, onHomeRoleChanged: () -> Unit, say: (Stri
             action.id in running -> RunState.Running
             applied[action.id] == true -> RunState.Done(last?.takeIf { it.ok }?.output.orEmpty())
             last != null && !last.ok -> RunState.Failed(last.said ?: PowerSetup.failureSentence(last.output), last.output)
-            applied[action.id] == false && last != null -> RunState.DidntTake(notTaken(action, power, homeActions.any { it.id.startsWith("home_off_") }), last.output)
+            last != null && PowerSetup.didntTake(applied[action.id], last) -> RunState.DidntTake(notTaken(action, power, homeActions.any { it.id.startsWith("home_off_") }), last.output)
             applied[action.id] == false -> null
             last != null -> RunState.Done(last.output)
             else -> null

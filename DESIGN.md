@@ -326,8 +326,8 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
   Failed or Didn't take as the value) followed by its reason in `caption` and the exact shell command in a monospace `velvet` box, so
   nothing runs that the person has not read. What the command printed follows it in the same box in
   `dust`; a failure is a sentence under the box in `ember`, and its raw reason goes to the log. Didn't take
-  is for an action that ran without an error while the TV still says otherwise, with what to do
-  next under it. An action already in effect reads Done; one still
+  is for an action that ran without an error while the TV said otherwise right after, with what to
+  do next under it; one that took and was undone later reads Run again. An action already in effect reads Done; one still
   running when the sheet closes carries on, and each keeps its last result; Faster system animations has Normal system animations as
   its undo. Forget this connection sits last and asks again; the footnote shows the key fingerprint
   the device's prompt displays.

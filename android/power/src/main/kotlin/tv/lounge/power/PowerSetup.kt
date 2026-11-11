@@ -198,6 +198,7 @@ class PowerSetup(private val context: Context) {
             try {
                 runCatching { run(action) }
                 recheck()
+                _results.update { withTook(it, action.id, _applied.value[action.id]) }
             } finally {
                 _running.update { it - action.id }
             }
@@ -468,6 +469,15 @@ class PowerSetup(private val context: Context) {
         /** [results] with [id]'s new [result]. A success drops the result of the action it undoes, which has stopped being true. */
         fun withResult(results: Map<String, PowerResult>, id: String, result: PowerResult): Map<String, PowerResult> =
             (if (result.ok) results - listOfNotNull(oppositeOf(id)).toSet() else results) + (id to result)
+
+        /** [results] with whether [id]'s success showed on the TV right after it ran, as [applied] read it then. */
+        fun withTook(results: Map<String, PowerResult>, id: String, applied: Boolean?): Map<String, PowerResult> {
+            val last = results[id]?.takeIf { it.ok } ?: return results
+            return results + (id to last.copy(took = applied))
+        }
+
+        /** Whether [last] ran without an error and the TV showed no change right after, while it still shows none. */
+        fun didntTake(applied: Boolean?, last: PowerResult): Boolean = applied == false && last.ok && last.took == false
 
         fun homeCommand(component: String, userId: Int) = "cmd package set-home-activity --user $userId $component"
         fun grantCommand(packageName: String, permission: String, userId: Int) = "pm grant --user $userId $packageName $permission"
