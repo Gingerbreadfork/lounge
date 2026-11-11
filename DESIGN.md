@@ -254,7 +254,7 @@ When the strip focus moves: the outgoing artwork fades to 0 while sliding 12 px 
 - Each row remembers its last focused index; returning to the row restores it.
 - Home from anywhere: Stage expanded, focus on the strip's first tile, or on the last Stage tile if Home was pressed within the last 10 minutes.
 - Back from a row returns focus to the strip, not to the top bar. Back from the strip does nothing (we are home). Back from an overlay closes it and restores focus to the element that opened it.
-- Long-press OK opens the tile menu; long-press Back is a no-op; long-press Home is reserved for the system unless the accessibility module owns it.
+- Long-press OK opens the tile menu, and on a tile with no menu it is a press; long-press Back is a no-op; long-press Home is reserved for the system unless the accessibility module owns it.
 - When a focused tile leaves, focus goes to its neighbour in the row, or to the row now in its place; never to the top bar.
 - Focus never lands on a non-interactive element. The focus tests in `feature/home`, which CI runs with the unit tests, check the top bar's ends, overlays handing focus back and a focused tile leaving.
 

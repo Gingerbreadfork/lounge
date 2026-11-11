@@ -181,6 +181,7 @@ fun TileView(
     // The curtain only shows where no picture covers it; an opaque JPEG over it would be pure overdraw.
     val needsCurtain = kind == TileKind.COMPACT || tile.artworkPath == null
     val shape = remember { RoundedCornerShape(Dimens.tileRadius) }
+    val menu = hasMenu(tile)
     Box(
         modifier
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -193,7 +194,8 @@ fun TileView(
                 if (it.isFocused) placed[0]?.let { c -> light.set(c, lightColor) }
                 onFocused(it.isFocused, bounds())
             }
-            .tilePress(onClick, { onLongPress(bounds()) }, clickLabel = "Open", longPressLabel = if (hasMenu(tile)) "Options" else null)
+            // Held on a tile with no menu, OK is a press like any other.
+            .tilePress(onClick, { if (menu) onLongPress(bounds()) else onClick() }, clickLabel = "Open", longPressLabel = if (menu) "Options" else null)
             .focusable()
             .semantics { contentDescription = spoken }
             // Two layers on purpose: the glow redraws every frame of a focus change, and inside the
