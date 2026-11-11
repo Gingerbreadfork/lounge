@@ -340,6 +340,7 @@ class UpdateManager(
             return fail(e, e is NotInstallable)
         }
         val profile = downloadedProfile(ready.release)
+        val viaPower = throughPowerSetup(path, interactive, adbReady = (power.status.value as? PowerStatus.Ready)?.backend == "adb")
         _state.value = UpdateState.Installing(ready.release)
         installingSince = System.currentTimeMillis()
         pendingInteractive = interactive
@@ -348,12 +349,14 @@ class UpdateManager(
         pendingHash = ready.sha256
         pendingProfile = false
         pendingSilent = path == InstallPath.Silent
-        if (path == InstallPath.PowerSetup) {
+        if (viaPower) {
             val r = runCatching {
                 val staged = stage(ready.file, ready.sha256, ready.release)
                 val stagedProfile = profile?.let { (file, hash) -> runCatching { stageProfile(file, hash) }.getOrNull() }
+                // Someone who has gone to another app since asking is left there.
+                val reopen = if (interactive && inForeground) reopenCommand() else null
                 try {
-                    power.run(installAction(staged, ready.sha256, digest(ready.file, "SHA-1"), stagedProfile))
+                    power.run(installAction(staged, ready.sha256, digest(ready.file, "SHA-1"), stagedProfile, reopen))
                 } finally {
                     staged.delete()
                     stagedProfile?.let { File(it.source).delete() }
@@ -587,13 +590,21 @@ class UpdateManager(
         return StagedProfile(staged.absolutePath, sha256, digest(staged, "SHA-1"), "pm install-create -r -i ${context.packageName}")
     }
 
-    private fun installAction(file: File, sha256: String, sha1: String, profile: StagedProfile?): PowerAction = PowerAction(
+    private fun installAction(file: File, sha256: String, sha1: String, profile: StagedProfile?, reopen: String?): PowerAction = PowerAction(
         "install_update",
         "Install an update",
         "Installs the downloaded Lounge update without a prompt.",
-        installCommand(file.absolutePath, sha256, sha1, "pm install -r -i ${context.packageName}", profile = profile),
+        installCommand(file.absolutePath, sha256, sha1, "pm install -r -i ${context.packageName}", profile = profile, reopen = reopen),
         timeoutMs = 5 * 60_000,
     )
+
+    /**
+     * The shell command that opens Lounge again once an update is in, or null when nothing can. It
+     * names a category, not an activity, so it finds the entry in the version that has just gone in.
+     */
+    private fun reopenCommand(): String? = reopenIntent(context)?.categories?.firstOrNull()?.let { category ->
+        "am start -a ${Intent.ACTION_MAIN} -c $category" + if (category == Intent.CATEGORY_HOME) "" else " -p ${shellQuote(context.packageName)}"
+    }
 
     // ----- network -----
 
@@ -888,19 +899,22 @@ class UpdateManager(
          * Copies the staged APK into the shell user's own directory and checks that copy before
          * [install] reads it: on Android 10 and earlier other apps can write to shared storage, but
          * not there, and the copy is the shell user's alone. A toybox without sha256sum checks [sha1]
-         * instead. With a [profile] that passes the same check, the two go in together through a
-         * session first; if that fails for any reason, the APK is installed alone.
+         * instead. With a [profile] that passes the same check the two go in through one session,
+         * else the APK goes in alone, and [reopen] runs once an install has gone in.
          */
-        internal fun installCommand(source: String, sha256: String, sha1: String, install: String, copy: String = "/data/local/tmp/lounge-update.apk", profile: StagedProfile? = null): String {
+        internal fun installCommand(source: String, sha256: String, sha1: String, install: String, copy: String = "/data/local/tmp/lounge-update.apk", profile: StagedProfile? = null, reopen: String? = null): String {
             val t = shellQuote(copy)
+            val reopened = listOfNotNull(reopen?.let { "if [ \"\$r\" = 0 ]; then $it >/dev/null 2>&1; fi" })
             val checked = listOf(
+                // Installing stops Lounge and with it the connection running this, so the script ignores what that sends and carries on.
+                "trap '' HUP PIPE TERM",
                 "umask 077",
                 "rm -f $t",
                 "cp ${shellQuote(source)} $t || exit 1",
                 "if command -v sha256sum >/dev/null; then set -- \$(sha256sum $t); want=${shellQuote(sha256)}; else set -- \$(sha1sum $t); want=${shellQuote(sha1)}; fi",
                 "if [ \"\$1\" != \"\$want\" ]; then rm -f $t; echo 'The update changed before it was installed'; exit 1; fi",
             )
-            if (profile == null) return (checked + listOf("$install $t; r=\$?", "rm -f $t", "exit \$r")).joinToString("\n")
+            if (profile == null) return (checked + listOf("$install $t; r=\$?", "rm -f $t") + reopened + "exit \$r").joinToString("\n")
             val p = shellQuote(profile.copy)
             return (checked + listOf(
                 "r=1",
@@ -910,13 +924,12 @@ class UpdateManager(
                 "if [ \"\$1\" = \"\$want\" ]; then",
                 // The session's number is what stands between the brackets of pm's answer.
                 "s=\$(${profile.session}); s=\${s##*\\[}; s=\${s%%\\]*}",
-                "if pm install-write \"\$s\" lounge.apk $t >/dev/null && pm install-write \"\$s\" lounge.dm $p >/dev/null && pm install-commit \"\$s\"; then r=0; else pm install-abandon \"\$s\" >/dev/null 2>&1; fi",
+                "if pm install-write \"\$s\" lounge.apk $t >/dev/null && pm install-write \"\$s\" lounge.dm $p >/dev/null && pm install-commit \"\$s\" >/dev/null; then r=0; else pm install-abandon \"\$s\" >/dev/null 2>&1; fi",
                 "fi",
                 "fi",
                 "if [ \"\$r\" != 0 ]; then $install $t; r=\$?; fi",
                 "rm -f $t $p",
-                "exit \$r",
-            )).joinToString("\n")
+            ) + reopened + "exit \$r").joinToString("\n")
         }
 
         /** Whether an update signed by [update] may replace an app signed by [installed]: every current signer must be among them. */
@@ -988,11 +1001,16 @@ class UpdatedReceiver : BroadcastReceiver() {
         val askedAt = prefs.getLong(UpdateManager.KEY_RETURN, 0L)
         prefs.edit().remove(UpdateManager.KEY_RETURN).apply()
         if (System.currentTimeMillis() - askedAt > UpdateManager.RETURN_WITHIN_MS) return
-        val pm = context.packageManager
-        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val isHome = pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == context.packageName
-        val open = if (isHome) home else pm.getLeanbackLaunchIntentForPackage(context.packageName) ?: pm.getLaunchIntentForPackage(context.packageName) ?: return
+        val open = reopenIntent(context) ?: return
         runCatching { context.startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { Log.w(UpdateManager.TAG, "updates: could not reopen Lounge: ${it.message}") }
     }
+}
+
+/** What opens Lounge again after an update: the home screen when Lounge is the home app, otherwise its own entry. */
+internal fun reopenIntent(context: Context): Intent? {
+    val pm = context.packageManager
+    val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+    val isHome = pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == context.packageName
+    return if (isHome) home else pm.getLeanbackLaunchIntentForPackage(context.packageName) ?: pm.getLaunchIntentForPackage(context.packageName)
 }

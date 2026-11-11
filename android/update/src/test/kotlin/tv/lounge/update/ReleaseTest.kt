@@ -40,7 +40,7 @@ class ReleaseTest {
      * Runs the install script with a profile against a stand-in `pm` that writes down what it is
      * asked and fails where [failing] says. Gives the exit code and the calls made.
      */
-    private fun runWithProfile(failing: String = "", profileSha256: String? = null, created: String = "Success: created install session [42]", profileThere: Boolean = true): Pair<Int, List<String>> {
+    private fun runWithProfile(failing: String = "", profileSha256: String? = null, created: String = "Success: created install session [42]", profileThere: Boolean = true, reopen: Boolean = false): Pair<Int, List<String>> {
         val dir = kotlin.io.path.createTempDirectory().toFile()
         try {
             val apk = File(dir, "update.apk").apply { writeBytes(ByteArray(4096) { it.toByte() }) }
@@ -48,7 +48,8 @@ class ReleaseTest {
             val calls = File(dir, "calls")
             fun sha(file: File, algorithm: String) = hex(MessageDigest.getInstance(algorithm).digest(file.readBytes()))
             val profile = StagedProfile(dm.path, profileSha256 ?: sha(dm, "SHA-256"), if (profileSha256 == null) sha(dm, "SHA-1") else "0".repeat(40), "pm install-create -r -i tv.lounge", File(dir, "copy.dm").path)
-            val script = UpdateManager.installCommand(apk.path, sha(apk, "SHA-256"), sha(apk, "SHA-1"), "pm install -r -i tv.lounge", File(dir, "copy.apk").path, profile)
+            val script = UpdateManager.installCommand(apk.path, sha(apk, "SHA-256"), sha(apk, "SHA-1"), "pm install -r -i tv.lounge", File(dir, "copy.apk").path, profile,
+                reopen = if (reopen) "{ echo reopen >> '${calls.path}'; }" else null)
             if (!profileThere) dm.delete()
             // Only session 42 exists, so a number read wrongly from pm's answer shows as a failed write.
             val pm = """
@@ -93,6 +94,63 @@ class ReleaseTest {
         assertEquals(0 to listOf("install-create", "install-write $none lounge.apk", "install-abandon $none", "install"), runWithProfile(failing = "install-create", created = none))
         // When the APK will not install either, the script says so.
         assertEquals(1, runWithProfile(failing = "install-commit install").first)
+    }
+
+    @Test
+    fun loungeOpensAgainOnlyAfterAnInstallThatWentIn() {
+        assertEquals(0 to listOf("install-create", "install-write 42 lounge.apk", "install-write 42 lounge.dm", "install-commit 42", "reopen"), runWithProfile(reopen = true))
+        assertEquals(0 to listOf("install-create", "install-write 42 lounge.apk", "install-write 42 lounge.dm", "install-commit 42", "install-abandon 42", "install", "reopen"), runWithProfile(failing = "install-commit", reopen = true))
+        assertEquals(1 to listOf("install-create", "install-write 42 lounge.apk", "install-write 42 lounge.dm", "install-commit 42", "install-abandon 42", "install"), runWithProfile(failing = "install-commit install", reopen = true))
+    }
+
+    @Test
+    fun loungeStaysClosedAfterAnInstallThatFailed() {
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        try {
+            val apk = File(dir, "update.apk").apply { writeBytes(ByteArray(4096) { it.toByte() }) }
+            val reopened = File(dir, "reopened")
+            fun sha(algorithm: String) = hex(MessageDigest.getInstance(algorithm).digest(apk.readBytes()))
+            fun run(install: String) = ProcessBuilder("sh", "-c", UpdateManager.installCommand(apk.path, sha("SHA-256"), sha("SHA-1"), install, File(dir, "copy.apk").path, reopen = "touch '${reopened.path}'")).start().waitFor()
+            assertEquals(1, run("false"))
+            assertFalse(reopened.exists())
+            assertEquals(0, run("true"))
+            assertTrue(reopened.exists())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun onlyAnInstallSomeoneAskedForLeavesTheSilentPathForPowerSetup() {
+        assertTrue(throughPowerSetup(InstallPath.PowerSetup, asked = false, adbReady = false))
+        assertTrue(throughPowerSetup(InstallPath.Silent, asked = true, adbReady = true))
+        assertFalse(throughPowerSetup(InstallPath.Silent, asked = false, adbReady = true))
+        // Shizuku stops what it runs when Lounge goes, so only adb is worth the detour.
+        assertFalse(throughPowerSetup(InstallPath.Silent, asked = true, adbReady = false))
+    }
+
+    @Test
+    fun theInstallScriptFinishesAfterItsConnectionCloses() {
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        try {
+            val apk = File(dir, "update.apk").apply { writeBytes(ByteArray(4096) { it.toByte() }) }
+            val copy = File(dir, "copy.apk")
+            val reopened = File(dir, "reopened")
+            fun sha(algorithm: String) = hex(MessageDigest.getInstance(algorithm).digest(apk.readBytes()))
+            // The install outlasts the connection and then prints into it, as pm does when Lounge has been stopped.
+            val script = UpdateManager.installCommand(apk.path, sha("SHA-256"), sha("SHA-1"), "sleep 1; echo installed; true", copy.path, reopen = "touch '${reopened.path}'")
+            val pid = File(dir, "pid")
+            val p = ProcessBuilder("sh", "-c", "echo \$\$ > '${pid.path}'\n$script").redirectErrorStream(true).start()
+            val until = System.currentTimeMillis() + 5_000
+            while (pid.length() == 0L && System.currentTimeMillis() < until) Thread.sleep(20)
+            p.inputStream.close()
+            ProcessBuilder("kill", "-HUP", pid.readText().trim()).start().waitFor()
+            assertEquals(0, p.waitFor())
+            assertTrue(reopened.exists())
+            assertFalse(copy.exists())
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 
     @Test

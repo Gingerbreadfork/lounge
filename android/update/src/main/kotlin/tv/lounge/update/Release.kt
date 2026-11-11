@@ -188,6 +188,13 @@ fun installPath(sdk: Int, selfIsInstaller: Boolean, powerReady: Boolean, canRequ
 }
 
 /**
+ * Whether an install goes through Power Setup. Some TVs never tell Lounge it was replaced, and only an
+ * adb shell outlives Lounge to open it again, so an install someone [asked] for goes that way when it can.
+ */
+fun throughPowerSetup(path: InstallPath, asked: Boolean, adbReady: Boolean): Boolean =
+    path == InstallPath.PowerSetup || (asked && path == InstallPath.Silent && adbReady)
+
+/**
  * Whether [file] is a profile archive with a profile in it and nothing else. Android would also act
  * on other entries, such as verification data, which no signature covers here.
  */
