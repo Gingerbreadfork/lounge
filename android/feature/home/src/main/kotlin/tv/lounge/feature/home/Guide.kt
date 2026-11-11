@@ -85,9 +85,8 @@ private val RowHeight = 72.dp
 
 /**
  * The TV guide (DESIGN.md §5.4): a bottom sheet with channels down the side and two and a half
- * hours across, laid out to the minute. OK on a programme tunes its channel. Refreshes every minute
- * while open. Its heading takes focus at once, so while the guide is read the d-pad stays in the
- * sheet rather than acting on the home behind it.
+ * hours across, laid out to the minute and read again every minute. OK on a programme tunes its
+ * channel. Its heading takes focus at once, so the d-pad stays in the sheet while the guide loads.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

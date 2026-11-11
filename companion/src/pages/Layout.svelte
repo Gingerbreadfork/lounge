@@ -27,9 +27,8 @@
     const l = await quiet(() => api.layout());
     if (l && waiting === 0 && edits === began) layout = l;
   }
-  // Saves run one at a time and in order, so the TV ends up with the last move. Only the last
-  // answer is shown, so an older one cannot undo a newer move on screen. When the last save
-  // fails, the page reads the TV again, so it never shows a change the TV does not have.
+  // Saves run in order and only the last answer is shown, so the TV and the page end on the
+  // last move. When that save fails, the page reads the TV again.
   let queue: Promise<void> = Promise.resolve();
   let waiting = 0;
   function save(patch: Partial<Layout>, message = 'Saved to the TV') {

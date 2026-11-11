@@ -524,9 +524,11 @@ one definition the host and the SDK share.
 - An error shows on the TV and the phone exactly as the plugin writes it, so a refresh or
   `resolve` that fails returns one sentence naming the cause and the fix ("Jellyfin didn't
   answer at 192.168.0.20. Check the server, then try again."), never a stack trace, a status
-  code or a parser's message. `sdk::fetch_from`, `fetch_online`, `didnt_answer`,
+  code on its own or a parser's message. `sdk::fetch_from`, `fetch_online`, `didnt_answer`,
   `answered_error`, `wrong_server`, `unreadable`, `offline`, `online_error` and `not_set` word
-  the usual failures; log the raw cause with `sdk::warn!`.
+  the usual failures, and the two that carry a status put it inside the sentence ("Jellyfin at
+  nas:8096 answered with error 503. Check the server, then try again."); log the raw cause with
+  `sdk::warn!`.
 - A `help` longer than 160 characters opens with a sentence that stands alone, because the TV
   shows only that one and leaves the rest to the phone.
 - Row titles say where they come from ("Watchlist on Trakt"), tile lines are in sentence case

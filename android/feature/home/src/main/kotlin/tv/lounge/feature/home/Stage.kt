@@ -503,10 +503,9 @@ private fun ExpandedStage(
 }
 
 /**
- * The strip under the playbill. Nothing here changes when the selection moves, so a move
- * recomposes no tile: each tile's light is a State on the selection. [canTakeFocus] is read when
- * focus searches, so the lowered strip refuses focus without recomposing. Each tile is read out
- * with what the playbill shows for it, which is otherwise never read.
+ * The strip under the playbill. Each tile's light is a State on the selection and [canTakeFocus]
+ * is read when focus searches, so neither a move nor the lowering recomposes a tile. Each tile is
+ * read out with what the playbill shows for it.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

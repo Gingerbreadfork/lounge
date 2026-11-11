@@ -161,13 +161,13 @@ the TV shows a fresh one as soon as it is used.
   &nbsp;
   <img src="docs/screenshots/phone-remote.png" width="23%" alt="Remote: a d-pad, media keys and a field that types on the TV">
   &nbsp;
-  <img src="docs/screenshots/phone-layout.png" width="23%" alt="Layout: the rows in order with arrows to move them">
+  <img src="docs/screenshots/phone-layout.png" width="23%" alt="Layout: the rows in order, each with a grip to drag it">
   &nbsp;
   <img src="docs/screenshots/phone-plugins.png" width="23%" alt="Plugins: the built-in plugins, each marked off or needing setup">
 </p>
 
-- **What's on** mirrors the home screen. Tap a tile to open it on the TV, or hold it for the
-  same menu as the remote's.
+- **Home** shows what's on: it mirrors the TV's home screen. Tap a tile to open it on the TV, or
+  hold it for the same menu as the remote's.
 - **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into Lounge's
   search and other fields, and a place to paste a link that opens on the TV. Home, the volume and
   the media keys work whatever is on screen. The d-pad, OK, Back and Menu reach another app only

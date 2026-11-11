@@ -71,11 +71,10 @@ import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 
 /**
- * Search (DESIGN.md §5.5): the query in display type, results as ordinary rows updated per
- * keystroke. The screen fades up and results reflow rather than jump; before anything is typed
- * Continue watching and Your apps fill the space. It searches everything in the snapshot, best
- * matches first, and the search plugins answer a moment later with a row each. The keyboard's
- * search key puts the keyboard away and lands on the first result.
+ * Search (DESIGN.md §5.5): the query in display type over ordinary rows that update per keystroke,
+ * with Continue watching and Your apps before anything is typed. It searches the snapshot, best
+ * matches first, and the search plugins add a row each a moment later. The keyboard's search key
+ * puts the keyboard away and lands on the first result.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

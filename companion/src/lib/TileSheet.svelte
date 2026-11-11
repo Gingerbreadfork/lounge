@@ -18,9 +18,8 @@
   let sheet: HTMLDivElement;
   // The sheet's first choice takes focus as it opens.
   const focus = (el: HTMLElement) => el.focus();
-  // Back closes the sheet like any page: the sheet is one history entry, and closing it by
-  // other means pops that entry so the page's own history stays as it was. Focus goes back to
-  // whatever had it before the sheet opened.
+  // The sheet is one history entry, so Back closes it, and closing it any other way pops that
+  // entry. Focus goes back to whatever had it before the sheet opened.
   let pushed = false;
   $effect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;

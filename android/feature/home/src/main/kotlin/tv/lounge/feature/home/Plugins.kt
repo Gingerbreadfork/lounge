@@ -421,9 +421,9 @@ internal fun shortHelp(text: String): String {
 }
 
 /**
- * A plugin setting as a TV text field: label above, value in `title`. Focus rests on the field as
- * a row, and OK opens the keyboard on it; Done, Back or leaving saves it. Passwords are masked;
- * toggles are a row. Text typed on the phone goes into the focused field.
+ * A plugin setting as a row: label above, value in `title`, and a toggle as a switch row. OK opens
+ * the keyboard on it, and Done, Back or leaving saves what was typed. Text typed on the phone goes
+ * into the focused field.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

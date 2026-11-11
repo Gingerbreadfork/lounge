@@ -251,7 +251,7 @@ fun KeyEvent.isBack(): Boolean = key in backKeys && !nativeKeyEvent.isCanceled &
 class PhoneText(val typed: Flow<String> = emptyFlow()) {
     private val taking = AtomicInteger(0)
 
-    /** Whether a field is open to take text now, so the phone is not told that text landed nowhere. */
+    /** Whether a field is open to take text, so the phone is not told that text landed nowhere. */
     val fieldOpen: Boolean get() = taking.get() > 0
 
     internal suspend fun into(onText: (String) -> Unit) {

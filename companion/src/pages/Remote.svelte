@@ -7,9 +7,8 @@
   let listening = $state(false);
   let recognition: any = null;
 
-  // Keys go to the TV one at a time, in the order pressed. A repeat from a held key is dropped
-  // while one is still waiting, so letting go stops at once, and a refused key drops the rest
-  // so its reason is said once.
+  // Keys go to the TV one at a time, in the order pressed. A held key's repeat is dropped while
+  // one is waiting, and a refused key drops the rest, so its reason is said once.
   let waiting: string[] = [];
   let sending = false;
   function key(k: string, repeat = false) {

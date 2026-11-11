@@ -92,10 +92,9 @@ private const val STEPS = 5
 internal const val HOME_NOT_TAKEN_SETUP = "Android didn't make Lounge the home screen. Try again, or in Settings open Default home screen for other ways."
 
 /**
- * First run: five full-screen steps, one question each, a heading and one primary button; progress
- * is a row of dots (DESIGN.md §5). Back goes to the previous step and leaves from the first. Focus
- * lands on the first thing still to decide, and Next only once there is none. Unfinished, it comes
- * back at the step reached.
+ * Setup: five full-screen steps, one question each, with a row of dots for progress (DESIGN.md
+ * §5.5). Back goes to the previous step, and from the first it leaves, except on a first run, where
+ * setup stays up. Focus lands on the first thing still to decide, and on Next once there is none.
  */
 @Composable
 fun OnboardingScreen(

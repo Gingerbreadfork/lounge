@@ -68,7 +68,7 @@ sealed interface UpdateState {
     data class NeedsConfirmation(override val release: Release, val file: File, val confirm: Intent) : UpdateState {
         override val label: String get() = "NeedsConfirmation"
     }
-    /** [cause] says what went wrong, and [next] what happens now, when the cause does not say so itself. */
+    /** [cause] says what went wrong, and [next] what follows, when the cause does not say so itself. */
     data class Failed(val cause: String, val next: Next?, override val release: Release?, val atMs: Long) : UpdateState {
         override val label: String get() = "Failed"
         val message: String get() = if (next == null) cause else "$cause ${next.said}"

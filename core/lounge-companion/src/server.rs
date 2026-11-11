@@ -1,9 +1,7 @@
-//! axum on a tokio runtime, on its own thread. Every `/api` route needs a paired token in
-//! `Authorization: Bearer …`, checked before a byte of the body is read, except `POST /api/pair`.
-//! Pictures, the snapshot socket and the backup load by URL, so those `GET` routes also accept
-//! the session cookie `POST /api/session` sets, and no token ever sits in a URL.
-//! Snapshots are pushed over `/api/ws` whenever the core says one changed. Every error the page
-//! can show is a sentence that says the cause and the fix; the raw reason goes to the log.
+//! axum on a tokio runtime, on its own thread. Every `/api` route but `POST /api/pair` needs a
+//! paired token, checked before the body is read, and the `GET` routes a page loads by URL also
+//! take the session cookie, so no token sits in a URL. Snapshots are pushed over `/api/ws`, and
+//! every error the page can show is a sentence with the cause and the fix.
 
 use crate::auth::{PairingInfo, TokenStore};
 use crate::{reads_as_sentence, CompanionActions, CompanionError, LayoutPatch};

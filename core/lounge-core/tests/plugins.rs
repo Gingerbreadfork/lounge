@@ -289,7 +289,7 @@ fn an_update_never_rolls_back_and_is_turned_off_when_it_asks_for_more() {
     // One the person turned off takes a wider update without being held back.
     core.set_plugin_enabled(ID.into(), false);
     assert!(core.install_plugin(version("5", r#""a.example","b.example","c.example","d.example""#), false).unwrap().update_asks_to_reach.is_empty());
-    // One turned off by an update goes back on when a later update no longer asks for more.
+    // One turned off by an update goes back on when a later update asks for nothing more.
     core.set_plugin_enabled(ID.into(), true);
     let held = core.install_plugin(version("6", r#""a.example","b.example","c.example","d.example","e.example""#), false).unwrap();
     assert!(!held.enabled);

@@ -111,7 +111,7 @@ class PowerTest {
         val done = PowerResult(true, "")
         val off = PowerSetup.withResult(emptyMap(), "home_off_com.x", done)
         assertEquals(setOf("home_off_com.x"), off.keys)
-        // Turned back on, the home is no longer off.
+        // Turning the home back on undoes turning it off.
         assertEquals(setOf("home_on_com.x"), PowerSetup.withResult(off, "home_on_com.x", done).keys)
         // A failure undoes nothing.
         assertEquals(setOf("home_off_com.x", "home_on_com.x"), PowerSetup.withResult(off, "home_on_com.x", PowerResult(false, "exit 1")).keys)

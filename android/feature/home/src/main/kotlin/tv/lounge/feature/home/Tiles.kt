@@ -105,12 +105,8 @@ fun tileSize(kind: TileKind, size: RowSize): DpSize = when (kind) {
 private fun Tile.artIsBanner(): Boolean = artworkPath != null && id.startsWith("app:")
 
 /**
- * One tile. Focus is light: scale, glow and the backdrop spill; everything else is a brightness
- * state (DESIGN.md §6.1). [chrome] adds the title block to landscape tiles, [held] keeps a tile lit
- * while its menu is open, [nudge] is a horizontal offset in px read while drawing. [badged] is
- * false in a row that wears the tile's badge itself, so it is said once. [shown] is false while the
- * tile is kept off screen. [description] replaces what is read out about it, for a tile whose
- * words are drawn elsewhere.
+ * One tile. Focus is light: scale, glow and the backdrop spill, and everything else is a
+ * brightness state (DESIGN.md §6.1).
  */
 @Composable
 fun TileView(
@@ -124,11 +120,17 @@ fun TileView(
     onLongPress: (Rect) -> Unit,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
+    /** Adds the title block to a landscape tile. */
     chrome: Boolean = true,
+    /** Keeps the tile lit while its menu is open. */
     held: Boolean = false,
+    /** A horizontal offset in px, read while drawing. */
     nudge: (() -> Float)? = null,
+    /** False in a row that wears the tile's badge itself, so it is said once. */
     badged: Boolean = true,
+    /** False while the tile is kept off screen. */
     shown: () -> Boolean = { true },
+    /** Replaces what is read out, for a tile whose words are drawn elsewhere. */
     description: String? = null,
 ) {
     val colors = LoungeTheme.colors
@@ -472,8 +474,8 @@ private fun LandscapeContent(
 private val ScrimFade = 56.dp
 
 /**
- * The scrim under a landscape tile's words: clear above them, deep enough by [titleTop] for
- * `limelight` and by [metaTop] for `dust` to reach 4.5 to 1 over white artwork.
+ * The scrim under a landscape tile's words: clear above them, and deep enough by [titleTop] for
+ * `limelight` and by [metaTop] for `dust` to read over white artwork (DESIGN.md §7.1).
  */
 private fun wordsScrim(velvet: Color, height: Dp, titleTop: Dp?, metaTop: Dp?): Brush {
     val stops = buildList {

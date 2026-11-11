@@ -172,8 +172,8 @@ fun AllAppsScreen(
         gridState.scrollToItem(i)
         requester(i).requestWhenReady()
     }
-    // An app hidden from its menu leaves its place: focus goes to the tile that took it, or the
-    // last one; with nothing left, to the field.
+    // An app that leaves the grid, as when it is uninstalled, hands focus to the tile that took
+    // its place, or the last one; with nothing left, to the field.
     LaunchedEffect(shown, covered) {
         val id = focusedTileId ?: return@LaunchedEffect
         if (leaving || covered || fieldFocused || shown.any { it.id == id }) return@LaunchedEffect

@@ -177,10 +177,9 @@ object PinWords {
 }
 
 /**
- * Menu items for a tile, by what it is and where it sits. All of them do something real.
- * [rowTitle] names the home row the tile sits in; the caller passes null for the Stage and for
- * search results, which keep their home row ids. An app hidden from every row, which only All
- * apps and search still list, offers Show and what an app always can.
+ * Menu items for a tile, by what it is and where it sits. [rowTitle] names the home row the tile
+ * sits in, and is null for the Stage and for search results. An app hidden from every row offers
+ * Show and what an app always can.
  */
 fun menuItemsFor(
     tile: Tile,

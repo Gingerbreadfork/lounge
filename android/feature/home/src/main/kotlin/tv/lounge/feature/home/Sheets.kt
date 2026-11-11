@@ -190,9 +190,8 @@ internal const val WHOLE = Int.MAX_VALUE
 
 /**
  * A 72 dp sheet row: glyph, title, optional trailing value. Focus is a lifted `curtainEdge` surface
- * with a glow and the tiles' rim; rested rows paint nothing. An `accent` of `signal` adds a status
- * dot, and `signal`, `houselight` or `ember` colour the value. Rows with [onCycle] change their
- * value with Left and Right and show chevrons.
+ * with a glow and the tiles' rim, and a rested row paints nothing. An [accent] of `signal`,
+ * `houselight` or `ember` colours the value, and `signal` adds a status dot.
  */
 @Composable
 fun SheetRow(
@@ -204,6 +203,7 @@ fun SheetRow(
     accent: Color = LoungeTheme.colors.dust,
     focusRequester: FocusRequester? = null,
     height: Dp = 72.dp,
+    /** Left and Right change the value through this, and the focused row shows chevrons. */
     onCycle: ((Int) -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
     /** A second line under the title, for rows that must stay narrow; the row grows past [height] when large text needs it. */
@@ -835,7 +835,7 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
     )
 }
 
-/** The code that pairs a phone at the TV's address now, or null when a new one has to be made. */
+/** The live code when it was made for the TV's present address, or null when a new one has to be made. */
 internal fun CompanionStatus.livePairing(): PairingInfo? = pairing?.takeIf { p -> url?.let { p.url.startsWith(it) } == true }
 
 /** Why the companion could not start, with what to do; the raw reason goes to the log. */

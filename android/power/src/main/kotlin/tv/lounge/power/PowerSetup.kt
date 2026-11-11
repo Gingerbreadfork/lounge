@@ -71,7 +71,7 @@ class PowerSetup(private val context: Context) {
     val log: StateFlow<List<PowerLogEntry>> = _log.asStateFlow()
     /** How each action last went while Lounge has been running, by action id. */
     val results: StateFlow<Map<String, PowerResult>> = _results.asStateFlow()
-    /** The actions [start] is running now, by id. */
+    /** The actions [start] is running, by id. */
     val running: StateFlow<Set<String>> = _running.asStateFlow()
     /** Whether what each setup action sets up is so, by action id, as [recheck] last read it. */
     val applied: StateFlow<Map<String, Boolean>> = _applied.asStateFlow()
@@ -439,7 +439,7 @@ class PowerSetup(private val context: Context) {
             else -> null
         }
 
-        /** [results] with [id]'s new [result]. A success drops the result of the action it undoes, which no longer holds. */
+        /** [results] with [id]'s new [result]. A success drops the result of the action it undoes, which has stopped being true. */
         fun withResult(results: Map<String, PowerResult>, id: String, result: PowerResult): Map<String, PowerResult> =
             (if (result.ok) results - listOfNotNull(oppositeOf(id)).toSet() else results) + (id to result)
 
