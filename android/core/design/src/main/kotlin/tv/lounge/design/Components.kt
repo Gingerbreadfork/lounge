@@ -112,8 +112,9 @@ fun LoungeButton(
             .lightGlow(light, { glow.value }, cornerRadius = 28.dp)
             .clip(shape)
             .background(background)
+            // In the label's colour, which stands off the fill, and over the secondary button's hairline.
+            .focusRim(colors, { rim.value }, 28.dp, color = content)
             .then(if (kind == ButtonKind.Secondary) Modifier.border(1.dp, colors.curtainEdge, shape) else Modifier)
-            .focusRim(colors, { rim.value }, 28.dp)
             .onFocusChanged { focused = it.isFocused }
             .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .semantics { role = Role.Button }

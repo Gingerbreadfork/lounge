@@ -55,6 +55,28 @@ class WordsTest {
     }
 
     @Test
+    fun theRimOnAPrimaryButtonStandsOffItsFill() {
+        /** [rim] as it lands on [fill] at the rim's strength. */
+        fun drawn(fill: androidx.compose.ui.graphics.Color, rim: androidx.compose.ui.graphics.Color) = androidx.compose.ui.graphics.Color(
+            red = fill.red + (rim.red - fill.red) * RIM_ALPHA,
+            green = fill.green + (rim.green - fill.green) * RIM_ALPHA,
+            blue = fill.blue + (rim.blue - fill.blue) * RIM_ALPHA,
+        )
+        // On each room's lamp, which fills a primary button with no artwork behind it.
+        val rooms = with(LoungeColors) { listOf(Dusk, House, Hearth, Opera, Marquee, GreenRoom, Moonlight, Graphite, Blackout, HighContrast) }
+        for (colors in rooms) {
+            val fill = colors.houselight
+            assertTrue(fill.toString(), contrastRatio(fill, drawn(fill, textOn(fill, colors))) >= 3f)
+        }
+        // On any artwork's light it is never fainter than a limelight rim would be.
+        val colors = LoungeColors.Dusk
+        for (argb in listOf(0xFF4A6FA5, 0xFF7A4FD0, 0xFFB03A48, 0xFF2E8B57, 0xFF3366FF, 0xFFC4D9F2)) {
+            val fill = androidx.compose.ui.graphics.Color(argb)
+            assertTrue("%08x".format(argb), contrastRatio(fill, drawn(fill, textOn(fill, colors))) >= contrastRatio(fill, drawn(fill, colors.limelight)))
+        }
+    }
+
+    @Test
     fun textOnALightIsWhicheverReadsBetter() {
         val colors = LoungeColors.Dusk
         for (argb in listOf(0xFF4A6FA5, 0xFF7A4FD0, 0xFFB03A48, 0xFFFFA86B, 0xFF2E8B57, 0xFF3366FF)) {

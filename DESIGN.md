@@ -343,7 +343,7 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
 - Primary: `light-text` on the artwork `light` (or `velvet` on `houselight` when no artwork), 56 px tall, 24 px radius pill, `title` label, 32 px horizontal padding. Only one primary per screen region.
 - Secondary: `limelight` on `curtain` with a 1 px `curtain-edge` hairline, same size.
 - Icon buttons in the top bar: 48 px, glyph 28 px, label in `meta` to the right; the label is always visible (no icon-only buttons on TV).
-- Focus on a button: scale 1.04, glow and the tiles' 2 px rim, same model as tiles. Top bar buttons, guide cells, the sort pill, fields and the focused alphabet letter take the same rim. Left and Right at the ends of the top bar nudge (5.3) instead of letting focus leave it.
+- Focus on a button: scale 1.04, glow and the tiles' 2 px rim, same model as tiles. On a primary button the rim is `light-text`, since `limelight` is lost on the lamp; on a secondary one it goes over the hairline. Top bar buttons, guide cells, the sort pill, fields and the focused alphabet letter take the same rim. Left and Right at the ends of the top bar nudge (5.3) instead of letting focus leave it.
 
 ### 7.3 Badges and indicators
 
