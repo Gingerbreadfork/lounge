@@ -206,6 +206,9 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         }
     }
 
+    // What the updater says before it hands over to one of Android's screens.
+    LaunchedEffect(updates) { updates.hints.collect { say(it) } }
+
     /** Core actions run off the main thread: a plugin may take a moment to answer. */
     fun perform(action: String, title: String) {
         scope.launch {

@@ -123,7 +123,7 @@ fun UpdatesSheet(updates: UpdateManager, firstFocus: FocusRequester) {
         Text("Lounge looks at its releases on GitHub twice a day. $how", style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.padding(horizontal = 16.dp))
         if (path == InstallPath.NeedsPermission) {
             Spacer(Modifier.height(8.dp))
-            SheetRow(icon = LoungeIcons.Settings, title = "Allow Lounge to install updates", subtitle = INSTALL_HINT, onClick = { activity?.let { updates.openInstallPermission(it) } })
+            SheetRow(icon = LoungeIcons.Settings, title = "Allow Lounge to install updates", subtitle = INSTALL_HINT, onClick = { activity?.let { updates.askForInstallPermission(it, scope) } })
         }
     }
 }

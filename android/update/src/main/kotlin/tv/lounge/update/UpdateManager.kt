@@ -89,6 +89,7 @@ class UpdateManager(
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle(0L))
     private val _autoCheck = MutableStateFlow(true)
     private val _confirmRequests = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
+    private val _hints = MutableSharedFlow<String>(extraBufferCapacity = 2)
     private val work = Mutex()
     @Volatile private var inForeground = false
     @Volatile private var lastAttemptMs = 0L
@@ -99,6 +100,8 @@ class UpdateManager(
     val autoCheck: StateFlow<Boolean> = _autoCheck.asStateFlow()
     /** Android's confirmation dialogs, to be started by the activity. */
     val confirmRequests: SharedFlow<Intent> = _confirmRequests.asSharedFlow()
+    /** Words for the home screen's own toast, said before Lounge hands over to one of Android's screens. */
+    val hints: SharedFlow<String> = _hints.asSharedFlow()
     val lastCheckedMs: Long get() = prefs.getLong(KEY_LAST_CHECK, 0L)
 
     /** What the last run left: the release it found and, if its download still checks out, that it is ready. */
@@ -353,7 +356,7 @@ class UpdateManager(
                 runCatching { activity.startActivity(s.confirm) }
             }
             is UpdateState.Ready -> if (currentPath() == InstallPath.NeedsPermission) {
-                openInstallPermission(activity)
+                askForInstallPermission(activity, scope)
             } else {
                 returnAfterInstall()
                 scope.launch { install(interactive = true) }
@@ -368,11 +371,29 @@ class UpdateManager(
     }
 
     /**
-     * Android's "install unknown apps" switch for Lounge. TV settings show the whole list rather
-     * than Lounge's own page, so the row that leads here says what to switch on; coming back with
-     * it allowed carries on with the install. False when the TV has no such screen.
+     * Says what to do in Android's list of apps allowed to install, leaves the words up a moment,
+     * then opens the list. When the TV has no such screen, says where else to allow it.
      */
-    fun openInstallPermission(activity: Activity): Boolean {
+    fun askForInstallPermission(activity: Activity, scope: CoroutineScope) {
+        if (leavingForPermission) return
+        leavingForPermission = true
+        _hints.tryEmit(INSTALL_HINT)
+        scope.launch {
+            try {
+                delay(HINT_MS)
+                if (!openInstallPermission(activity)) _hints.tryEmit(NO_INSTALL_SCREEN)
+            } finally {
+                leavingForPermission = false
+            }
+        }
+    }
+
+    /**
+     * Android's "install unknown apps" switch for Lounge. TV settings show the whole list rather
+     * than Lounge's own page; coming back with Lounge allowed carries on with the install. False
+     * when the TV has no such screen.
+     */
+    private fun openInstallPermission(activity: Activity): Boolean {
         val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
         return runCatching { activity.startActivity(intent) }
             .onSuccess { awaitingPermission = true }
@@ -721,6 +742,7 @@ class UpdateManager(
 
     @Volatile private var workScope: CoroutineScope? = null
     @Volatile private var awaitingPermission = false
+    @Volatile private var leavingForPermission = false
     @Volatile private var pendingInteractive = false
     /** The release the last session was committed for. */
     @Volatile private var pendingRelease: Release? = null
@@ -829,6 +851,10 @@ class UpdateManager(
         private const val CHECK_EVERY_MS = 12 * 3_600_000L
         private const val RETRY_AFTER_MS = 3_600_000L
         private const val INSTALL_TIMEOUT_MS = 10 * 60_000L
+        /** How long the words stay up before Android's screen covers them. */
+        private const val HINT_MS = 1_500L
+        const val INSTALL_HINT = "Find Lounge in Android's list and turn it on, then press Back."
+        const val NO_INSTALL_SCREEN = "This TV has no screen for that here. In its settings open Apps, then Special app access, then Install unknown apps, or connect Power Setup."
         /** How long after one quiet install Android lets the next go in unasked, with some to spare. */
         private const val SILENT_AGAIN_MS = 40_000L
 

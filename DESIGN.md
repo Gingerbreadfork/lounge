@@ -283,7 +283,8 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
   were watching"). It sits where the row it stands in for would be, one per row, and its only
   menu item is "Don't show this again". The update notice is the one exception to the
   placement: "Lounge 0.1.2 is ready" sits in a row of its own at the top, and only when the
-  install needs the person (a confirmation, or permission to install).
+  install needs the person (a confirmation, or permission to install). Before OK hands over to
+  Android's list of apps allowed to install, a toast says what to do there.
 - **Now Playing chip** (top bar, between Search and Settings): three bars in the artwork's `light`
   that move while sound is playing (static in reduced motion), then the title in `meta`, at most
   280 px. Selecting it opens the Now Playing card (5.4): artwork 200 × 200 on the left, app name
