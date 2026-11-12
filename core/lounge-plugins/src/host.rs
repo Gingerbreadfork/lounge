@@ -153,6 +153,9 @@ impl Host {
     pub fn new(services: Arc<dyn Services>, limits: Limits) -> Host {
         let mut config = Config::default();
         config.consume_fuel(true);
+        // A function is compiled on its first call. Fuel charged for compiling, landing on a nearly
+        // spent slice, ends the call where it cannot resume, so compiling is free and running is not.
+        config.fuel_cost(wasmi::CustomFuelCosts { bytes_copied_per_fuel: 64, fuel_per_bytes_translated: 0, fuel_per_bytes_validated: 0 });
         Host { engine: Engine::new(&config), services, limits }
     }
 
@@ -1047,6 +1050,23 @@ mod tests {
         let plugin = host.load("tv.lounge.test", secret_manifest(), &wasm).unwrap();
         let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
         assert!(cause(&err).contains("lg_alloc may not call host functions"), "{err:?}");
+    }
+
+    #[test]
+    fn a_large_function_first_called_near_the_end_of_a_slice_runs() {
+        // Large to compile and cheap to run: the branch never taken holds thousands of instructions.
+        let never = "(drop (i32.add (i32.const 1) (i32.const 2)))".repeat(20_000);
+        let large = format!("(func $large (if (i32.const 0) (then {never})))");
+        // Filling memory costs fuel by the byte, so this many fills leave the first slice nearly spent.
+        let (bytes, per_fuel) = (2 * 65_536, 64);
+        let fills = FUEL_SLICE * 95 / 100 / (bytes / per_fuel);
+        let body = format!("(local $i i32) (loop $l (memory.fill (i32.const 0) (i32.const 0) (i32.const {bytes})) (local.set $i (i32.add (local.get $i) (i32.const 1))) (br_if $l (i32.lt_u (local.get $i) (i32.const {fills})))) (call $large) (i64.const 0)");
+        let wasm = module("", &large, "(i32.const 8)", &body);
+        let (host, _) = host();
+        let plugin = host.load("x", Manifest { name: "Test".into(), ..Default::default() }, &wasm).unwrap();
+        // Reaching its empty answer shows the call ran to the end without running out of fuel.
+        let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert_eq!(cause(&err), "lg_refresh returned nothing");
     }
 
     #[test]
