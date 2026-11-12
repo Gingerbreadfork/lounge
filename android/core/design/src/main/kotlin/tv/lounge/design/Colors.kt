@@ -148,6 +148,72 @@ data class LoungeColors(
             horizon = Color(0xFF191919),
         )
 
+        /** Cabaret: black violet walls, a pink neon sign. */
+        val Cabaret = LoungeColors(
+            velvet = Color(0xFF170B1E),
+            curtain = Color(0xFF291634),
+            curtainEdge = Color(0xFF40244F),
+            limelight = Color(0xFFF6EFE7),
+            dust = Color(0xFFB9A3C6),
+            houselight = Color(0xFFFF8DC7),
+            ember = Color(0xFFFF5A4A),
+            signal = Color(0xFF7FE6C2),
+            scrim = Color(0x66170B1E),
+            spillScale = 1f,
+            horizon = Color(0xFF1F0C24),
+        )
+
+        /**
+         * Aquarium: deep petrol walls, lit by the glow of a fish tank. Its green leans to leaf so it
+         * stays apart from the lamp.
+         */
+        val Aquarium = LoungeColors(
+            velvet = Color(0xFF071517),
+            curtain = Color(0xFF10262A),
+            curtainEdge = Color(0xFF1D3B40),
+            limelight = Color(0xFFF6EFE7),
+            dust = Color(0xFF9DB8BA),
+            houselight = Color(0xFF74DCE8),
+            ember = Color(0xFFFF6B5E),
+            signal = Color(0xFFB5E88A),
+            scrim = Color(0x66071517),
+            spillScale = 1f,
+            horizon = Color(0xFF0A1B20),
+        )
+
+        /**
+         * Absinthe: dark olive walls, a green-gold glow. Its green leans to teal so it stays apart
+         * from the lamp.
+         */
+        val Absinthe = LoungeColors(
+            velvet = Color(0xFF12140A),
+            curtain = Color(0xFF22251A),
+            curtainEdge = Color(0xFF363A28),
+            limelight = Color(0xFFF6EFE7),
+            dust = Color(0xFFB0B39A),
+            houselight = Color(0xFFD2E27C),
+            ember = Color(0xFFFF5E57),
+            signal = Color(0xFF6FD9C0),
+            scrim = Color(0x6612140A),
+            spillScale = 1f,
+            horizon = Color(0xFF181A0C),
+        )
+
+        /** Ultraviolet: a room near black, lit by a blacklight. */
+        val Ultraviolet = LoungeColors(
+            velvet = Color(0xFF0D0C12),
+            curtain = Color(0xFF1B1A26),
+            curtainEdge = Color(0xFF2C2A3D),
+            limelight = Color(0xFFF6EFE7),
+            dust = Color(0xFFA9A6C4),
+            houselight = Color(0xFFB9A2FF),
+            ember = Color(0xFFFF5577),
+            signal = Color(0xFF7CF0C8),
+            scrim = Color(0x660D0C12),
+            spillScale = 1f,
+            horizon = Color(0xFF120F1C),
+        )
+
         // Both set their horizon too: a copy would keep House's plum one.
         val Blackout = House.copy(
             velvet = Color(0xFF000000),

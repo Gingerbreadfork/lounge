@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.LocalTextStyle
 
-enum class LoungeThemeVariant { Dusk, House, Hearth, Opera, Marquee, GreenRoom, Moonlight, Graphite, Blackout, HighContrast }
+enum class LoungeThemeVariant { Dusk, House, Hearth, Opera, Marquee, GreenRoom, Moonlight, Graphite, Cabaret, Aquarium, Absinthe, Ultraviolet, Blackout, HighContrast }
 
 fun LoungeThemeVariant.colors(): LoungeColors = when (this) {
     LoungeThemeVariant.Dusk -> LoungeColors.Dusk
@@ -32,6 +32,10 @@ fun LoungeThemeVariant.colors(): LoungeColors = when (this) {
     LoungeThemeVariant.GreenRoom -> LoungeColors.GreenRoom
     LoungeThemeVariant.Moonlight -> LoungeColors.Moonlight
     LoungeThemeVariant.Graphite -> LoungeColors.Graphite
+    LoungeThemeVariant.Cabaret -> LoungeColors.Cabaret
+    LoungeThemeVariant.Aquarium -> LoungeColors.Aquarium
+    LoungeThemeVariant.Absinthe -> LoungeColors.Absinthe
+    LoungeThemeVariant.Ultraviolet -> LoungeColors.Ultraviolet
     LoungeThemeVariant.Blackout -> LoungeColors.Blackout
     LoungeThemeVariant.HighContrast -> LoungeColors.HighContrast
 }

@@ -45,7 +45,7 @@ Contrast on Dusk `velvet` (WCAG relative luminance): `limelight` 16.5:1, `dust` 
 
 OLED theme ("Blackout"): House with `velvet` and `horizon` → `#000000`, `curtain` → `#161016`, everything else unchanged. Light spill alpha is halved so the black stays black away from the focus.
 
-**The ten rooms.** Every theme is a dim room with one lamp; they differ in the colour of the walls and the colour of the light, never in layout, motion or the light model. `limelight` is the same warm white in all of them, `horizon` sits within 5 % of `velvet`, and every one clears the same bar: `limelight` ≥ 15.8:1 and `dust` ≥ 6.9:1 on `velvet`, `houselight` ≥ 7.4:1 both ways, `ember` ≥ 5.2:1, `signal` ≥ 10.4:1.
+**The fourteen rooms.** Every theme is a dim room with one lamp; they differ in the colour of the walls and the colour of the light, never in layout, motion or the light model. `limelight` is the same warm white in all of them, `horizon` sits within 5 % of `velvet`, and every one clears the same bar: `limelight` ≥ 15.8:1 and `dust` ≥ 6.9:1 on `velvet`, `houselight` ≥ 7.4:1 both ways, `ember` ≥ 5.2:1, `signal` ≥ 10.4:1.
 
 | Theme | The room | `velvet` | `horizon` | `curtain` / edge | `dust` | `houselight` | `ember` | `signal` |
 |---|---|---|---|---|---|---|---|---|
@@ -57,10 +57,14 @@ OLED theme ("Blackout"): House with `velvet` and `horizon` → `#000000`, `curta
 | Green room | Deep green, brass lamp | `#0E1814` | `#131F1C` | `#192822` / `#283B33` | `#A0B2A8` | `#E9C47F` | `#FF6260` | `#8FE8BC` |
 | Moonlight | Cool slate, moonlight | `#10161F` | `#151C27` | `#1B2430` / `#2B3747` | `#A3ADBB` | `#C4D9F2` | `#FF6773` | `#86DEB1` |
 | Graphite | No colour, warm white | `#141414` | `#191919` | `#222222` / `#343434` | `#A6A3A0` | `#E8DFD4` | `#F25C5C` | `#86D9AC` |
+| Cabaret | Black violet, pink neon | `#170B1E` | `#1F0C24` | `#291634` / `#40244F` | `#B9A3C6` | `#FF8DC7` | `#FF5A4A` | `#7FE6C2` |
+| Aquarium | Deep teal, a fish tank's glow | `#071517` | `#0A1B20` | `#10262A` / `#1D3B40` | `#9DB8BA` | `#74DCE8` | `#FF6B5E` | `#B5E88A` |
+| Absinthe | Dark olive, green-gold glow | `#12140A` | `#181A0C` | `#22251A` / `#363A28` | `#B0B39A` | `#D2E27C` | `#FF5E57` | `#6FD9C0` |
+| Ultraviolet | Near black, a blacklight | `#0D0C12` | `#120F1C` | `#1B1A26` / `#2C2A3D` | `#A9A6C4` | `#B9A2FF` | `#FF5577` | `#7CF0C8` |
 | Blackout | True black for OLED panels | `#000000` | = velvet | `#161016` / `#3B2A34` | `#A89AA3` | `#F2B263` | `#E35D5B` | `#7FD3A8` |
 | High contrast | Bolder text and edges | `#000000` | = velvet | `#2A1B24` / `#3B2A34` | `#D5CBD1` | `#F2B263` | `#E35D5B` | `#7FD3A8` |
 
-Settings cycles them in this order; onboarding shows them as a two-column grid with the live preview beside it.
+Where a room's lamp sits near red or green, its `ember` or `signal` leans away from it (Cabaret's red toward orange, Aquarium's green toward leaf, Absinthe's toward teal) so a state never reads as the lamp. Settings cycles them in this order; onboarding shows them as a two-column grid with the live preview beside it.
 
 ### 3.2 Artwork light (dynamic tokens)
 

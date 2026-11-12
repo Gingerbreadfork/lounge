@@ -251,7 +251,7 @@ private fun ChoiceDot(selected: Boolean) {
 private fun StepLook(prefs: Prefs, uiPrefs: Prefs.UiPrefs, choiceFocus: FocusRequester, onPreview: (Prefs.Theme) -> Unit) {
     val scope = rememberCoroutineScope()
     Heading("Welcome to Lounge", "Your TV, laid out around what you actually watch. First, how should it look? You can change this any time.")
-    // Ten rooms, two to a row, so the grid and the live preview share the screen.
+    // The rooms two to a row, so the grid and the live preview share the screen.
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Prefs.Theme.entries.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

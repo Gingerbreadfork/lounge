@@ -34,7 +34,7 @@ class Prefs(private val context: Context) {
         }
     }
 
-    enum class Theme { Dusk, House, Hearth, Opera, Marquee, GreenRoom, Moonlight, Graphite, Blackout, HighContrast }
+    enum class Theme { Dusk, House, Hearth, Opera, Marquee, GreenRoom, Moonlight, Graphite, Cabaret, Aquarium, Absinthe, Ultraviolet, Blackout, HighContrast }
 
     /** Every UI preference at once, so the screen recomposes once per change rather than once per key. */
     data class UiPrefs(

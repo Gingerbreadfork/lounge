@@ -54,7 +54,7 @@ class WordsTest {
             blue = fill.blue + (rim.blue - fill.blue) * RIM_ALPHA,
         )
         // On each room's lamp, which fills a primary button with no artwork behind it.
-        val rooms = with(LoungeColors) { listOf(Dusk, House, Hearth, Opera, Marquee, GreenRoom, Moonlight, Graphite, Blackout, HighContrast) }
+        val rooms = LoungeThemeVariant.entries.map { it.colors() }
         for (colors in rooms) {
             val fill = colors.houselight
             assertTrue(fill.toString(), contrastRatio(fill, drawn(fill, textOn(fill, colors))) >= 3f)

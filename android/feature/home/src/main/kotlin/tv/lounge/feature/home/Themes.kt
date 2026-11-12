@@ -5,7 +5,7 @@ import tv.lounge.design.LoungeThemeVariant
 import tv.lounge.design.colors
 import tv.lounge.platform.Prefs
 
-/** The ten rooms (DESIGN.md §3.1), as Settings and onboarding name them. */
+/** The rooms (DESIGN.md §3.1), as Settings and onboarding name them. */
 val Prefs.Theme.title: String
     get() = when (this) {
         Prefs.Theme.Dusk -> "Dusk"
@@ -16,6 +16,10 @@ val Prefs.Theme.title: String
         Prefs.Theme.GreenRoom -> "Green room"
         Prefs.Theme.Moonlight -> "Moonlight"
         Prefs.Theme.Graphite -> "Graphite"
+        Prefs.Theme.Cabaret -> "Cabaret"
+        Prefs.Theme.Aquarium -> "Aquarium"
+        Prefs.Theme.Absinthe -> "Absinthe"
+        Prefs.Theme.Ultraviolet -> "Ultraviolet"
         Prefs.Theme.Blackout -> "Blackout"
         Prefs.Theme.HighContrast -> "High contrast"
     }
@@ -30,6 +34,10 @@ val Prefs.Theme.tagline: String
         Prefs.Theme.GreenRoom -> "Deep green, brass lamp"
         Prefs.Theme.Moonlight -> "Cool slate, moonlight"
         Prefs.Theme.Graphite -> "No colour, warm white"
+        Prefs.Theme.Cabaret -> "Black violet, pink neon"
+        Prefs.Theme.Aquarium -> "Deep teal, a fish tank's glow"
+        Prefs.Theme.Absinthe -> "Dark olive, green-gold glow"
+        Prefs.Theme.Ultraviolet -> "Near black, a blacklight"
         Prefs.Theme.Blackout -> "True black for OLED panels"
         Prefs.Theme.HighContrast -> "Bolder text and edges"
     }
