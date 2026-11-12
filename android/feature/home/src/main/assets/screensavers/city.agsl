@@ -1,0 +1,90 @@
+// City: the city at night, out of focus beyond the glass. Buildings full of lit windows, the
+// brighter lights among them, traffic going by underneath, and a few lights much nearer.
+uniform float2 resolution;
+uniform float time;
+uniform shader noise;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+layout(color) uniform half4 dust;
+
+float hash(float2 p) {
+    float3 q = fract(float3(p.xyx) * 0.1031);
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+}
+
+// How tall the building at x is, read from the noise texture's lattice, which holds a random
+// value every sixteen pixels and so repeats only every sixteen buildings.
+float roof(float x) {
+    float h = float(noise.eval(float2(mod(floor(x / 0.13), 16.0) * 16.0 + 0.5, 136.5)).r);
+    return -0.16 + 0.34 * h * h;
+}
+
+// One layer of lights, at most one to a cell and each kept inside it, so a pixel only needs its
+// own cell. Out of focus, each is a disc a little brighter toward its rim. [inBuildings] keeps
+// them under the roofs; otherwise they gather about the middle of the frame.
+half3 layer(float2 p, float cell, float drift, float many, float size, half3 warm, half3 other, float glow, bool inBuildings) {
+    float2 c = (p + float2(time * drift, 0.0)) / cell;
+    float2 id = floor(c);
+    float h = hash(id);
+    float h2 = fract(h * 13.73);
+    float h3 = fract(h * 71.97);
+    float r = size * (0.7 + 0.3 * h3);
+    float2 o = r + (1.0 - 2.0 * r) * float2(h2, h3);
+    float d = length(c - id - o) / r;
+    float2 at = (id + o) * cell - float2(time * drift, 0.0);
+    float place;
+    if (inBuildings) {
+        place = step(at.y, roof(at.x + time * 0.003)) * step(-0.36, at.y);
+    } else {
+        float y = at.y + 0.08;
+        place = clamp(1.0 - y * y * 7.0, 0.0, 1.0);
+    }
+    float lit = step(h, many * place) * (0.25 + 0.75 * h3 * h3);
+    return mix(warm, other, half(step(0.72, h2))) * half(clamp((1.0 - d) * 5.0, 0.0, 1.0) * (0.75 + 0.25 * d * d) * lit * glow);
+}
+
+// One lane of traffic or a row of street lamps, moving at [speed].
+half3 lane(float2 p, float y, float cell, float speed, float many, half3 color, float glow) {
+    float c = (p.x + time * speed) / cell;
+    float id = floor(c);
+    float h = hash(float2(id, y * 100.0));
+    float r = 0.3 + 0.12 * fract(h * 13.73);
+    float o = r + (1.0 - 2.0 * r) * fract(h * 71.97);
+    float d = length(float2(c - id - o, (p.y - y) / cell)) / r;
+    return color * half(smoothstep(1.0, 0.75, d) * step(h, many) * (0.4 + 0.6 * fract(h * 5.3)) * glow);
+}
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
+    half3 col = mix(horizon.rgb * 1.4, velvet.rgb * 0.6, half(smoothstep(-0.5, 0.45, p.y)));
+    half3 white = mix(houselight.rgb, dust.rgb, 0.6);
+
+    col += mix(houselight.rgb, ember.rgb, 0.4) * half(0.05 * exp(-(p.y + 0.05) * (p.y + 0.05) * 16.0));
+
+    // Nothing stands above the tallest roof, the street is one strip and few near lights reach the
+    // top, so most of the frame skips them.
+    if (p.y < 0.22) {
+        // The buildings: soft shapes full of lit windows that run together out of focus.
+        float x = p.x + time * 0.003;
+        float f = fract(x / 0.13);
+        float top = roof(x);
+        float body = smoothstep(top + 0.025, top - 0.025, p.y) * smoothstep(0.0, 0.12, f) * smoothstep(1.0, 0.88, f) * smoothstep(-0.42, -0.32, p.y);
+        float3 w = float3(noise.eval(float2(x * 22.0, p.y * 19.0) * 16.0).rgb);
+        float lit = smoothstep(0.4, 0.9, w.r) * (0.5 + 0.5 * w.g);
+        col += mix(houselight.rgb, white, half(w.b)) * half(0.16 * lit * body);
+        col += layer(p, 0.05, 0.003, 0.55, 0.42, houselight.rgb, white, 0.34, true);
+        col += layer(p + float2(0.31, 0.17), 0.07, 0.003, 0.4, 0.4, houselight.rgb, ember.rgb, 0.3, true);
+    }
+    if (p.y < -0.34) {
+        col += lane(p, -0.38, 0.1, 0.003, 0.55, houselight.rgb, 0.3);
+        col += lane(p, -0.42, 0.065, 0.022, 0.4, ember.rgb, 0.4);
+        col += lane(p, -0.445, 0.065, -0.018, 0.35, white, 0.3);
+    }
+    if (p.y < 0.36) {
+        col += layer(p + float2(-7.1, 4.2), 0.26, 0.011, 0.45, 0.47, houselight.rgb, ember.rgb, 0.14, false);
+    }
+    return half4(col, 1.0);
+}

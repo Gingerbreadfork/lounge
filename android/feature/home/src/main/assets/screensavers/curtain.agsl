@@ -1,0 +1,46 @@
+// Curtain: the house curtain before the show, lit from the footlights.
+uniform float2 resolution;
+uniform float time;
+uniform shader noise;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
+    float t = time * 0.14;
+    float low = 0.5 - p.y;
+    // Pleats of uneven width, gathered toward the top and swaying more toward the hem.
+    float uneven = float(noise.eval(float2(p.x * 4.0, 0.37) * 16.0).r);
+    float sway = (0.75 * sin(t + p.x * 1.7) + 0.4 * sin(0.6 * t - p.x * 3.1)) * (0.2 + 0.8 * low);
+    float f = 30.0 * (1.0 + 0.14 * p.y);
+    float u = p.x * f + 3.6 * uneven + sway;
+    float s = sin(u);
+    // Some pleats fall deeper than others.
+    float deep = 1.2 + 1.2 * float(noise.eval(float2(p.x * 2.5, 4.1) * 16.0).b);
+    float3 n = normalize(float3(-cos(u) * deep, 0.05 * sway, 1.0));
+
+    // Three footlights just below the frame, each throwing its own pool up the cloth, and a faint
+    // wash from the front of the house.
+    float light = 0.0;
+    for (int i = 0; i < 3; i++) {
+        float3 to = float3((float(i) - 1.0) * 0.72 - p.x, -0.6 - p.y, 0.22);
+        float d2 = dot(to, to);
+        float facing = dot(n, to * inversesqrt(d2));
+        light += clamp((facing + 0.25) / 1.25, 0.0, 1.0) / (1.0 + d2 * 12.0);
+    }
+    light += 0.1 * clamp(dot(n, float3(-0.4, 0.35, 0.85)), 0.0, 1.0);
+    // A shallow pleat lets more light into its fold than a deep one.
+    float hollow = mix(mix(0.26, 0.07, (deep - 1.2) / 1.2), 1.0, smoothstep(-0.95, -0.1, s));
+    // Velvet catches light where the cloth turns away from you.
+    float turn = 1.0 - n.z;
+    float grain = 0.93 + 0.07 * float(noise.eval(float2(p.x * 40.0, p.y * 1.5) * 16.0).g);
+
+    half3 cloth = mix(horizon.rgb * 1.8, ember.rgb * 0.55, 0.68);
+    half3 col = velvet.rgb * 0.4;
+    col += cloth * half(light * hollow * grain * 2.4);
+    col += mix(ember.rgb, houselight.rgb, 0.5) * half(turn * turn * light * hollow * 2.2);
+    col *= half(1.0 - 0.45 * smoothstep(-0.1, 0.5, p.y));
+    return half4(col, 1.0);
+}

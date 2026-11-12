@@ -1,0 +1,78 @@
+// Record: a record turning under the lamp.
+uniform float2 resolution;
+uniform float time;
+uniform shader noise;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+layout(color) uniform half4 dust;
+
+const float2 CENTRE = float2(0.86, -0.16);
+const float EDGE = 1.16;
+const float LABEL = 0.37;
+const float3 LAMP = float3(-0.7, 0.75, 1.1);
+
+float n(float2 p) {
+    return float(noise.eval(p * 16.0).r);
+}
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
+    float2 d = p - CENTRE;
+    float r = length(d);
+    float2 radial = d / r;
+    float turn = time * 0.3;
+    float3 toLamp = LAMP - float3(p, 0.0);
+    float near = 1.0 / (1.0 + dot(toLamp, toLamp) * 0.35);
+    float3 l = normalize(toLamp);
+    float3 h = normalize(l + float3(0.0, 0.0, 1.0));
+
+    // The table under the record, in the lamp's pool, and the record's shadow on it.
+    float shade = smoothstep(EDGE + 0.07, EDGE - 0.01, length(p - CENTRE + l.xy * 0.05));
+    half3 col = velvet.rgb * 0.5 + mix(horizon.rgb * 1.6, houselight.rgb * 0.18, 0.3) * half(1.6 * near * near * (1.0 - 0.7 * shade));
+
+    if (r < EDGE) {
+        // A record is never quite flat: the warp tilts the grooves along their way round as it
+        // turns, and the light on them sways.
+        float a = atan(d.y, d.x);
+        float warp = 0.045 * cos(a + turn) + 0.02 * cos(2.0 * a - turn * 2.0 + 1.0);
+        float2 groove = float2(-radial.y, radial.x);
+        float along = (dot(groove, h.xy) + warp * h.z) * inversesqrt(1.0 + warp * warp);
+        float across = 1.0 - along * along;
+        float sheen = pow(across, 360.0) * 0.95 + pow(across, 40.0) * 0.22;
+
+        // Tracks with smooth gaps between them, and grooves cut louder or quieter within each.
+        float span = (r - LABEL - 0.04) / (EDGE - LABEL - 0.1);
+        float track = fract(span * 5.3 + 0.3 * n(float2(span * 3.0, 4.0)));
+        float gap = smoothstep(0.0, 0.02, track) * smoothstep(1.0, 0.97, track) * step(0.0, span) * step(span, 1.0);
+        float cut = 0.5 + 0.5 * n(float2(r * 85.0, 1.5)) * (0.6 + 0.4 * n(float2(r * 23.0, 6.5)));
+        float groovy = gap * cut;
+
+        half3 vinyl = velvet.rgb * 0.22 + horizon.rgb * 0.15;
+        half3 light = mix(houselight.rgb, dust.rgb, 0.35);
+        col = vinyl * half(0.6 + 0.8 * near) + light * half(sheen * groovy * near * 1.5);
+        // The smooth vinyl in the gaps shows the lamp itself, faintly.
+        float mirror = pow(max(dot(normalize(float3(-groove * warp, 1.0)), h), 0.0), 400.0);
+        col += light * half(mirror * (1.0 - gap) * 0.4);
+        // The bevel at the rim.
+        col += light * half(smoothstep(EDGE - 0.012, EDGE - 0.004, r) * smoothstep(EDGE, EDGE - 0.004, r) * 0.25 * near);
+
+        if (r < LABEL) {
+            // The label: paper turning with the record, a line of fine print near its edge and a
+            // printed rule further in.
+            float spin = a - turn;
+            // Read round a circle, so the print joins up where the angle wraps.
+            float2 round = float2(cos(spin), sin(spin));
+            float words = step(0.52, n(round * 4.2 + 2.0)) * step(0.3, fract(spin * 5.0 / 6.2832));
+            float line = words * smoothstep(0.012, 0.004, abs(r - (LABEL - 0.045)));
+            float rule = smoothstep(0.004, 0.0015, abs(r - 0.2));
+            float title = step(0.5, n(round * 2.3 + 5.0)) * step(fract(spin / 6.2832 + 0.1), 0.25) * smoothstep(0.014, 0.006, abs(r - 0.27));
+            half3 paper = mix(ember.rgb * 0.42, horizon.rgb, 0.35) * half(0.35 + 1.1 * near) * half(0.92 + 0.08 * n(round * 0.5 + float2(r * 20.0, 0.0)));
+            half3 ink = mix(houselight.rgb, dust.rgb, 0.4) * half(0.25 + 0.7 * near);
+            paper = mix(paper, ink, half(0.55 * max(max(line, rule), title)));
+            col = mix(paper, vinyl, half(smoothstep(0.016, 0.012, r)));
+        }
+    }
+    return half4(col, 1.0);
+}

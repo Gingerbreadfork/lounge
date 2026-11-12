@@ -43,6 +43,25 @@ class ShaderSourceTest {
     }
 
     @Test
+    fun everyBundledSceneCanRun() {
+        val dir = java.io.File("src/main/assets/screensavers")
+        val index = org.json.JSONArray(java.io.File(dir, "index.json").readText())
+        val ids = mutableSetOf<String>()
+        for (i in 0 until index.length()) {
+            val o = index.getJSONObject(i)
+            val id = o.getString("id")
+            assertTrue("$id is listed twice", ids.add(id))
+            assertTrue("$id needs a name and a description", o.getString("name").isNotBlank() && o.getString("description").isNotBlank())
+            val source = java.io.File(dir, o.getString("file")).readText()
+            assertNull(id, ShaderSource.problem(source))
+            // A bundled scene is given no values, so it may only ask for what Lounge provides.
+            val given = o.optJSONObject("uniforms")?.keys()?.asSequence()?.toSet().orEmpty()
+            val missing = ShaderSource.uniforms(source).map { it.name }.filter { it !in ShaderSource.PROVIDED && it !in given }
+            assertTrue("$id declares $missing", missing.isEmpty())
+        }
+    }
+
+    @Test
     fun valuesUseThePluginFormat() {
         val values = ShaderSource.parseValues(JSONObject("""{"speed": 0.5, "drift": [0.1, 0.2], "smoke": "#C8B8A0", "bad": "blue"}""")).associateBy { it.name }
         assertEquals(setOf("speed", "drift", "smoke"), values.keys)

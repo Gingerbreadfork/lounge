@@ -7,5 +7,9 @@
   { "id": "shallows", "name": "Shallows", "description": "Light on the floor of a pool", "file": "shallows.agsl" },
   { "id": "lava", "name": "Lava", "description": "A lava lamp, slowly", "file": "lava.agsl" },
   { "id": "aurora", "name": "Aurora", "description": "Northern lights over the hills", "file": "aurora.agsl" },
-  { "id": "silk", "name": "Silk", "description": "Folds of satin turning under the lamp", "file": "silk.agsl" }
+  { "id": "silk", "name": "Silk", "description": "Folds of satin turning under the lamp", "file": "silk.agsl" },
+  { "id": "curtain", "name": "Curtain", "description": "The house curtain before the show, lit from the footlights", "file": "curtain.agsl" },
+  { "id": "moonpath", "name": "Moonpath", "description": "The sea at night, and the road the moon lays across it", "file": "moonpath.agsl" },
+  { "id": "city", "name": "City", "description": "The city at night, out of focus beyond the glass", "file": "city.agsl" },
+  { "id": "record", "name": "Record", "description": "A record turning under the lamp", "file": "record.agsl" }
 ]
