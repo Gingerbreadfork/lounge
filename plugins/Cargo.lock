@@ -526,6 +526,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-seerr"
+version = "0.7.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-simkl"
 version = "0.7.0"
 dependencies = [

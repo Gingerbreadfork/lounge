@@ -84,6 +84,10 @@ different corner of the interface:
   other things pass, a square cover sent as `poster` so the Stage frames it whole, and
   `resolve` starting a stream on the server at the press, whose address carries no secret,
   after closing the one the last press started.
+- `plugins/seerr`: an API key in a header, titles and artwork looked up once per film or show
+  and kept in the key-value store, a few looked up again each refresh once they are a week old,
+  posters from TMDB through a second host in `fetch_hosts`, and `search` actions that find the
+  title in whichever app or plugin has it.
 
 ## Quick start
 

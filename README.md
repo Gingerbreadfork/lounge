@@ -76,7 +76,7 @@ Your artwork or nine abstract scenes, which can also play behind the home screen
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/plugin.svg" width="28" height="28" alt=""><br>
-<b>Twenty-four plugins</b><br>
+<b>Twenty-five plugins</b><br>
 Jellyfin, Plex, Kodi, Stremio, IPTV, Trakt, Twitch and more. Each is sandboxed WebAssembly in a signed bundle.
 </td>
 </tr>
@@ -193,7 +193,7 @@ anyone else. Plugins built into the APK are vouched for by the APK itself. Any l
 targets core WebAssembly will do: the interface is eight imports and six exports with JSON in
 between.
 
-Twenty-four ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
+Twenty-five ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
 use from the phone or the TV's settings. One that needs a sign-in shows a code and a QR code on
 its page, and carries on by itself once you have entered the code on your phone. If an app such as Plex or Jellyfin is on the TV and its
 plugin is off, the home offers to set it up until you do or dismiss the offer.
@@ -209,6 +209,7 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | Stremio | Paused titles, next episodes and newly released episodes in Continue watching, the library as a row, and search. Opens in the Stremio app. |
 | Nuvio | Paused titles and next episodes in Continue watching, the library as a row, and search. Opens in the Nuvio TV app. |
 | Sonarr and Radarr | This week's episodes and releases, what's downloading and what just arrived. Tiles search for the title in whichever app has it. |
+| Seerr | What has been requested, waiting for approval or on its way, and what has become available in the last month, from Seerr, Jellyseerr or Overseerr. Tiles search for the title in whichever app has it. |
 | Spotify | Recently played, playlists, saved albums and podcasts with a Spotify developer app, or any Spotify links you paste without one. Opens in the Spotify app. |
 | IPTV | An M3U playlist as channels, with a guide from XMLTV. |
 | HDHomeRun | The tuner's channels and guide, played in the TV's own player. |
@@ -223,7 +224,7 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art as the screensaver. |
 | Weather | The temperature and sky now and each day's high for the week ahead in a town you name, as a row of small tiles to read. Celsius or Fahrenheit. From Open-Meteo, with no account or key. |
 
-A twenty-fifth, **Sample library**, lives in the repository but not the APK: eighteen
+A twenty-sixth, **Sample library**, lives in the repository but not the APK: eighteen
 public-domain films with their posters, so you can see Lounge with something on it. The pictures
 in this file show a made-up horror library instead; every title, poster and name in them is
 invented.
