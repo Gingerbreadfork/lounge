@@ -159,6 +159,17 @@ impl Host {
         Host { engine: Engine::new(&config), services, limits }
     }
 
+    /// The sizes a call's memory and tables may reach, with tables held to `table_elements`.
+    fn store_limits(&self, table_elements: usize) -> StoreLimits {
+        StoreLimitsBuilder::new()
+            .memory_size(self.limits.memory_bytes)
+            .memories(1)
+            .table_elements(table_elements)
+            .tables(4)
+            .instances(1)
+            .build()
+    }
+
     /// Compile a module. Fails for anything that is not valid WebAssembly.
     pub fn load(&self, id: &str, manifest: Manifest, wasm: &[u8]) -> Result<LoadedPlugin> {
         let unrunnable = |cause: String| {
@@ -263,13 +274,7 @@ impl Host {
             plugin: plugin.id.clone(),
             manifest: plugin.manifest.clone(),
             services: Arc::clone(services),
-            limits: StoreLimitsBuilder::new()
-                .memory_size(self.limits.memory_bytes)
-                .memories(1)
-                .table_elements(self.limits.table_elements)
-                .tables(4)
-                .instances(1)
-                .build(),
+            limits: self.store_limits(self.limits.table_elements),
             kv_value_bytes: self.limits.kv_value_bytes,
             kv_keys: self.limits.kv_keys,
             kv_writes_left: self.limits.kv_writes,
@@ -289,6 +294,9 @@ impl Host {
         let mut linker = Linker::<State>::new(&self.engine);
         link_host_functions(&mut linker).map_err(|e| e.to_string())?;
         let instance = linker.instantiate_and_start(&mut store, &plugin.module).map_err(|e| trap_cause(&e))?;
+        // A `table.grow` that runs out of fuel resumes from the wrong instruction, so once the
+        // plugin runs its tables keep their size and growing one answers -1, as the spec allows.
+        store.data_mut().limits = self.store_limits(0);
         let memory = instance.get_memory(&store, exports::MEMORY).ok_or_else(|| "the module has no memory export".to_string())?;
 
         let packed = match input {
@@ -1039,20 +1047,6 @@ mod tests {
     }
 
     #[test]
-    fn lg_alloc_cannot_call_back_into_the_host() {
-        let (host, _) = host();
-        let wasm = module(
-            r#"(import "lounge" "setting" (func $setting (param i32 i32) (result i64)))"#,
-            r#"(data (i32.const 1100) "server")"#,
-            "(drop (call $setting (i32.const 1100) (i32.const 6))) (i32.const 4096)",
-            "(drop (call $setting (i32.const 1100) (i32.const 6))) (i64.const 0)",
-        );
-        let plugin = host.load("tv.lounge.test", secret_manifest(), &wasm).unwrap();
-        let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
-        assert!(cause(&err).contains("lg_alloc may not call host functions"), "{err:?}");
-    }
-
-    #[test]
     fn a_large_function_first_called_near_the_end_of_a_slice_runs() {
         // Large to compile and cheap to run: the branch never taken holds thousands of instructions.
         let never = "(drop (i32.add (i32.const 1) (i32.const 2)))".repeat(20_000);
@@ -1067,6 +1061,20 @@ mod tests {
         // Reaching its empty answer shows the call ran to the end without running out of fuel.
         let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
         assert_eq!(cause(&err), "lg_refresh returned nothing");
+    }
+
+    #[test]
+    fn lg_alloc_cannot_call_back_into_the_host() {
+        let (host, _) = host();
+        let wasm = module(
+            r#"(import "lounge" "setting" (func $setting (param i32 i32) (result i64)))"#,
+            r#"(data (i32.const 1100) "server")"#,
+            "(drop (call $setting (i32.const 1100) (i32.const 6))) (i32.const 4096)",
+            "(drop (call $setting (i32.const 1100) (i32.const 6))) (i64.const 0)",
+        );
+        let plugin = host.load("tv.lounge.test", secret_manifest(), &wasm).unwrap();
+        let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+        assert!(cause(&err).contains("lg_alloc may not call host functions"), "{err:?}");
     }
 
     #[test]
@@ -1189,5 +1197,27 @@ mod tests {
         let plugin = host.load("tv.lounge.test", manifest, &wasm).unwrap();
         // The module ignores the fetch result, so the call still succeeds; the denial is what the plugin would have read.
         assert!(host.refresh(&plugin, &RefreshContext::default()).is_ok());
+    }
+
+    #[test]
+    fn a_table_does_not_grow_while_the_plugin_runs() {
+        let (host, _) = host();
+        // Filling memory costs fuel by the byte; these counts put the grow on either side of the
+        // first slice's end. The global counts entries, so a call that starts over traps.
+        let (bytes, per_fuel) = (2 * 65_536, 64);
+        let around = FUEL_SLICE / (bytes / per_fuel);
+        for fills in around - 50..around + 5 {
+            let body = format!(
+                "(local $i i32) (global.set $g (i32.add (global.get $g) (i32.const 1)))
+                 (loop $l (memory.fill (i32.const 0) (i32.const 0) (i32.const {bytes})) (local.set $i (i32.add (local.get $i) (i32.const 1))) (br_if $l (i32.lt_u (local.get $i) (i32.const {fills}))))
+                 (if (i32.ne (table.grow $t (ref.null func) (i32.const 99999)) (i32.const -1)) (then unreachable))
+                 (if (i32.ne (global.get $g) (i32.const 1)) (then unreachable))
+                 (i64.const 0)"
+            );
+            let wasm = module("", "(table $t 1 funcref) (global $g (mut i32) (i32.const 0))", "(i32.const 8)", &body);
+            let plugin = host.load("x", Manifest { name: "Test".into(), ..Default::default() }, &wasm).unwrap();
+            let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
+            assert_eq!(cause(&err), "lg_refresh returned nothing", "after {fills} fills");
+        }
     }
 }
