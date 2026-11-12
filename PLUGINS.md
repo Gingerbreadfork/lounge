@@ -78,6 +78,12 @@ different corner of the interface:
   key-value store, asked for in other languages when English finds nothing much, a `compact`
   row of tiles to read with a `logo` as their symbol, and the last forecast kept so its days
   still show, named against the clock, while the network is away.
+- `plugins/audiobookshelf`: a username and password whose one-hour access token is renewed
+  from a refresh token, or an API key instead, a request sent again once after a renewal,
+  shelves read from one call per library with each entry parsed on its own so shelves of
+  other things pass, a square cover sent as `poster` so the Stage frames it whole, and
+  `resolve` starting a stream on the server at the press, whose address carries no secret,
+  after closing the one the last press started.
 
 ## Quick start
 

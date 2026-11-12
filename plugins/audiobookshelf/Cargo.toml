@@ -1,0 +1,14 @@
+[package]
+name = "lounge-plugin-audiobookshelf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Audiobookshelf: books and podcast episodes to continue, recently added and search, played in a player app"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lounge-plugin-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
