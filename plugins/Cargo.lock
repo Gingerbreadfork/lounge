@@ -510,6 +510,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lounge-plugin-radio"
+version = "0.7.0"
+dependencies = [
+ "lounge-plugin-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lounge-plugin-sample"
 version = "0.7.0"
 dependencies = [

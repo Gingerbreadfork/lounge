@@ -76,7 +76,7 @@ Your artwork or nine abstract scenes, which can also play behind the home screen
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/plugin.svg" width="28" height="28" alt=""><br>
-<b>Twenty-five plugins</b><br>
+<b>Twenty-six plugins</b><br>
 Jellyfin, Plex, Kodi, Stremio, IPTV, Trakt, Twitch and more. Each is sandboxed WebAssembly in a signed bundle.
 </td>
 </tr>
@@ -193,7 +193,7 @@ anyone else. Plugins built into the APK are vouched for by the APK itself. Any l
 targets core WebAssembly will do: the interface is eight imports and six exports with JSON in
 between.
 
-Twenty-five ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
+Twenty-six ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
 use from the phone or the TV's settings. One that needs a sign-in shows a code and a QR code on
 its page, and carries on by itself once you have entered the code on your phone. If an app such as Plex or Jellyfin is on the TV and its
 plugin is off, the home offers to set it up until you do or dismiss the offer.
@@ -217,6 +217,7 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | Twitch | The live channels you follow, in Live now and the guide. |
 | YouTube | New videos from channels and playlists through their public feeds. With a Google sign-in, your subscriptions, playlists and liked videos too. |
 | Podcasts | New episodes from feeds, Apple Podcasts links or an OPML export, played in a player app. Search uses Apple's directory. |
+| Internet radio | Stations you name and the most popular ones, anywhere or in your country, from the radio-browser.info directory, with search across it. Played in a player app. No account or key. |
 | Audiobookshelf | Books and podcast episodes you are partway through in Continue watching, the next book of a series as up next, recently added books and new episodes as rows, and search. Played in a player app from where you left off, though the server doesn't learn where you stop on the TV. Sign in with a username and password or an API key. |
 | Moonlight | Your gaming PCs and their games from Sunshine, as tiles that start a stream in Moonlight. A game left running shows up in Continue watching. |
 | Internet Archive | Free films, cartoons and television from archive.org, with search. |
@@ -224,7 +225,7 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art as the screensaver. |
 | Weather | The temperature and sky now and each day's high for the week ahead in a town you name, as a row of small tiles to read. Celsius or Fahrenheit. From Open-Meteo, with no account or key. |
 
-A twenty-sixth, **Sample library**, lives in the repository but not the APK: eighteen
+A twenty-seventh, **Sample library**, lives in the repository but not the APK: eighteen
 public-domain films with their posters, so you can see Lounge with something on it. The pictures
 in this file show a made-up horror library instead; every title, poster and name in them is
 invented.
