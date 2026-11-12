@@ -209,8 +209,9 @@ another, so pressing a tile never waits for someone's refresh.
 
 `search` runs as the user types on the TV's search screen, for plugins whose manifest lists the
 `search` kind and whose required settings are filled in. Each plugin that finds something gets a
-row under its own name, with the first picture of each result; the results' actions work
-exactly as they do in a refresh. A search that a newer one has replaced is not run at all.
+row under its own name, with one picture for each result: its poster, else its thumbnail, else
+its logo, which makes the row compact tiles. The results' actions work exactly as they do in a
+refresh. A search that a newer one has replaced is not run at all.
 `resolve` runs when the user selects an item whose action says `resolve`.
 
 The host fetches artwork for you, four pictures at a time, caps each at 4 MB (12 MB for a

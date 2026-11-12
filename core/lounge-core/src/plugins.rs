@@ -562,12 +562,14 @@ impl PluginManager {
                         let setting = |key: &str| settings.get(key).cloned();
                         let fetcher = self.fetchers.for_plugin(&entry.id, &entry.manifest, &setting);
                         let permitted = |host: &str| host_permitted(&entry.manifest, host, &setting);
-                        // One picture per result: the poster or the thumbnail, whichever it has.
+                        // One picture per result: the poster, else the thumbnail, else the logo.
                         for it in items.iter_mut() {
                             if it.poster.is_some() {
                                 it.thumbnail = None;
                             }
-                            it.logo = None;
+                            if it.poster.is_some() || it.thumbnail.is_some() {
+                                it.logo = None;
+                            }
                         }
                         let budget = ArtBudget { downloads: SEARCH_LIMIT as usize, bytes: 24 * 1024 * 1024, deadline };
                         let (ready, _) = with_artwork(&fetcher, &permitted, &dir, items, &budget);

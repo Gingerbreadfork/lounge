@@ -1,7 +1,7 @@
 //! Plugin search for the TV's search screen: the search plugins are asked on the thread that
 //! answers presses, their answers become rows of tiles, and each tile remembers what it opens.
 
-use crate::plugins::{channel_key, PluginJob, SearchGroup};
+use crate::plugins::{channel_key, PluginJob, ReadyItem, SearchGroup};
 use crate::worker::{plugin_link, ArtPlan};
 use crate::{Badge, Inner, Row, RowSize, Tile, TileKind};
 use lounge_artwork::Style;
@@ -35,19 +35,17 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
     let mut plan = ArtPlan::new();
     let mut wants = Vec::new();
     for g in &groups {
-        let portrait = g.items.iter().filter(|r| r.poster.is_some()).count() * 2 > g.items.len();
+        let kind = row_kind(&g.items);
         let picks: Vec<Option<usize>> = g
             .items
             .iter()
-            .map(|r| {
-                if portrait {
-                    plan.want(r.poster.as_deref().or(r.thumbnail.as_deref()), Style::Poster)
-                } else {
-                    plan.want(r.thumbnail.as_deref().or(r.poster.as_deref()), Style::Landscape)
-                }
+            .map(|r| match kind {
+                TileKind::Poster => plan.want(r.poster.as_deref().or(r.thumbnail.as_deref()), Style::Poster),
+                TileKind::Compact => plan.want(r.logo.as_deref(), Style::Logo),
+                _ => plan.want(r.thumbnail.as_deref().or(r.poster.as_deref()), Style::Landscape),
             })
             .collect();
-        wants.push((portrait, picks));
+        wants.push((kind, picks));
     }
     let art = plan.run(&inner.state, 48).results;
 
@@ -55,8 +53,7 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
     let mut rows = Vec::new();
     {
         let state = inner.state.lock();
-        for (g, (portrait, picks)) in groups.iter().zip(wants) {
-            let kind = if portrait { TileKind::Poster } else { TileKind::Landscape };
+        for (g, (kind, picks)) in groups.iter().zip(wants) {
             let mut tiles = Vec::new();
             for (r, pick) in g.items.iter().zip(picks) {
                 let it = &r.item;
@@ -79,8 +76,8 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
                     kind,
                     title: it.title.clone(),
                     subtitle: it.subtitle.clone().or_else(|| it.channel_name.clone()),
-                    artwork_path: prepared.map(|p| p.path.clone()),
-                    icon_path: None,
+                    artwork_path: prepared.filter(|_| kind != TileKind::Compact).map(|p| p.path.clone()),
+                    icon_path: prepared.filter(|_| kind == TileKind::Compact).map(|p| p.path.clone()),
                     light_argb: prepared.map(|p| lounge_graph::light_from_palette(&p.palette)).unwrap_or(lounge_graph::color::HOUSELIGHT),
                     progress: it.progress,
                     badge: (it.kind == PluginItemKind::Channel).then_some(Badge::Live),
@@ -105,4 +102,34 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
     }
     *inner.search_links.lock() = links;
     rows
+}
+
+/// Posters when most results have one, compact tiles when most have only a logo, else landscape.
+fn row_kind(items: &[ReadyItem]) -> TileKind {
+    let most = |n: usize| n * 2 > items.len();
+    if most(items.iter().filter(|r| r.poster.is_some()).count()) {
+        TileKind::Poster
+    } else if most(items.iter().filter(|r| r.poster.is_none() && r.thumbnail.is_none() && r.logo.is_some()).count()) {
+        TileKind::Compact
+    } else {
+        TileKind::Landscape
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn result(poster: bool, thumbnail: bool, logo: bool) -> ReadyItem {
+        let pic = |has: bool, name: &str| has.then(|| format!("/art/{name}.png"));
+        ReadyItem { item: Default::default(), poster: pic(poster, "p"), thumbnail: pic(thumbnail, "t"), logo: pic(logo, "l") }
+    }
+
+    #[test]
+    fn a_row_takes_the_shape_most_of_its_results_have_pictures_for() {
+        assert_eq!(row_kind(&[result(true, false, false), result(true, true, false), result(false, true, false)]), TileKind::Poster);
+        assert_eq!(row_kind(&[result(false, false, true), result(false, false, true), result(false, true, false)]), TileKind::Compact, "stations with only their logo");
+        assert_eq!(row_kind(&[result(false, true, true), result(false, true, true)]), TileKind::Landscape, "a logo beside a thumbnail is not the picture");
+        assert_eq!(row_kind(&[result(false, false, false)]), TileKind::Landscape);
+    }
 }
