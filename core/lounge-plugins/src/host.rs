@@ -24,6 +24,10 @@ pub trait Services: Send + Sync {
     fn fetch(&self, plugin: &str, request: &HttpRequest) -> std::result::Result<HttpResponse, String>;
 }
 
+/// Says when a call's answer is no longer wanted. The call then ends at its next host call or
+/// its next slice of fuel.
+pub type Stop = Arc<dyn Fn() -> bool + Send + Sync>;
+
 /// The services `lg_manifest` gets: nothing to read and nowhere to write or fetch.
 struct Silent;
 
@@ -150,6 +154,13 @@ struct State {
     fuel_reserve: u64,
     /// Set while the host waits on the plugin's `lg_alloc`, which may not call back into the host.
     in_alloc: bool,
+    stop: Option<Stop>,
+}
+
+impl State {
+    fn stopped(&self) -> bool {
+        self.stop.as_ref().is_some_and(|stop| stop())
+    }
 }
 
 impl Host {
@@ -193,7 +204,7 @@ impl Host {
     /// before the plugin is trusted with anything, so it reaches neither the network nor storage.
     pub fn manifest_of(&self, plugin: &LoadedPlugin) -> Result<Manifest> {
         let silent: Arc<dyn Services> = Arc::new(Silent);
-        self.call_json_with(&silent, plugin, exports::MANIFEST, None::<&()>, self.limits.call_time, self.limits.call_result_bytes).map(|o| match o {
+        self.call_json_with(&silent, plugin, exports::MANIFEST, None::<&()>, self.limits.call_time, self.limits.call_result_bytes, None).map(|o| match o {
             Outcome::Ok(m) => Ok(m),
             Outcome::Err(e) => Err(PluginError::Failed(e)),
             Outcome::Ask(ask) => Err(PluginError::Failed(ask.say)),
@@ -216,11 +227,22 @@ impl Host {
     }
 
     pub fn search(&self, plugin: &LoadedPlugin, query: &str, limit: u32) -> Result<Vec<Item>> {
+        self.search_with(plugin, query, limit, None)
+    }
+
+    /// As [Self::search], ending early with [PluginError::Stopped] once `stop` says the answer is
+    /// no longer wanted.
+    pub fn search_until(&self, plugin: &LoadedPlugin, query: &str, limit: u32, stop: Stop) -> Result<Vec<Item>> {
+        self.search_with(plugin, query, limit, Some(stop))
+    }
+
+    fn search_with(&self, plugin: &LoadedPlugin, query: &str, limit: u32, stop: Option<Stop>) -> Result<Vec<Item>> {
         if !self.can_search(plugin) {
             return Ok(Vec::new());
         }
         let q = SearchQuery { query: query.to_string(), limit };
-        let listing: Listing = self.outcome(self.call_json(plugin, exports::SEARCH, Some(&q), self.limits.call_time, self.limits.call_result_bytes)?)?;
+        let answer = self.call_json_with(&self.services, plugin, exports::SEARCH, Some(&q), self.limits.call_time, self.limits.call_result_bytes, stop)?;
+        let listing: Listing = self.outcome(answer)?;
         Ok(listing.items)
     }
 
@@ -240,7 +262,7 @@ impl Host {
     }
 
     fn call_json<I: Serialize, O: DeserializeOwned>(&self, plugin: &LoadedPlugin, export: &str, input: Option<&I>, time: Duration, max_result: usize) -> Result<Outcome<O>> {
-        self.call_json_with(&self.services, plugin, export, input, time, max_result)
+        self.call_json_with(&self.services, plugin, export, input, time, max_result, None)
     }
 
     /// Runs `export`. A call that does not finish becomes a sentence for the screens, and why it
@@ -253,8 +275,12 @@ impl Host {
         input: Option<&I>,
         time: Duration,
         max_result: usize,
+        stop: Option<Stop>,
     ) -> Result<Outcome<O>> {
-        self.run(services, plugin, export, input, time, max_result).map_err(|cause| {
+        self.run(services, plugin, export, input, time, max_result, stop).map_err(|cause| {
+            if cause == NOT_WANTED {
+                return PluginError::Stopped;
+            }
             self.services.log(&plugin.id, api::LOG_ERROR, &format!("{} stopped: {cause}", call_name(export)));
             PluginError::Trap { said: stopped(&plugin.manifest.name, export), cause }
         })
@@ -269,6 +295,7 @@ impl Host {
         input: Option<&I>,
         time: Duration,
         max_result: usize,
+        stop: Option<Stop>,
     ) -> std::result::Result<Outcome<O>, String> {
         let started = Instant::now();
         let deadline = started + time;
@@ -290,6 +317,7 @@ impl Host {
             deadline,
             fuel_reserve: self.limits.fuel - first_slice,
             in_alloc: false,
+            stop,
         };
         let mut store = Store::new(&plugin.engine, state);
         store.limiter(|s| &mut s.limits);
@@ -434,6 +462,8 @@ fn call_name(export: &str) -> &str {
 }
 
 const OUT_OF_FUEL: &str = "out of fuel: the plugin took too long";
+/// Why a call ended once its [Stop] said so.
+const NOT_WANTED: &str = "its answer was no longer wanted";
 
 fn past_limit(export: &str, time: Duration) -> String {
     format!("{export} ran past its {} s limit", time.as_secs())
@@ -456,6 +486,9 @@ fn call_metered<P: WasmParams, R: WasmResults>(store: &mut Store<State>, f: &Typ
 
 /// Gives a paused call its next slice, unless its time or its fuel has run out.
 fn refuel(store: &mut Store<State>, export: &str, time: Duration) -> std::result::Result<(), String> {
+    if store.data().stopped() {
+        return Err(NOT_WANTED.into());
+    }
     if Instant::now() > store.data().deadline {
         return Err(past_limit(export, time));
     }
@@ -493,6 +526,9 @@ fn enter(caller: &mut Caller<'_, State>, bytes: usize) -> std::result::Result<()
     let st = caller.data();
     if st.in_alloc {
         return Err(wasmi::Error::new("lg_alloc may not call host functions"));
+    }
+    if st.stopped() {
+        return Err(wasmi::Error::new(NOT_WANTED));
     }
     if Instant::now() > st.deadline {
         return Err(wasmi::Error::new("the plugin ran past its time limit"));
@@ -963,6 +999,37 @@ mod tests {
             assert!(matches!(&err, PluginError::Trap { cause, .. } if cause.contains("limit")), "{err:?}");
             assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
         }
+    }
+
+    #[test]
+    fn a_search_whose_answer_is_no_longer_wanted_stops_and_logs_nothing() {
+        let (host, services) = host();
+        let spin = wat::parse_str(
+            r#"(module (memory (export "memory") 1)
+              (func (export "lg_alloc") (param i32) (result i32) (i32.const 8))
+              (func (export "lg_free") (param i32 i32))
+              (func (export "lg_manifest") (result i64) (i64.const 0))
+              (func (export "lg_refresh") (param i32 i32) (result i64) (i64.const 0))
+              (func (export "lg_search") (param i32 i32) (result i64) (loop $l (br $l)) (i64.const 0)))"#,
+        )
+        .unwrap();
+        let plugin = host.load("x", Manifest::default(), &spin).unwrap();
+        let replaced = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stop: Stop = {
+            let replaced = Arc::clone(&replaced);
+            Arc::new(move || replaced.load(std::sync::atomic::Ordering::SeqCst))
+        };
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                std::thread::sleep(Duration::from_millis(100));
+                replaced.store(true, std::sync::atomic::Ordering::SeqCst);
+            });
+            let started = Instant::now();
+            let err = host.search_until(&plugin, "bear", SEARCH_LIMIT, stop).unwrap_err();
+            assert!(matches!(err, PluginError::Stopped), "{err:?}");
+            assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
+        });
+        assert!(services.logs.lock().is_empty(), "{:?}", services.logs.lock());
     }
 
     #[test]

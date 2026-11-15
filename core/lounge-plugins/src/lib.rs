@@ -33,6 +33,9 @@ pub enum PluginError {
     /// The plugin's own error, shown as it wrote it.
     #[error("{0}")]
     Failed(String),
+    /// The call was stopped because its answer is no longer wanted; not a failure.
+    #[error("The plugin was stopped because its answer was no longer needed.")]
+    Stopped,
     /// The plugin waits on the person; not a failure.
     #[error("{}", .0.say)]
     Asks(lounge_plugin_api::Ask),

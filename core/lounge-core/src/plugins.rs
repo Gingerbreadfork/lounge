@@ -1,11 +1,11 @@
 //! Plugins inside the core: bundles live under `<data_dir>/plugins/<id>/`, their key-values and
-//! settings in the store. One thread runs refreshes on a schedule or on demand and hands the items
-//! to the worker; another answers tile presses and searches, so neither waits on the other.
+//! settings in the store. A few threads run refreshes on a schedule or on demand and hand the
+//! items to the worker; one answers searches and one answers tile presses, so none waits on another.
 
 use crate::{now_ms, screensavers, worker, Inner, PluginInfo, PluginSettingInfo};
 use lounge_plugin_api::{valid_plugin_id, Action, Ask, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext};
 use lounge_plugins::bundle::Bundle;
-use lounge_plugins::host::{kept, kept_results, Host, Limits, LoadedPlugin, Services, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
+use lounge_plugins::host::{kept, kept_results, Host, Limits, LoadedPlugin, Services, Stop, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
 use lounge_plugins::http::{host_permitted, reach, redact, Fetcher, Reach};
 use lounge_store::PluginRow;
 use parking_lot::Mutex;
@@ -26,6 +26,8 @@ const ART_TIME: Duration = Duration::from_secs(120);
 const ART_THREADS: usize = 4;
 /// The time a search's pictures may take.
 const SEARCH_ART_TIME: Duration = Duration::from_secs(4);
+/// How many plugins refresh at once, so one waiting on a server that is off does not hold up the rest.
+const REFRESH_WORKERS: usize = 2;
 
 pub(crate) enum PluginJob {
     Refresh(String),
@@ -101,14 +103,14 @@ pub(crate) struct PluginManager {
     logs: Arc<Mutex<HashMap<String, VecDeque<String>>>>,
     refresh_tx: crossbeam_channel::Sender<PluginJob>,
     calls_tx: crossbeam_channel::Sender<PluginJob>,
+    resolve_tx: crossbeam_channel::Sender<PluginJob>,
     fetchers: Arc<Fetchers>,
     services: Arc<CoreServices>,
-    /// The newest search; older ones still queued answer with nothing.
-    pub search_generation: AtomicU64,
+    /// The newest search; older ones answer with nothing, and one still running is stopped.
+    pub search_generation: Arc<AtomicU64>,
     /// Held through an install, so two of one id cannot both pass the publisher check.
     pub installing: Mutex<()>,
-    /// Plugins with a refresh waiting to run; asking again meanwhile adds nothing.
-    refresh_queued: Mutex<HashSet<String>>,
+    refreshes: Mutex<Refreshes>,
     /// When refreshes ran that the store could not record, so those plugins are not due at once.
     unrecorded_refresh: Mutex<HashMap<String, i64>>,
     /// What each plugin waits on the person for, from its last refresh.
@@ -117,6 +119,22 @@ pub(crate) struct PluginManager {
     ask_watches: AtomicU64,
     /// Where the QR pictures of asks are kept, a folder per plugin.
     ask_dir: PathBuf,
+}
+
+/// Refreshes waiting and running, so a plugin never has two of either.
+#[derive(Default)]
+struct Refreshes {
+    /// Plugins with a refresh waiting to run; asking again meanwhile adds nothing.
+    queued: HashSet<String>,
+    /// Plugins whose refresh is running, each with whether another was asked for meanwhile.
+    running: HashMap<String, bool>,
+}
+
+/// Where each kind of plugin job is taken from.
+pub(crate) struct Receivers {
+    refresh: crossbeam_channel::Receiver<PluginJob>,
+    calls: crossbeam_channel::Receiver<PluginJob>,
+    resolve: crossbeam_channel::Receiver<PluginJob>,
 }
 
 /// A plugin's ask, with when its wait began and the watch kept on it, if one is.
@@ -322,15 +340,13 @@ fn push_log(logs: &Mutex<HashMap<String, VecDeque<String>>>, plugin: &str, level
 }
 
 impl PluginManager {
-    pub fn new(
-        data_dir: &Path,
-        cache_dir: &Path,
-    ) -> (Arc<PluginManager>, crossbeam_channel::Receiver<PluginJob>, crossbeam_channel::Receiver<PluginJob>, Arc<CoreServices>) {
+    pub fn new(data_dir: &Path, cache_dir: &Path) -> (Arc<PluginManager>, Receivers, Arc<CoreServices>) {
         let logs = Arc::new(Mutex::new(HashMap::new()));
         let fetchers = Arc::new(Fetchers::default());
         let services = Arc::new(CoreServices { inner: OnceLock::new(), fetchers: Arc::clone(&fetchers), logs: Arc::clone(&logs) });
-        let (refresh_tx, refresh_rx) = crossbeam_channel::unbounded();
-        let (calls_tx, calls_rx) = crossbeam_channel::unbounded();
+        let (refresh_tx, refresh) = crossbeam_channel::unbounded();
+        let (calls_tx, calls) = crossbeam_channel::unbounded();
+        let (resolve_tx, resolve) = crossbeam_channel::unbounded();
         let manager = Arc::new(PluginManager {
             host: Host::new(services.clone(), Limits::default()),
             dir: data_dir.join("plugins"),
@@ -339,17 +355,18 @@ impl PluginManager {
             logs,
             refresh_tx,
             calls_tx,
+            resolve_tx,
             fetchers,
             services: Arc::clone(&services),
-            search_generation: AtomicU64::new(0),
+            search_generation: Arc::new(AtomicU64::new(0)),
             installing: Mutex::new(()),
-            refresh_queued: Mutex::new(HashSet::new()),
+            refreshes: Mutex::new(Refreshes::default()),
             unrecorded_refresh: Mutex::new(HashMap::new()),
             asks: Mutex::new(HashMap::new()),
             ask_watches: AtomicU64::new(0),
             ask_dir: cache_dir.join("plugin-asks"),
         });
-        (manager, refresh_rx, calls_rx, services)
+        (manager, Receivers { refresh, calls, resolve }, services)
     }
 
     pub fn logs(&self, plugin: &str) -> Vec<String> {
@@ -382,16 +399,26 @@ impl PluginManager {
         }
     }
 
-    /// Queue a refresh on the refresh thread.
+    /// Queue a refresh. One asked for while the plugin's refresh runs follows it.
     pub fn refresh_soon(&self, id: &str) {
-        if self.refresh_queued.lock().insert(id.to_string()) {
+        let mut refreshes = self.refreshes.lock();
+        if let Some(again) = refreshes.running.get_mut(id) {
+            *again = true;
+        } else if refreshes.queued.insert(id.to_string()) {
             let _ = self.refresh_tx.send(PluginJob::Refresh(id.to_string()));
         }
     }
 
-    /// Queue a resolve or search on the thread that answers presses.
+    /// The plugins with a refresh waiting or running.
+    fn refreshing(&self) -> HashSet<String> {
+        let refreshes = self.refreshes.lock();
+        refreshes.queued.iter().chain(refreshes.running.keys()).cloned().collect()
+    }
+
+    /// Queue a resolve or a search. A press has a thread of its own, so it never waits on a search.
     pub fn call(&self, job: PluginJob) -> Result<(), String> {
-        self.calls_tx.send(job).map_err(|_| "plugin thread is gone".to_string())
+        let tx = if matches!(job, PluginJob::Resolve { .. }) { &self.resolve_tx } else { &self.calls_tx };
+        tx.send(job).map_err(|_| "plugin thread is gone".to_string())
     }
 
     /// `<plugins>/<id>`; an id that is not a single plain path component never becomes a path.
@@ -535,8 +562,12 @@ impl PluginManager {
     }
 
     /// Ask every searchable plugin in `entries` at once; each answer gets one picture per item.
-    fn search(&self, entries: &[PluginEntry], query: &str) -> Vec<SearchGroup> {
+    /// Once a newer search than `generation` starts, each plugin stops at its next host call.
+    fn search(&self, entries: &[PluginEntry], query: &str, generation: u64) -> Vec<SearchGroup> {
         let deadline = Instant::now() + SEARCH_ART_TIME;
+        let newest = Arc::clone(&self.search_generation);
+        let replaced: Stop = Arc::new(move || newest.load(Ordering::SeqCst) != generation);
+        let replaced = &replaced;
         let found: Vec<Option<SearchGroup>> = std::thread::scope(|scope| {
             let handles: Vec<_> = entries
                 .iter()
@@ -546,15 +577,16 @@ impl PluginManager {
                         if !self.host.can_search(&plugin) {
                             return None;
                         }
-                        let items = match self.host.search(&plugin, query, SEARCH_LIMIT) {
+                        let items = match self.host.search_until(&plugin, query, SEARCH_LIMIT, Arc::clone(replaced)) {
                             Ok(items) => items,
+                            Err(lounge_plugins::PluginError::Stopped) => return None,
                             Err(e) => {
                                 push_log(&self.logs, &entry.id, 2, &format!("search failed: {e}"));
                                 return None;
                             }
                         };
                         let mut items = kept_results(items);
-                        if items.is_empty() {
+                        if items.is_empty() || replaced() {
                             return None;
                         }
                         let dir = self.plugin_art_dir(&entry.id)?;
@@ -743,51 +775,66 @@ fn configured(manifest: &Manifest, settings: &[(String, String)]) -> bool {
     manifest.settings.iter().filter(|s| s.required).all(|s| settings.iter().any(|(k, v)| k == &s.key && !v.is_empty()))
 }
 
-/// The refresh thread: runs refreshes, and once a minute starts any that are due. A second
-/// thread answers resolves and searches.
-pub(crate) fn spawn(
-    inner: Arc<Inner>,
-    refresh_rx: crossbeam_channel::Receiver<PluginJob>,
-    calls_rx: crossbeam_channel::Receiver<PluginJob>,
-    services: Arc<CoreServices>,
-) {
+/// Starts the plugin threads. A few run refreshes, so one plugin waiting on its server does not
+/// hold up the rest; one answers searches and one answers presses; and one, once a minute, queues
+/// the refreshes that are due.
+pub(crate) fn spawn(inner: Arc<Inner>, jobs: Receivers, services: Arc<CoreServices>) {
     let _ = services.inner.set(Arc::downgrade(&inner));
-    let calls_inner = Arc::clone(&inner);
-    std::thread::Builder::new()
-        .name("lounge-plugin-calls".into())
-        .spawn(move || {
-            while let Ok(job) = calls_rx.recv() {
-                crate::guarded("a plugin call", || answer(&calls_inner, job));
-            }
-        })
-        .expect("spawn plugin calls thread");
+    let answering = |name: &str, rx: crossbeam_channel::Receiver<PluginJob>| {
+        let inner = Arc::clone(&inner);
+        std::thread::Builder::new()
+            .name(name.into())
+            .spawn(move || {
+                while let Ok(job) = rx.recv() {
+                    crate::guarded("a plugin call", || answer(&inner, job));
+                }
+            })
+            .expect("spawn a plugin thread");
+    };
+    answering("lounge-plugin-calls", jobs.calls);
+    answering("lounge-plugin-resolve", jobs.resolve);
+    for n in 0..REFRESH_WORKERS {
+        answering(&format!("lounge-plugin-refresh-{n}"), jobs.refresh.clone());
+    }
+    let weak = Arc::downgrade(&inner);
     std::thread::Builder::new()
         .name("lounge-plugins".into())
-        .spawn(move || {
-            let mut next_due = Instant::now() + DUE_EVERY;
-            loop {
-                match refresh_rx.recv_timeout(next_due.saturating_duration_since(Instant::now())) {
-                    Ok(PluginJob::Refresh(id)) => {
-                        // Taken off first, so a request while this one runs queues the next.
-                        inner.plugins.refresh_queued.lock().remove(&id);
-                        crate::guarded("a plugin refresh", || run_refresh(&inner, &id));
-                    }
-                    Ok(other) => {
-                        crate::guarded("a plugin call", || answer(&inner, other));
-                    }
-                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
-                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
-                }
-                // By the clock, so a run of requested refreshes cannot put the due ones off.
-                if Instant::now() >= next_due {
-                    next_due = Instant::now() + DUE_EVERY;
-                    for id in due(&inner) {
-                        crate::guarded("a plugin refresh", || run_refresh(&inner, &id));
-                    }
-                }
-            }
+        .spawn(move || loop {
+            std::thread::sleep(DUE_EVERY);
+            let Some(inner) = weak.upgrade() else { break };
+            crate::guarded("the plugin schedule", || refresh_what_is_due(&inner));
         })
-        .expect("spawn plugin thread");
+        .expect("spawn the plugin schedule thread");
+}
+
+/// Marks a plugin's refresh as running for as long as it is held. When it ends, a refresh asked
+/// for meanwhile is queued.
+struct Running<'a> {
+    plugins: &'a PluginManager,
+    id: &'a str,
+}
+
+impl<'a> Running<'a> {
+    /// `None` when the plugin's refresh is already running; that one is then followed by another.
+    fn begin(plugins: &'a PluginManager, id: &'a str) -> Option<Running<'a>> {
+        let mut refreshes = plugins.refreshes.lock();
+        refreshes.queued.remove(id);
+        if let Some(again) = refreshes.running.get_mut(id) {
+            *again = true;
+            return None;
+        }
+        refreshes.running.insert(id.to_string(), false);
+        Some(Running { plugins, id })
+    }
+}
+
+impl Drop for Running<'_> {
+    fn drop(&mut self) {
+        let again = self.plugins.refreshes.lock().running.remove(self.id).unwrap_or(false);
+        if again {
+            self.plugins.refresh_soon(self.id);
+        }
+    }
 }
 
 /// What a press says when its tile's plugin has been turned off or removed since the tile was drawn.
@@ -795,7 +842,11 @@ pub(crate) const NOT_RUNNING: &str = "Its plugin is turned off or no longer inst
 
 fn answer(inner: &Arc<Inner>, job: PluginJob) {
     match job {
-        PluginJob::Refresh(id) => run_refresh(inner, &id),
+        PluginJob::Refresh(id) => {
+            if let Some(_running) = Running::begin(&inner.plugins, &id) {
+                run_refresh(inner, &id);
+            }
+        }
         PluginJob::Resolve { plugin, action, reply } => {
             let entry = inner.state.lock().plugins.iter().find(|p| p.id == plugin && p.enabled).cloned();
             let result = match entry {
@@ -819,7 +870,7 @@ fn answer(inner: &Arc<Inner>, job: PluginJob) {
                     .cloned()
                     .collect()
             };
-            let _ = reply.send(inner.plugins.search(&entries, &query));
+            let _ = reply.send(inner.plugins.search(&entries, &query, generation));
         }
     }
 }
@@ -847,11 +898,13 @@ fn refresh_due(last_ms: Option<i64>, failed: bool, interval_minutes: u32, now: i
     now - last >= every
 }
 
-/// The enabled plugins whose refresh is due, or none while the screen is off.
+/// The enabled plugins whose refresh is due and neither waiting nor running, or none while the
+/// screen is off.
 fn due(inner: &Inner) -> Vec<String> {
     if !inner.screen_on.load(Ordering::Relaxed) {
         return Vec::new();
     }
+    let refreshing = inner.plugins.refreshing();
     let state = inner.state.lock();
     let rows = state.store.plugins().unwrap_or_default();
     let unrecorded = inner.plugins.unrecorded_refresh.lock();
@@ -859,7 +912,7 @@ fn due(inner: &Inner) -> Vec<String> {
     state
         .plugins
         .iter()
-        .filter(|p| p.enabled)
+        .filter(|p| p.enabled && !refreshing.contains(&p.id))
         .filter(|p| {
             let row = rows.iter().find(|r| r.id == p.id);
             let last = row.and_then(|r| r.last_refresh_ms).max(unrecorded.get(&p.id).copied());
@@ -1412,13 +1465,38 @@ mod tests {
     #[test]
     fn the_person_s_own_refresh_starts_the_watch_over() {
         let dir = tempfile::tempdir().unwrap();
-        let (plugins, _refresh, _calls, _services) = PluginManager::new(&dir.path().join("data"), &dir.path().join("cache"));
+        let (plugins, _jobs, _services) = PluginManager::new(&dir.path().join("data"), &dir.path().join("cache"));
         let ask = Ask { say: "Sign in".into(), code: Some("25Q4".into()), watch: true, ..Default::default() };
         plugins.asks.lock().insert("p".into(), PendingAsk { ask: ask.clone(), since_ms: 0, watch: None });
         assert!(!PendingAsk::carried_on(plugins.asks.lock().get("p"), &ask, now_ms()).1);
         plugins.refresh_asking();
         assert!(PendingAsk::carried_on(plugins.asks.lock().get("p"), &ask, now_ms()).1);
-        assert!(plugins.refresh_queued.lock().contains("p"));
+        assert!(plugins.refreshes.lock().queued.contains("p"));
+    }
+
+    #[test]
+    fn a_plugin_never_has_two_refreshes_running_and_one_asked_for_meanwhile_follows() {
+        let dir = tempfile::tempdir().unwrap();
+        let (plugins, _jobs, _services) = PluginManager::new(&dir.path().join("data"), &dir.path().join("cache"));
+        let queued = |id: &str| plugins.refreshes.lock().queued.contains(id);
+        plugins.refresh_soon("p");
+        assert!(queued("p"));
+        let running = Running::begin(&plugins, "p").expect("the first to take it runs it");
+        assert!(!queued("p"));
+        assert!(plugins.refreshing().contains("p"));
+        // Nothing asked for meanwhile: the plugin is free once the refresh ends.
+        drop(running);
+        assert!(plugins.refreshing().is_empty());
+
+        // Asked for while it runs, another follows rather than joining it.
+        let running = Running::begin(&plugins, "p").unwrap();
+        plugins.refresh_soon("p");
+        assert!(!queued("p"));
+        assert!(Running::begin(&plugins, "p").is_none(), "a second worker must not start it too");
+        // A different plugin is not held up.
+        assert!(Running::begin(&plugins, "q").is_some());
+        drop(running);
+        assert!(queued("p"));
     }
 
     #[test]

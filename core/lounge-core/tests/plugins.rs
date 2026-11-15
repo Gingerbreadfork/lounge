@@ -336,3 +336,113 @@ fn only_a_built_in_plugin_follows_a_new_apk_to_another_key() {
     assert!(core.install_plugin(bundle(theirs, "2", 8), false).is_err());
     assert!(core.install_plugin(bundle(theirs, "2", 7), false).is_ok());
 }
+
+const SLOW_ID: &str = "tv.lounge.testslow";
+
+/// A plugin with one tile that resolves at the press, and a search that spins for a long while
+/// when the query is a long one and answers at once when it is short.
+fn slow_search_bundle(dir: &std::path::Path) -> std::path::PathBuf {
+    let manifest = format!(r#"{{"id":"{SLOW_ID}","name":"Slow","version":"1","kinds":["content","search"],"fetch_hosts":[],"rows":[{{"id":"r","title":"Films on Slow"}}]}}"#);
+    let items = r#"[{"id":"p1","title":"A film","row":"r","action":{"resolve":"p1"}}]"#;
+    let found = r#"[{"id":"f1","title":"Found","action":{"play":"http://slow/f1"}}]"#;
+    let opened = r#"{"ok":{"play":"http://slow/p1","title":"A film"}}"#;
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let m = format!(r#"{{"ok":{manifest}}}"#);
+    let i = format!(r#"{{"ok":{items}}}"#);
+    let f = format!(r#"{{"ok":{found}}}"#);
+    let (mo, io, fo, oo) = (65536, 70000, 75000, 80000);
+    let wasm = wat::parse_str(format!(
+        r#"(module
+          (memory (export "memory") 4)
+          (global $heap (mut i32) (i32.const 200000))
+          (data (i32.const {mo}) "{me}")
+          (data (i32.const {io}) "{ie}")
+          (data (i32.const {fo}) "{fe}")
+          (data (i32.const {oo}) "{oe}")
+          (func (export "lg_alloc") (param $len i32) (result i32)
+            (local $p i32)
+            (local.set $p (global.get $heap))
+            (global.set $heap (i32.add (global.get $heap) (i32.add (local.get $len) (i32.const 8))))
+            (local.get $p))
+          (func (export "lg_free") (param i32 i32))
+          (func (export "lg_manifest") (result i64) (i64.or (i64.shl (i64.const {mo}) (i64.const 32)) (i64.const {ml})))
+          (func (export "lg_refresh") (param i32 i32) (result i64) (i64.or (i64.shl (i64.const {io}) (i64.const 32)) (i64.const {il})))
+          (func (export "lg_resolve") (param i32 i32) (result i64) (i64.or (i64.shl (i64.const {oo}) (i64.const 32)) (i64.const {ol})))
+          (func (export "lg_search") (param $ptr i32) (param $len i32) (result i64)
+            (local $n i64)
+            (if (i32.gt_u (local.get $len) (i32.const 50))
+              (then (loop $spin
+                (local.set $n (i64.add (local.get $n) (i64.const 1)))
+                (br_if $spin (i64.lt_u (local.get $n) (i64.const 4000000000))))))
+            (i64.or (i64.shl (i64.const {fo}) (i64.const 32)) (i64.const {fl}))))"#,
+        me = esc(&m),
+        ie = esc(&i),
+        fe = esc(&f),
+        oe = esc(opened),
+        ml = m.len(),
+        il = i.len(),
+        fl = f.len(),
+        ol = opened.len(),
+    ))
+    .unwrap();
+    signed(dir, &manifest, &wasm)
+}
+
+/// A query long enough for the slow plugin's search to spin on.
+const LONG_QUERY: &str = "a query long enough to keep the slow plugin busy";
+
+fn slow_core(dir: &std::path::Path) -> (Arc<Core>, Arc<Recorder>) {
+    let config = CoreConfig {
+        data_dir: dir.join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::B,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    let platform = Arc::new(Recorder::default());
+    let core = Core::open(config, platform.clone()).unwrap();
+    core.install_plugin(slow_search_bundle(dir).to_string_lossy().into_owned(), false).unwrap();
+    core.set_plugin_enabled(SLOW_ID.into(), true);
+    let tile = format!("plugin:{SLOW_ID}:p1");
+    wait_for("the slow plugin's tile", || core.snapshot().rows.iter().any(|r| r.tiles.iter().any(|t| t.id == tile)));
+    (core, platform)
+}
+
+#[test]
+fn a_press_does_not_wait_for_a_search() {
+    let dir = tempfile::tempdir().unwrap();
+    let (core, platform) = slow_core(dir.path());
+    let searched = std::sync::atomic::AtomicBool::new(false);
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            core.search_plugins(LONG_QUERY.into());
+            searched.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        let pressed = Instant::now();
+        core.perform(format!("open:plugin:{SLOW_ID}:p1")).unwrap();
+        assert!(pressed.elapsed() < Duration::from_secs(3), "the press took {:?}", pressed.elapsed());
+        assert!(!searched.load(std::sync::atomic::Ordering::SeqCst), "the search was meant to be still running");
+        assert_eq!(platform.calls.lock().as_slice(), ["play http://slow/p1 A film"]);
+        // A short search replaces the long one, which lets the thread above finish.
+        core.search_plugins("go".into());
+    });
+}
+
+#[test]
+fn a_newer_search_stops_the_one_before_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (core, _platform) = slow_core(dir.path());
+    std::thread::scope(|scope| {
+        let first = scope.spawn(|| core.search_plugins(LONG_QUERY.into()));
+        std::thread::sleep(Duration::from_millis(300));
+        let asked = Instant::now();
+        let rows = core.search_plugins("go".into());
+        assert!(asked.elapsed() < Duration::from_secs(3), "the newer search waited {:?} for the older one", asked.elapsed());
+        assert_eq!(rows.iter().flat_map(|r| &r.tiles).map(|t| t.title.as_str()).collect::<Vec<_>>(), ["Found"]);
+        assert!(first.join().unwrap().is_empty(), "a search that was replaced has nothing to show");
+    });
+}

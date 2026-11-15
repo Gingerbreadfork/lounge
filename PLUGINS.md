@@ -210,14 +210,16 @@ fill in. The plugin's page then shows a step to take rather than a problem: a QR
 link on the TV, a button on the phone, and the code in large type. With `watch` set, as
 `sign_in` sets it, the TV refreshes the plugin every 5 seconds for 5 minutes, so it carries on
 by itself once the code is entered. `say` is the whole instruction as a sentence, for the log
-and for anything that shows only text. Refreshes run one after another on their own thread; `resolve` and `search` run on
-another, so pressing a tile never waits for someone's refresh.
+and for anything that shows only text. Two plugins refresh at a time, and a plugin never has two
+refreshes running: one asked for while it refreshes follows it. `search` and `resolve` each run
+on a thread of their own, so pressing a tile never waits for a refresh or a search.
 
 `search` runs as the user types on the TV's search screen, for plugins whose manifest lists the
 `search` kind and whose required settings are filled in. Each plugin that finds something gets a
 row under its own name, with one picture for each result: its poster, else its thumbnail, else
 its logo, which makes the row compact tiles. The results' actions work exactly as they do in a
-refresh. A search that a newer one has replaced is not run at all.
+refresh. A search that a newer one has replaced is not run at all, and one already running is
+stopped at its next host call.
 `resolve` runs when the user selects an item whose action says `resolve`.
 
 The host fetches artwork for you, four pictures at a time, caps each at 4 MB (12 MB for a

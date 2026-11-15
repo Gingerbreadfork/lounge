@@ -797,8 +797,7 @@ impl Core {
             .ok()
             .map(Arc::new);
         let plugin_entries = plugins::entries_from_rows(&plugin_rows);
-        let (plugin_manager, refresh_rx, calls_rx, plugin_services) =
-            plugins::PluginManager::new(&PathBuf::from(&config.data_dir), &PathBuf::from(&config.cache_dir));
+        let (plugin_manager, plugin_jobs, plugin_services) = plugins::PluginManager::new(&PathBuf::from(&config.data_dir), &PathBuf::from(&config.cache_dir));
         let utc_offset = config.utc_offset_minutes;
 
         let (tx, rx) = crossbeam_channel::unbounded();
@@ -843,7 +842,7 @@ impl Core {
         inner.queue_depth.fetch_add(1, Ordering::Relaxed);
         let _ = inner.tx.send(worker::Job::LoadGraph);
         worker::spawn(Arc::clone(&inner), rx);
-        plugins::spawn(Arc::clone(&inner), refresh_rx, calls_rx, plugin_services);
+        plugins::spawn(Arc::clone(&inner), plugin_jobs, plugin_services);
         tracing::info!("core opened, revision {}", inner.state.lock().revision);
         Ok(Arc::new(Core { inner }))
     }
