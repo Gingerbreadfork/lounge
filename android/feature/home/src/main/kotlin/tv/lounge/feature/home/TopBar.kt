@@ -117,14 +117,14 @@ fun TopBar(
             .focusGroup()
             .focusProperties { down = downFocus() },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Mark()
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        // The buttons keep to the right. On a full bar the playing title is what gives way.
+        Row(Modifier.weight(1f).padding(start = 28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.End)) {
             TopBarButton(LoungeIcons.Search, "Search", onSearch, focus, focus.search)
             if (showGuide) TopBarButton(LoungeIcons.Guide, "TV guide", onGuide, focus, focus.guide)
             if (showTvControls) TopBarButton(LoungeIcons.Tv, "TV controls", onTvControls, focus, focus.tvControls)
-            if (nowPlaying != null) NowPlayingChip(nowPlaying, onNowPlaying, focus)
+            if (nowPlaying != null) NowPlayingChip(nowPlaying, onNowPlaying, focus, Modifier.weight(1f, fill = false))
             TopBarButton(LoungeIcons.Settings, "Settings", onSettings, focus, focus.settings)
             Spacer(Modifier.width(12.dp))
             Clock()
@@ -211,7 +211,7 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
  * room is idle.
  */
 @Composable
-private fun NowPlayingChip(np: NowPlaying, onClick: () -> Unit, focus: TopBarFocus) {
+private fun NowPlayingChip(np: NowPlaying, onClick: () -> Unit, focus: TopBarFocus, modifier: Modifier = Modifier) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
@@ -232,7 +232,7 @@ private fun NowPlayingChip(np: NowPlaying, onClick: () -> Unit, focus: TopBarFoc
         }
     }
     Row(
-        Modifier
+        modifier
             .focusRequester(focus.nowPlaying)
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
             .lightGlow(light, { glow.value }, cornerRadius = 24.dp)
@@ -275,7 +275,7 @@ private fun NowPlayingChip(np: NowPlaying, onClick: () -> Unit, focus: TopBarFoc
             color = if (focused) colors.limelight else colors.dust,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 280.dp),
+            modifier = Modifier.weight(1f, fill = false).widthIn(max = 280.dp),
         )
     }
 }
