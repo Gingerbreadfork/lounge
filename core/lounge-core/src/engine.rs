@@ -1223,7 +1223,7 @@ fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
             Ok(()) => Ok(()),
             Err(_) => inner.platform.launch_app(package, String::new()).map_err(platform_err),
         },
-        DeepLink::Play { url, title, start_ms } => inner.platform.play_stream(url, title, start_ms).map_err(platform_err),
+        DeepLink::Play { url, title, start_ms, headers, audio } => inner.platform.play_stream(url, title, start_ms, headers.into_iter().collect(), audio).map_err(platform_err),
         DeepLink::PluginResolve { plugin, action } => {
             let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
             inner
@@ -1234,8 +1234,8 @@ fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
                 .recv_timeout(std::time::Duration::from_secs(15))
                 .map_err(|_| CoreError::Plugin { detail: format!("{plugin} did not answer in time") })?
                 .map_err(|detail| CoreError::Plugin { detail })?;
-            let link = if let Some(url) = resolved.play {
-                DeepLink::Play { url, title: resolved.title.unwrap_or_default(), start_ms: resolved.start_ms }
+            let link = if let Some(url) = &resolved.play {
+                crate::worker::play_link(&resolved, url, resolved.title.clone().unwrap_or_default())
             } else if let (Some(uri), Some(pkg)) = (resolved.view.clone(), resolved.fallback_launch.clone()) {
                 DeepLink::ViewOrLaunch { uri, package: pkg }
             } else if let Some(uri) = resolved.view {

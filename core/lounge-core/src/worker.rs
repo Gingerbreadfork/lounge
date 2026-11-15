@@ -1012,13 +1012,18 @@ fn home_kind(p: &lounge_plugin_api::Item) -> Option<ItemKind> {
     })
 }
 
+/// The link for an action's stream at `url`, with the headers a player may be handed.
+pub(crate) fn play_link(a: &lounge_plugin_api::Action, url: &str, title: String) -> DeepLink {
+    DeepLink::Play { url: url.to_string(), title, start_ms: a.start_ms, headers: a.play_headers(), audio: a.media == lounge_plugin_api::Media::Audio }
+}
+
 /// What selecting a plugin item does. Wallpapers do nothing; a schedule entry without an action
 /// plays through its channel; a programme put in a row without one is a tile to read, which
 /// opens nothing; anything else needs an action of its own.
 pub(crate) fn plugin_link(plugin: &str, p: &lounge_plugin_api::Item) -> Option<DeepLink> {
     let a = &p.action;
     Some(if let Some(url) = &a.play {
-        DeepLink::Play { url: url.clone(), title: a.title.clone().unwrap_or_else(|| p.title.clone()), start_ms: a.start_ms }
+        play_link(a, url, a.title.clone().unwrap_or_else(|| p.title.clone()))
     } else if let (Some(uri), Some(pkg)) = (&a.view, &a.fallback_launch) {
         DeepLink::ViewOrLaunch { uri: uri.clone(), package: pkg.clone() }
     } else if let Some(uri) = &a.view {

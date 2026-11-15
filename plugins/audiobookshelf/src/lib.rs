@@ -137,12 +137,13 @@ impl sdk::Plugin for Audiobookshelf {
             return Err(sdk::unreadable(SERVICE, &s.server));
         };
         host::kv_set(STREAM_KEY, session.id.as_bytes());
-        Ok(Action {
+        let stream = Action {
             play: Some(format!("{}{}", s.server, track.content_url)),
             title: session.display_title.clone(),
             start_ms: session.current_time.map(seconds_ms).filter(|&t| t > 0),
             ..Default::default()
-        })
+        };
+        Ok(stream.audio())
     }
 }
 

@@ -29,12 +29,17 @@ pub enum DeepLink {
     ViewUri(String),
     /// Open a URI; if nothing handles it, launch the package instead.
     ViewOrLaunch { uri: String, package: String },
-    /// A stream URL for whatever video player the device has, from `start_ms` for a resume point.
+    /// A stream URL for whatever player the device has, from `start_ms` for a resume point. The
+    /// player is handed `headers` for its request, and an audio player is asked first when `audio`.
     Play {
         url: String,
         title: String,
         #[serde(default)]
         start_ms: Option<i64>,
+        #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+        headers: std::collections::BTreeMap<String, String>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        audio: bool,
     },
     /// Ask the plugin what to do when the item is selected.
     PluginResolve { plugin: String, action: String },

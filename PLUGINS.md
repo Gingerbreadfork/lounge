@@ -15,8 +15,9 @@ different corner of the interface:
   a screensaver drawn on the TV's GPU. No settings, no network beyond the pictures. The best one
   to copy from.
 - `plugins/iptv`: an M3U playlist becomes channels, an XMLTV feed fills the guide. Settings,
-  a gzipped guide read in chunks within a memory and time budget, and the 2,000 places shared
-  fairly between channels.
+  a gzipped guide read in chunks within a memory and time budget, the 2,000 places shared
+  fairly between channels, and the headers a playlist names for a stream handed on to the
+  player.
 - `plugins/jellyfin` and `plugins/emby`: sign in to a server with a password, publish resume
   points and new arrivals, answer search. Secrets, a cached token in the key-value store, and
   in Jellyfin's case deep links into another app and a sign-in by a code approved where the
@@ -337,11 +338,13 @@ What happens when the user selects an item. The first field that is set wins, in
 
 | Field | What it does |
 |---|---|
-| `play` | A stream URL, opened in whatever video player the TV has. `title` is handed to the player, and `start_ms` starts it part-way, for a resume point. |
+| `play` | A stream URL, opened in whatever player the TV has. `title` is handed to the player, and `start_ms` starts it part-way, for a resume point. `media` says what the stream is: `video`, the default, or `audio` for sound alone, which is offered to audio players first and to a video player on a TV that has none. `headers` are names and values for the player to send when it asks for the stream, such as a user agent or a referrer. Whether they are sent is up to the player, and a header whose name is not a plain token or whose value runs past one line is left out, with a line in the plugin's log. |
 | `view` | An Android URI: a deep link such as `jellyfin://…`, a web address, or an `intent:` string. `fallback_launch` runs if nothing on the TV handles it. |
 | `launch` | A package name to open. |
 | `resolve` | A string handed back to your `resolve` at selection time, which returns one of the actions here. Use it when the stream URL is only known at the moment of playing, or when the plugin does the work itself, such as telling a player on the network to start: then return an empty action, and nothing more is opened. |
 | `search` | A query for Lounge's own search: for a title that lives in some app the plugin cannot name. A search result never carries one. |
+
+In Rust, `Action::play(url, title)` takes `.header(name, value)` and `.audio()`.
 
 ## Screensavers
 
@@ -499,6 +502,7 @@ no longer asks for it.
 | Artwork | 4 MB per picture, 12 MB for a wallpaper; 600 new pictures, 192 MB and two minutes per refresh |
 | Key-value | 256 keys of up to 256 bytes, values of 256 KB, 1,000 writes per call |
 | Log | 500 lines per call of up to 4 KB each, the last 200 kept |
+| Play headers | 16 per action, a name and its value up to 4 KB together |
 | Screensavers | 8 per plugin, each a program of up to 32 KB with up to 24 uniforms of up to 16 numbers |
 
 ## The wire interface, for other languages

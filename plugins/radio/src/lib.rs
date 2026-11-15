@@ -112,7 +112,7 @@ impl sdk::Plugin for Radio {
             unreadable()
         })?;
         let url = answer.url.filter(|u| answer.ok && (u.starts_with("http://") || u.starts_with("https://"))).ok_or_else(|| GONE.to_string())?;
-        Ok(Action::play(url, answer.name.unwrap_or_default().trim()))
+        Ok(Action::play(url, answer.name.unwrap_or_default().trim()).audio())
     }
 }
 
@@ -354,7 +354,7 @@ fn stream_item(url: &str, weight: i32) -> Item {
         subtitle: Some("A stream you added".into()),
         row: Some("yours".into()),
         weight,
-        action: Action::play(url, &server),
+        action: Action::play(url, &server).audio(),
         title: server,
         ..Default::default()
     }

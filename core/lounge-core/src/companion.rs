@@ -465,7 +465,7 @@ mod tests {
         fn open_app_info(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
         fn media_command(&self, _: String, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
         fn request_permission(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
-        fn play_stream(&self, _: String, _: String, _: Option<i64>) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn play_stream(&self, _: String, _: String, _: Option<i64>, _: std::collections::HashMap<String, String>, _: bool) -> Result<(), crate::PlatformError> { Ok(()) }
         fn send_key(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
         fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
     }
@@ -486,7 +486,7 @@ mod tests {
         fn open_app_info(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
         fn media_command(&self, _: String, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
         fn request_permission(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
-        fn play_stream(&self, _: String, _: String, _: Option<i64>) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn play_stream(&self, _: String, _: String, _: Option<i64>, _: std::collections::HashMap<String, String>, _: bool) -> Result<(), crate::PlatformError> { Ok(()) }
         fn send_key(&self, key: String) -> Result<(), crate::PlatformError> {
             self.0.lock().push(format!("key {key}"));
             Ok(())

@@ -679,8 +679,9 @@ pub trait Platform: Send + Sync {
     fn media_command(&self, package: String, command: String) -> Result<(), PlatformError>;
     /// Ask the user for an optional access: tv_listings, notifications, usage.
     fn request_permission(&self, name: String) -> Result<(), PlatformError>;
-    /// Play a stream URL in whatever video player the device has, from `start_ms` when given.
-    fn play_stream(&self, url: String, title: String, start_ms: Option<i64>) -> Result<(), PlatformError>;
+    /// Play a stream URL in whatever player the device has, from `start_ms` when given. The
+    /// player is handed `headers` for its request, and an audio player is asked first when `audio`.
+    fn play_stream(&self, url: String, title: String, start_ms: Option<i64>, headers: std::collections::HashMap<String, String>, audio: bool) -> Result<(), PlatformError>;
     /// A remote key from the companion: up, down, left, right, center, back, home, menu,
     /// play_pause, rewind, fast_forward, volume_up, volume_down, mute.
     fn send_key(&self, key: String) -> Result<(), PlatformError>;

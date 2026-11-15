@@ -4,7 +4,7 @@
 
 use lounge_plugin_sdk::{self as sdk, epoch_ms, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::BuildHasherDefault;
 use std::io::Read;
 
@@ -185,10 +185,19 @@ pub struct Channel {
     pub logo: Option<String>,
     pub group: Option<String>,
     pub url: String,
+    /// Headers the playlist asks a player to send for the stream.
+    pub headers: BTreeMap<String, String>,
+    /// Marked as radio in the playlist, so sound alone.
+    pub radio: bool,
 }
 
 impl Channel {
     fn to_item(&self) -> Item {
+        let mut action = Action::play(&self.url, &self.name);
+        action.headers = self.headers.clone();
+        if self.radio {
+            action = action.audio();
+        }
         Item {
             id: format!("ch:{}", self.id),
             kind: ItemKind::Channel,
@@ -198,7 +207,7 @@ impl Channel {
             channel_id: Some(self.id.clone()),
             channel_name: Some(self.name.clone()),
             channel_number: self.number.clone(),
-            action: Action::play(&self.url, &self.name),
+            action,
             ..Default::default()
         }
     }
@@ -229,15 +238,62 @@ fn is_on_demand(url: &str) -> bool {
     path.contains("/movie/") || path.contains("/series/")
 }
 
+/// The header a `#EXTVLCOPT:` line asks a player to send: a user agent or a referrer.
+fn vlc_header(option: &str) -> Option<(String, String)> {
+    let (name, value) = option.split_once('=')?;
+    let header = match name.trim().to_ascii_lowercase().as_str() {
+        "http-user-agent" => "User-Agent",
+        "http-referrer" | "http-referer" => "Referer",
+        _ => return None,
+    };
+    let value = value.trim();
+    (!value.is_empty()).then(|| (header.to_string(), value.to_string()))
+}
+
+/// A stream's address and the headers written after it as `|Name=value&Name=value`, the way
+/// Kodi's playlists carry them. An address whose tail does not read that way is left whole.
+fn split_piped(line: &str) -> (&str, BTreeMap<String, String>) {
+    let Some((url, tail)) = line.split_once('|') else { return (line, BTreeMap::new()) };
+    let mut headers = BTreeMap::new();
+    for pair in tail.split('&') {
+        let Some((name, value)) = pair.split_once('=') else { return (line, BTreeMap::new()) };
+        headers.insert(percent_decoded(name.trim()), percent_decoded(value.trim()));
+    }
+    (url, headers)
+}
+
+/// `text` with each `%XX` turned back into the byte it stands for.
+fn percent_decoded(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let hex = |b: Option<&u8>| b.and_then(|&b| (b as char).to_digit(16));
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match (bytes[i], hex(bytes.get(i + 1)), hex(bytes.get(i + 2))) {
+            (b'%', Some(high), Some(low)) => {
+                out.push((high * 16 + low) as u8);
+                i += 3;
+            }
+            (b, _, _) => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 /// Parse an extended M3U, keeping the first `limit` channels in `only_group` (every group when
 /// `None`); also returns how many channels the group has. Attributes on `#EXTINF` (`tvg-id`,
-/// `tvg-name`, `tvg-logo`, `tvg-chno`, `group-title`) are optional.
+/// `tvg-name`, `tvg-logo`, `tvg-chno`, `group-title`, `radio`) are optional. Headers for the
+/// player come from `#EXTVLCOPT:` lines under the entry and from a `|` tail on its address.
 pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Channel>, usize) {
     let mut out = Vec::new();
     let mut used = HashSet::new();
     let mut next = HashMap::new();
     let mut total = 0;
     let mut pending: Option<(HashMap<String, String>, String)> = None;
+    let mut options: BTreeMap<String, String> = BTreeMap::new();
     let mut index = 0usize;
     for raw in text.lines() {
         // A byte order mark can open the file even where #EXTM3U is missing.
@@ -248,9 +304,15 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Cha
         if let Some(rest) = line.strip_prefix("#EXTINF:") {
             let (attrs, name) = split_extinf(rest);
             pending = Some((parse_attrs(attrs), name.to_string()));
+            options.clear();
+        } else if let Some(option) = line.strip_prefix("#EXTVLCOPT:") {
+            options.extend(vlc_header(option));
         } else if line.starts_with('#') {
             continue;
         } else if let Some((attrs, name)) = pending.take() {
+            let (url, piped) = split_piped(line);
+            let mut headers = std::mem::take(&mut options);
+            headers.extend(piped);
             if is_on_demand(line) {
                 continue;
             }
@@ -273,7 +335,9 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Cha
                     number: attrs.get("tvg-chno").cloned().filter(|s| !s.is_empty()).or_else(|| Some(index.to_string())),
                     logo: attrs.get("tvg-logo").cloned().filter(|s| s.starts_with("http")),
                     group,
-                    url: line.to_string(),
+                    url: url.to_string(),
+                    headers,
+                    radio: attrs.get("radio").is_some_and(|r| r.eq_ignore_ascii_case("true")),
                 });
             }
         }
@@ -997,7 +1061,7 @@ mod tests {
     const HOUR: i64 = 3_600_000;
 
     fn channel(id: &str, name: &str) -> Channel {
-        Channel { id: id.into(), tvg_id: Some(id.into()), name: name.into(), tvg_name: None, number: None, logo: None, group: None, url: format!("http://s/{id}") }
+        Channel { id: id.into(), tvg_id: Some(id.into()), name: name.into(), tvg_name: None, number: None, logo: None, group: None, url: format!("http://s/{id}"), headers: BTreeMap::new(), radio: false }
     }
 
     fn at(stamp: &str) -> i64 {
@@ -1060,6 +1124,38 @@ https://example.com/seven.m3u8
         assert_eq!(parse_m3u(m3u, Some("sport"), 100).0.len(), 1);
         let (first, total) = parse_m3u(m3u, None, 2);
         assert_eq!((first.len(), total), (2, 3));
+    }
+
+    #[test]
+    fn a_playlist_s_headers_and_radio_channels_reach_the_player() {
+        let m3u = "#EXTM3U\n\
+            #EXTINF:-1 tvg-id=\"one\",One\n\
+            #EXTVLCOPT:http-user-agent=Mozilla/5.0 (TV)\n\
+            #EXTVLCOPT:http-referrer=https://one.example/watch\n\
+            #EXTVLCOPT:network-caching=1000\n\
+            http://s/one.m3u8\n\
+            #EXTINF:-1 tvg-id=\"two\",Two\n\
+            http://s/two.m3u8|User-Agent=Player%2F2.0&Referer=https://two.example/\n\
+            #EXTINF:-1 tvg-id=\"three\" radio=\"true\",Three\n\
+            http://s/three.mp3\n\
+            #EXTINF:-1 tvg-id=\"four\",Four\n\
+            http://s/four?list=a|b\n";
+        let (channels, _) = parse_m3u(m3u, None, 10);
+        let headers = |c: &Channel| c.headers.iter().map(|(k, v)| format!("{k}: {v}")).collect::<Vec<_>>();
+        assert_eq!(headers(&channels[0]), ["Referer: https://one.example/watch", "User-Agent: Mozilla/5.0 (TV)"]);
+        // The address is left clean for the player, and its headers go beside it.
+        assert_eq!(channels[1].url, "http://s/two.m3u8");
+        assert_eq!(headers(&channels[1]), ["Referer: https://two.example/", "User-Agent: Player/2.0"]);
+        // One channel's headers are not carried to the next.
+        assert!(channels[2].headers.is_empty() && channels[2].radio);
+        // A bar that does not open a list of headers is part of the address.
+        assert_eq!((channels[3].url.as_str(), channels[3].headers.len()), ("http://s/four?list=a|b", 0));
+
+        let action = channels[1].to_item().action;
+        assert_eq!(action.play.as_deref(), Some("http://s/two.m3u8"));
+        assert_eq!(action.headers.get("User-Agent").map(String::as_str), Some("Player/2.0"));
+        assert_eq!(channels[2].to_item().action.media, sdk::Media::Audio);
+        assert_eq!(channels[0].to_item().action.media, sdk::Media::Video);
     }
 
     #[test]

@@ -153,7 +153,7 @@ impl sdk::Plugin for Podcasts {
         };
         let show = parse_feed(&fetched.text, url);
         let latest = show.latest().ok_or_else(|| format!("{} has no episodes to play yet.", if show.title.is_empty() { "This podcast" } else { show.title.as_str() }))?;
-        Ok(Action::play(&latest.url, &latest.title))
+        Ok(latest.play())
     }
 }
 
@@ -585,6 +585,17 @@ pub struct Episode {
     pub number: Option<u32>,
     #[serde(default)]
     pub trailer: bool,
+    /// The feed says the file is sound alone. Unset for a video and where the feed does not say.
+    #[serde(default)]
+    pub audio: bool,
+}
+
+impl Episode {
+    /// Plays the episode, in an audio player when the feed says it is sound alone.
+    fn play(&self) -> Action {
+        let action = Action::play(&self.url, &self.title);
+        if self.audio { action.audio() } else { action }
+    }
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -714,7 +725,7 @@ fn episode_item(show: &Show, e: &Episode, weight: i32, is_new: bool) -> Item {
         thumbnail: e.image.clone().or_else(|| show.image.clone()),
         row: Some("new".into()),
         weight,
-        action: Action::play(&e.url, &e.title),
+        action: e.play(),
         ..Default::default()
     }
 }
@@ -730,7 +741,7 @@ fn show_item(show: &Show, weight: i32) -> Option<Item> {
         thumbnail: show.image.clone().or_else(|| latest.image.clone()),
         row: Some("shows".into()),
         weight,
-        action: Action::play(&latest.url, &latest.title),
+        action: latest.play(),
         ..Default::default()
     })
 }
@@ -950,6 +961,7 @@ impl Draft {
             season: self.season,
             number: self.number,
             trailer: self.trailer,
+            audio: self.enclosure_type.starts_with("audio"),
         })
     }
 }
@@ -1202,6 +1214,7 @@ mod tests {
         assert_eq!(item.thumbnail.as_deref(), Some("https://img.example/ep2.jpg"));
         assert_eq!(item.action.play.as_deref(), Some("https://cdn.example/ep2.mp3"));
         assert_eq!(item.action.title.as_deref(), Some("The Other Latif & Co"));
+        assert_eq!(item.action.media, sdk::Media::Audio);
         assert!(item.is_new);
         assert_eq!(item.row.as_deref(), Some("new"));
         let plain = episode_item(&show, &show.episodes[1], 1, false);
@@ -1215,6 +1228,16 @@ mod tests {
         assert_eq!(length_text(2 * 3_600_000), "2 hours");
         assert_eq!(length_text(20_000), "1 minute");
         assert_eq!(length_text(61 * 60_000), "1 hour 1 minute");
+    }
+
+    #[test]
+    fn only_a_file_the_feed_calls_audio_goes_to_an_audio_player() {
+        let feed = |kind: &str| format!(r#"<rss><channel><title>Show</title><item><title>One</title><guid>1</guid><enclosure url="https://cdn.example/1" {kind}/></item></channel></rss>"#);
+        let media = |kind: &str| episode_item(&parse_feed(&feed(kind), "https://feeds.example/show"), &parse_feed(&feed(kind), "https://feeds.example/show").episodes[0], 1, false).action.media;
+        assert_eq!(media(r#"type="audio/mpeg""#), sdk::Media::Audio);
+        assert_eq!(media(r#"type="video/mp4""#), sdk::Media::Video);
+        // A feed that does not say is offered as video.
+        assert_eq!(media(""), sdk::Media::Video);
     }
 
     #[test]

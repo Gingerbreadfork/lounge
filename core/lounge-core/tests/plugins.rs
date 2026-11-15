@@ -43,8 +43,10 @@ impl Platform for Recorder {
     fn request_permission(&self, n: String) -> Result<(), PlatformError> {
         self.note(format!("permission {n}"))
     }
-    fn play_stream(&self, url: String, title: String, start_ms: Option<i64>) -> Result<(), PlatformError> {
-        self.note(format!("play {url} {title}{}", start_ms.map(|s| format!(" from {s}")).unwrap_or_default()))
+    fn play_stream(&self, url: String, title: String, start_ms: Option<i64>, headers: std::collections::HashMap<String, String>, audio: bool) -> Result<(), PlatformError> {
+        let mut headers: Vec<String> = headers.iter().map(|(name, value)| format!(" with {name}: {value}")).collect();
+        headers.sort();
+        self.note(format!("play {url} {title}{}{}{}", start_ms.map(|s| format!(" from {s}")).unwrap_or_default(), if audio { " as audio" } else { "" }, headers.concat()))
     }
     fn send_key(&self, k: String) -> Result<(), PlatformError> {
         self.note(format!("key {k}"))
@@ -446,3 +448,34 @@ fn a_newer_search_stops_the_one_before_it() {
         assert!(first.join().unwrap().is_empty(), "a search that was replaced has nothing to show");
     });
 }
+
+#[test]
+fn a_stream_reaches_the_player_with_its_headers_and_its_kind() {
+    let dir = tempfile::tempdir().unwrap();
+    let id = "tv.lounge.teststreams";
+    let manifest = format!(r#"{{"id":"{id}","name":"Streams","version":"1","kinds":["content"],"fetch_hosts":[],"rows":[{{"id":"r","title":"Stations on Streams"}}]}}"#);
+    let items = r#"[{"id":"radio","title":"A station","row":"r","action":{"play":"http://radio/live","media":"audio","headers":{"User-Agent":"Lounge","Bad name":"x"}}},
+        {"id":"film","title":"A film","row":"r","action":{"play":"http://films/1"}}]"#;
+    let config = CoreConfig {
+        data_dir: dir.path().join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.path().join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::B,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    let platform = Arc::new(Recorder::default());
+    let core = Core::open(config, platform.clone()).unwrap();
+    core.install_plugin(signed(dir.path(), &manifest, &module(&manifest, items, "[]")).to_string_lossy().into_owned(), false).unwrap();
+    core.set_plugin_enabled(id.into(), true);
+    wait_for("the streams", || core.snapshot().rows.iter().any(|r| r.tiles.len() == 2));
+
+    core.perform(format!("open:plugin:{id}:radio")).unwrap();
+    core.perform(format!("open:plugin:{id}:film")).unwrap();
+    // A header that is not well formed is left behind, and a stream with nothing said is video.
+    assert_eq!(platform.calls.lock().as_slice(), ["play http://radio/live A station as audio with User-Agent: Lounge", "play http://films/1 A film"]);
+    assert!(core.plugin_log(id.into()).iter().any(|line| line.contains("1 headers on play actions were left out")), "{:?}", core.plugin_log(id.into()));
+}
+

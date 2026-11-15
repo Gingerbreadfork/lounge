@@ -765,6 +765,13 @@ pub fn kept(items: Vec<Item>, sent: usize) -> (Vec<Item>, Vec<String>) {
         notes.push(format!("{sent} items sent; only the first {MAX_ITEMS} are kept"));
         items.truncate(MAX_ITEMS);
     }
+    let left_out: usize = items.iter().map(|it| it.action.headers.len() - it.action.play_headers().len()).sum();
+    if left_out > 0 {
+        notes.push(format!(
+            "{left_out} headers on play actions were left out; a name is a plain token, a value is one line, and an action carries at most {}",
+            api::MAX_PLAY_HEADERS
+        ));
+    }
     (items, notes)
 }
 
@@ -898,6 +905,9 @@ mod tests {
         assert!(notes[0].contains("only the first 2000"));
         let results: Vec<Item> = (0..20).map(|n| item(&n.to_string(), if n == 0 { " " } else { "T" })).collect();
         assert_eq!(kept_results(results).len(), SEARCH_LIMIT as usize);
+        let stream = Item { action: Action::play("http://a/1", "A").header("User-Agent", "Lounge").header("Bad name", "x"), ..item("s", "Stream") };
+        let (_, notes) = kept(vec![stream], 1);
+        assert!(notes[0].starts_with("1 headers on play actions were left out"), "{notes:?}");
     }
 
     #[test]

@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.tv.TvContract
 import android.net.Uri
+import android.os.Bundle
+import android.provider.Browser
 import android.provider.Settings
 import android.util.Log
 import java.net.URISyntaxException
@@ -239,29 +241,40 @@ class AndroidPlatform(private val context: Context) : Platform {
         if (!_commands.tryEmit(UiCommand.RequestPermission(name))) throw PlatformException.Failed("busy")
     }
 
-    override fun playStream(url: String, title: String, startMs: Long?) {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "video/*")
-            putExtra(Intent.EXTRA_TITLE, title)
-            putExtra("title", title)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        if (startMs != null && startMs > 0) {
-            // Players take the start as "position": MX Player and Just Player read an int, VLC a long.
-            val player = runCatching { context.packageManager.resolveActivity(intent, 0)?.activityInfo?.packageName }.getOrNull().orEmpty()
-            if (player.startsWith("com.mxtech.videoplayer") || player == "com.brouken.player") {
-                intent.putExtra("position", startMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
-            } else {
-                intent.putExtra("position", startMs)
+    override fun playStream(url: String, title: String, startMs: Long?, headers: Map<String, String>, audio: Boolean) {
+        // Sound is offered to audio players first, and to a video player on a TV that has none.
+        for (type in if (audio) listOf("audio/*", "video/*") else listOf("video/*")) {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(Uri.parse(url), type)
+                putExtra(Intent.EXTRA_TITLE, title)
+                putExtra("title", title)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (headers.isNotEmpty()) {
+                // Players take request headers one of two ways: names and values in turn, as MX
+                // Player defined it, or Android's own bundle for a view. Whether one sends them is its choice.
+                intent.putExtra("headers", headers.flatMap { listOf(it.key, it.value) }.toTypedArray())
+                intent.putExtra(Browser.EXTRA_HEADERS, Bundle().apply { headers.forEach { (name, value) -> putString(name, value) } })
+            }
+            if (startMs != null && startMs > 0) {
+                // Players take the start as "position": MX Player and Just Player read an int, VLC a long.
+                val player = runCatching { context.packageManager.resolveActivity(intent, 0)?.activityInfo?.packageName }.getOrNull().orEmpty()
+                if (player.startsWith("com.mxtech.videoplayer") || player == "com.brouken.player") {
+                    intent.putExtra("position", startMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+                } else {
+                    intent.putExtra("position", startMs)
+                }
+            }
+            try {
+                context.startActivity(intent)
+                return
+            } catch (e: ActivityNotFoundException) {
+                continue
+            } catch (e: SecurityException) {
+                throw PlatformException.Failed(e.message ?: "not allowed")
             }
         }
-        try {
-            context.startActivity(intent)
-        } catch (e: ActivityNotFoundException) {
-            throw PlatformException.Failed("No video player can open this stream. Install VLC or another player.")
-        } catch (e: SecurityException) {
-            throw PlatformException.Failed(e.message ?: "not allowed")
-        }
+        throw PlatformException.Failed(if (audio) "No player can open this stream. Install VLC or another player." else "No video player can open this stream. Install VLC or another player.")
     }
 
     override fun openAppInfo(`package`: String) {

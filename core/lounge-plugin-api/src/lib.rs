@@ -494,8 +494,26 @@ impl Shader {
     }
 }
 
+/// What a `play` stream is, so the TV offers it to the right kind of player.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Media {
+    #[default]
+    Video,
+    /// Sound alone, such as a radio station or a book: offered to audio players first.
+    Audio,
+}
+
+fn is_video(media: &Media) -> bool {
+    *media == Media::Video
+}
+
+/// Most headers a `play` action may hand the player, and the longest a name and its value may be together.
+pub const MAX_PLAY_HEADERS: usize = 16;
+pub const MAX_PLAY_HEADER_BYTES: usize = 4096;
+
 /// What selecting an item does. The first field that is set wins, in this order: `play`
-/// (a stream URL for a video player), `view` (an Android URI), `launch` (a package), `resolve`
+/// (a stream URL for a player), `view` (an Android URI), `launch` (a package), `resolve`
 /// (ask the plugin at selection time), `search` (Lounge's own search, with this query).
 /// `fallback_launch` runs if `view` finds no handler. An action `resolve` hands back with
 /// nothing set means the plugin has done the work itself.
@@ -519,6 +537,12 @@ pub struct Action {
     /// Where `play` starts, in milliseconds into the stream, for a resume point.
     #[serde(default)]
     pub start_ms: Option<i64>,
+    /// Headers for the player to send when it asks for `play`: a user agent, a referrer, a token.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
+    /// What `play` is; video unless it says otherwise.
+    #[serde(default, skip_serializing_if = "is_video")]
+    pub media: Media,
 }
 
 impl Action {
@@ -530,6 +554,27 @@ impl Action {
     }
     pub fn launch(package: impl Into<String>) -> Action {
         Action { launch: Some(package.into()), ..Default::default() }
+    }
+    /// Adds a header for the player to send when it asks for the stream.
+    pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Action {
+        self.headers.insert(name.into(), value.into());
+        self
+    }
+    /// Says the stream is sound alone, so audio players are offered it first.
+    pub fn audio(mut self) -> Action {
+        self.media = Media::Audio;
+        self
+    }
+    /// The headers the TV hands the player: those with a name of plain token characters and a
+    /// value on one line, the first [MAX_PLAY_HEADERS] of them by name.
+    pub fn play_headers(&self) -> BTreeMap<String, String> {
+        let token = |c: char| c.is_ascii_alphanumeric() || "!#$%&'*+-.^_`|~".contains(c);
+        self.headers
+            .iter()
+            .filter(|(name, value)| !name.is_empty() && name.chars().all(token) && !value.chars().any(char::is_control) && name.len() + value.len() <= MAX_PLAY_HEADER_BYTES)
+            .take(MAX_PLAY_HEADERS)
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect()
     }
     /// Open Lounge's search with `query`: for things that live in some app the plugin cannot name.
     pub fn search(query: impl Into<String>) -> Action {
@@ -777,6 +822,41 @@ mod tests {
         assert!(two("days", "sonarr").validate().is_err());
         assert!(two("sonarr_key", "days").validate().is_err());
         assert!(two("sonarr_key", "missing").validate().is_err());
+    }
+}
+
+#[cfg(test)]
+mod play_tests {
+    use super::*;
+
+    #[test]
+    fn a_play_action_says_its_headers_and_kind_only_when_it_has_them() {
+        let plain = Action::play("http://a/1", "A film");
+        assert_eq!(serde_json::to_value(&plain).unwrap().as_object().unwrap().get("headers"), None);
+        assert_eq!(serde_json::to_value(&plain).unwrap().as_object().unwrap().get("media"), None);
+        let radio = Action::play("http://a/live", "A station").header("User-Agent", "Lounge").audio();
+        let json = serde_json::to_string(&radio).unwrap();
+        assert!(json.contains(r#""headers":{"User-Agent":"Lounge"}"#) && json.contains(r#""media":"audio""#), "{json}");
+        assert_eq!(serde_json::from_str::<Action>(&json).unwrap(), radio);
+        // An action written before either existed reads as video with no headers.
+        let old: Action = serde_json::from_str(r#"{"play":"http://a/1","title":"A film"}"#).unwrap();
+        assert_eq!((old.media, old.headers.len()), (Media::Video, 0));
+    }
+
+    #[test]
+    fn only_well_formed_headers_reach_the_player() {
+        let action = Action::play("http://a/1", "A")
+            .header("User-Agent", "Lounge/1.0 (TV)")
+            .header("Referer", "https://example.com/watch?v=1")
+            .header("X-Token", "")
+            .header("Bad name", "x")
+            .header("", "x")
+            .header("X-Split", "one\r\nInjected: two")
+            .header("X-Long", "v".repeat(MAX_PLAY_HEADER_BYTES));
+        let kept: Vec<String> = action.play_headers().into_keys().collect();
+        assert_eq!(kept, ["Referer", "User-Agent", "X-Token"]);
+        let many = (0..40).fold(Action::play("http://a/1", "A"), |a, n| a.header(format!("X-{n:02}"), "v"));
+        assert_eq!(many.play_headers().len(), MAX_PLAY_HEADERS);
     }
 }
 
