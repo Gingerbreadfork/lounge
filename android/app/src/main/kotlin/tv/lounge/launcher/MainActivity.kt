@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -176,6 +177,10 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             apps.packageChanges().collectLatest { collectAppsNow() }
+        }
+        // Phone apps come and go as soon as the setting changes, on the TV or from a restored backup.
+        lifecycleScope.launch {
+            prefs.showMobileApps.distinctUntilChanged().drop(1).collect { collectAppsNow() }
         }
         // Collections run one at a time, and requests made while one runs fold into a single rerun.
         lifecycleScope.launch(Dispatchers.IO) {
