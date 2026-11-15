@@ -62,8 +62,8 @@ pub(crate) enum Job {
 pub(crate) struct PendingArt {
     /// By source, what its latest ingest still has to prepare.
     backlogs: HashMap<String, ArtBacklog>,
-    /// The latest programme records, kept in `State::last_programs`, want a new plan.
-    programs: bool,
+    /// The preview programmes in `State::last_previews` want their pictures.
+    previews: bool,
     queued: bool,
 }
 
@@ -391,8 +391,8 @@ impl ArtPlan {
 }
 
 impl ArtDone {
-    /// What is left for later passes and the items it dresses, or `None` when nothing is.
-    fn backlog(self, items: Vec<(String, ItemArt)>, dress: Dress, persist: fn(&Item) -> bool) -> Option<ArtBacklog> {
+    /// What is left for later passes and the items of `source` it dresses, or `None` when nothing is.
+    fn backlog(self, source: &str, items: Vec<(String, ItemArt)>, dress: Dress, persist: fn(&Item) -> bool) -> Option<ArtBacklog> {
         if self.rest.is_empty() || self.stalled {
             return None;
         }
@@ -401,7 +401,7 @@ impl ArtDone {
             waiting[i] = true;
         }
         let items = items.into_iter().filter(|(_, w)| w.slots().any(|i| waiting[i])).collect();
-        Some(ArtBacklog { results: self.results, queue: self.rest, items, dress, persist })
+        Some(ArtBacklog { source: source.to_string(), results: self.results, queue: self.rest, items, dress, persist })
     }
 }
 
@@ -433,6 +433,8 @@ fn release_freed_memory() {
 
 /// What one ingest still has to prepare, in the order it asked, and the items those pictures dress.
 struct ArtBacklog {
+    /// The source the items belong to.
+    source: String,
     results: Vec<Option<Prepared>>,
     queue: VecDeque<Group>,
     items: Vec<(String, ItemArt)>,
@@ -441,15 +443,19 @@ struct ArtBacklog {
     persist: fn(&Item) -> bool,
 }
 
-/// Keep what `source` has still to prepare and make sure a pass is queued, or forget it when
-/// nothing is left.
-fn defer(inner: &Inner, source: &str, backlog: Option<ArtBacklog>) {
+/// The backlog of preview programmes dressed after their channel was switched on. It is kept
+/// apart from the backlog of the TV provider's last ingest, so neither replaces the other.
+const PREVIEW_ART: &str = "tvprovider previews";
+
+/// Keep what the ingest named `key` has still to prepare and make sure a pass is queued, or
+/// forget it when nothing is left.
+fn defer(inner: &Inner, key: &str, backlog: Option<ArtBacklog>) {
     let queue = {
         let mut state = inner.state.lock();
         let pending = &mut state.pending_art;
         match backlog {
-            Some(b) => pending.backlogs.insert(source.to_string(), b),
-            None => pending.backlogs.remove(source),
+            Some(b) => pending.backlogs.insert(key.to_string(), b),
+            None => pending.backlogs.remove(key),
         };
         !pending.backlogs.is_empty() && !std::mem::replace(&mut pending.queued, true)
     };
@@ -458,45 +464,91 @@ fn defer(inner: &Inner, source: &str, backlog: Option<ArtBacklog>) {
     }
 }
 
-/// Ask for the pictures of the latest programme records again: a preview channel the person just
-/// switched on has had none prepared.
+/// Ask for the pictures of the preview programmes: a channel the person just switched on has
+/// had none prepared.
 pub(crate) fn want_program_art(inner: &Inner, state: &mut State) {
-    state.pending_art.programs = true;
+    state.pending_art.previews = true;
     if !std::mem::replace(&mut state.pending_art.queued, true) {
         inner.enqueue_job(Job::MoreArt);
     }
 }
 
-/// The next pass: a batch from every backlog, then a new plan for the programmes if one was asked.
+/// The next pass: a batch from every backlog, then the preview programmes if they were asked for.
 fn more_art(inner: &Inner) {
-    let (programs, sources) = {
+    let (previews, keys) = {
         let mut state = inner.state.lock();
         let pending = &mut state.pending_art;
         pending.queued = false;
-        (std::mem::take(&mut pending.programs), pending.backlogs.keys().cloned().collect::<Vec<_>>())
+        (std::mem::take(&mut pending.previews), pending.backlogs.keys().cloned().collect::<Vec<_>>())
     };
-    for source in sources {
-        let backlog = inner.state.lock().pending_art.backlogs.remove(&source);
+    for key in keys {
+        let backlog = inner.state.lock().pending_art.backlogs.remove(&key);
         if let Some(backlog) = backlog {
-            let rest = next_batch(inner, &source, backlog);
-            defer(inner, &source, rest);
+            let rest = next_batch(inner, backlog);
+            defer(inner, &key, rest);
         }
     }
-    if programs {
-        // Nothing has been read from the TV provider yet this time: there is nothing to prepare,
-        // and an empty ingest would throw away what is stored.
-        let programs = inner.state.lock().last_programs.clone();
-        if !programs.is_empty()
-            && let Err(e) = ingest_programs(inner, programs)
-        {
-            tracing::error!("ingest programs failed: {e}");
+    if previews {
+        dress_previews(inner);
+    }
+}
+
+/// Prepare the pictures of the preview programmes whose channel is switched on, and dress the
+/// items already in the graph with them.
+fn dress_previews(inner: &Inner) {
+    let (previews, enabled) = {
+        let state = inner.state.lock();
+        (state.last_previews.clone(), state.graph.layout.enabled_channels.clone())
+    };
+    let now = now_ms();
+    let mut plan = ArtPlan::new();
+    let items: Vec<(String, ItemArt)> = previews
+        .iter()
+        .filter(|p| p.channel_id.is_some_and(|c| enabled.contains(&c)))
+        .map(|p| (p.id.clone(), program_art(&mut plan, p, &enabled, now)))
+        .collect();
+    if items.is_empty() {
+        return;
+    }
+    let done = plan.run(&inner.state, art_sources(&inner.state));
+    write_dressed(inner, "tvprovider", &items.iter().collect::<Vec<_>>(), &done.results, dress_content, stored_program);
+    defer(inner, PREVIEW_ART, done.backlog("tvprovider", items, dress_content, stored_program));
+}
+
+/// Dress the items of `source` that are still in the graph with the pictures ready so far, and
+/// write them to the graph and, where `persist` says so, to the store.
+fn write_dressed(inner: &Inner, source: &str, items: &[&(String, ItemArt)], results: &[Option<Prepared>], dress: Dress, persist: fn(&Item) -> bool) {
+    let dressed: Vec<Item> = {
+        let state = inner.state.lock();
+        items
+            .iter()
+            .filter_map(|(id, w)| {
+                let mut it = state.graph.get(id)?.clone();
+                dress(&mut it, w, results);
+                Some(it)
+            })
+            .collect()
+    };
+    let (kept, loose): (Vec<Item>, Vec<Item>) = dressed.into_iter().partition(|it| persist(it));
+    let encoded = lounge_store::encode_items(&kept);
+    let mut state = inner.state.lock();
+    let state = &mut *state;
+    // Only items still in the graph: those of a plugin turned off meanwhile stay gone.
+    let written = encoded.and_then(|mut rows| {
+        rows.retain(|r| state.graph.get(&r.id).is_some());
+        state.store.upsert_items_encoded(source, &rows, now_ms())
+    });
+    stored(source, written);
+    for it in kept.into_iter().chain(loose) {
+        if state.graph.get(&it.id).is_some() {
+            state.graph.upsert(it);
         }
     }
 }
 
 /// Prepare the next few sources of a backlog and write just the items they dress. Returns the
 /// backlog while sources remain and the pass did not stall.
-fn next_batch(inner: &Inner, source: &str, mut backlog: ArtBacklog) -> Option<ArtBacklog> {
+fn next_batch(inner: &Inner, mut backlog: ArtBacklog) -> Option<ArtBacklog> {
     let take = art_sources(&inner.state).min(backlog.queue.len());
     let mut plan = ArtPlan::new();
     let mut slots = Vec::new();
@@ -520,34 +572,7 @@ fn next_batch(inner: &Inner, source: &str, mut backlog: ArtBacklog) -> Option<Ar
     for (i, j) in slots {
         backlog.results[i] = done.results[j].take();
     }
-    let dressed: Vec<Item> = {
-        let state = inner.state.lock();
-        waiting
-            .iter()
-            .filter_map(|(id, w)| {
-                let mut it = state.graph.get(id)?.clone();
-                (backlog.dress)(&mut it, w, &backlog.results);
-                Some(it)
-            })
-            .collect()
-    };
-    let (kept, loose): (Vec<Item>, Vec<Item>) = dressed.into_iter().partition(|it| (backlog.persist)(it));
-    let encoded = lounge_store::encode_items(&kept);
-    {
-        let mut state = inner.state.lock();
-        let state = &mut *state;
-        // Only items still in the graph: those of a plugin turned off meanwhile stay gone.
-        let written = encoded.and_then(|mut rows| {
-            rows.retain(|r| state.graph.get(&r.id).is_some());
-            state.store.upsert_items_encoded(source, &rows, now_ms())
-        });
-        stored(source, written);
-        for it in kept.into_iter().chain(loose) {
-            if state.graph.get(&it.id).is_some() {
-                state.graph.upsert(it);
-            }
-        }
-    }
+    write_dressed(inner, &backlog.source, &waiting, &backlog.results, backlog.dress, backlog.persist);
     (!done.stalled && !backlog.queue.is_empty()).then_some(backlog)
 }
 
@@ -615,7 +640,7 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
             Err(e) => tracing::error!("could not read app usage: {e}"),
         }
     }
-    defer(inner, "apps", done.backlog(dressed, dress_app, |_| true));
+    defer(inner, "apps", done.backlog("apps", dressed, dress_app, |_| true));
     Ok(())
 }
 
@@ -698,37 +723,7 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
         (state.graph.layout.enabled_channels.clone(), first_seen(&state, "tvprovider"))
     };
     let mut plan = ArtPlan::new();
-    let wants: Vec<ItemArt> = programs
-        .iter()
-        .map(|p| {
-            // Pictures only for what can be on screen: preview rows the person switched on, and
-            // schedule entries airing in the next few hours.
-            let shown = match p.kind {
-                ProgramKind::Preview => p.channel_id.is_some_and(|c| enabled_channels.contains(&c)),
-                ProgramKind::Schedule => p.end_ms.is_none_or(|e| e > now) && p.start_ms.is_none_or(|s| s < now + SCHEDULE_ART_AHEAD_MS),
-                ProgramKind::WatchNext | ProgramKind::Channel => true,
-            };
-            if !shown {
-                return ItemArt::default();
-            }
-            // A 16:9 thumbnail is the landscape source when there is one; the poster is used
-            // in its own orientation and as the Stage's framed art when it is portrait.
-            let wide = p.thumbnail_path.as_deref().or(if p.poster_is_portrait { None } else { p.poster_path.as_deref() });
-            let portrait = if p.poster_is_portrait { p.poster_path.as_deref() } else { None };
-            let schedule = p.kind == ProgramKind::Schedule;
-            let pictureless = p.kind == ProgramKind::Channel && wide.is_none() && p.poster_path.is_none();
-            ItemArt {
-                poster: if schedule { None } else { plan.want(portrait, Style::Poster) },
-                landscape: plan.want(wide.or(p.poster_path.as_deref()), Style::Landscape),
-                hero: plan.want(wide, Style::Hero),
-                hero_fit: plan.want(if wide.is_none() { portrait } else { None }, Style::HeroFit),
-                backdrop: plan.want(wide.or(portrait), Style::Backdrop),
-                logo: if schedule { None } else { plan.want(p.logo_path.as_deref(), Style::Logo) },
-                wallpaper: None,
-                card: if pictureless { plan.want(p.logo_path.as_deref(), Style::Landscape) } else { None },
-            }
-        })
-        .collect();
+    let wants: Vec<ItemArt> = programs.iter().map(|p| program_art(&mut plan, p, &enabled_channels, now)).collect();
     let done = plan.run(&inner.state, art_sources(&inner.state));
 
     let mut items = Vec::with_capacity(programs.len());
@@ -801,10 +796,42 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
         let mut state = inner.state.lock();
         stored("TV listings", state.store.replace_items_encoded("tvprovider", &rows, now));
         state.graph.replace_source("tvprovider", items);
-        state.last_programs = programs;
+        state.last_previews = programs.into_iter().filter(|p| p.kind == ProgramKind::Preview).collect();
     }
-    defer(inner, "tvprovider", done.backlog(dressed, dress_content, stored_program));
+    defer(inner, "tvprovider", done.backlog("tvprovider", dressed, dress_content, stored_program));
+    // This ingest planned the pictures of every channel switched on, so an earlier pass over the
+    // previews has nothing left to add.
+    defer(inner, PREVIEW_ART, None);
     Ok(())
+}
+
+/// The pictures a programme record wants. Only what can be on screen wants any: preview rows
+/// the person switched on, and schedule entries airing in the next few hours.
+fn program_art(plan: &mut ArtPlan, p: &ProgramRecord, enabled_channels: &HashSet<i64>, now: i64) -> ItemArt {
+    let shown = match p.kind {
+        ProgramKind::Preview => p.channel_id.is_some_and(|c| enabled_channels.contains(&c)),
+        ProgramKind::Schedule => p.end_ms.is_none_or(|e| e > now) && p.start_ms.is_none_or(|s| s < now + SCHEDULE_ART_AHEAD_MS),
+        ProgramKind::WatchNext | ProgramKind::Channel => true,
+    };
+    if !shown {
+        return ItemArt::default();
+    }
+    // A 16:9 thumbnail is the landscape source when there is one; the poster is used
+    // in its own orientation and as the Stage's framed art when it is portrait.
+    let wide = p.thumbnail_path.as_deref().or(if p.poster_is_portrait { None } else { p.poster_path.as_deref() });
+    let portrait = if p.poster_is_portrait { p.poster_path.as_deref() } else { None };
+    let schedule = p.kind == ProgramKind::Schedule;
+    let pictureless = p.kind == ProgramKind::Channel && wide.is_none() && p.poster_path.is_none();
+    ItemArt {
+        poster: if schedule { None } else { plan.want(portrait, Style::Poster) },
+        landscape: plan.want(wide.or(p.poster_path.as_deref()), Style::Landscape),
+        hero: plan.want(wide, Style::Hero),
+        hero_fit: plan.want(if wide.is_none() { portrait } else { None }, Style::HeroFit),
+        backdrop: plan.want(wide.or(portrait), Style::Backdrop),
+        logo: if schedule { None } else { plan.want(p.logo_path.as_deref(), Style::Logo) },
+        wallpaper: None,
+        card: if pictureless { plan.want(p.logo_path.as_deref(), Style::Landscape) } else { None },
+    }
 }
 
 /// Schedule rows are regenerated seconds after launch and go stale within hours, so the graph
@@ -926,7 +953,7 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         stored(&source, state.store.replace_items_encoded(&source, &rows, now));
         state.graph.replace_source(&source, items);
     }
-    defer(inner, &source, done.backlog(dressed, dress_content, |_| true));
+    defer(inner, &source, done.backlog(&source, dressed, dress_content, |_| true));
     Ok(())
 }
 

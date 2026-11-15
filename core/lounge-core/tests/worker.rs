@@ -444,3 +444,34 @@ fn the_clock_alone_does_not_rewrite_the_stored_home() {
     }
     assert_eq!(stored_revision(dir.path()), written);
 }
+
+#[test]
+fn a_preview_channel_switched_on_gets_its_pictures_and_the_rest_stays() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = Core::open(config(dir.path()), Arc::new(Quiet)).unwrap();
+    let pictures = dir.path().join("pictures");
+    std::fs::create_dir_all(&pictures).unwrap();
+    // Eight previews at six pictures a pass: the pass that follows the switch, and one more.
+    let mut programs: Vec<ProgramRecord> = (0..8u8)
+        .map(|n| {
+            let path = pictures.join(format!("preview{n}.png"));
+            image::RgbaImage::from_pixel(128, 72, image::Rgba([40, 80, 20 * n, 255])).save(&path).unwrap();
+            ProgramRecord { thumbnail_path: Some(path.to_string_lossy().into_owned()), ..on_channel_five(&format!("preview:{n}"), ProgramKind::Preview, None, None) }
+        })
+        .collect();
+    let now = now_ms();
+    programs.push(ProgramRecord { channel_id: Some(9), ..on_channel_five("chan:9", ProgramKind::Channel, None, None) });
+    programs.push(ProgramRecord { channel_id: Some(9), ..on_channel_five("prog:1", ProgramKind::Schedule, Some(now - 60_000), Some(now + 3_600_000)) });
+    core.ingest_programs(programs);
+    wait_for("the preview channel", || core.available_channels().iter().any(|c| c.id == 5 && c.programmes == 8));
+    assert!(core.snapshot().rows.iter().all(|r| r.id != "channel:5"), "a channel is off until it is switched on");
+
+    core.command(LayoutCommand::EnableChannel { channel_id: 5 });
+    let pictured = |s: &HomeSnapshot| s.rows.iter().find(|r| r.id == "channel:5").map_or(0, |r| r.tiles.iter().filter(|t| t.artwork_path.is_some()).count());
+    wait_for("a picture on every preview", || pictured(&core.snapshot()) == 8);
+
+    // The schedule came with the same listings and lives only in the graph; it is still there.
+    let snapshot = core.snapshot();
+    let live = snapshot.rows.iter().find(|r| r.id == "live").expect("the tuner's channel");
+    assert_eq!(live.tiles.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["prog:1"]);
+}

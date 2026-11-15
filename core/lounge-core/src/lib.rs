@@ -754,8 +754,9 @@ pub(crate) struct State {
     pub playing: std::collections::HashSet<String>,
     /// Ingests whose pictures are still being prepared, a few at a time.
     pub pending_art: worker::PendingArt,
-    /// The latest TvProvider records, for preparing pictures later.
-    pub last_programs: Vec<ProgramRecord>,
+    /// The latest preview programmes from the TV provider. Their pictures are prepared only once
+    /// their channel is switched on, which can be after they arrived.
+    pub last_previews: Vec<ProgramRecord>,
     /// Whether the TV shows a 24-hour clock, so the Stage writes times as the clock does.
     pub clock_24h: bool,
 }
@@ -819,7 +820,7 @@ impl Core {
                 habits,
                 playing: Default::default(),
                 pending_art: Default::default(),
-                last_programs: Vec::new(),
+                last_previews: Vec::new(),
                 clock_24h: false,
             }),
             snapshot: RwLock::new(snapshot),

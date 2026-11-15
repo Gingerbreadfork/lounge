@@ -1290,7 +1290,7 @@ mod tests {
             habits: Default::default(),
             playing: Default::default(),
             pending_art: Default::default(),
-            last_programs: Vec::new(),
+            last_previews: Vec::new(),
             clock_24h: false,
         }
     }
