@@ -433,7 +433,8 @@ for anything malformed.
 A refresh keeps at most `sdk::MAX_ITEMS`. `sdk::dedup_ids` drops repeated ids, and
 `fit_schedule` or, for a long guide read as it arrives, `ScheduleBudget` share the places left
 after the channels evenly between them, earliest programmes first. `for_each_in_array` reads a
-large JSON array one entry at a time.
+large JSON array one entry at a time, and `find_first_of` looks through a large body for the
+next of a few bytes, eight bytes at a time.
 
 ## Testing without a TV
 

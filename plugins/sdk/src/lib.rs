@@ -600,6 +600,30 @@ fn base64_decode_in_place(buf: &mut [u8]) -> usize {
     w
 }
 
+/// Where the first byte of `hay` that is one of `bytes` sits. The search takes eight bytes at a
+/// time, which costs a plugin far less than looking at each byte, so it suits scanning a large
+/// answer for the next quote or tag.
+pub fn find_first_of(hay: &[u8], bytes: &[u8]) -> Option<usize> {
+    const ONES: u64 = 0x0101_0101_0101_0101;
+    const HIGHS: u64 = 0x8080_8080_8080_8080;
+    let mut words = hay.chunks_exact(8);
+    let mut at = 0;
+    for word in &mut words {
+        let word = u64::from_le_bytes([word[0], word[1], word[2], word[3], word[4], word[5], word[6], word[7]]);
+        let mut found = 0;
+        for &byte in bytes {
+            // A high bit is set at each byte equal to `byte`. The lowest is exact; one above it can be set by a borrow.
+            let diff = word ^ (ONES * u64::from(byte));
+            found |= diff.wrapping_sub(ONES) & !diff & HIGHS;
+        }
+        if found != 0 {
+            return Some(at + (found.trailing_zeros() / 8) as usize);
+        }
+        at += 8;
+    }
+    words.remainder().iter().position(|b| bytes.contains(b)).map(|i| at + i)
+}
+
 /// Reading the host's answer to `fetch` without copying the body: the body's JSON string is
 /// unescaped inside the buffer the answer arrived in, which then becomes the body.
 mod wire {
@@ -670,7 +694,7 @@ mod wire {
         let hex = |buf: &[u8], at: usize| -> Option<u32> { u32::from_str_radix(std::str::from_utf8(buf.get(at..at + 4)?).ok()?, 16).ok() };
         let (mut r, mut w) = (0, 0);
         while r < buf.len() {
-            let next = buf[r..].iter().position(|&b| b == b'\\').map_or(buf.len(), |i| r + i);
+            let next = crate::find_first_of(&buf[r..], b"\\").map_or(buf.len(), |i| r + i);
             if w != r {
                 buf.copy_within(r..next, w);
             }
@@ -1000,6 +1024,33 @@ mod helper_tests {
         assert_eq!(starts("d"), [5]);
         assert_eq!(starts("a"), (1..=10).collect::<Vec<_>>()[..starts("a").len()]);
         assert!(starts("a").len() >= 9 && starts("b").len() >= 9);
+    }
+
+    #[test]
+    fn a_word_at_a_time_finds_what_a_byte_at_a_time_does() {
+        let slow = |hay: &[u8], bytes: &[u8]| hay.iter().position(|b| bytes.contains(b));
+        // Every length across two words, with the wanted byte at every place and nowhere.
+        for len in 0..20 {
+            for at in 0..=len {
+                let mut hay = vec![b'a'; len];
+                if at < len {
+                    hay[at] = b'<';
+                }
+                assert_eq!(find_first_of(&hay, b"<"), slow(&hay, b"<"), "{hay:?}");
+                assert_eq!(find_first_of(&hay, b">\"<"), slow(&hay, b">\"<"), "{hay:?}");
+            }
+        }
+        // The byte below a wanted one borrows from it and must not be taken for one.
+        assert_eq!(find_first_of(&[0x3D, 0x3C, 0x3C, 0x3D, 0x3D, 0x3D, 0x3D, 0x3D], b"<"), Some(1));
+        assert_eq!(find_first_of(&[0x3B, 0x3D, 0x3B, 0x3D, 0x3B, 0x3D, 0x3B, 0x3D, 0x3C], b"<"), Some(8));
+        // High bytes, zero bytes and several wanted bytes together.
+        let text = "naïve — \u{0} \"quoted\" 'single' <tag attr=\"v\">text</tag>\\".as_bytes();
+        for from in 0..text.len() {
+            for bytes in [&b"<"[..], b">", b"\\", b"\"", b">\"'", b"\0", &[0xC3], &[0xEF, 0x80]] {
+                assert_eq!(find_first_of(&text[from..], bytes), slow(&text[from..], bytes), "from {from} for {bytes:?}");
+            }
+        }
+        assert_eq!(find_first_of(b"anything", b""), None);
     }
 
     #[test]

@@ -511,22 +511,29 @@ impl<'a> Guide<'a> {
         let (mut channel, mut start, mut stop) = (None, None, None);
         for (name, value) in Attributes(tag) {
             match name {
-                b"channel" if value.contains(&b'&') => channel = Some(Cow::Owned(decode(value, MAX_FIELD_BYTES))),
-                b"channel" => channel = Some(String::from_utf8_lossy(value)),
-                b"start" => start = std::str::from_utf8(value).ok().and_then(parse_xmltv_time),
-                b"stop" => stop = std::str::from_utf8(value).ok().and_then(parse_xmltv_time),
+                b"channel" => channel = Some(value),
+                b"start" => start = Some(value),
+                b"stop" => stop = Some(value),
                 _ => {}
             }
         }
         let channel = channel?;
+        let channel = if channel.contains(&b'&') { Cow::Owned(decode(channel, MAX_FIELD_BYTES)) } else { String::from_utf8_lossy(channel) };
         let bucket = match self.by_id.get(&*channel).or_else(|| self.aliases.get(&*channel)) {
             Some(&bucket) => bucket,
             None => self.fold(&channel)?,
         };
         self.matched += 1;
+        // Most programmes in a guide are on other channels or outside the window, so a time is
+        // read only once it can still matter.
+        let time = |value: Option<&[u8]>| value.and_then(|v| std::str::from_utf8(v).ok()).and_then(parse_xmltv_time);
+        let start_ms = time(start)?;
+        if start_ms >= self.window.1 {
+            return None;
+        }
         // XMLTV's stop is optional; such a programme is closed off once the next one is known.
-        let (start_ms, end_ms) = (start?, stop.unwrap_or(OPEN_END));
-        if end_ms <= self.window.0 || start_ms >= self.window.1 || end_ms <= start_ms {
+        let end_ms = time(stop).unwrap_or(OPEN_END);
+        if end_ms <= self.window.0 || end_ms <= start_ms {
             return None;
         }
         // Once a bucket holds as many earlier programmes as it can use, later ones are not read.
@@ -717,11 +724,19 @@ impl<R: Read> Stream<R> {
         loop {
             let hay = &self.buf[self.pos..];
             while at < hay.len() {
+                let found = match quote {
+                    Some(q) => sdk::find_first_of(&hay[at..], &[q]),
+                    None => sdk::find_first_of(&hay[at..], b">\"'"),
+                };
+                let Some(i) = found else {
+                    at = hay.len();
+                    break;
+                };
+                at += i;
                 match (hay[at], quote) {
                     (b'>', None) => return Ok(at),
-                    (q @ (b'"' | b'\''), None) => quote = Some(q),
-                    (c, Some(q)) if c == q => quote = None,
-                    _ => {}
+                    (q, None) => quote = Some(q),
+                    (_, Some(_)) => quote = None,
                 }
                 at += 1;
             }
@@ -734,7 +749,7 @@ impl<R: Read> Stream<R> {
 
 fn find_bytes(hay: &[u8], needle: &[u8]) -> Option<usize> {
     let mut from = 0;
-    while let Some(i) = hay[from..].iter().position(|&b| b == needle[0]) {
+    while let Some(i) = sdk::find_first_of(&hay[from..], &needle[..1]) {
         let at = from + i;
         if hay[at..].starts_with(needle) {
             return Some(at);
