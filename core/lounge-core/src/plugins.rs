@@ -28,6 +28,9 @@ const ART_THREADS: usize = 4;
 const SEARCH_ART_TIME: Duration = Duration::from_secs(4);
 /// How many plugins refresh at once, so one waiting on a server that is off does not hold up the rest.
 const REFRESH_WORKERS: usize = 2;
+/// How long a loaded module is kept after its last use. Loading one again is quick, and a plugin
+/// that refreshes every few seconds while it waits on a sign-in stays loaded.
+const MODULE_KEPT: Duration = Duration::from_secs(120);
 
 pub(crate) enum PluginJob {
     Refresh(String),
@@ -99,7 +102,8 @@ pub(crate) struct PluginManager {
     host: Host,
     dir: PathBuf,
     art_dir: PathBuf,
-    loaded: Mutex<HashMap<String, Arc<LoadedPlugin>>>,
+    /// Modules loaded for a call, each with when it was last used.
+    loaded: Mutex<HashMap<String, (Arc<LoadedPlugin>, Instant)>>,
     logs: Arc<Mutex<HashMap<String, VecDeque<String>>>>,
     refresh_tx: crossbeam_channel::Sender<PluginJob>,
     calls_tx: crossbeam_channel::Sender<PluginJob>,
@@ -421,6 +425,11 @@ impl PluginManager {
         tx.send(job).map_err(|_| "plugin thread is gone".to_string())
     }
 
+    /// Lets go of modules no call has used for a while.
+    fn forget_idle_modules(&self) {
+        self.loaded.lock().retain(|_, (_, used)| used.elapsed() < MODULE_KEPT);
+    }
+
     /// `<plugins>/<id>`; an id that is not a single plain path component never becomes a path.
     fn plugin_dir(&self, id: &str) -> Option<PathBuf> {
         single_component(&self.dir, id)
@@ -464,7 +473,9 @@ impl PluginManager {
         std::fs::create_dir_all(&dir).map_err(not_kept)?;
         std::fs::write(dir.join("plugin.wasm"), &bundle.wasm).map_err(not_kept)?;
         std::fs::write(dir.join("manifest.json"), &bundle.manifest_json).map_err(not_kept)?;
-        self.loaded.lock().insert(bundle.manifest.id.clone(), Arc::new(probe));
+        // The copy loaded to check it is let go; a plugin that is on loads the new files at its next call.
+        drop(probe);
+        self.loaded.lock().remove(&bundle.manifest.id);
         self.fetchers.forget(&bundle.manifest.id);
         // An update that asks to reach more is turned off until the person allows it again. The
         // ones bundled with Lounge come with the APK the person installed.
@@ -517,13 +528,14 @@ impl PluginManager {
     }
 
     fn loaded(&self, id: &str, manifest: &Manifest) -> Result<Arc<LoadedPlugin>, String> {
-        if let Some(p) = self.loaded.lock().get(id) {
-            return Ok(Arc::clone(p));
+        if let Some((plugin, used)) = self.loaded.lock().get_mut(id) {
+            *used = Instant::now();
+            return Ok(Arc::clone(plugin));
         }
         let dir = self.plugin_dir(id).ok_or_else(|| format!("invalid plugin id {id:?}"))?;
         let wasm = std::fs::read(dir.join("plugin.wasm")).map_err(|e| format!("plugin files missing: {e}"))?;
         let plugin = Arc::new(self.host.load(id, manifest.clone(), &wasm).map_err(|e| e.to_string())?);
-        self.loaded.lock().insert(id.to_string(), Arc::clone(&plugin));
+        self.loaded.lock().insert(id.to_string(), (Arc::clone(&plugin), Instant::now()));
         Ok(plugin)
     }
 
@@ -777,7 +789,7 @@ fn configured(manifest: &Manifest, settings: &[(String, String)]) -> bool {
 
 /// Starts the plugin threads. A few run refreshes, so one plugin waiting on its server does not
 /// hold up the rest; one answers searches and one answers presses; and one, once a minute, queues
-/// the refreshes that are due.
+/// the refreshes that are due and lets idle modules go.
 pub(crate) fn spawn(inner: Arc<Inner>, jobs: Receivers, services: Arc<CoreServices>) {
     let _ = services.inner.set(Arc::downgrade(&inner));
     let answering = |name: &str, rx: crossbeam_channel::Receiver<PluginJob>| {
@@ -802,7 +814,10 @@ pub(crate) fn spawn(inner: Arc<Inner>, jobs: Receivers, services: Arc<CoreServic
         .spawn(move || loop {
             std::thread::sleep(DUE_EVERY);
             let Some(inner) = weak.upgrade() else { break };
-            crate::guarded("the plugin schedule", || refresh_what_is_due(&inner));
+            crate::guarded("the plugin schedule", || {
+                refresh_what_is_due(&inner);
+                inner.plugins.forget_idle_modules();
+            });
         })
         .expect("spawn the plugin schedule thread");
 }
@@ -1497,6 +1512,34 @@ mod tests {
         assert!(Running::begin(&plugins, "q").is_some());
         drop(running);
         assert!(queued("p"));
+    }
+
+    #[test]
+    fn a_module_is_let_go_once_no_call_has_used_it_for_a_while() {
+        let dir = tempfile::tempdir().unwrap();
+        let (plugins, _jobs, _services) = PluginManager::new(&dir.path().join("data"), &dir.path().join("cache"));
+        let wasm = wat::parse_str(
+            r#"(module (memory (export "memory") 1)
+              (func (export "lg_alloc") (param i32) (result i32) (i32.const 8))
+              (func (export "lg_free") (param i32 i32))
+              (func (export "lg_manifest") (result i64) (i64.const 0))
+              (func (export "lg_refresh") (param i32 i32) (result i64) (i64.const 0)))"#,
+        )
+        .unwrap();
+        let id = "tv.example.idle";
+        std::fs::create_dir_all(plugins.plugin_dir(id).unwrap()).unwrap();
+        std::fs::write(plugins.plugin_dir(id).unwrap().join("plugin.wasm"), wasm).unwrap();
+        let first = plugins.loaded(id, &Manifest::default()).unwrap();
+        // A call soon after finds the same module, and using it keeps it.
+        assert!(Arc::ptr_eq(&first, &plugins.loaded(id, &Manifest::default()).unwrap()));
+        plugins.forget_idle_modules();
+        assert_eq!(plugins.loaded.lock().len(), 1);
+        let Some(long_ago) = Instant::now().checked_sub(MODULE_KEPT) else { return };
+        plugins.loaded.lock().get_mut(id).unwrap().1 = long_ago;
+        plugins.forget_idle_modules();
+        assert!(plugins.loaded.lock().is_empty());
+        // The next call loads it again from its file.
+        assert!(!Arc::ptr_eq(&first, &plugins.loaded(id, &Manifest::default()).unwrap()));
     }
 
     #[test]
