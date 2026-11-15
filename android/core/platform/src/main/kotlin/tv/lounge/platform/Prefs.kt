@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
@@ -86,7 +87,7 @@ class Prefs(private val context: Context) {
     val previousScreensaver: Flow<String?> = data.map { it[PREVIOUS_SCREENSAVER] }
 
     /** The screensaver's style: "pictures", or the id of an abstract scene. */
-    val ambientStyle: Flow<String> = data.map { it[AMBIENT_STYLE] ?: "pictures" }
+    val ambientStyle: Flow<String> = data.map { it[AMBIENT_STYLE] ?: PICTURES }
     suspend fun setAmbientStyle(id: String) { context.dataStore.edit { it[AMBIENT_STYLE] = id } }
     suspend fun setBackdrop(id: String) { context.dataStore.edit { it[BACKDROP] = id } }
     suspend fun setAllAppsSort(sort: String) { context.dataStore.edit { it[ALL_APPS_SORT] = sort } }
@@ -113,11 +114,54 @@ class Prefs(private val context: Context) {
     suspend fun setOnboardingStep(step: Int) { context.dataStore.edit { it[ONBOARDING_STEP] = step } }
     suspend fun setReducedMotion(on: Boolean?) { context.dataStore.edit { if (on == null) it.remove(REDUCED_MOTION) else it[REDUCED_MOTION] = on } }
 
+    /**
+     * The settings a backup carries, by name: how the home looks, sounds and is laid out. What
+     * belongs to this TV alone stays behind, such as its setup, its phone and its screensaver.
+     */
+    suspend fun exported(): Map<String, String> {
+        val p = data.first()
+        return mapOf(
+            THEME.name to runCatching { Theme.valueOf(p[THEME] ?: Theme.Dusk.name) }.getOrDefault(Theme.Dusk).name,
+            SOUNDS.name to (p[SOUNDS] ?: true).toString(),
+            LITE_MODE.name to (p[LITE_MODE]?.toString() ?: AUTOMATIC),
+            REDUCED_MOTION.name to (p[REDUCED_MOTION]?.toString() ?: AUTOMATIC),
+            SHOW_MOBILE_APPS.name to (p[SHOW_MOBILE_APPS] ?: false).toString(),
+            BACKDROP.name to (p[BACKDROP] ?: STILL_BACKDROP),
+            AMBIENT_STYLE.name to (p[AMBIENT_STYLE] ?: PICTURES),
+            ALL_APPS_SORT.name to (p[ALL_APPS_SORT] ?: SORT_AZ),
+        )
+    }
+
+    /**
+     * Sets each setting in [values] that [exported] names and whose value reads as one of its
+     * own. Anything else in [values] is passed over, and a setting it leaves out stays as it is.
+     */
+    suspend fun restore(values: Map<String, String>) {
+        context.dataStore.edit { p ->
+            values[THEME.name]?.takeIf { name -> Theme.entries.any { it.name == name } }?.let { p[THEME] = it }
+            values[SOUNDS.name]?.toBooleanStrictOrNull()?.let { p[SOUNDS] = it }
+            values[SHOW_MOBILE_APPS.name]?.toBooleanStrictOrNull()?.let { p[SHOW_MOBILE_APPS] = it }
+            for (key in listOf(LITE_MODE, REDUCED_MOTION)) {
+                val value = values[key.name] ?: continue
+                if (value == AUTOMATIC) p.remove(key) else value.toBooleanStrictOrNull()?.let { p[key] = it }
+            }
+            for (key in listOf(BACKDROP, AMBIENT_STYLE)) {
+                values[key.name]?.takeIf { it.isNotBlank() && it.length <= MAX_STYLE_ID }?.let { p[key] = it }
+            }
+            values[ALL_APPS_SORT.name]?.takeIf { it in setOf(SORT_AZ, SORT_OPENED, SORT_INSTALLED) }?.let { p[ALL_APPS_SORT] = it }
+        }
+    }
+
     companion object {
         const val STILL_BACKDROP = "still"
         const val SORT_AZ = "az"
         const val SORT_OPENED = "opened"
         const val SORT_INSTALLED = "installed"
+        /** How a backup writes a setting that follows the TV: Lite mode and reduced motion left to it. */
+        const val AUTOMATIC = "auto"
+        private const val PICTURES = "pictures"
+        /** The longest id a background or screensaver style has. */
+        private const val MAX_STYLE_ID = 200
         private val THEME = stringPreferencesKey("theme")
         private val SOUNDS = booleanPreferencesKey("sounds")
         private val LITE_MODE = booleanPreferencesKey("lite_mode")

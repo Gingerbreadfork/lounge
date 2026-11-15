@@ -1,0 +1,60 @@
+package tv.lounge.platform
+
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+
+/** The settings a backup carries, and what a restore will and will not take from one. */
+@RunWith(RobolectricTestRunner::class)
+class PrefsBackupTest {
+    @Test
+    fun a_backup_names_how_the_home_looks_and_a_restore_sets_it_again() = runBlocking {
+        val prefs = Prefs(RuntimeEnvironment.getApplication())
+        val platform = AndroidPlatform(RuntimeEnvironment.getApplication())
+
+        // A TV nobody has changed says each setting's default, with the two it follows the TV on.
+        assertEquals(
+            mapOf(
+                "theme" to "Dusk", "sounds" to "true", "lite_mode" to "auto", "reduced_motion" to "auto",
+                "show_mobile_apps" to "false", "backdrop" to "still", "ambient_style" to "pictures", "all_apps_sort" to "az",
+            ),
+            platform.preferences(),
+        )
+
+        prefs.setOnboardingDone(true)
+        prefs.setCompanionEnabled(true)
+        val backup = mapOf(
+            "theme" to "Opera", "sounds" to "false", "lite_mode" to "true", "reduced_motion" to "false",
+            "show_mobile_apps" to "true", "backdrop" to "silk", "ambient_style" to "plugin:tv.example.scenes:smoke", "all_apps_sort" to "opened",
+        )
+        // What belongs to this TV alone is not a backup's to change, whatever the file says.
+        platform.restorePreferences(backup + mapOf("onboarding_done" to "false", "companion_enabled" to "false", "made_up" to "x"))
+        val restored = prefs.all.first()
+        assertEquals(Prefs.Theme.Opera, restored.theme)
+        assertEquals(false, restored.sounds)
+        assertEquals(true, restored.liteMode)
+        assertEquals(false, restored.reducedMotion)
+        assertEquals(true, restored.showMobileApps)
+        assertEquals("silk", restored.backdrop)
+        assertEquals(Prefs.SORT_OPENED, restored.allAppsSort)
+        assertEquals("plugin:tv.example.scenes:smoke", prefs.ambientStyle.first())
+        assertTrue(restored.onboardingDone && restored.companionEnabled)
+        assertEquals(backup, platform.preferences())
+
+        // A value that is not one of a setting's own is passed over, and so is a setting left out.
+        platform.restorePreferences(mapOf("theme" to "Neon", "sounds" to "loud", "lite_mode" to "sometimes", "backdrop" to " ", "all_apps_sort" to "size"))
+        assertEquals(backup, platform.preferences())
+
+        // Following the TV again is a value like any other.
+        platform.restorePreferences(mapOf("lite_mode" to "auto", "reduced_motion" to "auto"))
+        assertNull(prefs.all.first().liteMode)
+        assertNull(prefs.all.first().reducedMotion)
+        assertEquals("Opera", platform.preferences()["theme"])
+    }
+}

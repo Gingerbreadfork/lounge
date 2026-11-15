@@ -6,6 +6,7 @@ use lounge_companion::{reads_as_sentence, sentence_or, AppRef, CompanionActions,
 use lounge_graph::Layout;
 use lounge_plugins::http::{Fetcher, Reach};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
@@ -168,7 +169,15 @@ struct Backup {
     version: u32,
     layout: Layout,
     plugins: Vec<BackupPlugin>,
+    /// The shell's own settings by name: the theme, the background and the like. A backup made
+    /// before they were kept has none, and restoring it leaves them alone.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    preferences: BTreeMap<String, String>,
 }
+
+/// The most settings a backup may hand the shell, and the longest a name and a value may be.
+const MAX_PREFERENCES: usize = 64;
+const MAX_PREFERENCE_BYTES: usize = 1024;
 
 #[derive(Serialize, Deserialize)]
 struct BackupPlugin {
@@ -347,6 +356,11 @@ impl CompanionActions for CoreActions {
 
     fn export_json(&self) -> String {
         let Ok(inner) = self.inner() else { return "{}".into() };
+        // Asked for before the state is locked: the shell answers in its own time.
+        let preferences = inner.platform.preferences().unwrap_or_else(|e| {
+            tracing::warn!("companion: the TV's own settings are left out of the backup ({e})");
+            Default::default()
+        });
         let state = inner.state.lock();
         let plugins = state
             .plugins
@@ -363,7 +377,8 @@ impl CompanionActions for CoreActions {
                     .collect(),
             })
             .collect();
-        serde_json::to_string_pretty(&Backup { version: 1, layout: state.graph.layout.clone(), plugins }).unwrap_or_else(|_| "{}".into())
+        let backup = Backup { version: 1, layout: state.graph.layout.clone(), plugins, preferences: preferences.into_iter().collect() };
+        serde_json::to_string_pretty(&backup).unwrap_or_else(|_| "{}".into())
     }
 
     fn import_json(&self, json: &str) -> Result<(), String> {
@@ -402,6 +417,19 @@ impl CompanionActions for CoreActions {
             }
         }
         inner.enqueue_job(worker::Job::Rebuild);
+        // The shell knows its own settings and takes only the names and values it recognises.
+        let preferences: std::collections::HashMap<String, String> = backup
+            .preferences
+            .into_iter()
+            .filter(|(name, value)| name.len() <= MAX_PREFERENCE_BYTES && value.len() <= MAX_PREFERENCE_BYTES)
+            .take(MAX_PREFERENCES)
+            .collect();
+        if !preferences.is_empty() {
+            inner.platform.restore_preferences(preferences).map_err(|e| {
+                tracing::warn!("companion: restored settings not saved ({e})");
+                "The layout is restored, but the TV couldn't save its look and sound settings. Check it has free space, then restore again.".to_string()
+            })?;
+        }
         Ok(())
     }
 
@@ -468,6 +496,8 @@ mod tests {
         fn play_stream(&self, _: String, _: String, _: Option<i64>, _: std::collections::HashMap<String, String>, _: bool) -> Result<(), crate::PlatformError> { Ok(()) }
         fn send_key(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
         fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn preferences(&self) -> Result<std::collections::HashMap<String, String>, crate::PlatformError> { Ok(Default::default()) }
+        fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), crate::PlatformError> { Ok(()) }
     }
 
     /// Remembers the keys and controls it is sent, in order.
@@ -492,6 +522,8 @@ mod tests {
             Ok(())
         }
         fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn preferences(&self) -> Result<std::collections::HashMap<String, String>, crate::PlatformError> { Ok(Default::default()) }
+        fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), crate::PlatformError> { Ok(()) }
     }
 
     #[test]
@@ -523,6 +555,62 @@ mod tests {
         let err = actions.search("bear").unwrap_err();
         assert!(err.starts_with("The search is open in Lounge"), "{err}");
         assert_eq!(*platform.0.lock(), ["key home", "control search:bear"]);
+    }
+
+    /// A shell with settings of its own, which remembers what a restore handed it.
+    #[derive(Default)]
+    struct Settings {
+        now: parking_lot::Mutex<std::collections::HashMap<String, String>>,
+        restored: parking_lot::Mutex<Vec<std::collections::HashMap<String, String>>>,
+    }
+
+    impl crate::Platform for Settings {
+        fn launch_app(&self, _: String, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn view_uri(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn switch_input(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn tune(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn control(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn open_app_info(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn media_command(&self, _: String, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn request_permission(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn play_stream(&self, _: String, _: String, _: Option<i64>, _: std::collections::HashMap<String, String>, _: bool) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn send_key(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn preferences(&self) -> Result<std::collections::HashMap<String, String>, crate::PlatformError> {
+            Ok(self.now.lock().clone())
+        }
+        fn restore_preferences(&self, preferences: std::collections::HashMap<String, String>) -> Result<(), crate::PlatformError> {
+            self.restored.lock().push(preferences);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_backup_carries_the_tv_s_own_settings_and_a_restore_hands_them_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let platform = Arc::new(Settings::default());
+        platform.now.lock().extend([("theme".to_string(), "Opera".to_string()), ("sounds".to_string(), "false".to_string())]);
+        let core = crate::Core::open(test_config(dir.path()), platform.clone()).unwrap();
+        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
+
+        let backup = actions.export_json();
+        let read: serde_json::Value = serde_json::from_str(&backup).unwrap();
+        assert_eq!(read["preferences"], serde_json::json!({"sounds": "false", "theme": "Opera"}));
+        actions.import_json(&backup).unwrap();
+        assert_eq!(platform.restored.lock().len(), 1);
+        assert_eq!(platform.restored.lock()[0].get("theme").map(String::as_str), Some("Opera"));
+
+        // A backup from before the settings were kept restores the layout and leaves them alone.
+        let old = r#"{"version":1,"layout":{"hidden":[],"pinned_apps":["tv.a"],"row_order":[],"stage_pins":[]},"plugins":[]}"#;
+        actions.import_json(old).unwrap();
+        assert_eq!(platform.restored.lock().len(), 1);
+        assert_eq!(core.inner.state.lock().graph.layout.pinned_apps, ["tv.a"]);
+
+        // A value too long to be a setting never reaches the shell.
+        let long = format!(r#"{{"version":1,"layout":{{"hidden":[],"pinned_apps":[],"row_order":[],"stage_pins":[]}},"plugins":[],"preferences":{{"theme":"Dusk","backdrop":"{}"}}}}"#, "x".repeat(MAX_PREFERENCE_BYTES + 1));
+        actions.import_json(&long).unwrap();
+        let last = platform.restored.lock().last().cloned().unwrap();
+        assert_eq!(last.keys().collect::<Vec<_>>(), ["theme"]);
     }
 
     #[test]

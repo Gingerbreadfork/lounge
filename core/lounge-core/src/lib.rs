@@ -687,6 +687,10 @@ pub trait Platform: Send + Sync {
     fn send_key(&self, key: String) -> Result<(), PlatformError>;
     /// Text from the companion into the TV's focused field.
     fn type_text(&self, text: String) -> Result<(), PlatformError>;
+    /// The shell's own settings by name, such as the theme and the background, for a backup.
+    fn preferences(&self) -> Result<std::collections::HashMap<String, String>, PlatformError>;
+    /// Sets the settings a backup carried. A name or a value the shell does not know is left as it is.
+    fn restore_preferences(&self, preferences: std::collections::HashMap<String, String>) -> Result<(), PlatformError>;
 }
 
 #[uniffi::export(with_foreign)]

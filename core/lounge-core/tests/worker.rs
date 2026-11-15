@@ -24,6 +24,8 @@ impl Platform for Quiet {
     fn play_stream(&self, _: String, _: String, _: Option<i64>, _: std::collections::HashMap<String, String>, _: bool) -> Result<(), PlatformError> { Ok(()) }
     fn send_key(&self, _: String) -> Result<(), PlatformError> { Ok(()) }
     fn type_text(&self, _: String) -> Result<(), PlatformError> { Ok(()) }
+    fn preferences(&self) -> Result<std::collections::HashMap<String, String>, PlatformError> { Ok(Default::default()) }
+    fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), PlatformError> { Ok(()) }
 }
 
 /// Panics on the first snapshot the worker delivers and keeps the ones after it.

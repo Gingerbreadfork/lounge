@@ -54,6 +54,12 @@ impl Platform for Recorder {
     fn type_text(&self, t: String) -> Result<(), PlatformError> {
         self.note(format!("text {t}"))
     }
+    fn preferences(&self) -> Result<std::collections::HashMap<String, String>, PlatformError> {
+        Ok(Default::default())
+    }
+    fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), PlatformError> {
+        Ok(())
+    }
 }
 
 struct Snapshots(Mutex<Option<HomeSnapshot>>);

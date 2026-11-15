@@ -14,6 +14,7 @@ import android.util.Log
 import java.net.URISyntaxException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.runBlocking
 import tv.lounge.core.Platform
 import tv.lounge.core.PlatformException
 
@@ -43,6 +44,7 @@ sealed interface UiCommand {
  * [PlatformException] so the core can report it.
  */
 class AndroidPlatform(private val context: Context) : Platform {
+    private val prefs by lazy { Prefs(context) }
     private val _commands = MutableSharedFlow<UiCommand>(extraBufferCapacity = 8)
     val commands: SharedFlow<UiCommand> = _commands
 
@@ -275,6 +277,17 @@ class AndroidPlatform(private val context: Context) : Platform {
             }
         }
         throw PlatformException.Failed(if (audio) "No player can open this stream. Install VLC or another player." else "No video player can open this stream. Install VLC or another player.")
+    }
+
+    /** Both are called off the main thread, by the phone's backup and restore. */
+    override fun preferences(): Map<String, String> = runBlocking { prefs.exported() }
+
+    override fun restorePreferences(preferences: Map<String, String>) {
+        try {
+            runBlocking { prefs.restore(preferences) }
+        } catch (e: java.io.IOException) {
+            throw PlatformException.Failed("The TV couldn't save its settings. Check it has free space, then try again.")
+        }
     }
 
     override fun openAppInfo(`package`: String) {

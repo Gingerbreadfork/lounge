@@ -6,7 +6,7 @@
 
   let diag = $state<Diagnostics | null>(null);
   let devices = $state<Device[]>([]);
-  /** A backup chosen to restore, waiting for the person to say it may replace the TV's layout. */
+  /** A backup chosen to restore, waiting for the person to say it may replace the TV's layout and settings. */
   let chosen = $state<File | null>(null);
   let restoring = $state(false);
   let picker = $state<HTMLInputElement>();
@@ -73,18 +73,18 @@
 
   <section class="section">
     <div class="section-head"><h3>Back up</h3></div>
-    <p class="caption">Your layout, hidden items, pins and plugin settings as one JSON file. Passwords and private addresses are not included.</p>
+    <p class="caption">Your layout, hidden items, pins, plugin settings and the TV's theme, background and sounds as one JSON file. Passwords and private addresses are not included.</p>
     <div class="actions">
       <a class="btn" href={api.backupUrl()} download="lounge-backup.json">Download backup</a>
       {#if chosen}
-        <Confirm label={restoring ? 'Restoring…' : `Restore ${chosen.name}`} confirm="Yes, replace the TV's layout" disabled={restoring} onconfirm={restore} />
+        <Confirm label={restoring ? 'Restoring…' : `Restore ${chosen.name}`} confirm="Yes, replace the TV's layout and settings" disabled={restoring} onconfirm={restore} />
         <button class="btn ghost" disabled={restoring} onclick={() => (chosen = null)}>Not now</button>
       {:else}
         <button class="btn" onclick={() => picker?.click()}>Restore from file</button>
       {/if}
       <input type="file" accept="application/json,.json" onchange={choose} hidden bind:this={picker} />
     </div>
-    {#if chosen}<p class="caption" role="status">Restoring replaces the TV's rows, pins and hidden items with the ones in the file.</p>{/if}
+    {#if chosen}<p class="caption" role="status">Restoring replaces the TV's rows, pins and hidden items with the ones in the file, and its theme, background and sounds where the file has them.</p>{/if}
   </section>
 
   <section class="section">
