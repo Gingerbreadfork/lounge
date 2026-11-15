@@ -37,14 +37,18 @@ import tv.lounge.core.WatchNextType
 /**
  * Reads Watch Next, other apps' preview channels and programmes, and TIF channels with their
  * schedule under READ_TV_LISTINGS. Artwork is copied to local files. What ends up on screen is the
- * core's decision.
+ * core's decision. A table is read again when the provider says it changed; the rest is kept
+ * from the read before.
  */
 class TvProviderCollector internal constructor(private val context: Context, private val artwork: TvArtwork) {
     constructor(context: Context) : this(context, CachedTvArtwork(context))
 
     private val resolver = context.contentResolver
-    /** Provider reads are serialized; downloads never hold this mutex. */
+    /** Provider reads are serialized; downloads never hold this mutex. It also guards [kept]. */
     private val collecting = Mutex()
+    private val kept = Listings()
+    /** The tables the provider has said changed since they were last read. */
+    private val changed = java.util.EnumSet.noneOf(Table::class.java)
 
     fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, TvContractCompat.PERMISSION_READ_TV_LISTINGS) == PackageManager.PERMISSION_GRANTED
@@ -55,16 +59,17 @@ class TvProviderCollector internal constructor(private val context: Context, pri
      */
     suspend fun snapshot(nowMs: Long = System.currentTimeMillis(), scheduleHours: Int = 6): List<ProgramRecord> = withContext(Dispatchers.IO) {
         collecting.withLock {
-            val drafts = collect(nowMs, scheduleHours)
+            val drafts = collect(nowMs, scheduleHours, everything = true)
             val paths = cachedPaths(drafts)
             drafts.map { it.toRecord(paths) }
         }
     }
 
     /**
-     * Each request carries the preview channels enabled in Lounge. Metadata and cached art are
-     * published first; four workers then fill in missing artwork and republish in batches. A
-     * late image only ever dresses the latest listings.
+     * Each request carries the preview channels enabled in Lounge, and reads again the tables
+     * [changes] has noted since the last read, or every table when it has noted none. Metadata and
+     * cached art are published first; four workers then fill in missing artwork and republish in
+     * batches. A late image only ever dresses the latest listings.
      */
     fun snapshots(requests: Flow<Set<Long>>): Flow<List<ProgramRecord>> = channelFlow {
         val state = Mutex()
@@ -151,32 +156,75 @@ class TvProviderCollector internal constructor(private val context: Context, pri
     private fun cachedPaths(drafts: List<Draft>): Map<String, String> =
         drafts.flatMap { it.artUris() }.distinct().mapNotNull { uri -> artwork.cached(uri)?.let { uri to it } }.toMap()
 
-    private fun collect(nowMs: Long, scheduleHours: Int): List<Draft> {
-        if (!hasPermission()) return emptyList()
-        val drafts = ArrayList<Draft>()
-        runCatching { drafts += watchNext() }.onFailure { Log.w(TAG, "watch next", it) }
-        val channels = runCatching { channels() }.getOrElse { Log.w(TAG, "channels", it); emptyList() }
-        for (ch in channels) {
-            if (ch.type == TvContractCompat.Channels.TYPE_PREVIEW) {
-                runCatching { drafts += previewPrograms(ch) }.onFailure { Log.w(TAG, "preview ${ch.id}", it) }
-            } else {
-                drafts += ch.toDraft()
-                runCatching { drafts += schedule(ch, nowMs - 3_600_000L, nowMs + scheduleHours * 3_600_000L) }
-                    .onFailure { Log.w(TAG, "schedule ${ch.id}", it) }
+    /**
+     * The listings, reading from the provider only the tables noted as changed, or all of them
+     * when [everything], when none is noted or on the first read. The schedule is also read again
+     * once its window has moved on. A table that fails to read keeps what it held and is read
+     * again next time. Called with [collecting] held.
+     */
+    private fun collect(nowMs: Long, scheduleHours: Int, everything: Boolean = false): List<Draft> {
+        if (!hasPermission()) {
+            kept.clear()
+            return emptyList()
+        }
+        val noted = synchronized(changed) { changed.toSet().also { changed.clear() } }
+        val all = everything || noted.isEmpty() || !kept.read
+        val failed = java.util.EnumSet.noneOf(Table::class.java)
+        fun read(table: Table, block: () -> Unit) {
+            try {
+                block()
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "reading $table", e)
+                failed += table
             }
         }
-        Log.d(TAG, "TV listings: ${drafts.groupingBy { it.kind }.eachCount()}")
+        if (all || Table.WatchNext in noted) read(Table.WatchNext) { kept.watchNext = watchNext() }
+        // The channels decide which previews and which schedule there are.
+        val channels = all || Table.Channels in noted
+        if (channels) read(Table.Channels) { kept.channels = channels() }
+        if (channels || Table.Previews in noted) {
+            // One channel that will not read does not cost the others their programmes.
+            kept.previews = kept.channels.filter { it.isPreview() }.flatMap { ch ->
+                runCatching { previewPrograms(ch) }.onFailure { Log.w(TAG, "preview ${ch.id}", it) }.getOrDefault(emptyList())
+            }
+        }
+        if (channels || Table.Schedule in noted || nowMs - kept.scheduleReadAt > SCHEDULE_KEPT_MS) {
+            read(Table.Schedule) {
+                kept.schedule = schedule(kept.channels.filterNot { it.isPreview() }, nowMs - 3_600_000L, nowMs + scheduleHours * 3_600_000L)
+                kept.scheduleReadAt = nowMs
+            }
+        }
+        kept.read = true
+        if (failed.isNotEmpty()) synchronized(changed) { changed += failed }
+        val drafts = kept.watchNext + kept.previews + kept.channels.filterNot { it.isPreview() }.map { it.toDraft() } + kept.schedule
+        Log.d(TAG, "TV listings: ${drafts.groupingBy { it.kind }.eachCount()}, read ${if (all) "in full" else noted.toString()}")
         return drafts
     }
 
+    private fun Channel.isPreview(): Boolean = type == TvContractCompat.Channels.TYPE_PREVIEW
+
+    /** Notes the table a changed row belongs to; a change that names no row is a change to them all. */
+    internal fun note(uri: Uri?) {
+        val table = when (uri?.pathSegments?.firstOrNull()) {
+            "watch_next_program" -> Table.WatchNext
+            "channel" -> Table.Channels
+            "preview_program" -> Table.Previews
+            "program" -> Table.Schedule
+            else -> null
+        }
+        synchronized(changed) { if (table != null) changed += table else changed += Table.entries }
+    }
+
     /**
-     * Refresh after registering, as well as on changes. The home stops observing while a player
-     * is in front, so each new subscription must catch writes made while it was away. Register
-     * first so a write between the refresh and observer setup cannot be missed.
+     * Emits once on registering and then at each change, noting which table changed so the next
+     * read takes only that one. Collected for as long as the access is granted, in front or not,
+     * so a write made while a player was in front is known on the way back. It registers first so
+     * a write between the refresh and observer setup cannot be missed.
      */
     fun changes(): Flow<Unit> = callbackFlow {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
+                note(uri)
                 trySend(Unit)
             }
         }
@@ -191,6 +239,8 @@ class TvProviderCollector internal constructor(private val context: Context, pri
                 runCatching { resolver.registerContentObserver(uri, true, observer) }
                     .onFailure { Log.w(TAG, "observe $uri", it) }
             }
+            // Nothing was watching until now, so anything may have changed.
+            note(null)
             trySend(Unit)
         }
         awaitClose { runCatching { resolver.unregisterContentObserver(observer) } }
@@ -314,12 +364,37 @@ class TvProviderCollector internal constructor(private val context: Context, pri
         inputId = inputId,
     )
 
-    private fun schedule(ch: Channel, fromMs: Long, toMs: Long): List<Draft> {
+    /**
+     * The schedule of [channels] between [fromMs] and [toMs], in one query for them all. A
+     * provider that will not answer that is asked a channel at a time.
+     */
+    private fun schedule(channels: List<Channel>, fromMs: Long, toMs: Long): List<Draft> {
+        if (channels.isEmpty()) return emptyList()
+        val window = TvContract.Programs.CONTENT_URI.buildUpon()
+            .appendQueryParameter(PARAM_START_TIME, fromMs.toString())
+            .appendQueryParameter(PARAM_END_TIME, toMs.toString())
+            .build()
+        return try {
+            schedule(window, channels.associateBy { it.id }, fromMs, toMs)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "schedule in one query", e)
+            channels.flatMap { ch ->
+                runCatching { schedule(TvContract.buildProgramsUriForChannel(ch.id, fromMs, toMs), mapOf(ch.id to ch), fromMs, toMs) }
+                    .onFailure { Log.w(TAG, "schedule ${ch.id}", it) }
+                    .getOrDefault(emptyList())
+            }
+        }
+    }
+
+    /** The programmes [uri] lists that air on one of [channels] between [fromMs] and [toMs]. */
+    private fun schedule(uri: Uri, channels: Map<Long, Channel>, fromMs: Long, toMs: Long): List<Draft> {
         val out = ArrayList<Draft>()
-        val uri = TvContract.buildProgramsUriForChannel(ch.id, fromMs, toMs)
         resolver.query(uri, Program.PROJECTION, null, null, null)?.use { c ->
             c.readRows(uri) {
                 val p = Program.fromCursor(c)
+                val ch = channels[p.channelId] ?: return@readRows
+                // The provider is asked for this window; one that ignores the request is held to it here.
+                if (p.endTimeUtcMillis < fromMs || p.startTimeUtcMillis > toMs) return@readRows
                 val title = p.title?.takeIf { it.isNotBlank() } ?: return@readRows
                 out += Draft(
                     id = "prog:${p.id}",
@@ -367,6 +442,29 @@ class TvProviderCollector internal constructor(private val context: Context, pri
         TvContractCompat.PreviewPrograms.ASPECT_RATIO_MOVIE_POSTER,
         -> true
         else -> false
+    }
+
+    /** The provider's tables, as far as a change to one means reading it again. */
+    private enum class Table { WatchNext, Channels, Previews, Schedule }
+
+    /** What was last read from each table. */
+    private class Listings {
+        var watchNext: List<Draft> = emptyList()
+        var channels: List<Channel> = emptyList()
+        var previews: List<Draft> = emptyList()
+        var schedule: List<Draft> = emptyList()
+        var scheduleReadAt = 0L
+        /** False until the first read, and again once the access is taken away. */
+        var read = false
+
+        fun clear() {
+            watchNext = emptyList()
+            channels = emptyList()
+            previews = emptyList()
+            schedule = emptyList()
+            scheduleReadAt = 0L
+            read = false
+        }
     }
 
     /** A record before its artwork has been fetched. */
@@ -428,5 +526,10 @@ class TvProviderCollector internal constructor(private val context: Context, pri
 
     private companion object {
         const val TAG = "LoungeTv"
+        /** The provider's query parameters for a window of programmes. */
+        const val PARAM_START_TIME = "start_time"
+        const val PARAM_END_TIME = "end_time"
+        /** How long a schedule is kept before its window is read again. */
+        const val SCHEDULE_KEPT_MS = 15 * 60_000L
     }
 }

@@ -262,11 +262,23 @@ class MainActivity : ComponentActivity() {
                     .conflate().debounce(500).collect { guarded("now playing") { core.ingestSessions(it) } }
             }
         }
+        // The TV provider is watched in front or not, which only notes what changed. The listings
+        // are read once the home is on screen, and then only if something changed or they are old.
+        lifecycleScope.launch {
+            permissions.filterNotNull().map { it.tvListings }.distinctUntilChanged()
+                .flatMapLatest { tvProvider.changes() }
+                .collect { tvChanges.value += 1 }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                permissions.filterNotNull().map { it.tvListings }.distinctUntilChanged()
-                    .flatMapLatest { tvProvider.changes() }
-                    .debounce(1500).collect { collectTvNow() }
+                tvChanges.debounce(1500).collect { change ->
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (change != tvChangeRead || now - tvReadAt > TV_LISTINGS_KEPT_MS) {
+                        tvChangeRead = change
+                        tvReadAt = now
+                        collectTvNow()
+                    }
+                }
             }
         }
         // A core that arrived after Lounge came to the front missed its resume.
@@ -401,6 +413,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private val tvCollects = Channel<Unit>(Channel.CONFLATED)
+    /** Counts the changes the TV provider has reported, and which count the listings were last read at, and when. */
+    private val tvChanges = MutableStateFlow(0L)
+    private var tvChangeRead = -1L
+    private var tvReadAt = 0L
     /** Phone keys for the app in front, sent one at a time so they arrive in the order pressed. */
     private val remoteKeys = Channel<tv.lounge.power.PowerAction>(capacity = 16, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     private val appCollects = Channel<Unit>(Channel.CONFLATED)
@@ -418,6 +434,8 @@ class MainActivity : ComponentActivity() {
         const val COMPANION_PORT = CoreClient.COMPANION_PORT
         /** With less free space than this, the recovery screen says the storage is full. */
         private const val LOW_STORAGE_BYTES = 32L * 1024 * 1024
+        /** Listings older than this are read again when the home comes back, changed or not. */
+        private const val TV_LISTINGS_KEPT_MS = 15 * 60_000L
     }
 
     override fun onResume() {

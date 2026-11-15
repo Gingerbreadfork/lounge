@@ -235,6 +235,86 @@ class TvProviderCollectorTest {
         }
     }
 
+    @Test fun aChangeToOneTableReadsOnlyThatTableAgain() = runBlocking {
+        val asked = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val rows = mutableListOf(row(1))
+        val channels = listOf(
+            arrayOf<Any?>(33L, "com.netflix.ninja", TvContractCompat.Channels.TYPE_PREVIEW, 0, "Recommendations"),
+            arrayOf<Any?>(34L, "org.example.tuner", TvContractCompat.Channels.TYPE_OTHER, 1, "One"),
+        )
+        val collector = fixture(rows, channels, listOf(row(10)), programs = listOf(programme(1, 34)), onQuery = { asked += it.path.orEmpty() })
+        val requests = TestChannel<Set<Long>>(TestChannel.UNLIMITED)
+        val snapshots = collector.snapshots(requests.receiveAsFlow()).produceIn(this)
+        try {
+            requests.send(emptySet())
+            assertEquals(4, snapshots.next().size)
+            assertEquals(setOf("/watch_next_program", "/channel", "/preview_program", "/program"), asked.toSet())
+
+            // A new title in Watch Next: only that table is asked for again, and the rest is kept.
+            asked.clear()
+            rows[0][2] = "Updated title"
+            collector.note(Uri.withAppendedPath(TvContractCompat.WatchNextPrograms.CONTENT_URI, "1"))
+            requests.send(emptySet())
+            val updated = snapshots.next()
+            assertEquals(4, updated.size)
+            assertEquals("Updated title", updated.single { it.kind == ProgramKind.WATCH_NEXT }.title)
+            assertEquals(listOf("/watch_next_program"), asked.toList())
+
+            // A change to the channels reads what hangs off them too, but not Watch Next.
+            asked.clear()
+            channels[0][4] = "Picked for you"
+            collector.note(TvContractCompat.Channels.CONTENT_URI)
+            requests.send(emptySet())
+            assertEquals("Picked for you", snapshots.next().single { it.kind == ProgramKind.PREVIEW }.channelName)
+            assertEquals(setOf("/channel", "/preview_program", "/program"), asked.toSet())
+        } finally {
+            snapshots.cancel()
+        }
+    }
+
+    @Test fun theScheduleOfEveryChannelIsReadInOneQueryAndHeldToItsWindow() = runBlocking {
+        val asked = java.util.Collections.synchronizedList(mutableListOf<Uri>())
+        val now = System.currentTimeMillis()
+        val channels = listOf(
+            arrayOf<Any?>(34L, "org.example.tuner", TvContractCompat.Channels.TYPE_OTHER, 1, "One"),
+            arrayOf<Any?>(35L, "org.example.tuner", TvContractCompat.Channels.TYPE_OTHER, 1, "Two"),
+            arrayOf<Any?>(36L, "org.example.tuner", TvContractCompat.Channels.TYPE_OTHER, 0, "Hidden"),
+        )
+        val programs = listOf(
+            programme(1, 34, start = now - 600_000, end = now + 600_000),
+            programme(2, 35, start = now + 600_000, end = now + 1_200_000),
+            // Long over, on a hidden channel, and on a channel that is not listed.
+            programme(3, 34, start = now - 9 * 3_600_000, end = now - 8 * 3_600_000),
+            programme(4, 36, start = now, end = now + 600_000),
+            programme(5, 99, start = now, end = now + 600_000),
+        )
+        val collector = fixture(emptyList(), channels, programs = programs, onQuery = { asked += it })
+        val schedule = collector.snapshot(now).filter { it.kind == ProgramKind.SCHEDULE }
+        assertEquals(listOf("prog:1" to 34L, "prog:2" to 35L), schedule.map { it.id to it.channelId })
+        assertEquals("One", schedule.first().channelName)
+        val queries = asked.filter { it.path == "/program" }
+        assertEquals(1, queries.size)
+        assertNull(queries.single().getQueryParameter("channel"))
+        assertEquals((now - 3_600_000).toString(), queries.single().getQueryParameter("start_time"))
+    }
+
+    @Test fun aProviderThatWillNotAnswerForEveryChannelIsAskedForEachInTurn() = runBlocking {
+        val asked = java.util.Collections.synchronizedList(mutableListOf<Uri>())
+        val now = System.currentTimeMillis()
+        val channels = listOf(
+            arrayOf<Any?>(34L, "org.example.tuner", TvContractCompat.Channels.TYPE_OTHER, 1, "One"),
+            arrayOf<Any?>(35L, "org.example.tuner", TvContractCompat.Channels.TYPE_OTHER, 1, "Two"),
+        )
+        val programs = listOf(programme(1, 34, start = now, end = now + 600_000), programme(2, 35, start = now, end = now + 600_000))
+        val collector = fixture(emptyList(), channels, programs = programs, onQuery = { uri ->
+            asked += uri
+            if (uri.path == "/program" && uri.getQueryParameter("channel") == null) throw IllegalArgumentException("a channel is needed")
+        })
+        val schedule = collector.snapshot(now).filter { it.kind == ProgramKind.SCHEDULE }
+        assertEquals(listOf("prog:1", "prog:2"), schedule.map { it.id })
+        assertEquals(listOf(null, "34", "35"), asked.filter { it.path == "/program" }.map { it.getQueryParameter("channel") })
+    }
+
     private suspend fun ReceiveChannel<List<ProgramRecord>>.next() = withTimeout(3_000) { receive() }
 
     private class FakeArtwork(private val download: suspend (String) -> String?) : TvArtwork {
@@ -280,15 +360,33 @@ class TvProviderCollectorTest {
         id, "com.netflix.ninja", title, browsable, "episode-1", 0, 30_000, 120_000, 1_000L, "nflx://episode-1", poster,
     )
 
+    /** A schedule entry: id, channel, title, start and end. */
+    private fun programme(id: Long, channel: Long, start: Long = System.currentTimeMillis(), end: Long = System.currentTimeMillis() + 600_000) =
+        arrayOf<Any?>(id, channel, "Programme $id", start, end)
+
+    /**
+     * A collector over a provider that answers from these lists. Schedule queries honour a
+     * `channel` parameter and ignore the window, as a provider that does not know it would.
+     * [onQuery] sees every query first and may throw to refuse one.
+     */
     private fun fixture(
         rows: List<Array<Any?>>,
         channels: List<Array<Any?>> = emptyList(),
         previews: List<Array<Any?>> = emptyList(),
         artwork: TvArtwork? = null,
+        programs: List<Array<Any?>> = emptyList(),
+        onQuery: (Uri) -> Unit = {},
     ): TvProviderCollector {
         val provider = object : ContentProvider() {
             override fun onCreate() = true
             override fun query(uri: Uri, projection: Array<out String>?, selection: String?, args: Array<out String>?, sort: String?): Cursor {
+                onQuery(uri)
+                if (uri.path == TvContractCompat.Programs.CONTENT_URI.path) {
+                    val channel = uri.getQueryParameter("channel")?.toLong()
+                    return MatrixCursor(arrayOf("_id", "channel_id", "title", "start_time_utc_millis", "end_time_utc_millis")).apply {
+                        programs.filter { channel == null || it[1] == channel }.forEach { addRow(it) }
+                    }
+                }
                 if (uri == TvContractCompat.Channels.CONTENT_URI) {
                     return MatrixCursor(arrayOf("_id", "package_name", "type", "browsable", "display_name")).apply {
                         channels.forEach { addRow(it) }
