@@ -55,6 +55,44 @@ pub(crate) enum Job {
     Housekeeping,
 }
 
+/// A mark of the rows each source's stored items were last replaced with. An ingest that brings
+/// the same rows again, as most refreshes do, then leaves the database alone.
+#[derive(Default)]
+pub(crate) struct StoredRows {
+    marks: HashMap<String, blake3::Hash>,
+}
+
+impl StoredRows {
+    /// Replace the stored items of `source` with `rows`, unless the last replace wrote the same.
+    fn replace(&mut self, store: &mut lounge_store::Store, source: &str, rows: &[lounge_store::EncodedItem], now: i64) {
+        let mut hasher = blake3::Hasher::new();
+        for row in rows {
+            for part in [&row.id, &row.kind, &row.json] {
+                hasher.update(&(part.len() as u64).to_le_bytes());
+                hasher.update(part.as_bytes());
+            }
+        }
+        let mark = hasher.finalize();
+        if self.marks.get(source) == Some(&mark) {
+            return;
+        }
+        match store.replace_items_encoded(source, rows, now) {
+            Ok(()) => {
+                self.marks.insert(source.to_string(), mark);
+            }
+            Err(e) => {
+                self.marks.remove(source);
+                tracing::error!("could not store {source}: {e}");
+            }
+        }
+    }
+
+    /// The stored items of `source` were changed some other way, so its next replace is written.
+    pub(crate) fn forget(&mut self, source: &str) {
+        self.marks.remove(source);
+    }
+}
+
 /// Ingests whose pictures did not all fit in one pass. Each pass prepares the next few of each,
 /// writes just the items they dress, and queues the next, so layout commands and other ingests
 /// never wait for long.
@@ -539,6 +577,7 @@ fn write_dressed(inner: &Inner, source: &str, items: &[&(String, ItemArt)], resu
         state.store.upsert_items_encoded(source, &rows, now_ms())
     });
     stored(source, written);
+    state.stored_rows.forget(source);
     for it in kept.into_iter().chain(loose) {
         if state.graph.get(&it.id).is_some() {
             state.graph.upsert(it);
@@ -628,8 +667,8 @@ fn ingest_apps(inner: &Inner, apps: Vec<AppRecord>) -> Result<(), lounge_store::
     let rows = lounge_store::encode_items(&items)?;
     {
         let mut state = inner.state.lock();
-        let now = now_ms();
-        stored("apps", state.store.replace_items_encoded("apps", &rows, now));
+        let state = &mut *state;
+        state.stored_rows.replace(&mut state.store, "apps", &rows, now_ms());
         state.graph.replace_source("apps", items);
         match state.store.load_usage() {
             Ok(usage) => {
@@ -794,7 +833,8 @@ fn ingest_programs(inner: &Inner, programs: Vec<ProgramRecord>) -> Result<(), lo
     let rows = lounge_store::encode_items(&persisted)?;
     {
         let mut state = inner.state.lock();
-        stored("TV listings", state.store.replace_items_encoded("tvprovider", &rows, now));
+        let state = &mut *state;
+        state.stored_rows.replace(&mut state.store, "tvprovider", &rows, now);
         state.graph.replace_source("tvprovider", items);
         state.last_previews = programs.into_iter().filter(|p| p.kind == ProgramKind::Preview).collect();
     }
@@ -950,7 +990,8 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         if !enabled(&state) {
             return Ok(());
         }
-        stored(&source, state.store.replace_items_encoded(&source, &rows, now));
+        let state = &mut *state;
+        state.stored_rows.replace(&mut state.store, &source, &rows, now);
         state.graph.replace_source(&source, items);
     }
     defer(inner, &source, done.backlog(&source, dressed, dress_content, |_| true));

@@ -1214,6 +1214,7 @@ impl Inner {
         {
             let mut state = self.state.lock();
             let _ = state.store.plugin_remove(id);
+            state.stored_rows.forget(&format!("plugin:{id}"));
             screensavers::clear(&state.store, id);
             set_held_back(&state.store, id, &[]);
             state.graph.replace_source(&format!("plugin:{id}"), Vec::new());
@@ -1253,6 +1254,7 @@ impl Inner {
             } else {
                 self.plugins.forget_ask(id);
                 let _ = state.store.replace_items(&format!("plugin:{id}"), &[], now_ms());
+                state.stored_rows.forget(&format!("plugin:{id}"));
                 screensavers::clear(&state.store, id);
                 state.graph.replace_source(&format!("plugin:{id}"), Vec::new());
             }

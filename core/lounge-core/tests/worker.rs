@@ -475,3 +475,28 @@ fn a_preview_channel_switched_on_gets_its_pictures_and_the_rest_stays() {
     let live = snapshot.rows.iter().find(|r| r.id == "live").expect("the tuner's channel");
     assert_eq!(live.tiles.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["prog:1"]);
 }
+
+#[test]
+fn an_ingest_that_brings_the_same_rows_again_leaves_the_database_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = Core::open(config(dir.path()), Arc::new(Quiet)).unwrap();
+    let apps = vec![app("one.tv"), app("two.tv")];
+    core.ingest_apps(apps.clone());
+    wait_for("the apps", || core.snapshot().all_apps.len() == 2);
+    let db = rusqlite::Connection::open(dir.path().join("data").join("lounge.db")).unwrap();
+    let written = |id: &str| -> i64 { db.query_row("SELECT updated_ms FROM items WHERE id = ?1", [id], |r| r.get(0)).unwrap() };
+    let first = written("app:one.tv");
+
+    let ingested = core.diagnostics().last_ingest_ms;
+    std::thread::sleep(Duration::from_millis(20));
+    core.ingest_apps(apps.clone());
+    wait_for("the second ingest", || core.diagnostics().last_ingest_ms > ingested && core.diagnostics().queue_depth == 0);
+    assert_eq!(written("app:one.tv"), first, "the same rows were written a second time");
+
+    // A list that differs anywhere is written whole.
+    let mut renamed = apps;
+    renamed[1].label = "Two again".into();
+    core.ingest_apps(renamed);
+    wait_for("the new name", || core.snapshot().all_apps.iter().any(|t| t.title == "Two again"));
+    assert!(written("app:one.tv") > first);
+}

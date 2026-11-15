@@ -1292,6 +1292,7 @@ mod tests {
             pending_art: Default::default(),
             last_previews: Vec::new(),
             clock_24h: false,
+            stored_rows: Default::default(),
         }
     }
 

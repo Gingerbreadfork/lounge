@@ -759,6 +759,8 @@ pub(crate) struct State {
     pub last_previews: Vec<ProgramRecord>,
     /// Whether the TV shows a 24-hour clock, so the Stage writes times as the clock does.
     pub clock_24h: bool,
+    /// What each source's stored rows were last replaced with, so the same rows are not written again.
+    pub stored_rows: worker::StoredRows,
 }
 
 #[derive(uniffi::Object)]
@@ -822,6 +824,7 @@ impl Core {
                 pending_art: Default::default(),
                 last_previews: Vec::new(),
                 clock_24h: false,
+                stored_rows: Default::default(),
             }),
             snapshot: RwLock::new(snapshot),
             snapshot_json: Mutex::new(String::new()),
