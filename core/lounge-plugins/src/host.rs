@@ -120,10 +120,13 @@ pub struct LoadedPlugin {
     pub id: String,
     pub manifest: Manifest,
     module: Module,
+    /// The module's own engine. An engine keeps what it compiled until it is dropped, so each
+    /// plugin has one and letting the plugin go frees all of it.
+    engine: Engine,
 }
 
 pub struct Host {
-    engine: Engine,
+    config: Config,
     services: Arc<dyn Services>,
     limits: Limits,
 }
@@ -156,7 +159,7 @@ impl Host {
         // A function is compiled on its first call. Fuel charged for compiling, landing on a nearly
         // spent slice, ends the call where it cannot resume, so compiling is free and running is not.
         config.fuel_cost(wasmi::CustomFuelCosts { bytes_copied_per_fuel: 64, fuel_per_bytes_translated: 0, fuel_per_bytes_validated: 0 });
-        Host { engine: Engine::new(&config), services, limits }
+        Host { config, services, limits }
     }
 
     /// The sizes a call's memory and tables may reach, with tables held to `table_elements`.
@@ -176,13 +179,14 @@ impl Host {
             self.services.log(id, api::LOG_ERROR, &format!("Loading the module failed: {cause}"));
             PluginError::Wasm { said: format!("{} can't run on this version of Lounge. Ask its publisher for a version that can.", named(&manifest.name)), cause }
         };
-        let module = Module::new(&self.engine, wasm).map_err(|e| unrunnable(e.to_string()))?;
+        let engine = Engine::new(&self.config);
+        let module = Module::new(&engine, wasm).map_err(|e| unrunnable(e.to_string()))?;
         for required in [exports::MEMORY, exports::ALLOC, exports::FREE, exports::MANIFEST, exports::REFRESH] {
             if module.get_export(required).is_none() {
                 return Err(unrunnable(format!("module does not export {required}")));
             }
         }
-        Ok(LoadedPlugin { id: id.to_string(), manifest, module })
+        Ok(LoadedPlugin { id: id.to_string(), manifest, module, engine })
     }
 
     /// The manifest the module itself reports, for cross-checking with `manifest.json`. It runs
@@ -287,11 +291,11 @@ impl Host {
             fuel_reserve: self.limits.fuel - first_slice,
             in_alloc: false,
         };
-        let mut store = Store::new(&self.engine, state);
+        let mut store = Store::new(&plugin.engine, state);
         store.limiter(|s| &mut s.limits);
         store.set_fuel(first_slice).map_err(|e| e.to_string())?;
 
-        let mut linker = Linker::<State>::new(&self.engine);
+        let mut linker = Linker::<State>::new(&plugin.engine);
         link_host_functions(&mut linker).map_err(|e| e.to_string())?;
         let instance = linker.instantiate_and_start(&mut store, &plugin.module).map_err(|e| trap_cause(&e))?;
         // A `table.grow` that runs out of fuel resumes from the wrong instruction, so once the
