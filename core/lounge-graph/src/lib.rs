@@ -301,7 +301,8 @@ impl Layout {
 
 #[derive(Clone, Debug, Default)]
 pub struct Graph {
-    items: HashMap<String, Item>,
+    /// Each item is boxed: the map keeps room for more entries than it holds, and an item is large.
+    items: HashMap<String, Box<Item>>,
     pub layout: Layout,
 }
 
@@ -323,23 +324,23 @@ impl Graph {
     }
 
     pub fn get(&self, id: &str) -> Option<&Item> {
-        self.items.get(id)
+        self.items.get(id).map(|it| &**it)
     }
 
     pub fn items(&self) -> impl Iterator<Item = &Item> {
-        self.items.values()
+        self.items.values().map(|it| &**it)
     }
 
     /// Replace every item from `source` with `items`, keeping items from other sources.
     pub fn replace_source(&mut self, source: &str, items: Vec<Item>) {
         self.items.retain(|_, it| it.source != source);
         for it in items {
-            self.items.insert(it.id.clone(), it);
+            self.items.insert(it.id.clone(), Box::new(it));
         }
     }
 
     pub fn upsert(&mut self, item: Item) {
-        self.items.insert(item.id.clone(), item);
+        self.items.insert(item.id.clone(), Box::new(item));
     }
 
     pub fn remove(&mut self, id: &str) {
@@ -430,15 +431,13 @@ impl Graph {
     pub fn your_apps(&self) -> Vec<&Item> {
         let mut out: Vec<&Item> = Vec::new();
         for p in &self.layout.pinned_apps {
-            if let Some(it) = self.items.get(&format!("app:{p}")) {
+            if let Some(it) = self.get(&format!("app:{p}")) {
                 if !self.is_hidden(&it.id) {
                     out.push(it);
                 }
             }
         }
-        let mut rest: Vec<&Item> = self
-            .items
-            .values()
+        let mut rest: Vec<&Item> = self.items()
             .filter(|it| it.kind == ItemKind::App && !it.flags.is_game)
             .filter(|it| !self.is_hidden(&it.id))
             .filter(|it| !out.iter().any(|o| o.id == it.id))
@@ -458,9 +457,7 @@ impl Graph {
     }
 
     pub fn all_apps(&self) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self
-            .items
-            .values()
+        let mut v: Vec<&Item> = self.items()
             .filter(|it| it.kind == ItemKind::App)
             .filter(|it| !self.is_hidden(&it.id))
             .collect();
@@ -471,15 +468,13 @@ impl Graph {
     /// Every app A to Z, hidden ones too: the All apps screen and search keep them, so the way to
     /// an app is never lost by hiding it from the rows.
     pub fn every_app(&self) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self.items.values().filter(|it| it.kind == ItemKind::App).collect();
+        let mut v: Vec<&Item> = self.items().filter(|it| it.kind == ItemKind::App).collect();
         v.sort_by_cached_key(|it| it.title.to_lowercase());
         v
     }
 
     pub fn games(&self) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self
-            .items
-            .values()
+        let mut v: Vec<&Item> = self.items()
             .filter(|it| (it.kind == ItemKind::Game || it.flags.is_game) && !self.is_hidden(&it.id))
             .collect();
         rank::by_recency_then_title(&mut v);
@@ -490,7 +485,7 @@ impl Graph {
     /// titles it brings and one of them.
     pub fn continue_providers(&self) -> Vec<(&str, usize, &Item)> {
         let mut by_provider: HashMap<&str, (usize, &Item)> = HashMap::new();
-        for it in self.items.values().filter(|it| it.continues() && !self.is_hidden(&it.id)) {
+        for it in self.items().filter(|it| it.continues() && !self.is_hidden(&it.id)) {
             if let Some(provider) = it.provider() {
                 by_provider.entry(provider).or_insert((0, it)).0 += 1;
             }
@@ -501,9 +496,7 @@ impl Graph {
     /// Resume points and Watch Next entries, newest first, one per title, without those from
     /// apps and plugins the user left out.
     pub fn continue_watching(&self) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self
-            .items
-            .values()
+        let mut v: Vec<&Item> = self.items()
             .filter(|it| it.continues() && !self.is_hidden(&it.id) && !self.is_muted(it))
             .collect();
         rank::by_recency_then_title(&mut v);
@@ -513,9 +506,7 @@ impl Graph {
 
     /// Tuner channels (anything that is not a preview channel), by number then name.
     pub fn channels(&self) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self
-            .items
-            .values()
+        let mut v: Vec<&Item> = self.items()
             .filter(|it| it.kind == ItemKind::Channel && !self.is_hidden(&it.id))
             .collect();
         v.sort_by(|a, b| {
@@ -543,7 +534,7 @@ impl Graph {
     /// entries overlap, the one that started last wins, the same one every rebuild.
     pub fn airing_index(&self, now_ms: i64) -> HashMap<i64, &Item> {
         let mut out: HashMap<i64, &Item> = HashMap::new();
-        for it in self.items.values() {
+        for it in self.items() {
             if it.kind != ItemKind::Program {
                 continue;
             }
@@ -561,7 +552,7 @@ impl Graph {
     /// Schedule entries for every channel in `[from_ms, to_ms)`, in airing order, in one pass.
     pub fn schedule_index(&self, from_ms: i64, to_ms: i64) -> HashMap<i64, Vec<&Item>> {
         let mut out: HashMap<i64, Vec<&Item>> = HashMap::new();
-        for it in self.items.values() {
+        for it in self.items() {
             if it.kind != ItemKind::Program || it.flags.watch_next {
                 continue;
             }
@@ -578,8 +569,7 @@ impl Graph {
 
     /// The next moment after `now_ms` when a programme starts or ends.
     pub fn next_airing_change(&self, now_ms: i64) -> Option<i64> {
-        self.items
-            .values()
+        self.items()
             .filter(|it| it.kind == ItemKind::Program)
             .flat_map(|it| [it.airing_start_ms, it.airing_end_ms])
             .flatten()
@@ -589,15 +579,13 @@ impl Graph {
 
     /// The channel a schedule entry belongs to.
     pub fn channel_for(&self, channel_id: i64) -> Option<&Item> {
-        self.items.values().find(|it| it.kind == ItemKind::Channel && it.channel_id == Some(channel_id))
+        self.items().find(|it| it.kind == ItemKind::Channel && it.channel_id == Some(channel_id))
     }
 
     /// Items a plugin published into one of its rows, by weight then recency.
     pub fn plugin_row(&self, plugin: &str, row: &str) -> Vec<&Item> {
         let source = format!("plugin:{plugin}");
-        let mut v: Vec<&Item> = self
-            .items
-            .values()
+        let mut v: Vec<&Item> = self.items()
             .filter(|it| it.source == source && it.row.as_deref() == Some(row) && !self.is_hidden(&it.id))
             .collect();
         v.sort_by(|a, b| b.weight.cmp(&a.weight).then_with(|| b.added_ms.cmp(&a.added_ms)).then_with(|| a.title.cmp(&b.title)));
@@ -607,7 +595,7 @@ impl Graph {
     /// Pictures plugins published for the screensaver, each source's by weight then recency, the
     /// sources taking turns so one with many pictures cannot crowd out the rest.
     pub fn wallpapers(&self) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self.items.values().filter(|it| it.kind == ItemKind::Wallpaper && !self.is_hidden(&it.id)).collect();
+        let mut v: Vec<&Item> = self.items().filter(|it| it.kind == ItemKind::Wallpaper && !self.is_hidden(&it.id)).collect();
         v.sort_by(|a, b| b.weight.cmp(&a.weight).then_with(|| b.added_ms.cmp(&a.added_ms)).then_with(|| a.id.cmp(&b.id)));
         let mut by_source: std::collections::BTreeMap<&str, std::collections::VecDeque<&Item>> = Default::default();
         for it in v {
@@ -621,13 +609,13 @@ impl Graph {
     }
 
     pub fn count_source(&self, source: &str) -> usize {
-        self.items.values().filter(|it| it.source == source).count()
+        self.items().filter(|it| it.source == source).count()
     }
 
     /// Preview programmes grouped by channel: (channel id, channel name, programmes by weight).
     pub fn preview_channels(&self) -> Vec<(i64, String, Vec<&Item>)> {
         let mut by_channel: HashMap<i64, (String, Vec<&Item>)> = HashMap::new();
-        for it in self.items.values() {
+        for it in self.items() {
             if it.kind != ItemKind::Program || it.flags.watch_next || it.airing_start_ms.is_some() {
                 continue;
             }
@@ -651,9 +639,7 @@ impl Graph {
 
     /// Inputs and devices: connected first (weight), then as the collector ordered them.
     pub fn devices(&self) -> Vec<&Item> {
-        let mut v: Vec<&Item> = self
-            .items
-            .values()
+        let mut v: Vec<&Item> = self.items()
             .filter(|it| matches!(it.kind, ItemKind::Input | ItemKind::Device) && !self.is_hidden(&it.id))
             .collect();
         v.sort_by(|a, b| b.weight.cmp(&a.weight).then_with(|| a.title.cmp(&b.title)));
@@ -669,7 +655,7 @@ impl Graph {
             if out.len() >= cap {
                 break;
             }
-            if let Some(it) = self.items.get(id) {
+            if let Some(it) = self.get(id) {
                 if !self.is_hidden(&it.id) {
                     out.push(it);
                 }
@@ -698,9 +684,7 @@ impl Graph {
         let free = cap.saturating_sub(out.len());
         out.extend(passed_over.into_iter().take(free));
         if out.len() < cap {
-            let mut recent: Vec<&Item> = self
-                .items
-                .values()
+            let mut recent: Vec<&Item> = self.items()
                 .filter(|it| it.kind == ItemKind::App && it.last_used_ms.is_some() && !self.is_hidden(&it.id))
                 .collect();
             rank::by_recency_then_title(&mut recent);
@@ -717,7 +701,7 @@ impl Graph {
         // open on something: the pinned apps, then banner apps by name, whatever Your apps shows.
         if out.len() < cap {
             let mut fallback: Vec<&Item> = self.your_apps();
-            let mut named: Vec<&Item> = self.items.values().filter(|it| it.kind == ItemKind::App && it.flags.has_banner && !it.flags.is_game && !self.is_hidden(&it.id)).collect();
+            let mut named: Vec<&Item> = self.items().filter(|it| it.kind == ItemKind::App && it.flags.has_banner && !it.flags.is_game && !self.is_hidden(&it.id)).collect();
             named.sort_by_cached_key(|it| it.title.to_lowercase());
             fallback.extend(named);
             for it in fallback {
