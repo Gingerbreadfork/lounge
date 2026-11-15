@@ -136,11 +136,19 @@ class ArtworkFetcher(
         }
     }
 
-    private fun sha1(s: String): String =
-        MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun sha1(s: String): String {
+        val digest = MessageDigest.getInstance("SHA-1").digest(s.toByteArray())
+        val hex = CharArray(digest.size * 2)
+        digest.forEachIndexed { i, b ->
+            hex[i * 2] = HEX[(b.toInt() shr 4) and 0xF]
+            hex[i * 2 + 1] = HEX[b.toInt() and 0xF]
+        }
+        return String(hex)
+    }
 
     private companion object {
         const val TAG = "LoungeArt"
+        const val HEX = "0123456789abcdef"
         /** The most the artwork pipeline will decode. */
         const val MAX_BYTES = 12L * 1024 * 1024
         const val DEADLINE_MS = 30_000L
