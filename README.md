@@ -55,7 +55,7 @@ One list from every app that publishes Watch Next, the TV's own listings and you
 <td width="33%" valign="top">
 <img src="docs/icons/theme.svg" width="28" height="28" alt=""><br>
 <b>Lit by the artwork</b><br>
-The focused tile's colour spills onto the wall behind it. Ten themes, including Blackout and High contrast.
+The focused tile's colour spills onto the wall behind it. Fourteen themes, including Blackout and High contrast.
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/phone.svg" width="28" height="28" alt=""><br>
@@ -72,7 +72,7 @@ Channels from the tuner and from plugins, with a programme guide.
 <td width="33%" valign="top">
 <img src="docs/icons/frame.svg" width="28" height="28" alt=""><br>
 <b>Screensaver</b><br>
-Your artwork or nine abstract scenes, which can also play behind the home screen.
+Your artwork or thirteen abstract scenes, which can also play behind the home screen.
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/plugin.svg" width="28" height="28" alt=""><br>
@@ -135,8 +135,8 @@ card with play, pause and skip.
 
 **Search.** One box for apps, what you've been watching and whatever the plugins can find.
 
-**Screensaver.** Artwork from the Stage and the rows with a slow push-in, or one of nine abstract
-scenes drawn on the GPU in your theme's colours. Plugins can add scenes
+**Screensaver.** Artwork from the Stage and the rows with a slow push-in, or one of thirteen
+abstract scenes drawn on the GPU in your theme's colours. Plugins can add scenes
 ([PLUGINS.md](PLUGINS.md#screensavers)), and any scene can also run behind the home screen,
 dimmed so the tiles stay the brightest thing in the room.
 
@@ -238,11 +238,11 @@ open a pull request that adds yours under `plugins/` once it passes the
 
 The idea is a dim living room at night with one bright thing in it. The backdrop is dark and the
 focused tile is the lamp: its artwork's colour spills onto the wall around it, and after a
-minute without the remote the lights go down. Ten themes change the walls and the lamp and
+minute without the remote the lights go down. Fourteen themes change the walls and the lamp and
 nothing else.
 
 <p align="center">
-  <img src="docs/screenshots/themes.png" width="920" alt="The ten themes, each shown as the home screen with the Settings sheet open">
+  <img src="docs/screenshots/themes.png" width="920" alt="Ten of the fourteen themes, each shown as the home screen with the Settings sheet open">
 </p>
 
 The type is Bricolage Grotesque and Figtree, both bundled. Reduced motion follows the system
@@ -250,7 +250,7 @@ setting or your own, and Lite mode turns off the shader and the colour spill for
 struggles with them. The whole design system is written down in [DESIGN.md](DESIGN.md).
 
 <p align="center">
-  <img src="docs/screenshots/onboarding.png" width="49%" alt="The first setup screen: ten themes in a grid with a live preview of the home screen beside them">
+  <img src="docs/screenshots/onboarding.png" width="49%" alt="The first setup screen: themes in a grid with a live preview of the home screen beside them">
   <img src="docs/screenshots/settings.png" width="49%" alt="The Settings sheet over the home screen">
 </p>
 
@@ -316,7 +316,7 @@ ranking into the Stage and the rows, a SQLite store, and an artwork pipeline tha
 picture once and writes every size the screen needs. Plugins run in
 [wasmi](https://github.com/wasmi-labs/wasmi) inside that core. The companion is an
 [axum](https://github.com/tokio-rs/axum) server in the same process, with the Svelte 5 app
-embedded at build time, about 30 KB gzipped.
+embedded at build time, about 140 KB, or 48 KB gzipped.
 
 The APK is 24 MB. On a Google TV Streamer the release build is on screen in about a second
 from a cold start, sits a little over 100 MB, and keeps the main thread under 5 ms on nine
@@ -376,12 +376,12 @@ the `profile` build. The scripts compile the installed build the way a real inst
 frame times mean something.
 
 ```
-android/     Gradle project: app, core/{bindings,design,platform}, collector/*, feature/home, power
-core/        Rust workspace: lounge-core (UniFFI), -graph, -store, -artwork, -plugins, -companion
+android/     Gradle project: app, core/{bindings,design,platform}, collector/*, feature/home, power, update
+core/        Rust workspace: lounge-core (UniFFI), -graph, -store, -artwork, -plugins, -plugin-api, -companion
 plugins/     Rust workspace: the plugin SDK, the built-in plugins, lgp-tool
 companion/   Svelte 5 phone app, embedded into the core at build time
 design/      fonts, the mark's sources and renderer, the sound renderer
-docs/        the pictures in this file, and how to release
+docs/        the pictures in this file, how to release, and TV listings troubleshooting
 tools/       device drives, frame timing, the baseline profile, builds, the README's icons
 workdir/     ignored by git: your own notes, logs and measurements
 ```
