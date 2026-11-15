@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -52,6 +53,8 @@ class Prefs(private val context: Context) {
         val backdrop: String = STILL_BACKDROP,
         /** How the All apps screen is sorted: "az", "opened" or "installed". */
         val allAppsSort: String = SORT_AZ,
+        /** Whether apps' notifications are read and shown in the top bar. */
+        val notifications: Boolean = true,
         /** False only for the placeholder used before the store has been read. */
         val loaded: Boolean = false,
     )
@@ -68,6 +71,7 @@ class Prefs(private val context: Context) {
             companionEnabled = p[COMPANION_ENABLED] ?: false,
             backdrop = p[BACKDROP] ?: STILL_BACKDROP,
             allAppsSort = p[ALL_APPS_SORT] ?: SORT_AZ,
+            notifications = p[NOTIFICATIONS] ?: true,
             loaded = true,
         )
     }
@@ -82,6 +86,27 @@ class Prefs(private val context: Context) {
     val showMobileApps: Flow<Boolean> = data.map { it[SHOW_MOBILE_APPS] ?: false }
 
     val companionEnabled: Flow<Boolean> = data.map { it[COMPANION_ENABLED] ?: false }
+
+    /** How the home treats apps' notifications. */
+    data class NotificationPrefs(
+        val shown: Boolean = true,
+        /** Packages whose notifications are left out. */
+        val hiddenApps: Set<String> = emptySet(),
+        /** When the panel was last looked at; a notification posted later is new. */
+        val seenAt: Long = 0L,
+    )
+
+    val notifications: Flow<NotificationPrefs> = data.map { p ->
+        NotificationPrefs(p[NOTIFICATIONS] ?: true, p[NOTIFICATIONS_HIDDEN] ?: emptySet(), p[NOTIFICATIONS_SEEN_AT] ?: 0L)
+    }
+    suspend fun setNotifications(on: Boolean) { context.dataStore.edit { it[NOTIFICATIONS] = on } }
+    suspend fun setNotificationsHidden(packageName: String, hidden: Boolean) {
+        context.dataStore.edit { p ->
+            val now = p[NOTIFICATIONS_HIDDEN] ?: emptySet()
+            p[NOTIFICATIONS_HIDDEN] = if (hidden) now + packageName else now - packageName
+        }
+    }
+    suspend fun setNotificationsSeenAt(at: Long) { context.dataStore.edit { it[NOTIFICATIONS_SEEN_AT] = at } }
 
     /** The system screensaver component that was set before Lounge took over, to give back. */
     val previousScreensaver: Flow<String?> = data.map { it[PREVIOUS_SCREENSAVER] }
@@ -129,6 +154,8 @@ class Prefs(private val context: Context) {
             BACKDROP.name to (p[BACKDROP] ?: STILL_BACKDROP),
             AMBIENT_STYLE.name to (p[AMBIENT_STYLE] ?: PICTURES),
             ALL_APPS_SORT.name to (p[ALL_APPS_SORT] ?: SORT_AZ),
+            NOTIFICATIONS.name to (p[NOTIFICATIONS] ?: true).toString(),
+            NOTIFICATIONS_HIDDEN.name to (p[NOTIFICATIONS_HIDDEN] ?: emptySet()).sorted().joinToString(","),
         )
     }
 
@@ -141,6 +168,11 @@ class Prefs(private val context: Context) {
             values[THEME.name]?.takeIf { name -> Theme.entries.any { it.name == name } }?.let { p[THEME] = it }
             values[SOUNDS.name]?.toBooleanStrictOrNull()?.let { p[SOUNDS] = it }
             values[SHOW_MOBILE_APPS.name]?.toBooleanStrictOrNull()?.let { p[SHOW_MOBILE_APPS] = it }
+            values[NOTIFICATIONS.name]?.toBooleanStrictOrNull()?.let { p[NOTIFICATIONS] = it }
+            values[NOTIFICATIONS_HIDDEN.name]?.let { list ->
+                val apps = list.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                if (apps.size <= MAX_HIDDEN_APPS && apps.all { PACKAGE_NAME.matches(it) }) p[NOTIFICATIONS_HIDDEN] = apps.toSet()
+            }
             for (key in listOf(LITE_MODE, REDUCED_MOTION)) {
                 val value = values[key.name] ?: continue
                 if (value == AUTOMATIC) p.remove(key) else value.toBooleanStrictOrNull()?.let { p[key] = it }
@@ -162,6 +194,8 @@ class Prefs(private val context: Context) {
         private const val PICTURES = "pictures"
         /** The longest id a background or screensaver style has. */
         private const val MAX_STYLE_ID = 200
+        private const val MAX_HIDDEN_APPS = 200
+        private val PACKAGE_NAME = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)*")
         private val THEME = stringPreferencesKey("theme")
         private val SOUNDS = booleanPreferencesKey("sounds")
         private val LITE_MODE = booleanPreferencesKey("lite_mode")
@@ -176,5 +210,8 @@ class Prefs(private val context: Context) {
         private val AMBIENT_STYLE = stringPreferencesKey("ambient_style")
         private val BACKDROP = stringPreferencesKey("backdrop")
         private val ALL_APPS_SORT = stringPreferencesKey("all_apps_sort")
+        private val NOTIFICATIONS = booleanPreferencesKey("notifications")
+        private val NOTIFICATIONS_HIDDEN = stringSetPreferencesKey("notifications_hidden")
+        private val NOTIFICATIONS_SEEN_AT = longPreferencesKey("notifications_seen_at")
     }
 }
