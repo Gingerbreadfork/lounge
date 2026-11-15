@@ -16,6 +16,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -24,12 +25,14 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import tv.lounge.design.LoungeTheme
+import tv.lounge.platform.AppNotification
 
 /** The top bar keeps focus at its ends (DESIGN.md §5.3) and hands Down to what is below it. */
 @OptIn(ExperimentalTestApi::class)
@@ -40,6 +43,10 @@ class TopBarFocusTest {
     private val focus = TopBarFocus()
     private val below = FocusRequester()
     private var searches = 0
+    private val notices = MutableStateFlow(NotificationsShown())
+    private var opened = 0
+
+    private fun notice(key: String) = AppNotification(key, "tv.shop", "Shop", "Title $key", "", postedAt = 0, dismissible = true, opens = true)
 
     /**
      * The top bar with focusable boxes where the playbill's button and the strip's last tile sit:
@@ -55,6 +62,7 @@ class TopBarFocusTest {
                         showTvControls = true,
                         showGuide = true,
                         nowPlaying = null,
+                        notifications = notices,
                         focus = focus,
                         downFocus = { below },
                         onFocused = {},
@@ -62,6 +70,7 @@ class TopBarFocusTest {
                         onTvControls = {},
                         onGuide = {},
                         onNowPlaying = {},
+                        onNotifications = { opened++ },
                         onSettings = {},
                     )
                 }
@@ -101,6 +110,36 @@ class TopBarFocusTest {
         press(Key.DirectionRight)
         press(Key.DirectionRight)
         assertFocusedButton("Settings")
+        press(Key.DirectionLeft)
+        assertFocusedButton("TV controls")
+    }
+
+    @Test
+    fun theNotificationsChipSitsBeforeSettingsWhileThereIsSomethingToRead() {
+        showTopBar()
+        rule.runOnIdle { focus.settings.requestFocus() }
+        press(Key.DirectionLeft)
+        assertFocusedButton("TV controls")
+
+        notices.value = NotificationsShown(listOf(notice("a"), notice("b")), fresh = 1)
+        rule.waitForIdle()
+        press(Key.DirectionRight)
+        rule.onNode(isFocused()).assert(hasContentDescription("2 notifications, 1 new"))
+        press(Key.DirectionCenter)
+        rule.runOnIdle { assertEquals(1, opened) }
+        // Settings is still the end of the bar.
+        press(Key.DirectionRight)
+        assertFocusedButton("Settings")
+        press(Key.DirectionRight)
+        assertFocusedButton("Settings")
+
+        // Once they have been seen the chip says how many and no more, and it leaves with the last.
+        notices.value = NotificationsShown(listOf(notice("a")), fresh = 0)
+        rule.waitForIdle()
+        rule.onNode(hasContentDescription("1 notification")).assertExists()
+        notices.value = NotificationsShown()
+        rule.waitForIdle()
+        rule.onNode(hasContentDescription("1 notification")).assertDoesNotExist()
         press(Key.DirectionLeft)
         assertFocusedButton("TV controls")
     }

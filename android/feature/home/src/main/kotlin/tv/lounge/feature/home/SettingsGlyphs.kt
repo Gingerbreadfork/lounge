@@ -33,6 +33,31 @@ internal object SettingsGlyphs {
         path(fill = SolidColor(Color.White), stroke = null, pathBuilder = d)
     }
 
+    /** An arrow leaving a frame: goes to the app. */
+    val Open: ImageVector by lazy {
+        icon("open") {
+            stroke { moveTo(12f, 6f); lineTo(7.5f, 6f); arcTo(2.5f, 2.5f, 0f, false, false, 5f, 8.5f); lineTo(5f, 20.5f); arcTo(2.5f, 2.5f, 0f, false, false, 7.5f, 23f); lineTo(19.5f, 23f); arcTo(2.5f, 2.5f, 0f, false, false, 22f, 20.5f); lineTo(22f, 16f) }
+            stroke { moveTo(16.5f, 5f); lineTo(23f, 5f); lineTo(23f, 11.5f) }
+            stroke { moveTo(23f, 5f); lineTo(13.5f, 14.5f) }
+        }
+    }
+
+    /** An arrow: one of a notification's own buttons. */
+    val Act: ImageVector by lazy {
+        icon("act") {
+            stroke { moveTo(5f, 14f); lineTo(22.5f, 14f) }
+            stroke { moveTo(16f, 7.5f); lineTo(22.5f, 14f); lineTo(16f, 20.5f) }
+        }
+    }
+
+    /** A cross: puts a notification away. */
+    val Dismiss: ImageVector by lazy {
+        icon("dismiss") {
+            stroke { moveTo(7f, 7f); lineTo(21f, 21f) }
+            stroke { moveTo(21f, 7f); lineTo(7f, 21f) }
+        }
+    }
+
     /** A house: the default home screen. */
     val Home: ImageVector by lazy {
         icon("home") {

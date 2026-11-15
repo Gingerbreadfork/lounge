@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import tv.lounge.collector.inputs.InputsCollector
 import tv.lounge.collector.media.MediaSessionsCollector
+import tv.lounge.collector.media.NotificationFeed
 import tv.lounge.collector.tvprovider.TvProviderCollector
 import tv.lounge.core.Permissions
 import tv.lounge.platform.UiCommand
@@ -141,7 +142,7 @@ class MainActivity : ComponentActivity() {
                 visuals = visuals,
             ) {
                 CompositionLocalProvider(LocalUiSounds provides soundsState.value) {
-                    HomeScreen(core = core, platform = platform, prefs = prefs, uiPrefs = uiPrefs, power = power, updates = updates)
+                    HomeScreen(core = core, platform = platform, prefs = prefs, uiPrefs = uiPrefs, power = power, updates = updates, notifications = NotificationFeed)
                 }
             }
         }
@@ -177,6 +178,10 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             apps.packageChanges().collectLatest { collectAppsNow() }
+        }
+        // Notifications are read only while the setting is on, and let go of when it is turned off.
+        lifecycleScope.launch {
+            prefs.notifications.map { it.shown }.distinctUntilChanged().collect { NotificationFeed.reading = it }
         }
         // Phone apps come and go as soon as the setting changes, on the TV or from a restored backup.
         lifecycleScope.launch {

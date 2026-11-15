@@ -266,6 +266,15 @@ object LoungeIcons {
         }
     }
 
+    /** A bell: what apps want to tell the person. */
+    val Bell: ImageVector by lazy {
+        icon("bell") {
+            stroke { moveTo(4.5f, 21f); curveTo(6.2f, 19.5f, 7.5f, 17.5f, 7.5f, 14.5f); lineTo(7.5f, 12.5f); arcTo(6.5f, 6.5f, 0f, false, true, 20.5f, 12.5f); lineTo(20.5f, 14.5f); curveTo(20.5f, 17.5f, 21.8f, 19.5f, 23.5f, 21f); close() }
+            stroke { moveTo(11.4f, 24.3f); arcTo(2.7f, 2.7f, 0f, false, false, 16.6f, 24.3f) }
+            stroke { moveTo(14f, 3.2f); lineTo(14f, 6f) }
+        }
+    }
+
     val Trash: ImageVector by lazy {
         icon("trash") {
             stroke { moveTo(4f, 7f); lineTo(24f, 7f) }

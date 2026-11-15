@@ -133,6 +133,11 @@ sound to a soundbar, changes the volume or turns everything off.
 **Now playing.** Music or a podcast playing in the background gets a chip in the top bar and a
 card with play, pause and skip.
 
+**Notifications.** What your apps want to tell you, such as an update, a finished download or
+storage running low, is counted in the top bar and a press away: read it in full, open it, use
+its buttons or dismiss it. An app that nags can be hidden. Lounge reads notifications only to
+show them on the TV, keeps none of them and sends none anywhere, and Settings turns it off.
+
 **Search.** One box for apps, what you've been watching and whatever the plugins can find.
 
 **Screensaver.** Artwork from the Stage and the rows with a slow push-in, or one of thirteen

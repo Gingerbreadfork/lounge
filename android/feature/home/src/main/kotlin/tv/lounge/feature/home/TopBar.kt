@@ -29,6 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -76,13 +82,15 @@ import java.time.LocalTime
 
 /**
  * Top bar (DESIGN.md §5.1): the mark on the left; Search, TV controls, Settings and the clock on
- * the right. Left off Search and Right off Settings nudge the button instead of leaving the bar.
+ * the right, with what is playing and what apps have posted between them while there is either.
+ * Left off Search and Right off Settings nudge the button instead of leaving the bar.
  */
 @Composable
 fun TopBar(
     showTvControls: Boolean,
     showGuide: Boolean,
     nowPlaying: NowPlaying?,
+    notifications: StateFlow<NotificationsShown>,
     focus: TopBarFocus,
     downFocus: () -> FocusRequester,
     onFocused: () -> Unit,
@@ -90,10 +98,13 @@ fun TopBar(
     onTvControls: () -> Unit,
     onGuide: () -> Unit,
     onNowPlaying: () -> Unit,
+    onNotifications: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val motion = LoungeTheme.motion
+    // Read here, so a notification coming or going recomposes the bar and not the home.
+    val notices by notifications.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val nudgePx = with(LocalDensity.current) { 6.dp.toPx() }
     Row(
@@ -125,6 +136,18 @@ fun TopBar(
             if (showGuide) TopBarButton(LoungeIcons.Guide, "TV guide", onGuide, focus, focus.guide)
             if (showTvControls) TopBarButton(LoungeIcons.Tv, "TV controls", onTvControls, focus, focus.tvControls)
             if (nowPlaying != null) NowPlayingChip(nowPlaying, onNowPlaying, focus, Modifier.weight(1f, fill = false))
+            if (notices.list.isNotEmpty()) {
+                TopBarButton(
+                    icon = LoungeIcons.Bell,
+                    label = NotificationWords.count(notices.list.size),
+                    onClick = onNotifications,
+                    focus = focus,
+                    requester = focus.notifications,
+                    marked = notices.fresh > 0,
+                    counts = true,
+                    description = NotificationWords.spoken(notices.list.size, notices.fresh),
+                )
+            }
             TopBarButton(LoungeIcons.Settings, "Settings", onSettings, focus, focus.settings)
             Spacer(Modifier.width(12.dp))
             Clock()
@@ -160,10 +183,20 @@ private const val SEAT = 0.85f
 /**
  * A top-bar button: glyph and label. Focus is a `curtainEdge` pill behind it with the tiles' rim,
  * the glyph in houselight, the full glow and a 1.04 scale, all read while drawing; the label does
- * not move.
+ * not move. [marked] puts a `houselight` dot on the glyph's shoulder for something not yet seen,
+ * and a label that [counts] swaps with a short rise when its number changes.
  */
 @Composable
-private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, focus: TopBarFocus, requester: FocusRequester) {
+private fun TopBarButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    focus: TopBarFocus,
+    requester: FocusRequester,
+    marked: Boolean = false,
+    counts: Boolean = false,
+    description: String? = null,
+) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
@@ -194,16 +227,42 @@ private fun TopBarButton(icon: ImageVector, label: String, onClick: () -> Unit, 
             }
             .tilePress(onClick, onClick)
             .focusable()
-            .semantics { role = Role.Button }
+            .semantics(mergeDescendants = description != null) {
+                role = Role.Button
+                if (description != null) contentDescription = description
+            }
             .height(48.dp)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = if (focused) colors.houselight else colors.dust, modifier = Modifier.size(28.dp))
-        Text(label, style = LoungeTheme.typography.meta, color = if (focused) colors.limelight else colors.dust)
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (focused) colors.houselight else colors.dust,
+            modifier = Modifier.size(28.dp).then(if (marked) Modifier.unseenDot(colors.houselight) else Modifier),
+        )
+        val labelColor = if (focused) colors.limelight else colors.dust
+        if (counts) {
+            Swap(label, rise = 6.dp, durationMs = 180) { text -> Text(text, style = LoungeTheme.typography.meta, color = labelColor, maxLines = 1) }
+        } else {
+            Text(label, style = LoungeTheme.typography.meta, color = labelColor)
+        }
     }
 }
+
+/**
+ * A 10 dp dot on a glyph's upper right, with the glyph cut away around it so the dot reads on
+ * any ground.
+ */
+private fun Modifier.unseenDot(color: Color): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val centre = Offset(size.width - 5.5.dp.toPx(), 5.5.dp.toPx())
+        drawCircle(Color.Black, radius = 7.dp.toPx(), center = centre, blendMode = BlendMode.Clear)
+        drawCircle(color, radius = 5.dp.toPx(), center = centre)
+    }
 
 /**
  * What is playing, as a top-bar entry: three bars that move while sound is on, the title in `meta`,

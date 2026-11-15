@@ -35,6 +35,21 @@ class FocusRulesTest {
     }
 
     @Test
+    fun theNotificationsPanelLeavesWithItsLastNotification() {
+        val page = Overlay.NotificationDetail("b")
+        assertEquals(PanelChange.Stay, panelAfter(Overlay.Notifications, listOf("a")))
+        assertEquals(PanelChange.Stay, panelAfter(page, listOf("a", "b")))
+        // The one on show has gone and others remain: back to the list.
+        assertEquals(PanelChange.ToList, panelAfter(page, listOf("a")))
+        assertEquals(PanelChange.Close, panelAfter(page, emptyList()))
+        assertEquals(PanelChange.Close, panelAfter(Overlay.Notifications, emptyList()))
+        // Nothing else is moved by a notification coming or going.
+        assertEquals(PanelChange.Stay, panelAfter(Overlay.None, emptyList()))
+        assertEquals(PanelChange.Stay, panelAfter(Overlay.NotificationSettings, emptyList()))
+        assertEquals(PanelChange.Stay, panelAfter(Overlay.QuickSettings, emptyList()))
+    }
+
+    @Test
     fun aHiddenTileHandsFocusToItsNeighbour() {
         val a = testTile("a")
         val b = testTile("b")

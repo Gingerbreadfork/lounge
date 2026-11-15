@@ -16,7 +16,9 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -195,6 +197,9 @@ val LocalSheetBack = staticCompositionLocalOf { SheetBack() }
 /** No limit on a sheet row's second line. */
 internal const val WHOLE = Int.MAX_VALUE
 
+/** The width a sheet row leaves its words beside a glyph and with no value: the sheet less its edge, its padding and the row's own. */
+internal val SheetRowWordsWidth: Dp = Dimens.sheetWidth - 1.dp - 96.dp - 40.dp - 28.dp - 16.dp
+
 /**
  * A 72 dp sheet row: glyph, title, optional trailing value. Focus is a lifted `curtainEdge` surface
  * with a glow and the tiles' rim, and a rested row paints nothing. An [accent] of `signal`,
@@ -212,7 +217,7 @@ fun SheetRow(
     height: Dp = 72.dp,
     /** Left and Right change the value through this, and the focused row shows chevrons. */
     onCycle: ((Int) -> Unit)? = null,
-    leading: (@Composable () -> Unit)? = null,
+    leading: (@Composable RowScope.() -> Unit)? = null,
     /** A second line under the title, for rows that must stay narrow; the row grows past [height] when large text needs it. */
     subtitle: String? = null,
     /** Holding OK, where a row has a second action; a plain press otherwise. */
@@ -221,6 +226,8 @@ fun SheetRow(
     subtitleLines: Int = 2,
     /** `ember` for the second step of something that cannot be undone. */
     titleColor: Color = LoungeTheme.colors.limelight,
+    /** Lines of the row's own under the title, where a subtitle is not enough; the row grows for them. */
+    lines: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -273,10 +280,11 @@ fun SheetRow(
     ) {
         if (leading != null) leading()
         if (icon != null) Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(28.dp))
-        if (subtitle != null) {
-            Column(Modifier.weight(1f).padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (subtitle != null || lines != null) {
+            Column(Modifier.weight(1f).padding(vertical = if (lines != null) 12.dp else 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = LoungeTheme.typography.title, color = titleColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(subtitle, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis)
+                if (subtitle != null) Text(subtitle, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis)
+                if (lines != null) lines()
             }
         } else {
             // A long title wraps to a second line and the row grows, rather than losing its end.
@@ -386,6 +394,8 @@ fun QuickSettingsSheet(
     backdrops: List<ShaderStyle> = emptyList(),
     liveBackdrops: Boolean = true,
     onSetBackdrop: (String) -> Unit = {},
+    notificationsOn: Boolean = true,
+    onNotifications: () -> Unit = {},
 ) {
     val colors = LoungeTheme.colors
     val sounds0 = LoungeTheme.sounds
@@ -399,7 +409,7 @@ fun QuickSettingsSheet(
     var saverName by remember { mutableStateOf(screensaver()) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { saverName = screensaver() }
     // Back from one of its pages puts focus on the row that opened it.
-    val pages = listOf(Overlay.Rows, Overlay.Channels, Overlay.Plugins, Overlay.Companion, Overlay.Ambient, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding)
+    val pages = listOf(Overlay.Rows, Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding)
     val returnTo = cameFrom?.takeIf { it in pages }
     fun focusFor(page: Overlay?) = firstFocus.takeIf { page == returnTo }
 
@@ -448,6 +458,16 @@ fun QuickSettingsSheet(
             value = if (enabledPlugins == 0) "None on" else "$enabledPlugins on",
             onClick = onPlugins,
             focusRequester = focusFor(Overlay.Plugins),
+        )
+        val notificationsAllowed = access.isOn(Access.NowPlaying)
+        SheetRow(
+            icon = LoungeIcons.Bell,
+            title = "Notifications",
+            subtitle = "What apps want to tell you",
+            value = if (!notificationsAllowed) "Not allowed" else if (notificationsOn) "On" else "Off",
+            accent = if (notificationsAllowed && notificationsOn) colors.signal else colors.dust,
+            onClick = onNotifications,
+            focusRequester = focusFor(Overlay.NotificationSettings),
         )
         Spacer(Modifier.height(16.dp))
         Hairline(Modifier.fillMaxWidth())
@@ -582,7 +602,7 @@ fun QuickSettingsSheet(
 /** One of Lounge's optional accesses, as Settings and the setup steps name it. */
 internal enum class Access(val key: String, val title: String, val what: String) {
     TvListings("tv_listings", "TV listings", "Continue watching, channels and the TV guide"),
-    NowPlaying("notifications", "Now playing", "What is playing, with play and pause"),
+    NowPlaying("notifications", "Notification access", "What is playing, and what apps want to tell you"),
     Usage("usage", "Usage access", "Lets Your apps follow what you open"),
 }
 

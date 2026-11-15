@@ -278,7 +278,7 @@ class PowerSetup(private val context: Context) {
 
     val homeRole = PowerAction("home", "Make Lounge the home screen", "Pressing Home brings Lounge up; the TV's own home screen stays installed.", homeCommand(home, userId))
     val tvListings = PowerAction("tv_listings", "Allow TV listings", "Lets Lounge see what you were watching, channels and the TV guide.", grantCommand(context.packageName, "android.permission.READ_TV_LISTINGS", userId))
-    val notificationAccess = PowerAction("notifications", "Allow Now playing", "Lets Lounge see what is playing and control it.", "cmd notification allow_listener ${context.packageName}/tv.lounge.collector.media.NowPlayingListener")
+    val notificationAccess = PowerAction("notifications", "Allow notification access", "Lets Lounge see what is playing, control it, and show what apps want to tell you.", "cmd notification allow_listener ${context.packageName}/tv.lounge.collector.media.NowPlayingListener")
     val usageAccess = PowerAction("usage", "Allow usage access", "Lets Your apps follow what you open.", "appops set ${context.packageName} GET_USAGE_STATS allow")
     val quickAnimations = PowerAction("animations", "Faster system animations", "Halves the TV's own animations, so its menus and apps open quicker.", "settings put global window_animation_scale 0.5; settings put global transition_animation_scale 0.5; settings put global animator_duration_scale 0.5")
     val normalAnimations = PowerAction("animations_reset", "Normal system animations", "Puts the TV's own animations back to their usual length.", "settings put global window_animation_scale 1.0; settings put global transition_animation_scale 1.0; settings put global animator_duration_scale 1.0")

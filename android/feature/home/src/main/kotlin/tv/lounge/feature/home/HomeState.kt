@@ -27,6 +27,12 @@ sealed interface Overlay {
     /** Every app, A to Z, with an alphabet to jump by. */
     data object AllApps : Overlay
     data object NowPlaying : Overlay
+    /** What apps on the TV have posted, newest first. */
+    data object Notifications : Overlay
+    /** One notification in full, with what can be done with it. */
+    data class NotificationDetail(val key: String) : Overlay
+    /** Whether notifications show, and the apps left out of them. */
+    data object NotificationSettings : Overlay
     data object Channels : Overlay
     /** The row editor: which rows show and in what order, and what is hidden. */
     data object Rows : Overlay
@@ -53,6 +59,7 @@ class TopBarFocus {
     val guide = FocusRequester()
     val tvControls = FocusRequester()
     val nowPlaying = FocusRequester()
+    val notifications = FocusRequester()
     val settings = FocusRequester()
     /** The button that last had focus; not read by composition. */
     var last: FocusRequester = search
@@ -96,6 +103,9 @@ class HomeState(private val tierA: Boolean = true) {
 
     /** The sheet Back last left, so the sheet under it can focus the row that opened it. */
     var sheetLeft: Overlay? = null
+
+    /** The place in the list of the notification last opened, for when it is gone on the way back; not read by composition. */
+    var notificationIndex = 0
 
     /** Whether the setup steps on show were opened from Settings, and so end back there; not read by composition. */
     var setupFromSettings = false

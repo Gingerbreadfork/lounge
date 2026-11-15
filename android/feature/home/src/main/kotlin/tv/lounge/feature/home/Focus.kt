@@ -328,6 +328,22 @@ internal fun homeBack(region: FocusRegion, playbillFocused: Boolean): HomeBack =
     FocusRegion.Stage -> if (playbillFocused) HomeBack.ToStrip else HomeBack.Stay
 }
 
+/** What the notifications panel does when the list changes under it. */
+enum class PanelChange {
+    Stay,
+    /** Nothing is left to show: the panel closes. */
+    Close,
+    /** The notification on show has gone and others remain: back to the list. */
+    ToList,
+}
+
+internal fun panelAfter(open: Overlay, keys: Collection<String>): PanelChange = when {
+    open != Overlay.Notifications && open !is Overlay.NotificationDetail -> PanelChange.Stay
+    keys.isEmpty() -> PanelChange.Close
+    open is Overlay.NotificationDetail && open.key !in keys -> PanelChange.ToList
+    else -> PanelChange.Stay
+}
+
 /** Where focus goes when the rows change under a focused tile, as when it is hidden from its menu. */
 sealed interface RowFocus {
     /** Still in its row, now at [index]. */

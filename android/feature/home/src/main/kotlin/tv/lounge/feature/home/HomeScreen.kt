@@ -60,9 +60,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tv.lounge.core.CoreClient
@@ -81,6 +87,8 @@ import tv.lounge.design.RoomLights
 import tv.lounge.design.ToastController
 import tv.lounge.design.sounds
 import tv.lounge.platform.AndroidPlatform
+import tv.lounge.platform.NoNotifications
+import tv.lounge.platform.NotificationSource
 import tv.lounge.platform.Prefs
 import tv.lounge.platform.UiCommand
 import kotlin.math.roundToInt
@@ -98,9 +106,23 @@ private var lampLit = false
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPrefs: Prefs.UiPrefs, power: tv.lounge.power.PowerSetup, updates: tv.lounge.update.UpdateManager) {
+fun HomeScreen(
+    core: CoreClient,
+    platform: AndroidPlatform,
+    prefs: Prefs,
+    uiPrefs: Prefs.UiPrefs,
+    power: tv.lounge.power.PowerSetup,
+    updates: tv.lounge.update.UpdateManager,
+    notifications: NotificationSource = NoNotifications,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // What the top bar and the panel show of the TV's notifications. Held as a flow, so one
+    // coming or going recomposes those two and not the home.
+    val notices = remember(notifications, prefs) {
+        combine(notifications.posted, prefs.notifications) { posted, p -> shownNotifications(posted, p) }
+            .stateIn(scope, SharingStarted.Eagerly, NotificationsShown())
+    }
     val powerStatus by power.status.collectAsStateWithLifecycle()
     val snapshot by core.snapshots.collectAsStateWithLifecycle()
     val tierA = LoungeTheme.visuals.tierA
@@ -231,13 +253,17 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
         }
     }
 
+    /** Whether [button] is a top-bar chip that has left with what it showed. */
+    fun chipGone(button: FocusRequester?): Boolean =
+        (button === state.topBar.nowPlaying && snapshot.nowPlaying == null) ||
+            (button === state.topBar.notifications && notices.value.list.isEmpty())
+
     /** Focus back on the home where it was, or as near as the current rows allow. */
     suspend fun focusHome() {
         when (state.region) {
             FocusRegion.TopBar -> {
-                // The Now Playing chip leaves with its session; Settings sits where it was.
-                val chipGone = state.topBar.last === state.topBar.nowPlaying && snapshot.nowPlaying == null
-                val last = if (chipGone) state.topBar.settings else state.topBar.last
+                // A chip leaves with what it showed; Settings sits where it was.
+                val last = if (chipGone(state.topBar.last)) state.topBar.settings else state.topBar.last
                 if (!last.requestWhenReady(6)) state.topBarFocus.requestWhenReady()
             }
             FocusRegion.Stage -> if (!(state.playbillFocused && state.playbillFocus.requestWhenReady(6))) state.focusStrip()
@@ -277,7 +303,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
     /** Closes whatever is open and hands focus back to what opened it (DESIGN.md §6.4). */
     fun closeOverlay(sound: Boolean = true) {
         if (sound) close()
-        val back = state.opener?.takeUnless { it === state.topBar.nowPlaying && snapshot.nowPlaying == null }
+        val back = state.opener?.takeUnless { chipGone(it) }
         clearOverlays()
         scope.launch { if (back == null || !back.requestWhenReady(6)) focusHome() }
     }
@@ -439,7 +465,35 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 if (strip.any { it.id == id }) return@LaunchedEffect
                 state.stripRequester(state.stageIndex.coerceIn(0, strip.lastIndex)).requestWhenReady()
             }
-            FocusRegion.TopBar -> if (state.topBar.last === state.topBar.nowPlaying && snapshot.nowPlaying == null) focusHome()
+            FocusRegion.TopBar -> if (chipGone(state.topBar.last)) focusHome()
+        }
+    }
+
+    // The panel leaves with the last notification, a page whose notification has gone gives way
+    // to the list, and focus left on the chip moves along the bar.
+    LaunchedEffect(notices) {
+        notices.collect { now ->
+            val open = state.overlay
+            when (panelAfter(open, now.list.map { it.key })) {
+                PanelChange.Close -> closeOverlay(sound = false)
+                PanelChange.ToList -> {
+                    state.sheetTrail.removeLastOrNull()
+                    state.sheetLeft = open
+                    state.overlay = Overlay.Notifications
+                }
+                PanelChange.Stay -> if (open == Overlay.None && state.region == FocusRegion.TopBar && chipGone(state.topBar.last)) focusHome()
+            }
+        }
+    }
+    // What is listed when the panel opens, and whatever arrives while it is open, has been seen.
+    val panelOpen = overlay == Overlay.Notifications || overlay is Overlay.NotificationDetail
+    LaunchedEffect(panelOpen) {
+        if (!panelOpen) return@LaunchedEffect
+        prefs.setNotificationsSeenAt(System.currentTimeMillis())
+        try {
+            awaitCancellation()
+        } finally {
+            withContext(NonCancellable) { prefs.setNotificationsSeenAt(System.currentTimeMillis()) }
         }
     }
 
@@ -538,6 +592,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 showTvControls = power.hasTvControls,
                 showGuide = (snapshot.rows + snapshot.hiddenRows).any { it.id == "live" },
                 nowPlaying = nowPlaying,
+                notifications = notices,
                 focus = state.topBar,
                 downFocus = { state.stripFocus() },
                 onFocused = { state.region = FocusRegion.TopBar; light.clear() },
@@ -545,6 +600,7 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                 onTvControls = { uiSounds?.open(); openOverlay(Overlay.TvControls) },
                 onGuide = { uiSounds?.open(); openOverlay(Overlay.Guide) },
                 onNowPlaying = { uiSounds?.open(); openOverlay(Overlay.NowPlaying) },
+                onNotifications = { uiSounds?.open(); openOverlay(Overlay.Notifications) },
                 onSettings = { uiSounds?.open(); openOverlay(Overlay.QuickSettings) },
                 modifier = Modifier.graphicsLayer { alpha = roomAlpha.value },
             )
@@ -684,6 +740,10 @@ fun HomeScreen(core: CoreClient, platform: AndroidPlatform, prefs: Prefs, uiPref
                             openSheet(next)
                         },
                         forget = { gone -> state.sheetTrail.removeAll { it == gone } },
+                        notices = notices,
+                        notifications = notifications,
+                        notificationIndex = { state.notificationIndex },
+                        onNotificationIndex = { state.notificationIndex = it },
                     )
                 }
             }
@@ -885,13 +945,14 @@ private data class TopInsetShape(val top: Float) : androidx.compose.ui.graphics.
 private fun Overlay.isSheet(): Boolean = when (this) {
     Overlay.QuickSettings, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels, Overlay.Rows,
     Overlay.Plugins, is Overlay.PluginDetail, Overlay.HomeRole, Overlay.Companion, Overlay.Updates,
+    Overlay.Notifications, is Overlay.NotificationDetail, Overlay.NotificationSettings,
     -> true
     else -> false
 }
 
 /** How deep a sheet sits, for the direction of the content shift between sheets. */
 private fun Overlay.sheetDepth(): Int = when (this) {
-    Overlay.QuickSettings, Overlay.TvControls -> 0
+    Overlay.QuickSettings, Overlay.TvControls, Overlay.Notifications -> 0
     is Overlay.PluginDetail, Overlay.PowerSetup -> 2
     else -> 1
 }
@@ -921,7 +982,7 @@ internal fun friendlyReason(e: Throwable, reason: String, title: String): String
             "Nothing on this TV can open $title. Is its app still installed?"
         "not installed" in m -> "$title isn't installed on this TV. Install it from the Play Store, then try again."
         "no video player" in m -> "Nothing on this TV can play $title. Install VLC or another video player, then try again."
-        "notification access" in m -> "Lounge can't reach what's playing yet. In Settings, turn on Now playing."
+        "notification access" in m -> "Lounge can't reach what's playing yet. In Settings, allow Notification access."
         "not playing" in m -> "That app has stopped playing. Open it to start something again."
         "did not answer" in m || "didn't answer" in m -> "$title's source didn't answer. Check that it is running, then try again."
         "busy" in m -> "The TV is busy. Try again in a moment."
@@ -975,6 +1036,11 @@ private fun SheetContent(
     open: (Overlay) -> Unit,
     /** Takes a sheet that no longer has anything to show out of the way back. */
     forget: (Overlay) -> Unit,
+    notices: StateFlow<NotificationsShown>,
+    notifications: NotificationSource,
+    /** The place in the list of the notification last opened. */
+    notificationIndex: () -> Int,
+    onNotificationIndex: (Int) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1038,6 +1104,74 @@ private fun SheetContent(
                 backdrops = backdrops,
                 liveBackdrops = liveBackdrops,
                 onSetBackdrop = { id -> scope.launch { prefs.setBackdrop(id) } },
+                notificationsOn = uiPrefs.notifications,
+                onNotifications = { open(Overlay.NotificationSettings) },
+            )
+        }
+        Overlay.Notifications -> {
+            val shown by notices.collectAsStateWithLifecycle()
+            val icons = appIconPaths(core)
+            NotificationsSheet(
+                shown = shown,
+                iconPath = { icons[it] },
+                returnTo = (cameFrom as? Overlay.NotificationDetail)?.key,
+                lastIndex = notificationIndex(),
+                onRead = { at, n ->
+                    onNotificationIndex(at)
+                    open(Overlay.NotificationDetail(n.key))
+                },
+                onDismissAll = {
+                    val keys = shown.list.filter { it.dismissible }.map { it.key }
+                    // With none left the panel closes, so the word that they went is said here.
+                    if (keys.size == shown.list.size) say("Notifications dismissed")
+                    notifications.dismiss(keys)
+                },
+                firstFocus = first,
+            )
+        }
+        is Overlay.NotificationDetail -> {
+            val shown by notices.collectAsStateWithLifecycle()
+            NotificationDetailSheet(
+                notification = shown.list.firstOrNull { it.key == overlay.key },
+                onOpen = { n -> if (!notifications.open(n.key)) say(NotificationWords.TAKEN_BACK) },
+                onPress = { n, action -> if (!notifications.press(n.key, action.index)) say(NotificationWords.TAKEN_BACK) },
+                onDismiss = { n ->
+                    if (shown.list.size == 1) say("Dismissed")
+                    notifications.dismiss(listOf(n.key))
+                },
+                onHideApp = { n ->
+                    scope.launch { prefs.setNotificationsHidden(n.packageName, true) }
+                    say("Notifications from ${n.app} hidden. Settings, Notifications brings them back")
+                },
+                firstFocus = first,
+            )
+        }
+        Overlay.NotificationSettings -> {
+            val noticePrefs by prefs.notifications.collectAsStateWithLifecycle(Prefs.NotificationPrefs())
+            val access = rememberAccessAsker(
+                requestDialog = { name -> scope.launch { withContext(Dispatchers.IO) { core.perform("permission:$name") } } },
+                say = say,
+                onPowerSetup = { open(Overlay.PowerSetup) },
+            )
+            val icons = appIconPaths(core)
+            // An app's name is read from Android, off the main thread; one since removed keeps its package's name.
+            val hidden by produceState(emptyList<HiddenApp>(), noticePrefs.hiddenApps) {
+                value = withContext(Dispatchers.IO) {
+                    val pm = context.packageManager
+                    noticePrefs.hiddenApps
+                        .map { pkg -> HiddenApp(pkg, runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)) }
+                        .sortedBy { it.name.lowercase() }
+                }
+            }
+            NotificationSettingsSheet(
+                on = noticePrefs.shown,
+                allowed = access.isOn(Access.NowPlaying),
+                hidden = hidden,
+                iconPath = { icons[it] },
+                onSet = { on -> scope.launch { prefs.setNotifications(on) } },
+                onAllow = { access.ask(Access.NowPlaying) },
+                onShow = { app -> scope.launch { prefs.setNotificationsHidden(app.packageName, false) } },
+                firstFocus = first,
             )
         }
         Overlay.Updates -> UpdatesSheet(updates = updates, firstFocus = first)
@@ -1169,6 +1303,13 @@ private fun SheetContent(
         )
         else -> Unit
     }
+}
+
+/** Each installed app's icon as the home keeps it, by package. */
+@Composable
+private fun appIconPaths(core: CoreClient): Map<String, String> {
+    val snapshot by core.snapshots.collectAsStateWithLifecycle()
+    return remember(snapshot.allApps) { snapshot.allApps.mapNotNull { t -> t.iconPath?.let { t.id.removePrefix("app:") to it } }.toMap() }
 }
 
 /**
