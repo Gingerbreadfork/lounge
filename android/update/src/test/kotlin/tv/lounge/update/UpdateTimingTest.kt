@@ -15,8 +15,15 @@ class UpdateTimingTest {
         assertFalse(UpdateManager.checkDue(now, now - 11 * hour, online = true))
         // A sleeping TV has no network: nothing is tried, so nothing is recorded as failed.
         assertFalse(UpdateManager.checkDue(now, now - 13 * hour, online = false))
-        assertFalse(UpdateManager.checkDue(now, 0, online = false))
+        assertFalse(UpdateManager.checkDue(now, now - 35 * hour, online = false))
         assertTrue(UpdateManager.checkDue(now, 0, online = true))
+    }
+
+    @Test
+    fun aLookLongOverdueIsTakenWhateverAndroidSaysOfTheNetwork() {
+        // A TV that wrongly reports no network would otherwise never find an update again.
+        assertTrue(UpdateManager.checkDue(now, now - 37 * hour, online = false))
+        assertTrue(UpdateManager.checkDue(now, 0, online = false))
     }
 
     @Test

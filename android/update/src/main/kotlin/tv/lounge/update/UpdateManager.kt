@@ -249,6 +249,8 @@ class UpdateManager(
     }
 
     private suspend fun passLocked() {
+        // Set once a look in this pass got an answer, which shows there is a network whatever Android says.
+        var reached = false
         repeat(3) {
             if (!_autoCheck.value) return
             val s = _state.value
@@ -266,10 +268,14 @@ class UpdateManager(
                 }
                 s is UpdateState.Checking || s is UpdateState.Downloading -> return
                 // Due checks run from every resting state, so a newer release replaces one still waiting.
-                checkDue(now, lastAttemptMs, online) -> work.withLock { checkLocked(quiet = s.isWaiting()) }
+                checkDue(now, lastAttemptMs, online) -> {
+                    val answeredBefore = lastCheckedMs
+                    work.withLock { checkLocked(quiet = s.isWaiting()) }
+                    reached = lastCheckedMs != answeredBefore
+                }
                 s is UpdateState.Failed && s.release != null && failures.gaveUpOn(s.release.tag) -> return
                 s is UpdateState.Failed && retryDue(now, s.atMs, online, failedOffline) -> if (s.release != null) download(s.release) else check()
-                s is UpdateState.Available && online -> download(s.release)
+                s is UpdateState.Available && (online || reached) -> download(s.release)
                 // A quiet install waits until the home is off screen; one that needs a confirmation
                 // only prepares the session, so Android has the dialog ready for the notice.
                 s is UpdateState.Ready && currentPath().let { it == InstallPath.Confirm || (!inForeground && it != InstallPath.NeedsPermission) } -> install(interactive = false)
@@ -923,8 +929,17 @@ class UpdateManager(
         private const val CHECK_EVERY_MS = 12 * 3_600_000L
         private const val RETRY_AFTER_MS = 3_600_000L
 
-        /** Whether the background pass looks for a release now: the last look is old enough and there is a network to look over. */
-        internal fun checkDue(now: Long, lastAttemptMs: Long, online: Boolean): Boolean = online && now - lastAttemptMs > CHECK_EVERY_MS
+        /** A look this long overdue is taken whatever Android says of the network, so a TV that reports none wrongly still finds its updates. */
+        private const val CHECK_OVERDUE_MS = 36 * 3_600_000L
+
+        /**
+         * Whether the background pass looks for a release now: the last look is old enough, and
+         * there is a network to look over or the look is long overdue.
+         */
+        internal fun checkDue(now: Long, lastAttemptMs: Long, online: Boolean): Boolean {
+            val since = now - lastAttemptMs
+            return since > CHECK_EVERY_MS && (online || since > CHECK_OVERDUE_MS)
+        }
 
         /** Whether a failed attempt is made again now: after an hour, or at once when it failed for want of a network and there is one. */
         internal fun retryDue(now: Long, failedAtMs: Long, online: Boolean, failedOffline: Boolean): Boolean =
