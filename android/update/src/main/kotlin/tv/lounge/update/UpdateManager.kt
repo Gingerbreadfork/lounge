@@ -115,6 +115,8 @@ class UpdateManager(
     @Volatile private var lastAttemptMs = 0L
     /** Whether the last attempt failed with no network to make it over, so it is tried again once there is one. */
     @Volatile private var failedOffline = false
+    /** Whether a pass is already waiting to run for the home's return. */
+    private val returnPass = java.util.concurrent.atomic.AtomicBoolean(false)
     /** Set once the loop has waited out the start of the app, before which nothing is fetched. */
     @Volatile private var settled = false
     @Volatile private var installingSince = 0L
@@ -181,14 +183,27 @@ class UpdateManager(
     /** The activity tells the updater when the home screen is on screen, so quiet installs wait. */
     fun noteForeground(foreground: Boolean) {
         inForeground = foreground
-        // A TV that has just woken takes the pass it missed now, not at the loop's next turn.
-        if (foreground && settled) workScope?.launch(Dispatchers.IO) { runCatching { tick() }.onFailure { Log.w(TAG, "updates: ${it.message}") } }
-        // Back from Android's list with Lounge allowed: carry on with the install that asked.
-        if (foreground && awaitingPermission) {
+        if (!foreground) return
+        // Back from Android's list with Lounge allowed: carry on with the install that asked,
+        // and leave it to that install alone to open Android's dialog.
+        if (awaitingPermission) {
             awaitingPermission = false
             if (canRequestInstalls() && _state.value is UpdateState.Ready) {
                 returnAfterInstall()
                 workScope?.launch(Dispatchers.IO) { install(interactive = true) }
+                return
+            }
+        }
+        // A TV that has just woken takes the pass it missed without waiting for the loop's next
+        // turn, once its network has had a moment to come up.
+        if (settled && returnPass.compareAndSet(false, true)) {
+            workScope?.launch(Dispatchers.IO) {
+                try {
+                    delay(RETURN_DELAY_MS)
+                    runCatching { tick() }.onFailure { Log.w(TAG, "updates: ${it.message}") }
+                } finally {
+                    returnPass.set(false)
+                }
             }
         }
     }
@@ -931,6 +946,8 @@ class UpdateManager(
 
         /** A look this long overdue is taken whatever Android says of the network, so a TV that reports none wrongly still finds its updates. */
         private const val CHECK_OVERDUE_MS = 36 * 3_600_000L
+        /** How long the pass for the home's return waits, for a network that has only just come up. */
+        private const val RETURN_DELAY_MS = 10_000L
 
         /**
          * Whether the background pass looks for a release now: the last look is old enough, and
