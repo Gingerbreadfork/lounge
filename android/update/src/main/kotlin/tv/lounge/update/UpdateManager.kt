@@ -167,14 +167,15 @@ class UpdateManager(
     }
 
     /**
-     * Whether there is a network that reaches the internet and that Android lets Lounge use now.
-     * A sleeping TV has none, and a check made then would only record a failure.
+     * Whether there is a network Android lets Lounge use now. A sleeping TV has none, and a check
+     * made then would only record a failure. Android's own test of the internet is not asked for:
+     * a home network that blocks that test still reaches GitHub.
      */
     private fun online(): Boolean = runCatching {
         val manager = context.getSystemService(ConnectivityManager::class.java) ?: return@runCatching true
         val network = manager.activeNetwork ?: return@runCatching false
         val reach = manager.getNetworkCapabilities(network) ?: return@runCatching false
-        reach.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && reach.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        reach.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }.getOrDefault(true)
 
     /** The activity tells the updater when the home screen is on screen, so quiet installs wait. */
