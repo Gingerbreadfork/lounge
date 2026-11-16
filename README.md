@@ -173,7 +173,9 @@ the TV shows a fresh one as soon as it is used.
 </p>
 
 - **Home** shows what's on: it mirrors the TV's home screen. Tap a tile to open it on the TV, or
-  hold it for the same menu as the remote's.
+  hold it for the same menu as the remote's. With another app in front, Android lets Lounge open
+  things only as the TV's home screen; where it is not, the phone says so and asks you to open
+  Lounge on the TV first.
 - **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into Lounge's
   search and other fields, and a place to paste a link that opens on the TV. Home, the volume and
   the media keys work whatever is on screen. The d-pad, OK, Back and Menu reach another app only

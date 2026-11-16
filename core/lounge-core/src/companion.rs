@@ -655,6 +655,9 @@ mod tests {
         let platform_said = |detail: &str| CoreError::Platform { detail: detail.into() };
         assert_eq!(failed_to(&core.inner, "open:app:com.netflix.ninja", platform_said("No launch intent for com.netflix.ninja")), "Couldn't open that. Is its app still installed?");
         assert_eq!(failed_to(&core.inner, "media:tv.a:next", platform_said("That app is not playing anything")), "That app is not playing anything.");
+        // What the TV says when Android would drop the start reaches the phone as written.
+        let behind = "Lounge isn't on the TV's screen, and it can only open things from behind another app when it is the TV's home screen. Open Lounge on the TV, then try again.";
+        assert_eq!(failed_to(&core.inner, "open:app:com.netflix.ninja", platform_said(behind)), behind);
         assert_eq!(
             failed_to(&core.inner, "open:wn:1", CoreError::UnknownAction { action: "open:wn:1".into() }),
             "That isn't on the TV's home screen any more. Choose it again from what the TV shows now."

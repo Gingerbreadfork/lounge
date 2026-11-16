@@ -39,6 +39,10 @@ sealed interface UiCommand {
     data class OpenPlugin(val id: String) : UiCommand
 }
 
+/** What the phone is told when Android would drop a start made from behind another app. */
+internal const val OPENED_FROM_BEHIND =
+    "Lounge isn't on the TV's screen, and it can only open things from behind another app when it is the TV's home screen. Open Lounge on the TV, then try again."
+
 /**
  * The core's view of Android: launch, view, switch, tune, control. Every failure becomes a
  * [PlatformException] so the core can report it.
@@ -168,6 +172,25 @@ class AndroidPlatform(private val context: Context) : Platform {
     /** Set by the shell: whether Lounge's own window is in front. */
     @Volatile var inFront: () -> Boolean = { true }
 
+    /** Set by the shell: how long Lounge's window has been off the screen, in ms, or null while it is on it. */
+    @Volatile var offScreenFor: () -> Long? = { null }
+
+    /**
+     * Whether Android will let Lounge bring another app forward now. From behind another app it
+     * does so only for the home screen, for an app allowed to draw over others, and for a few
+     * seconds after Lounge leaves the screen. Any other start it drops without a word.
+     */
+    private fun mayOpen(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 29) return true
+        val away = offScreenFor() ?: return true
+        return away < LEAVE_GRACE_MS || isHomeScreen() || Settings.canDrawOverlays(context)
+    }
+
+    private fun isHomeScreen(): Boolean = runCatching {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        context.packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == context.packageName
+    }.getOrDefault(true)
+
     /** Set by the home screen: whether one of Lounge's text fields is open to take text. */
     @Volatile var fieldOpen: () -> Boolean = { false }
 
@@ -244,6 +267,7 @@ class AndroidPlatform(private val context: Context) : Platform {
     }
 
     override fun playStream(url: String, title: String, startMs: Long?, headers: Map<String, String>, audio: Boolean) {
+        if (!mayOpen()) throw PlatformException.Failed(OPENED_FROM_BEHIND)
         // Sound is offered to audio players first, and to a video player on a TV that has none.
         for (type in if (audio) listOf("audio/*", "video/*") else listOf("video/*")) {
             val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -297,6 +321,7 @@ class AndroidPlatform(private val context: Context) : Platform {
     }
 
     private fun start(intent: Intent, fallback: (() -> Unit)?) {
+        if (!mayOpen()) throw PlatformException.Failed(OPENED_FROM_BEHIND)
         try {
             context.startActivity(intent)
         } catch (e: ActivityNotFoundException) {
@@ -318,6 +343,8 @@ class AndroidPlatform(private val context: Context) : Platform {
     private companion object {
         const val TAG = "LoungePlatform"
         const val BUSY = "The TV is busy with the last few presses. Try again in a moment."
+        /** Android gives an app ten seconds after it leaves the screen; a little less is counted on. */
+        const val LEAVE_GRACE_MS = 8_000L
         const val APK_TYPE = "application/vnd.android.package-archive"
         const val URI_GRANTS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
