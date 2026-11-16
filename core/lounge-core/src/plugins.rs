@@ -427,7 +427,11 @@ impl PluginManager {
 
     /// Lets go of modules no call has used for a while.
     fn forget_idle_modules(&self) {
-        self.loaded.lock().retain(|_, (_, used)| used.elapsed() < MODULE_KEPT);
+        self.forget_modules_idle_for(MODULE_KEPT);
+    }
+
+    fn forget_modules_idle_for(&self, kept: Duration) {
+        self.loaded.lock().retain(|_, (_, used)| used.elapsed() < kept);
     }
 
     /// `<plugins>/<id>`; an id that is not a single plain path component never becomes a path.
@@ -1536,9 +1540,7 @@ mod tests {
         assert!(Arc::ptr_eq(&first, &plugins.loaded(id, &Manifest::default()).unwrap()));
         plugins.forget_idle_modules();
         assert_eq!(plugins.loaded.lock().len(), 1);
-        let Some(long_ago) = Instant::now().checked_sub(MODULE_KEPT) else { return };
-        plugins.loaded.lock().get_mut(id).unwrap().1 = long_ago;
-        plugins.forget_idle_modules();
+        plugins.forget_modules_idle_for(Duration::ZERO);
         assert!(plugins.loaded.lock().is_empty());
         // The next call loads it again from its file.
         assert!(!Arc::ptr_eq(&first, &plugins.loaded(id, &Manifest::default()).unwrap()));
