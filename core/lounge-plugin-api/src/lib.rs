@@ -498,10 +498,12 @@ impl Shader {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Media {
-    #[default]
-    Video,
     /// Sound alone, such as a radio station or a book: offered to audio players first.
     Audio,
+    /// Also what a kind this Lounge does not know is read as, so the rest of a plugin's answer still reads.
+    #[default]
+    #[serde(other)]
+    Video,
 }
 
 fn is_video(media: &Media) -> bool {
@@ -841,6 +843,11 @@ mod play_tests {
         // An action written before either existed reads as video with no headers.
         let old: Action = serde_json::from_str(r#"{"play":"http://a/1","title":"A film"}"#).unwrap();
         assert_eq!((old.media, old.headers.len()), (Media::Video, 0));
+        // A kind this Lounge does not know, or one in another case, reads as video and fails nothing.
+        for kind in ["hologram", "Audio", ""] {
+            let newer: Action = serde_json::from_str(&format!(r#"{{"play":"http://a/1","media":"{kind}"}}"#)).unwrap();
+            assert_eq!(newer.media, Media::Video, "{kind}");
+        }
     }
 
     #[test]
