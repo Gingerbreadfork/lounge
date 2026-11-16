@@ -30,10 +30,11 @@ key KEYCODE_DPAD_UP;                    snap 10-playbill 0.8
 key KEYCODE_DPAD_UP;                    snap 11-topbar 0.8
 # Right saturates at Settings whether or not the Guide button is showing.
 key KEYCODE_DPAD_RIGHT KEYCODE_DPAD_RIGHT KEYCODE_DPAD_RIGHT KEYCODE_DPAD_CENTER; snap 12-settings
-key KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN; snap 13-settings-home-row 0.8
-key KEYCODE_DPAD_CENTER;                snap 14-home-role 1.0
-key KEYCODE_BACK KEYCODE_BACK;          snap 15-settings-closed 0.8
-key KEYCODE_DPAD_LEFT KEYCODE_DPAD_CENTER; snap 16-search 1.5
+# Down the sheet without pressing anything: which row a count of presses lands on changes as rows are added.
+key KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN KEYCODE_DPAD_DOWN; snap 13-settings-rows 0.8
+key KEYCODE_BACK;                       snap 15-settings-closed 0.8
+# Left saturates at Search however many buttons the bar has.
+key KEYCODE_DPAD_LEFT KEYCODE_DPAD_LEFT KEYCODE_DPAD_LEFT KEYCODE_DPAD_LEFT KEYCODE_DPAD_LEFT KEYCODE_DPAD_LEFT KEYCODE_DPAD_CENTER; snap 16-search 1.5
 $A shell input text "ne"; snap 17-search-typed 1.5
 key KEYCODE_DPAD_DOWN;                  snap 18-search-result 1.0
 key KEYCODE_BACK KEYCODE_BACK;          snap 19-search-closed 1.0
