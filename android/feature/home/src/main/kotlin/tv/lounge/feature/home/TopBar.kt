@@ -146,6 +146,9 @@ fun TopBar(
                     marked = notices.fresh > 0,
                     counts = true,
                     description = NotificationWords.spoken(notices.list.size, notices.fresh),
+                    // Read as focus moves, not as composed: once the last notification has gone the
+                    // chip is still here for a frame, and the bar must not hand focus back to it.
+                    takesFocus = { notifications.value.list.isNotEmpty() },
                 )
             }
             TopBarButton(LoungeIcons.Settings, "Settings", onSettings, focus, focus.settings)
@@ -196,6 +199,7 @@ private fun TopBarButton(
     marked: Boolean = false,
     counts: Boolean = false,
     description: String? = null,
+    takesFocus: () -> Boolean = { true },
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -226,6 +230,7 @@ private fun TopBarButton(
                 if (it.isFocused) focus.last = requester
             }
             .tilePress(onClick, onClick)
+            .focusProperties { canFocus = takesFocus() }
             .focusable()
             .semantics(mergeDescendants = description != null) {
                 role = Role.Button

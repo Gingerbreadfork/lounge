@@ -145,6 +145,26 @@ class TopBarFocusTest {
     }
 
     @Test
+    fun aChipThatLeavesWhileItIsTheBarsRememberedButtonHandsItsPlaceToSettings() {
+        showTopBar()
+        notices.value = NotificationsShown(listOf(notice("a")), fresh = 1)
+        rule.waitForIdle()
+        rule.runOnIdle { focus.notifications.requestFocus() }
+        rule.onNode(isFocused()).assert(hasContentDescription("1 notification, 1 new"))
+        // Focus goes elsewhere, as into the panel.
+        press(Key.DirectionDown)
+        rule.onNodeWithTag("left below").assertIsFocused()
+        // The last notification is dismissed there, and focus is sent to Settings in the same
+        // moment, before the bar has let go of the chip.
+        rule.runOnIdle {
+            notices.value = NotificationsShown()
+            focus.settings.requestFocus()
+        }
+        rule.waitForIdle()
+        assertFocusedButton("Settings")
+    }
+
+    @Test
     fun downLeavesForWhatIsBelow() {
         showTopBar()
         rule.runOnIdle { focus.settings.requestFocus() }
