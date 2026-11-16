@@ -17,8 +17,8 @@ android {
         applicationId = "tv.lounge.launcher"
         minSdk = 28
         targetSdk = 37
-        versionCode = 18
-        versionName = "0.8.0"
+        versionCode = 19
+        versionName = "0.9.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
