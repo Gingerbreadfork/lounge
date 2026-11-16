@@ -172,19 +172,16 @@ class AndroidPlatform(private val context: Context) : Platform {
     /** Set by the shell: whether Lounge's own window is in front. */
     @Volatile var inFront: () -> Boolean = { true }
 
-    /** Set by the shell: how long Lounge's window has been off the screen, in ms, or null while it is on it. */
-    @Volatile var offScreenFor: () -> Long? = { null }
+    /** Set by the shell: whether Lounge's window is on the screen, in front or under a dialog. */
+    @Volatile var onScreen: () -> Boolean = { true }
 
     /**
      * Whether Android will let Lounge bring another app forward now. From behind another app it
-     * does so only for the home screen, for an app allowed to draw over others, and for a few
-     * seconds after Lounge leaves the screen. Any other start it drops without a word.
+     * does so only for the home screen and for an app allowed to draw over others. Any other
+     * start it drops without a word.
      */
-    private fun mayOpen(): Boolean {
-        if (android.os.Build.VERSION.SDK_INT < 29) return true
-        val away = offScreenFor() ?: return true
-        return away < LEAVE_GRACE_MS || isHomeScreen() || Settings.canDrawOverlays(context)
-    }
+    private fun mayOpen(): Boolean =
+        android.os.Build.VERSION.SDK_INT < 29 || onScreen() || isHomeScreen() || Settings.canDrawOverlays(context)
 
     private fun isHomeScreen(): Boolean = runCatching {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
@@ -343,8 +340,6 @@ class AndroidPlatform(private val context: Context) : Platform {
     private companion object {
         const val TAG = "LoungePlatform"
         const val BUSY = "The TV is busy with the last few presses. Try again in a moment."
-        /** Android gives an app ten seconds after it leaves the screen; a little less is counted on. */
-        const val LEAVE_GRACE_MS = 8_000L
         const val APK_TYPE = "application/vnd.android.package-archive"
         const val URI_GRANTS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION

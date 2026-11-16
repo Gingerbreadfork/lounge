@@ -39,16 +39,14 @@ class OpenFromBehindTest {
     }
 
     @Test
-    fun onScreenAndJustAfterLeavingItEverythingOpens() {
+    fun onScreenEverythingOpens() {
         openEachWay()
-        platform.offScreenFor = { 2_000L }
-        openEachWay()
-        assertEquals(6, tv.opened.size)
+        assertEquals(3, tv.opened.size)
     }
 
     @Test
     fun fromBehindAnotherAppThePhoneIsToldWhyNothingOpened() {
-        platform.offScreenFor = { 60_000L }
+        platform.onScreen = { false }
         for (open in listOf<() -> Unit>(
             { platform.viewUri("https://example.org/watch") },
             { platform.playStream("http://radio/live", "A station", null, emptyMap(), audio = true) },
@@ -66,7 +64,7 @@ class OpenFromBehindTest {
         val lounge = ResolveInfo().apply { activityInfo = ActivityInfo().apply { packageName = tv.packageName; name = "Home" } }
         @Suppress("DEPRECATION")
         shadowOf(tv.packageManager).addResolveInfoForIntent(home, lounge)
-        platform.offScreenFor = { 60_000L }
+        platform.onScreen = { false }
         openEachWay()
         assertEquals(3, tv.opened.size)
     }

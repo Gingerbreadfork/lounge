@@ -210,7 +210,7 @@ class MainActivity : ComponentActivity() {
         // The phone's d-pad, Back and Menu need Lounge in front or Power Setup, and the platform
         // refuses them with the reason when neither is there.
         platform.inFront = { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
-        platform.offScreenFor = { stoppedAtMs.takeIf { it != 0L }?.let { android.os.SystemClock.uptimeMillis() - it } }
+        platform.onScreen = { started }
         platform.keysForOtherApps = { power.status.value is tv.lounge.power.PowerStatus.Ready }
         lifecycleScope.launch {
             platform.commands.collect { cmd ->
@@ -432,8 +432,8 @@ class MainActivity : ComponentActivity() {
     private val remoteKeys = Channel<tv.lounge.power.PowerAction>(capacity = 16, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     private val appCollects = Channel<Unit>(Channel.CONFLATED)
 
-    /** When the window last left the screen, on the uptime clock; 0 while it is on it. */
-    @Volatile private var stoppedAtMs = 0L
+    /** Whether the window is on the screen. The core's threads read it. */
+    @Volatile private var started = false
 
     private fun collectTvNow() {
         if (!tvProvider.hasPermission()) return
@@ -477,12 +477,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        stoppedAtMs = 0L
+        started = true
     }
 
     override fun onStop() {
         super.onStop()
-        stoppedAtMs = android.os.SystemClock.uptimeMillis()
+        started = false
         if (!::core.isInitialized) return
         core.setScreenState(false)
         updates.noteForeground(false)
