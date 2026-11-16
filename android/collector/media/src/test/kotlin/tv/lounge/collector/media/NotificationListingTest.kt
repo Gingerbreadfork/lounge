@@ -110,6 +110,18 @@ class NotificationListingTest {
         assertEquals(emptyList<AppNotification.Action>(), buttonsOf(builder().build()))
     }
 
+    /** Before Android 15 the TV's part of a notification is read by hand, and an app may have put anything there. */
+    @Test
+    @org.robolectric.annotation.Config(sdk = [34])
+    fun what_an_app_puts_where_the_tv_s_intent_goes_is_never_trusted_to_be_one() {
+        fun withTvPart(under: android.os.Parcelable) = builder().build().apply {
+            extras.putBundle("android.tv.EXTENSIONS", android.os.Bundle().apply { putParcelable("content_intent", under) })
+        }
+        assertNotNull(opensWith(withTvPart(intent("tv"))))
+        assertNull(opensWith(withTvPart(Intent("not.a.pending.intent"))))
+        assertNull(opensWith(withTvPart(android.graphics.Rect(0, 0, 1, 1))))
+    }
+
     @Test
     fun a_notification_made_for_tv_opens_with_the_intent_it_carries_there() {
         assertNull(opensWith(builder().build()))

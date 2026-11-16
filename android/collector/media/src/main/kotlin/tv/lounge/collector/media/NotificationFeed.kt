@@ -70,10 +70,13 @@ internal fun buttonsOf(n: Notification): List<AppNotification.Action> =
 private const val TV_EXTENSIONS = "android.tv.EXTENSIONS"
 private const val TV_CONTENT_INTENT = "content_intent"
 
-/** Where a notification leads: its own intent, or the one it carries for a TV. */
+/**
+ * Where a notification leads: its own intent, or the one it carries for a TV. An app may put
+ * anything under that name, so whatever is not an intent to send is passed over.
+ */
 internal fun opensWith(n: Notification): PendingIntent? = n.contentIntent ?: when {
     Build.VERSION.SDK_INT >= 35 -> Notification.TvExtender(n).contentIntent
-    else -> @Suppress("DEPRECATION") n.extras.getBundle(TV_EXTENSIONS)?.getParcelable(TV_CONTENT_INTENT)
+    else -> @Suppress("DEPRECATION") n.extras.getBundle(TV_EXTENSIONS)?.get(TV_CONTENT_INTENT) as? PendingIntent
 }
 
 private fun isMedia(n: Notification): Boolean =
@@ -118,8 +121,20 @@ object NotificationFeed : NotificationSource {
 
     internal fun posted(service: NowPlayingListener, sbn: StatusBarNotification, ranking: RankingMap?) {
         if (!reading) return
-        active[sbn.key] = entryOf(service, sbn, ranking, active[sbn.key])
+        keep(service, sbn, ranking)
         publish(service)
+    }
+
+    /**
+     * Reads [sbn] into the feed. A notification is another app's to shape, and one that cannot be
+     * read, as when it carries a class Lounge does not have, is passed over and not held.
+     */
+    private fun keep(service: NowPlayingListener, sbn: StatusBarNotification, ranking: RankingMap?) {
+        val entry = runCatching { entryOf(service, sbn, ranking, active[sbn.key]) }.getOrElse { e ->
+            Log.w(TAG, "a notification from ${sbn.packageName} could not be read (${e.javaClass.simpleName})")
+            null
+        }
+        if (entry != null) active[sbn.key] = entry else active.remove(sbn.key)
     }
 
     internal fun removed(service: NowPlayingListener, key: String) {
@@ -137,7 +152,7 @@ object NotificationFeed : NotificationSource {
         val all = runCatching { service.activeNotifications }.getOrNull().orEmpty()
         val ranking = runCatching { service.currentRanking }.getOrNull()
         active.clear()
-        for (sbn in all) active[sbn.key] = entryOf(service, sbn, ranking, null)
+        for (sbn in all) keep(service, sbn, ranking)
         publish(service)
     }
 
