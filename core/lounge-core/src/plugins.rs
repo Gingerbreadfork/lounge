@@ -475,8 +475,13 @@ impl PluginManager {
         // A file that will not write is said in the host's words, not the system's.
         let not_kept = |e: std::io::Error| lounge_plugins::PluginError::Io(e).to_string();
         std::fs::create_dir_all(&dir).map_err(not_kept)?;
-        std::fs::write(dir.join("plugin.wasm"), &bundle.wasm).map_err(not_kept)?;
-        std::fs::write(dir.join("manifest.json"), &bundle.manifest_json).map_err(not_kept)?;
+        // Each file is written whole under another name first, so a call that loads the module
+        // meanwhile reads the old one or the new one and never part of either.
+        for (name, bytes) in [("plugin.wasm", bundle.wasm.as_slice()), ("manifest.json", bundle.manifest_json.as_ref())] {
+            let fresh = dir.join(format!("{name}.new"));
+            std::fs::write(&fresh, bytes).map_err(not_kept)?;
+            std::fs::rename(&fresh, dir.join(name)).map_err(not_kept)?;
+        }
         // The copy loaded to check it is let go; a plugin that is on loads the new files at its next call.
         drop(probe);
         self.loaded.lock().remove(&bundle.manifest.id);
@@ -532,9 +537,16 @@ impl PluginManager {
     }
 
     fn loaded(&self, id: &str, manifest: &Manifest) -> Result<Arc<LoadedPlugin>, String> {
-        if let Some((plugin, used)) = self.loaded.lock().get_mut(id) {
-            *used = Instant::now();
-            return Ok(Arc::clone(plugin));
+        {
+            let mut kept = self.loaded.lock();
+            if let Some((plugin, used)) = kept.get_mut(id) {
+                if plugin.manifest.version == manifest.version {
+                    *used = Instant::now();
+                    return Ok(Arc::clone(plugin));
+                }
+            }
+            // One loaded under another version's manifest would run with that version's reach and settings.
+            kept.remove(id);
         }
         let dir = self.plugin_dir(id).ok_or_else(|| format!("invalid plugin id {id:?}"))?;
         let wasm = std::fs::read(dir.join("plugin.wasm")).map_err(|e| format!("plugin files missing: {e}"))?;
@@ -1540,6 +1552,12 @@ mod tests {
         assert!(Arc::ptr_eq(&first, &plugins.loaded(id, &Manifest::default()).unwrap()));
         plugins.forget_idle_modules();
         assert_eq!(plugins.loaded.lock().len(), 1);
+        // One kept from before an update is not used under the new version's manifest.
+        let updated = Manifest { version: "9.9.9".into(), ..Manifest::default() };
+        let reloaded = plugins.loaded(id, &updated).unwrap();
+        assert!(!Arc::ptr_eq(&first, &reloaded));
+        assert_eq!(reloaded.manifest.version, "9.9.9");
+        assert!(Arc::ptr_eq(&reloaded, &plugins.loaded(id, &updated).unwrap()));
         plugins.forget_modules_idle_for(Duration::ZERO);
         assert!(plugins.loaded.lock().is_empty());
         // The next call loads it again from its file.
