@@ -92,7 +92,20 @@ object NotificationFeed : NotificationSource {
     private val shown = MutableStateFlow<List<AppNotification>>(emptyList())
     override val posted: StateFlow<List<AppNotification>> = shown
 
-    private class Entry(val sbn: StatusBarNotification, val posted: Posted)
+    /**
+     * What is kept of one notification: what the home lists, and what a press on it needs. The
+     * notification itself, with its pictures and everything else it carries, is let go.
+     */
+    private data class Entry(
+        val posted: Posted,
+        /** The group its app posted it in, where Android has not grouped it itself. */
+        val ownGroup: String?,
+        val opens: PendingIntent?,
+        /** The intents of its buttons, by their place among all the app gave it. */
+        val buttons: Map<Int, PendingIntent>,
+        val clearable: Boolean,
+        val goesWhenOpened: Boolean,
+    )
 
     private val active = HashMap<String, Entry>()
     private val appNames = HashMap<String, Pair<String, Boolean>>()
@@ -143,7 +156,12 @@ object NotificationFeed : NotificationSource {
 
     internal fun ranked(service: NowPlayingListener, ranking: RankingMap) {
         if (!reading || active.isEmpty()) return
-        for ((key, entry) in active.entries.toList()) active[key] = entryOf(service, entry.sbn, ranking, entry)
+        for ((key, entry) in active.entries.toList()) {
+            val rank = Ranking().takeIf { ranking.getRanking(key, it) }
+            active[key] = entry.copy(
+                posted = entry.posted.copy(importance = rank?.importance, suspended = rank?.isSuspended == true, group = rank?.overrideGroupKey ?: entry.ownGroup),
+            )
+        }
         publish(service)
     }
 
@@ -174,12 +192,19 @@ object NotificationFeed : NotificationSource {
         val (title, text) = wordsOf(n)
         // An update that asks not to alert again keeps the time it first asked.
         val quietUpdate = before != null && n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0
+        val ownGroup = sbn.groupKey.takeIf { sbn.isGroup }
+        val opens = opensWith(n)
+        val buttons = buttonsOf(n)
         return Entry(
-            sbn,
-            Posted(
+            ownGroup = ownGroup,
+            opens = opens,
+            buttons = buttons.mapNotNull { b -> n.actions?.getOrNull(b.index)?.actionIntent?.let { b.index to it } }.toMap(),
+            clearable = sbn.isClearable,
+            goesWhenOpened = n.flags and Notification.FLAG_AUTO_CANCEL != 0,
+            posted = Posted(
                 packageName = sbn.packageName,
                 // Android groups an app's loose notifications itself and says so only in the ranking.
-                group = rank?.overrideGroupKey ?: sbn.groupKey.takeIf { sbn.isGroup },
+                group = rank?.overrideGroupKey ?: ownGroup,
                 summary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0,
                 ongoing = n.flags and (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_FOREGROUND_SERVICE) != 0,
                 media = isMedia(n),
@@ -195,8 +220,8 @@ object NotificationFeed : NotificationSource {
                     text = text,
                     postedAt = if (quietUpdate) before!!.posted.shown.postedAt else sbn.postTime,
                     dismissible = sbn.isClearable,
-                    opens = opensWith(n) != null,
-                    actions = buttonsOf(n),
+                    opens = opens != null,
+                    actions = buttons,
                 ),
             ),
         )
@@ -213,21 +238,18 @@ object NotificationFeed : NotificationSource {
 
     override fun open(key: String): Boolean {
         val entry = active[key] ?: return false
-        val n = entry.sbn.notification
-        val intent = opensWith(n) ?: return false
-        if (!send(intent)) return false
-        if (n.flags and Notification.FLAG_AUTO_CANCEL != 0) dismiss(listOf(key))
+        if (!send(entry.opens ?: return false)) return false
+        if (entry.goesWhenOpened) dismiss(listOf(key))
         return true
     }
 
     override fun press(key: String, action: Int): Boolean {
-        val intent = active[key]?.sbn?.notification?.actions?.getOrNull(action)?.actionIntent ?: return false
-        return send(intent)
+        return send(active[key]?.buttons?.get(action) ?: return false)
     }
 
     override fun dismiss(keys: Collection<String>) {
         val service = listener ?: return
-        val gone = keys.filter { active[it]?.sbn?.isClearable == true }
+        val gone = keys.filter { active[it]?.clearable == true }
         if (gone.isEmpty()) return
         runCatching { service.cancelNotifications(gone.toTypedArray()) }.onFailure { Log.w(TAG, "notifications not dismissed", it) }
         // Taken off the list at once; Android's own word that they are gone follows.
