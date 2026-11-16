@@ -29,7 +29,8 @@ class NotificationListingTest {
         media: Boolean = false,
         importance: Int? = NotificationManager.IMPORTANCE_DEFAULT,
         suspended: Boolean = false,
-    ) = Posted(packageName, group, summary, ongoing, media, importance, suspended, AppNotification(key, packageName, "Shop", title, text, at, dismissible = true, opens = true))
+        says: Boolean = true,
+    ) = Posted(packageName, group, summary, ongoing, media, importance, suspended, says, AppNotification(key, packageName, "Shop", title, text, at, dismissible = true, opens = true))
 
     private fun keys(vararg posted: Posted) = listed(posted.toList(), own = "tv.lounge.launcher").map { it.key }
 
@@ -48,7 +49,8 @@ class NotificationListingTest {
                 posted("song", media = true),
                 posted("own", packageName = "tv.lounge.launcher"),
                 posted("asleep", suspended = true),
-                posted("blank", title = " ", text = ""),
+                // Android's marker for a group says nothing itself, though it is shown under its app's name.
+                posted("marker", title = "Shop", says = false),
             ),
         )
     }
@@ -86,13 +88,14 @@ class NotificationListingTest {
     private fun builder() = Notification.Builder(context, "updates")
 
     @Test
-    fun the_whole_text_is_read_and_a_missing_title_is_the_app_s_name() {
+    fun the_whole_text_is_read_and_one_that_says_nothing_reads_as_empty() {
         val plain = builder().setContentTitle(" 3 apps updated ").setContentText("Plex and two more").build()
-        assertEquals("3 apps updated" to "Plex and two more", wordsOf(plain, "Play Store"))
+        assertEquals("3 apps updated" to "Plex and two more", wordsOf(plain))
         val long = builder().setContentTitle("Storage").setContentText("Short").setStyle(Notification.BigTextStyle().bigText("Some system functions may not work.\nFree up space.")).build()
-        assertEquals("Storage" to "Some system functions may not work.\nFree up space.", wordsOf(long, "Android System"))
+        assertEquals("Storage" to "Some system functions may not work.\nFree up space.", wordsOf(long))
         val lines = builder().setStyle(Notification.InboxStyle().addLine("First").addLine("Second")).build()
-        assertEquals("Play Store" to "First\nSecond", wordsOf(lines, "Play Store"))
+        assertEquals("" to "First\nSecond", wordsOf(lines))
+        assertEquals("" to "", wordsOf(builder().setGroup("g").setGroupSummary(true).build()))
     }
 
     @Test

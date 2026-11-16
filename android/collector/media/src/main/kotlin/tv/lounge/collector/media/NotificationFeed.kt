@@ -29,6 +29,8 @@ internal data class Posted(
     /** Android's importance for it, or null where Android gave none. */
     val importance: Int?,
     val suspended: Boolean,
+    /** Whether it has a title or a text of its own. One with neither is Android's own marker for a group. */
+    val says: Boolean,
     val shown: AppNotification,
 )
 
@@ -40,21 +42,20 @@ internal data class Posted(
 internal fun listed(posted: Collection<Posted>, own: String): List<AppNotification> {
     val messages = posted.filter { p ->
         p.packageName != own && !p.ongoing && !p.media && !p.suspended &&
-            (p.importance == null || p.importance >= NotificationManager.IMPORTANCE_LOW) &&
-            (p.shown.title.isNotBlank() || p.shown.text.isNotBlank())
+            (p.importance == null || p.importance >= NotificationManager.IMPORTANCE_LOW) && p.says
     }
     val groupsWithMembers = messages.filter { !it.summary }.mapNotNullTo(HashSet()) { it.group }
     return messages.filter { !(it.summary && it.group in groupsWithMembers) }.map { it.shown }.sortedByDescending { it.postedAt }
 }
 
-/** The title and whole text of a notification; a title it leaves out is the app's name. */
-internal fun wordsOf(n: Notification, app: String): Pair<String, String> {
+/** The title and whole text a notification gives itself; either may be empty. */
+internal fun wordsOf(n: Notification): Pair<String, String> {
     val extras = n.extras
     val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
     val text = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
         ?: extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString("\n")
         ?: extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
-    return title.ifEmpty { app } to text.orEmpty().trim()
+    return title to text.orEmpty().trim()
 }
 
 /** The buttons a remote can press: those that send something and ask for nothing typed. */
@@ -155,24 +156,27 @@ object NotificationFeed : NotificationSource {
         val (app, system) = appNames.getOrPut(sbn.packageName) { appName(context, sbn.packageName) }
         // Only Android's own apps may stand under another name, as the system shows them.
         val name = n.extras.getString(SUBSTITUTE_APP_NAME)?.takeIf { system && it.isNotBlank() } ?: app
-        val (title, text) = wordsOf(n, name)
+        val (title, text) = wordsOf(n)
         // An update that asks not to alert again keeps the time it first asked.
         val quietUpdate = before != null && n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0
         return Entry(
             sbn,
             Posted(
                 packageName = sbn.packageName,
-                group = sbn.groupKey.takeIf { sbn.isGroup },
+                // Android groups an app's loose notifications itself and says so only in the ranking.
+                group = rank?.overrideGroupKey ?: sbn.groupKey.takeIf { sbn.isGroup },
                 summary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0,
                 ongoing = n.flags and (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_FOREGROUND_SERVICE) != 0,
                 media = isMedia(n),
                 importance = rank?.importance,
                 suspended = rank?.isSuspended == true,
+                says = title.isNotEmpty() || text.isNotEmpty(),
                 shown = AppNotification(
                     key = sbn.key,
                     packageName = sbn.packageName,
                     app = name,
-                    title = title,
+                    // One with a text and no title is titled with its app.
+                    title = title.ifEmpty { name },
                     text = text,
                     postedAt = if (quietUpdate) before!!.posted.shown.postedAt else sbn.postTime,
                     dismissible = sbn.isClearable,
