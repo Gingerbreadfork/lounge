@@ -257,9 +257,15 @@ fn split_piped(line: &str) -> (&str, BTreeMap<String, String>) {
     let mut headers = BTreeMap::new();
     for pair in tail.split('&') {
         let Some((name, value)) = pair.split_once('=') else { return (line, BTreeMap::new()) };
-        headers.insert(percent_decoded(name.trim()), percent_decoded(value.trim()));
+        set_header(&mut headers, percent_decoded(name.trim()), percent_decoded(value.trim()));
     }
     (url, headers)
+}
+
+/// Sets a header, taking the place of one of the same name in any case.
+fn set_header(headers: &mut BTreeMap<String, String>, name: String, value: String) {
+    headers.retain(|kept, _| !kept.eq_ignore_ascii_case(&name));
+    headers.insert(name, value);
 }
 
 /// `text` with each `%XX` turned back into the byte it stands for.
@@ -311,8 +317,11 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Cha
             continue;
         } else if let Some((attrs, name)) = pending.take() {
             let (url, piped) = split_piped(line);
+            // What follows the address is said of this stream alone, so it wins over an option line.
             let mut headers = std::mem::take(&mut options);
-            headers.extend(piped);
+            for (name, value) in piped {
+                set_header(&mut headers, name, value);
+            }
             if is_on_demand(line) {
                 continue;
             }
@@ -1150,6 +1159,9 @@ https://example.com/seven.m3u8
         assert!(channels[2].headers.is_empty() && channels[2].radio);
         // A bar that does not open a list of headers is part of the address.
         assert_eq!((channels[3].url.as_str(), channels[3].headers.len()), ("http://s/four?list=a|b", 0));
+        // A header named on an option line and again after the address, in another case, is sent once.
+        let (both, _) = parse_m3u("#EXTM3U\n#EXTINF:-1 tvg-id=\"five\",Five\n#EXTVLCOPT:http-user-agent=FromOption\nhttp://s/five.m3u8|user-agent=FromTail\n", None, 10);
+        assert_eq!(headers(&both[0]), ["user-agent: FromTail"]);
 
         let action = channels[1].to_item().action;
         assert_eq!(action.play.as_deref(), Some("http://s/two.m3u8"));

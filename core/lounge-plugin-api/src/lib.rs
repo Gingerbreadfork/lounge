@@ -568,15 +568,22 @@ impl Action {
         self
     }
     /// The headers the TV hands the player: those with a name of plain token characters and a
-    /// value on one line, the first [MAX_PLAY_HEADERS] of them by name.
+    /// value on one line, the first [MAX_PLAY_HEADERS] of them by name. A name is one header
+    /// however its letters are cased, and the first spelling of it is the one kept.
     pub fn play_headers(&self) -> BTreeMap<String, String> {
         let token = |c: char| c.is_ascii_alphanumeric() || "!#$%&'*+-.^_`|~".contains(c);
-        self.headers
-            .iter()
-            .filter(|(name, value)| !name.is_empty() && name.chars().all(token) && !value.chars().any(char::is_control) && name.len() + value.len() <= MAX_PLAY_HEADER_BYTES)
-            .take(MAX_PLAY_HEADERS)
-            .map(|(name, value)| (name.clone(), value.clone()))
-            .collect()
+        let mut kept: BTreeMap<String, String> = BTreeMap::new();
+        for (name, value) in &self.headers {
+            let sound = !name.is_empty() && name.chars().all(token) && !value.chars().any(char::is_control) && name.len() + value.len() <= MAX_PLAY_HEADER_BYTES;
+            if !sound || kept.keys().any(|k| k.eq_ignore_ascii_case(name)) {
+                continue;
+            }
+            if kept.len() == MAX_PLAY_HEADERS {
+                break;
+            }
+            kept.insert(name.clone(), value.clone());
+        }
+        kept
     }
     /// Open Lounge's search with `query`: for things that live in some app the plugin cannot name.
     pub fn search(query: impl Into<String>) -> Action {
@@ -864,6 +871,10 @@ mod play_tests {
         assert_eq!(kept, ["Referer", "User-Agent", "X-Token"]);
         let many = (0..40).fold(Action::play("http://a/1", "A"), |a, n| a.header(format!("X-{n:02}"), "v"));
         assert_eq!(many.play_headers().len(), MAX_PLAY_HEADERS);
+        // The same header in two cases is sent once.
+        let twice = Action::play("http://a/1", "A").header("User-Agent", "One").header("user-agent", "Two").header("REFERER", "https://a/");
+        let sent: Vec<(String, String)> = twice.play_headers().into_iter().collect();
+        assert_eq!(sent, [("REFERER".to_string(), "https://a/".to_string()), ("User-Agent".to_string(), "One".to_string())]);
     }
 }
 
