@@ -110,6 +110,9 @@ internal object NotificationWords {
 
     const val TAKEN_BACK = "Its app has taken that back, so there is nothing to open."
 
+    /** Said once on a TV whose notification access was given before it covered notifications. */
+    const val OFFERED = "Your apps' notifications can show in the top bar now. Settings, Notifications turns them on"
+
     /** Why a notification has no Dismiss. */
     const val STAYS = "This one stays until its app takes it back."
 }

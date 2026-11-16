@@ -24,6 +24,17 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
 )
 
+/** Whether notifications show. Until it is chosen they show only on a TV still in setup, which is about to be asked. */
+internal fun notificationsShown(chosen: Boolean?, setupDone: Boolean): Boolean = chosen ?: !setupDone
+
+/**
+ * What to store for a TV that finished setup with nothing chosen: off where notification
+ * access was already given, on where it is still to be asked for. Null where there is nothing
+ * to settle.
+ */
+internal fun settledNotifications(chosen: Boolean?, setupDone: Boolean, accessGiven: Boolean): Boolean? =
+    if (chosen == null && setupDone) !accessGiven else null
+
 /** UI-only preferences. Durable data lives in the core. */
 class Prefs(private val context: Context) {
     /** The stored preferences, or the defaults while the file cannot be read. */
@@ -71,7 +82,7 @@ class Prefs(private val context: Context) {
             companionEnabled = p[COMPANION_ENABLED] ?: false,
             backdrop = p[BACKDROP] ?: STILL_BACKDROP,
             allAppsSort = p[ALL_APPS_SORT] ?: SORT_AZ,
-            notifications = p[NOTIFICATIONS] ?: true,
+            notifications = notificationsShown(p[NOTIFICATIONS], p[ONBOARDING_DONE] ?: false),
             loaded = true,
         )
     }
@@ -97,9 +108,32 @@ class Prefs(private val context: Context) {
     )
 
     val notifications: Flow<NotificationPrefs> = data.map { p ->
-        NotificationPrefs(p[NOTIFICATIONS] ?: true, p[NOTIFICATIONS_HIDDEN] ?: emptySet(), p[NOTIFICATIONS_SEEN_AT] ?: 0L)
+        NotificationPrefs(notificationsShown(p[NOTIFICATIONS], p[ONBOARDING_DONE] ?: false), p[NOTIFICATIONS_HIDDEN] ?: emptySet(), p[NOTIFICATIONS_SEEN_AT] ?: 0L)
     }
     suspend fun setNotifications(on: Boolean) { context.dataStore.edit { it[NOTIFICATIONS] = on } }
+
+    /**
+     * Settles notifications on a TV that finished setup before Lounge could show them, once.
+     * With notification access already given, it was given for Now playing alone, so they stay
+     * off until the person turns them on. Returns whether that is so, for the person to be told.
+     */
+    suspend fun settleNotifications(accessGiven: Boolean): Boolean {
+        var toTell = false
+        context.dataStore.edit { p ->
+            val settled = settledNotifications(p[NOTIFICATIONS], p[ONBOARDING_DONE] ?: false, accessGiven) ?: return@edit
+            p[NOTIFICATIONS] = settled
+            toTell = !settled
+        }
+        return toTell
+    }
+
+    /** Marks setup finished. Its steps name what notification access covers, so notifications are on from here unless already chosen. */
+    suspend fun finishSetup() {
+        context.dataStore.edit { p ->
+            p[ONBOARDING_DONE] = true
+            if (p[NOTIFICATIONS] == null) p[NOTIFICATIONS] = true
+        }
+    }
     suspend fun setNotificationsHidden(packageName: String, hidden: Boolean) {
         context.dataStore.edit { p ->
             val now = p[NOTIFICATIONS_HIDDEN] ?: emptySet()
@@ -154,7 +188,7 @@ class Prefs(private val context: Context) {
             BACKDROP.name to (p[BACKDROP] ?: STILL_BACKDROP),
             AMBIENT_STYLE.name to (p[AMBIENT_STYLE] ?: PICTURES),
             ALL_APPS_SORT.name to (p[ALL_APPS_SORT] ?: SORT_AZ),
-            NOTIFICATIONS.name to (p[NOTIFICATIONS] ?: true).toString(),
+            NOTIFICATIONS.name to notificationsShown(p[NOTIFICATIONS], p[ONBOARDING_DONE] ?: false).toString(),
             NOTIFICATIONS_HIDDEN.name to (p[NOTIFICATIONS_HIDDEN] ?: emptySet()).sorted().joinToString(","),
         )
     }

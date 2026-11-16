@@ -136,7 +136,8 @@ card with play, pause and skip.
 **Notifications.** What your apps want to tell you, such as an update, a finished download or
 storage running low, is counted in the top bar and a press away: read it in full, open it, use
 its buttons or dismiss it. An app that nags can be hidden. Lounge reads notifications only to
-show them on the TV, keeps none of them and sends none anywhere, and Settings turns it off.
+show them on the TV, keeps none of them and sends none anywhere. Settings turns it off, and on
+a TV set up before Lounge had this it stays off until you turn it on there.
 
 **Search.** One box for apps, what you've been watching and whatever the plugins can find.
 

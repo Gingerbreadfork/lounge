@@ -28,7 +28,17 @@ class PrefsBackupTest {
             platform.preferences(),
         )
 
+        // A TV in setup has nothing to settle. One that finished setup on an older Lounge, with
+        // notification access already given, has them off from then on and is told once.
+        assertEquals(false, prefs.settleNotifications(accessGiven = true))
         prefs.setOnboardingDone(true)
+        assertEquals(false, prefs.notifications.first().shown)
+        assertEquals(true, prefs.settleNotifications(accessGiven = true))
+        assertEquals(false, prefs.settleNotifications(accessGiven = true))
+        assertEquals("false", platform.preferences()["notifications"])
+        // Finishing setup again leaves a choice already made alone.
+        prefs.finishSetup()
+        assertEquals(false, prefs.notifications.first().shown)
         prefs.setCompanionEnabled(true)
         val backup = mapOf(
             "theme" to "Opera", "sounds" to "false", "lite_mode" to "true", "reduced_motion" to "false",

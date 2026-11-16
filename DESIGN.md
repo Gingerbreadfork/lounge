@@ -359,6 +359,9 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
   switch row reads Not allowed and OK asks for it. Two footnotes say what is kept and what is
   left out: Lounge reads notifications only to show them, not at all while the switch is off,
   keeps none and sends none anywhere. In Settings the row's value is On, Off or Not allowed.
+  Notifications are on for a TV that finishes setup, whose access step says what the access
+  covers. A TV set up before Lounge showed them, with the access already given for Now playing,
+  starts with them off and is told once, in a toast, that Settings, Notifications turns them on.
 - **Screensaver sheet**: one row naming the current screensaver (Lounge in `signal`, Off, or the
   other app's name), whose OK makes Lounge the screensaver or goes back to the previous one; a
   Style row that cycles Pictures and the abstract scenes with Left and Right and names the current

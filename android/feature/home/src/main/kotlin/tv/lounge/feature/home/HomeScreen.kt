@@ -221,7 +221,10 @@ fun HomeScreen(
 
     // The updater's notice tile and the one-time word after an update.
     LaunchedEffect(updates) {
-        updates.takeJustUpdatedFrom()?.let { say("Lounge updated to ${updates.currentVersion}") }
+        val updated = updates.takeJustUpdatedFrom()?.let { "Lounge updated to ${updates.currentVersion}" }
+        // Notification access given before it covered notifications does not turn them on: the person is told where to.
+        val offered = NotificationWords.OFFERED.takeIf { prefs.settleNotifications(hasNotificationAccess(context)) }
+        listOfNotNull(updated, offered).takeIf { it.isNotEmpty() }?.let { say(it.joinToString(". ")) }
         updates.state.collect { s ->
             val waiting = s is tv.lounge.update.UpdateState.NeedsConfirmation ||
                 (s is tv.lounge.update.UpdateState.Ready && s.path == tv.lounge.update.InstallPath.NeedsPermission)
@@ -879,7 +882,7 @@ fun HomeScreen(
                     val again = state.setupFromSettings
                     state.setupFromSettings = false
                     setupFinished = true
-                    scope.launch { prefs.setOnboardingDone(true) }
+                    scope.launch { prefs.finishSetup() }
                     isDefaultHome = isDefaultHome(context)
                     if (again) {
                         // Opened from Settings, so it ends on the row that started it.
