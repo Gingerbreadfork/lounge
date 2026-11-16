@@ -119,10 +119,16 @@ class Prefs(private val context: Context) {
      */
     suspend fun settleNotifications(accessGiven: Boolean): Boolean {
         var toTell = false
-        context.dataStore.edit { p ->
-            val settled = settledNotifications(p[NOTIFICATIONS], p[ONBOARDING_DONE] ?: false, accessGiven) ?: return@edit
-            p[NOTIFICATIONS] = settled
-            toTell = !settled
+        try {
+            context.dataStore.edit { p ->
+                val settled = settledNotifications(p[NOTIFICATIONS], p[ONBOARDING_DONE] ?: false, accessGiven) ?: return@edit
+                p[NOTIFICATIONS] = settled
+                toTell = !settled
+            }
+        } catch (e: IOException) {
+            // Run at every start, so a TV that cannot save is left unsettled, with them off, until it can.
+            android.util.Log.w("Lounge", "the notifications setting was not settled", e)
+            return false
         }
         return toTell
     }
@@ -140,7 +146,14 @@ class Prefs(private val context: Context) {
             p[NOTIFICATIONS_HIDDEN] = if (hidden) now + packageName else now - packageName
         }
     }
-    suspend fun setNotificationsSeenAt(at: Long) { context.dataStore.edit { it[NOTIFICATIONS_SEEN_AT] = at } }
+    /** Made by the home itself as the panel opens and closes, so a TV that cannot save carries on. */
+    suspend fun setNotificationsSeenAt(at: Long) {
+        try {
+            context.dataStore.edit { it[NOTIFICATIONS_SEEN_AT] = at }
+        } catch (e: IOException) {
+            android.util.Log.w("Lounge", "when the notifications were seen was not saved", e)
+        }
+    }
 
     /** The system screensaver component that was set before Lounge took over, to give back. */
     val previousScreensaver: Flow<String?> = data.map { it[PREVIOUS_SCREENSAVER] }
