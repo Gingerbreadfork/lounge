@@ -9,6 +9,8 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.content.pm.Signature
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -107,8 +109,14 @@ class UpdateManager(
     private val _confirmRequests = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
     private val _hints = MutableSharedFlow<String>(extraBufferCapacity = 2)
     private val work = Mutex()
+    /** Held by the background pass, so the loop's and one asked for at the home's return never overlap. */
+    private val pass = Mutex()
     @Volatile private var inForeground = false
     @Volatile private var lastAttemptMs = 0L
+    /** Whether the last attempt failed with no network to make it over, so it is tried again once there is one. */
+    @Volatile private var failedOffline = false
+    /** Set once the loop has waited out the start of the app, before which nothing is fetched. */
+    @Volatile private var settled = false
     @Volatile private var installingSince = 0L
     private var loop: Job? = null
 
@@ -158,9 +166,22 @@ class UpdateManager(
         return UpdateState.Failed(cause, if (settled) null else whatNext(release), release, System.currentTimeMillis())
     }
 
+    /**
+     * Whether there is a network that reaches the internet and that Android lets Lounge use now.
+     * A sleeping TV has none, and a check made then would only record a failure.
+     */
+    private fun online(): Boolean = runCatching {
+        val manager = context.getSystemService(ConnectivityManager::class.java) ?: return@runCatching true
+        val network = manager.activeNetwork ?: return@runCatching false
+        val reach = manager.getNetworkCapabilities(network) ?: return@runCatching false
+        reach.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && reach.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }.getOrDefault(true)
+
     /** The activity tells the updater when the home screen is on screen, so quiet installs wait. */
     fun noteForeground(foreground: Boolean) {
         inForeground = foreground
+        // A TV that has just woken takes the pass it missed now, not at the loop's next turn.
+        if (foreground && settled) workScope?.launch(Dispatchers.IO) { runCatching { tick() }.onFailure { Log.w(TAG, "updates: ${it.message}") } }
         // Back from Android's list with Lounge allowed: carry on with the install that asked.
         if (foreground && awaitingPermission) {
             awaitingPermission = false
@@ -205,6 +226,7 @@ class UpdateManager(
                 stagingDir()?.listFiles()?.forEach { it.delete() }
             }
             delay(FIRST_DELAY_MS)
+            settled = true
             while (true) {
                 runCatching { tick() }.onFailure { Log.w(TAG, "updates: ${it.message}") }
                 delay(TICK_MS)
@@ -212,12 +234,25 @@ class UpdateManager(
         }
     }
 
-    /** One pass of the background work: a due check, then the download, then a quiet install. */
+    /**
+     * One pass of the background work: a due check, then the download, then a quiet install.
+     * Nothing is fetched while there is no network, and nothing is recorded as failed for it.
+     */
     private suspend fun tick() {
+        if (!pass.tryLock()) return
+        try {
+            passLocked()
+        } finally {
+            pass.unlock()
+        }
+    }
+
+    private suspend fun passLocked() {
         repeat(3) {
             if (!_autoCheck.value) return
             val s = _state.value
             val now = System.currentTimeMillis()
+            val online = online()
             when {
                 s is UpdateState.Installing -> {
                     // Power Setup can report success without Android replacing the app; give up and retry later.
@@ -230,10 +265,10 @@ class UpdateManager(
                 }
                 s is UpdateState.Checking || s is UpdateState.Downloading -> return
                 // Due checks run from every resting state, so a newer release replaces one still waiting.
-                now - lastAttemptMs > CHECK_EVERY_MS -> work.withLock { checkLocked(quiet = s.isWaiting()) }
+                checkDue(now, lastAttemptMs, online) -> work.withLock { checkLocked(quiet = s.isWaiting()) }
                 s is UpdateState.Failed && s.release != null && failures.gaveUpOn(s.release.tag) -> return
-                s is UpdateState.Failed && now - s.atMs > RETRY_AFTER_MS -> if (s.release != null) download(s.release) else check()
-                s is UpdateState.Available -> download(s.release)
+                s is UpdateState.Failed && retryDue(now, s.atMs, online, failedOffline) -> if (s.release != null) download(s.release) else check()
+                s is UpdateState.Available && online -> download(s.release)
                 // A quiet install waits until the home is off screen; one that needs a confirmation
                 // only prepares the session, so Android has the dialog ready for the notice.
                 s is UpdateState.Ready && currentPath().let { it == InstallPath.Confirm || (!inForeground && it != InstallPath.NeedsPermission) } -> install(interactive = false)
@@ -269,6 +304,7 @@ class UpdateManager(
         val before = _state.value
         if (!quiet) _state.value = UpdateState.Checking
         lastAttemptMs = System.currentTimeMillis()
+        failedOffline = false
         val result = runCatching { fetchLatest() }
         val now = System.currentTimeMillis()
         val next = result.fold(
@@ -285,6 +321,7 @@ class UpdateManager(
             },
             onFailure = {
                 Log.w(TAG, "updates: the check failed: $it")
+                failedOffline = !online()
                 if (quiet) before else failed(it, null)
             },
         )
@@ -297,6 +334,7 @@ class UpdateManager(
         work.withLock {
             readyIfDownloaded(release)?.let { _state.value = it; return@withLock it }
             _state.value = UpdateState.Downloading(release, 0f)
+            failedOffline = false
             val result = runCatching { fetchApk(release) }
             // The update installs without its profile too; one that cannot be had only costs the compile.
             if (result.isSuccess) runCatching { fetchProfile(release) }.onFailure { Log.w(TAG, "updates: no profile for ${release.tag}: ${it.message}") }
@@ -304,6 +342,7 @@ class UpdateManager(
                 onSuccess = { (file, hash) -> UpdateState.Ready(release, file, hash, currentPath()) },
                 onFailure = {
                     Log.w(TAG, "updates: the download failed: $it${it.cause?.let { c -> " ($c)" }.orEmpty()}")
+                    failedOffline = !online()
                     noteFailure(release, final = false)
                     failed(it, release)
                 },
@@ -882,6 +921,13 @@ class UpdateManager(
         private const val TICK_MS = 15 * 60_000L
         private const val CHECK_EVERY_MS = 12 * 3_600_000L
         private const val RETRY_AFTER_MS = 3_600_000L
+
+        /** Whether the background pass looks for a release now: the last look is old enough and there is a network to look over. */
+        internal fun checkDue(now: Long, lastAttemptMs: Long, online: Boolean): Boolean = online && now - lastAttemptMs > CHECK_EVERY_MS
+
+        /** Whether a failed attempt is made again now: after an hour, or at once when it failed for want of a network and there is one. */
+        internal fun retryDue(now: Long, failedAtMs: Long, online: Boolean, failedOffline: Boolean): Boolean =
+            online && (failedOffline || now - failedAtMs > RETRY_AFTER_MS)
         private const val INSTALL_TIMEOUT_MS = 10 * 60_000L
         /** How long the words stay up before Android's screen covers them. */
         private const val HINT_MS = 1_500L

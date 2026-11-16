@@ -306,7 +306,8 @@ time. It shows each command before running it.
 ### Updates
 
 Lounge checks the [Releases](../../releases) page twice a day, verifies a newer APK against its
-published hash and installs it while you're in another app. Each release carries a profile, and
+published hash and installs it while you're in another app. A TV that was asleep or offline when
+a check came due makes it once it is awake and online again. Each release carries a profile, and
 where Android accepts it the update is compiled as it installs, so it is quick from its first
 start. From Android 12 there is no prompt after the first update, and with Power Setup there is
 none at all; otherwise a tile on the home screen offers it. On Google TV, Play Protect may warn the
