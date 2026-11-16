@@ -10,12 +10,15 @@ one for its Android with the APK, and Android then compiles Lounge as part of th
 of leaving it to the next night. The profiles are built from
 `android/app/src/main/baseline-prof.txt`; when the home screen's code has changed a good deal,
 record that file again with `tools/baseline-profile.sh <adb serial>` before tagging, on a device
-with Android 13 or later.
+with Android 13 or later. The script installs the profile build, `tv.lounge.launcher.profile`,
+which is an app of its own with its own data: go through its setup steps on the device once
+before recording, or the recording is of the setup steps and not of the home screen.
 
 The release stops before it builds unless:
 
-- the tag matches `versionName` in `android/app/build.gradle.kts`, and `versionCode` is higher
-  than at the previous tag;
+- the tag matches `versionName` in `android/app/build.gradle.kts` and the `version` in
+  `core/Cargo.toml` and `plugins/Cargo.toml`, and `versionCode` is higher than at the previous
+  tag;
 - the repository has the app's signing key as `LOUNGE_KEYSTORE_BASE64` (the keystore, base64
   encoded), with `LOUNGE_KEYSTORE_PASSWORD`, `LOUNGE_KEY_ALIAS` and `LOUNGE_KEY_PASSWORD`;
 - the repository has the plugin publisher key as `LOUNGE_PUBLISHER_KEY`, the contents of
