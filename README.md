@@ -185,9 +185,10 @@ the TV shows a fresh one as soon as it is used.
   unpins things from the Stage, shows or hides each source of Continue watching, and brings back
   anything you hid.
 - **Plugins** sets up the installed plugins and installs new ones from a file or a link.
-- **More** backs up your layout and settings to one file and restores it, asking first before a
-  restore replaces anything, lists the paired phones with when each was last seen, and shows the
-  TV's diagnostics.
+- **More** backs up your layout, your plugins' settings and the TV's own settings, such as the
+  theme, the background and whether notifications show, to one file and restores it, asking first
+  before a restore replaces anything. Passwords and sign-ins stay out of the file. It also lists
+  the paired phones with when each was last seen, and shows the TV's diagnostics.
 
 ## Plugins
 
@@ -220,7 +221,7 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | Sonarr and Radarr | This week's episodes and releases, what's downloading and what just arrived. Tiles search for the title in whichever app has it. |
 | Seerr | What has been requested, waiting for approval or on its way, and what has become available in the last month, from Seerr, Jellyseerr or Overseerr. Tiles search for the title in whichever app has it. |
 | Spotify | Recently played, playlists, saved albums and podcasts with a Spotify developer app, or any Spotify links you paste without one. Opens in the Spotify app. |
-| IPTV | An M3U playlist as channels, with a guide from XMLTV. |
+| IPTV | An M3U playlist as channels, with a guide from XMLTV. Radio channels play as audio, and the user agent or referrer a playlist names for a channel is passed to the player. |
 | HDHomeRun | The tuner's channels and guide, played in the TV's own player. |
 | Tvheadend, Channels DVR, NextPVR | A DVR's channels and guide, with its recordings as a row. |
 | Twitch | The live channels you follow, in Live now and the guide. |
@@ -233,6 +234,11 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | Immich photos | A shared Immich album as the screensaver. |
 | Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art as the screensaver. |
 | Weather | The temperature and sky now and each day's high for the week ahead in a town you name, as a row of small tiles to read. Celsius or Fahrenheit. From Open-Meteo, with no account or key. |
+
+Lounge has no player of its own, so a plugin that plays a stream hands it to a player app on
+the TV, such as VLC. Sound, like a radio station, a podcast or an audiobook, is offered to audio
+players first and to a video player on a TV that has none. Headers a stream needs go with it,
+though whether they are sent is up to the player: the ones some TVs come with ignore them.
 
 A twenty-seventh, **Sample library**, lives in the repository but not the APK: eighteen
 public-domain films with their posters, so you can see Lounge with something on it. The pictures
@@ -374,7 +380,7 @@ rules and the secrets it needs.
 cd companion && pnpm install && pnpm build   # once: the core embeds the phone app and needs it built
 cd core && cargo test --workspace            # the core: graph, ranking, colour, store, artwork, plugins
 cd plugins && cargo test --workspace         # the SDK and the built-in plugins
-cd android && ./gradlew :power:testDebugUnitTest
+cd android && ./gradlew testDebugUnitTest    # the shell: focus, words, updates, notifications
 cd companion && pnpm exec svelte-check
 cd companion && LOUNGE_TV=http://<tv>:8787 pnpm dev    # the phone app against a real TV
 ```
@@ -383,7 +389,10 @@ On a device, `tools/drive.sh <serial> <out dir>` walks a fixed path through the 
 saves a screenshot after every step, `tools/framestats.sh <serial>` prints per-phase frame times
 for that path, and `tools/baseline-profile.sh <serial>` captures a fresh baseline profile from
 the `profile` build. The scripts compile the installed build the way a real install ends up, so
-frame times mean something.
+frame times mean something. Two sets of tests need a device as well:
+`./gradlew :collector:tvprovider:connectedDebugAndroidTest` for reading the TV's listings and
+`:collector:media:connectedDebugAndroidTest` for the notification listener, which gives its own
+test app notification access and takes it away again.
 
 ```
 android/     Gradle project: app, core/{bindings,design,platform}, collector/*, feature/home, power, update
