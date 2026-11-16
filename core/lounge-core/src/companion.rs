@@ -176,8 +176,9 @@ struct Backup {
 }
 
 /// The most settings a backup may hand the shell, and the longest a name and a value may be.
+/// A value can be a list of app names, so it has room for the longest the shell keeps.
 const MAX_PREFERENCES: usize = 64;
-const MAX_PREFERENCE_BYTES: usize = 1024;
+const MAX_PREFERENCE_BYTES: usize = 64 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct BackupPlugin {
@@ -611,6 +612,12 @@ mod tests {
         actions.import_json(&long).unwrap();
         let last = platform.restored.lock().last().cloned().unwrap();
         assert_eq!(last.keys().collect::<Vec<_>>(), ["theme"]);
+
+        // A long list of apps is a setting like any other.
+        let apps = (0..200).map(|n| format!("tv.example.some.long.package.name.app{n:03}")).collect::<Vec<_>>().join(",");
+        let listed = format!(r#"{{"version":1,"layout":{{"hidden":[],"pinned_apps":[],"row_order":[],"stage_pins":[]}},"plugins":[],"preferences":{{"notifications_hidden":"{apps}"}}}}"#);
+        actions.import_json(&listed).unwrap();
+        assert_eq!(platform.restored.lock().last().unwrap().get("notifications_hidden"), Some(&apps));
     }
 
     #[test]
