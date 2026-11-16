@@ -54,7 +54,7 @@ impl Fetcher {
             .timeout_global(Some(DEFAULT_TIMEOUT))
             .max_redirects(0)
             .http_status_as_error(false)
-            .user_agent("Lounge/0.1 (Android TV; plugin host)")
+            .user_agent(concat!("Lounge/", env!("CARGO_PKG_VERSION"), " (Android TV; plugin host)"))
             .build();
         Fetcher { agent: ureq::Agent::with_parts(config, DefaultConnector::default(), resolver), reach, max_body: 8 * 1024 * 1024 }
     }

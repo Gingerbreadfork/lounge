@@ -25,12 +25,20 @@ class ArtworkFetcher(
     private val resolver: ContentResolver,
     private val dir: File,
     private val maxAgeMs: Long = 7L * 86_400_000L,
+    /** Lounge's version, which a server is told with each request. Empty where it is not known. */
+    private val version: String = "",
     private val isOwnAuthority: (String) -> Boolean,
 ) {
     /** A fetcher reading as [context]'s app, which refuses the providers that app publishes. */
-    constructor(context: Context, dir: File, maxAgeMs: Long = 7L * 86_400_000L) : this(context.contentResolver, dir, maxAgeMs, { authority ->
-        runCatching { context.packageManager.resolveContentProvider(authority, 0)?.packageName == context.packageName }.getOrDefault(true)
-    })
+    constructor(context: Context, dir: File, maxAgeMs: Long = 7L * 86_400_000L) : this(
+        context.contentResolver,
+        dir,
+        maxAgeMs,
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty(),
+        { authority -> runCatching { context.packageManager.resolveContentProvider(authority, 0)?.packageName == context.packageName }.getOrDefault(true) },
+    )
+
+    private val userAgent = if (version.isEmpty()) "Lounge (Android TV)" else "Lounge/$version (Android TV)"
 
     private val failures = HashMap<String, Long>()
 
@@ -117,7 +125,7 @@ class ArtworkFetcher(
             conn.connectTimeout = 8_000
             conn.readTimeout = 8_000
             conn.instanceFollowRedirects = true
-            conn.setRequestProperty("User-Agent", "Lounge/0.1 (Android TV)")
+            conn.setRequestProperty("User-Agent", userAgent)
             if (conn.responseCode !in 200..299) throw IllegalStateException("HTTP ${conn.responseCode}")
             val type = conn.contentType.orEmpty().lowercase()
             if (type.startsWith("video/") || type.startsWith("audio/")) throw IllegalStateException("not a picture: $type")
