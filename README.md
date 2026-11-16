@@ -152,6 +152,7 @@ a phone, done. All of it is in Settings afterwards.
 <p align="center">
   <img src="docs/screenshots/rows.png" width="49%" alt="The Stage lowered to a band of its picture's own light, with the rows below it: Just added, then a row of posters">
   <img src="docs/screenshots/tile-menu.png" width="49%" alt="The long-press menu beside a poster, with Pin to Stage and Hide, and the room dimmed around it">
+  <img src="docs/screenshots/notifications.png" width="49%" alt="The notifications panel beside the home screen: three notifications from two apps, each with its title, a line of its text, and who posted it and when">
 </p>
 
 ## The phone
@@ -250,7 +251,7 @@ minute without the remote the lights go down. Fourteen themes change the walls a
 nothing else.
 
 <p align="center">
-  <img src="docs/screenshots/themes.png" width="920" alt="Ten of the fourteen themes, each shown as the home screen with the Settings sheet open">
+  <img src="docs/screenshots/themes.png" width="920" alt="The fourteen themes, each shown as the home screen with the Settings sheet open">
 </p>
 
 The type is Bricolage Grotesque and Figtree, both bundled. Reduced motion follows the system
