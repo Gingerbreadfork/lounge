@@ -985,6 +985,7 @@ internal fun friendlyReason(e: Throwable, reason: String, title: String): String
             "Nothing on this TV can open $title. Is its app still installed?"
         "not installed" in m -> "$title isn't installed on this TV. Install it from the Play Store, then try again."
         "no video player" in m -> "Nothing on this TV can play $title. Install VLC or another video player, then try again."
+        "no player" in m -> "Nothing on this TV can play $title. Install VLC or another player, then try again."
         "notification access" in m -> "Lounge can't reach what's playing yet. In Settings, allow Notification access."
         "not playing" in m -> "That app has stopped playing. Open it to start something again."
         "did not answer" in m || "didn't answer" in m -> "$title's source didn't answer. Check that it is running, then try again."

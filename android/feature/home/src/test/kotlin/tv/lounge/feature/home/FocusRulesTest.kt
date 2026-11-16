@@ -108,6 +108,11 @@ class FocusRulesTest {
 
     @Test
     fun failuresAreSentencesWithTheirFix() {
+        // What the TV says when nothing can play a stream names the kind of player to install.
+        val film = "No video player can open this stream. Install VLC or another player."
+        assertEquals("Nothing on this TV can play A film. Install VLC or another video player, then try again.", friendlyReason(CoreException.Platform(film), film, "A film"))
+        val station = "No player can open this stream. Install VLC or another player."
+        assertEquals("Nothing on this TV can play A station. Install VLC or another player, then try again.", friendlyReason(CoreException.Platform(station), station, "A station"))
         val launch = friendlyReason(CoreException.Platform("No launch intent for com.netflix.ninja"), "No launch intent for com.netflix.ninja", "Netflix")
         assertEquals("Nothing on this TV can open Netflix. Is its app still installed?", launch)
         val unknown = CoreException.UnknownAction("open:wn:42")
