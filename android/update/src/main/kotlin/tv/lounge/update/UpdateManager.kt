@@ -113,8 +113,8 @@ class UpdateManager(
     private val pass = Mutex()
     @Volatile private var inForeground = false
     @Volatile private var lastAttemptMs = 0L
-    /** Whether the last attempt failed with no network to make it over, so it is tried again once there is one. */
-    @Volatile private var failedOffline = false
+    /** The time on a failure that came of having no network. Such a failure is tried again as soon as there is one. */
+    @Volatile private var offlineFailureAtMs = 0L
     /** Whether a pass is already waiting to run for the home's return. */
     private val returnPass = java.util.concurrent.atomic.AtomicBoolean(false)
     /** Set once the loop has waited out the start of the app, before which nothing is fetched. */
@@ -289,7 +289,7 @@ class UpdateManager(
                     reached = lastCheckedMs != answeredBefore
                 }
                 s is UpdateState.Failed && s.release != null && failures.gaveUpOn(s.release.tag) -> return
-                s is UpdateState.Failed && retryDue(now, s.atMs, online, failedOffline) -> if (s.release != null) download(s.release) else check()
+                s is UpdateState.Failed && retryDue(now, s.atMs, online, failedOffline = s.atMs == offlineFailureAtMs) -> if (s.release != null) download(s.release) else check()
                 s is UpdateState.Available && (online || reached) -> download(s.release)
                 // A quiet install waits until the home is off screen; one that needs a confirmation
                 // only prepares the session, so Android has the dialog ready for the notice.
@@ -326,7 +326,6 @@ class UpdateManager(
         val before = _state.value
         if (!quiet) _state.value = UpdateState.Checking
         lastAttemptMs = System.currentTimeMillis()
-        failedOffline = false
         val result = runCatching { fetchLatest() }
         val now = System.currentTimeMillis()
         val next = result.fold(
@@ -343,8 +342,7 @@ class UpdateManager(
             },
             onFailure = {
                 Log.w(TAG, "updates: the check failed: $it")
-                failedOffline = !online()
-                if (quiet) before else failed(it, null)
+                if (quiet) before else failed(it, null).also { f -> if (!online()) offlineFailureAtMs = f.atMs }
             },
         )
         _state.value = next
@@ -356,7 +354,6 @@ class UpdateManager(
         work.withLock {
             readyIfDownloaded(release)?.let { _state.value = it; return@withLock it }
             _state.value = UpdateState.Downloading(release, 0f)
-            failedOffline = false
             val result = runCatching { fetchApk(release) }
             // The update installs without its profile too; one that cannot be had only costs the compile.
             if (result.isSuccess) runCatching { fetchProfile(release) }.onFailure { Log.w(TAG, "updates: no profile for ${release.tag}: ${it.message}") }
@@ -364,9 +361,10 @@ class UpdateManager(
                 onSuccess = { (file, hash) -> UpdateState.Ready(release, file, hash, currentPath()) },
                 onFailure = {
                     Log.w(TAG, "updates: the download failed: $it${it.cause?.let { c -> " ($c)" }.orEmpty()}")
-                    failedOffline = !online()
-                    noteFailure(release, final = false)
-                    failed(it, release)
+                    // A download cut off by the network going is not one of the tries a release gets.
+                    val offline = !online()
+                    if (!offline) noteFailure(release, final = false)
+                    failed(it, release).also { f -> if (offline) offlineFailureAtMs = f.atMs }
                 },
             )
             _state.value = next
