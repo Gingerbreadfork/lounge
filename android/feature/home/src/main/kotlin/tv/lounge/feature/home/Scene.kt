@@ -53,6 +53,8 @@ private const val HOPELESS_MS = 500f
 private const val STALLED_FRAMES = 6
 /** A try at a better rung waits for twice as many starts after each one that fails, up to this many doublings. */
 private const val MAX_FAILS = 6
+/** A try at a better rung is kept only if it holds within this share of the budget, so it is not kept on the edge. */
+private const val TRY_MARGIN = 0.85f
 /** Bumped when the renderer changes what a frame costs, so remembered steps start over. */
 private const val RENDERER = 7
 
@@ -129,8 +131,8 @@ internal enum class StepChange { None, Kept, Stepped, Unusable }
 /**
  * Chooses the rung a scene runs at from what its frames cost. Two slow windows in a row step it
  * down, and the step is remembered. So that one bad evening is not kept for good, a later start
- * tries the rung above again: two clean windows keep it, a slow one goes back, and each failure
- * doubles the starts before the next try.
+ * tries the rung above again: two windows with room to spare keep it, one without goes back, and
+ * each failure doubles the starts before the next try.
  */
 internal class SceneSteps(private val ladder: SceneLadder, saved: SceneRecord?) {
     private val size = ladder.rungs.size
@@ -176,7 +178,7 @@ internal class SceneSteps(private val ladder: SceneLadder, saved: SceneRecord?) 
     fun window(medianMs: Float): StepChange {
         val slow = medianMs > ladder.budget(rung)
         if (trying) {
-            if (slow) return back(medianMs)
+            if (medianMs > TRY_MARGIN * ladder.budget(rung)) return back(medianMs)
             if (++cleanWindows < 2) return StepChange.None
             trying = false
             record = SceneRecord(step)

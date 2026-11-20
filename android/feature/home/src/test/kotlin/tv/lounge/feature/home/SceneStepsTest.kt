@@ -67,6 +67,16 @@ class SceneStepsTest {
     }
 
     @Test
+    fun aTryThatOnlyJustHoldsIsNotKept() {
+        // 22 ms is inside the budget of 24, but not by enough to stay there.
+        val s = SceneSteps(plain, SceneRecord(1))
+        assertTrue(s.trying)
+        assertEquals(StepChange.Stepped, s.window(22f))
+        assertEquals(1, s.step)
+        assertEquals(1, s.record.fails)
+    }
+
+    @Test
     fun aFailedTryGoesBackAndWaitsLonger() {
         val s = SceneSteps(plain, SceneRecord(1, fails = 1, starts = 1))
         assertTrue(s.trying)
