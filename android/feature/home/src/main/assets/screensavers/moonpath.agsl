@@ -1,6 +1,8 @@
-// Moonpath: the sea at night, and the road the moon lays across it.
+// Moonpath: the sea at night, and the road the moon lays across it. The moon stands highest
+// in the middle of the night and lower toward evening and morning.
 uniform float2 resolution;
 uniform float time;
+uniform float hour;
 uniform shader noise;
 layout(color) uniform half4 velvet;
 layout(color) uniform half4 horizon;
@@ -8,7 +10,6 @@ layout(color) uniform half4 houselight;
 layout(color) uniform half4 dust;
 
 const float SEA = 0.2;
-const float2 MOON = float2(0.42, 0.32);
 
 float n(float2 p) {
     return float(noise.eval(p * 16.0).r);
@@ -37,6 +38,9 @@ float waves(float2 w, float t, float footprint) {
 half4 main(float2 coord) {
     float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
     float t = time * 0.3;
+    // Six hours either side of half past midnight take the moon from its low place to its high one.
+    float high = clamp(1.0 - abs(mod(hour + 12.0, 24.0) - 12.5) / 6.0, 0.0, 1.0);
+    float2 MOON = float2(0.42, 0.27 + 0.09 * high);
     float3 moon = normalize(float3(MOON.x, MOON.y - SEA, 1.0));
     float3 view = normalize(float3(p.x, p.y - SEA, 1.0));
 

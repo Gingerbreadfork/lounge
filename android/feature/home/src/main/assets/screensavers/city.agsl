@@ -1,7 +1,9 @@
 // City: the city at night, out of focus beyond the glass. Buildings full of lit windows, the
-// brighter lights among them, traffic going by underneath, and a few lights much nearer.
+// brighter lights among them, traffic going by underneath, and a few lights much nearer. In the
+// small hours half the windows are dark and the traffic thins.
 uniform float2 resolution;
 uniform float time;
+uniform float hour;
 uniform shader noise;
 layout(color) uniform half4 velvet;
 layout(color) uniform half4 horizon;
@@ -61,6 +63,8 @@ half4 main(float2 coord) {
     float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
     half3 col = mix(horizon.rgb * 1.4, velvet.rgb * 0.6, half(smoothstep(-0.5, 0.45, p.y)));
     half3 white = mix(houselight.rgb, dust.rgb, 0.6);
+    // How much of the city is still up: all of it until midnight, half at half past three.
+    float up = 1.0 - 0.5 * clamp(1.0 - abs(hour - 3.5) / 3.5, 0.0, 1.0);
 
     col += mix(houselight.rgb, ember.rgb, 0.4) * half(0.05 * exp(-(p.y + 0.05) * (p.y + 0.05) * 16.0));
 
@@ -74,14 +78,14 @@ half4 main(float2 coord) {
         float body = smoothstep(top + 0.025, top - 0.025, p.y) * smoothstep(0.0, 0.12, f) * smoothstep(1.0, 0.88, f) * smoothstep(-0.42, -0.32, p.y);
         float3 w = float3(noise.eval(float2(x * 22.0, p.y * 19.0) * 16.0).rgb);
         float lit = smoothstep(0.4, 0.9, w.r) * (0.5 + 0.5 * w.g);
-        col += mix(houselight.rgb, white, half(w.b)) * half(0.16 * lit * body);
-        col += layer(p, 0.05, 0.003, 0.55, 0.42, houselight.rgb, white, 0.34, true);
-        col += layer(p + float2(0.31, 0.17), 0.07, 0.003, 0.4, 0.4, houselight.rgb, ember.rgb, 0.3, true);
+        col += mix(houselight.rgb, white, half(w.b)) * half(0.16 * lit * body * up);
+        col += layer(p, 0.05, 0.003, 0.55 * up, 0.42, houselight.rgb, white, 0.34, true);
+        col += layer(p + float2(0.31, 0.17), 0.07, 0.003, 0.4 * up, 0.4, houselight.rgb, ember.rgb, 0.3, true);
     }
     if (p.y < -0.34) {
         col += lane(p, -0.38, 0.1, 0.003, 0.55, houselight.rgb, 0.3);
-        col += lane(p, -0.42, 0.065, 0.022, 0.4, ember.rgb, 0.4);
-        col += lane(p, -0.445, 0.065, -0.018, 0.35, white, 0.3);
+        col += lane(p, -0.42, 0.065, 0.022, 0.4 * up, ember.rgb, 0.4);
+        col += lane(p, -0.445, 0.065, -0.018, 0.35 * up, white, 0.3);
     }
     if (p.y < 0.36) {
         col += layer(p + float2(-7.1, 4.2), 0.26, 0.011, 0.45, 0.47, houselight.rgb, ember.rgb, 0.14, false);
