@@ -1,27 +1,39 @@
 package tv.lounge.feature.home
 
+import android.content.Context
 import android.graphics.BitmapShader
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
+import android.view.SurfaceView
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import kotlinx.coroutines.delay
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import tv.lounge.design.BlueNoise
 import tv.lounge.design.LoungeTheme
+import tv.lounge.platform.PanelSize
 
-// Lounge's finishing pass, drawn at the screen's own size over every scene: the room's vignette,
-// the house lights, a ceiling on highlights so nothing glares at night, and one level of blue
-// noise a pixel against banding.
+// Lounge's finishing pass, drawn over every scene at the size of the surface's buffer: the room's
+// vignette, the house lights, a ceiling on highlights so nothing glares at night, and one level of
+// blue noise a pixel against banding.
 private const val FINISH_SKSL = """
 uniform shader scene;
 uniform shader blue;
@@ -43,43 +55,76 @@ half4 main(float2 coord) {
 """
 
 /**
- * An abstract screensaver: the program drawn on the GPU behind the clock and its name. The house
- * lights go down a step after half an hour, as they do for pictures.
+ * An abstract screensaver: the program drawn on the GPU behind the clock and its name. It comes
+ * up out of black once its first frame is there, and the house lights are the [room]'s.
  */
 @Composable
-fun ShaderScreensaver(style: ShaderStyle, onUnusable: (String) -> Unit, preview: Boolean = false) {
+internal fun ShaderScreensaver(style: ShaderStyle, room: AmbientRoom, onUnusable: (String) -> Unit, preview: Boolean = false) {
     val motion = LoungeTheme.motion
-    val clock = rememberAmbientClock()
-    val drift = rememberAmbientDrift()
-    val lights = remember { mutableFloatStateOf(1f) }
-    LaunchedEffect(Unit) {
-        delay(LATE_AFTER_MS)
-        repeat(LATE_DIM_STEPS) { i ->
-            lights.floatValue = 1f - 0.2f * (i + 1) / LATE_DIM_STEPS
-            delay(LATE_DIM_MS / LATE_DIM_STEPS)
-        }
-    }
+    var shown by remember(style) { mutableStateOf(false) }
+    val cover = animateFloatAsState(if (shown) 0f else 1f, tween(if (motion.reducedMotion) 0 else 1_200), label = "sceneCover")
+    // Whatever went wrong last time, this run decides afresh.
+    LaunchedEffect(style) { SceneMemory.seen.remove(style.id) }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (Build.VERSION.SDK_INT >= 33) {
-            SaverSurface(style, lights, motion.reducedMotion, !preview, onUnusable)
+            SaverSurface(style, room.lights, motion.reducedMotion, preview, onUnusable, onShown = { shown = true })
+            // The surface is behind the window, so black drawn here covers it until it has a frame.
+            Box(Modifier.fillMaxSize().drawBehind { if (cover.value > 0.001f) drawRect(Color.Black, alpha = cover.value) })
         } else {
             LaunchedEffect(Unit) { onUnusable("abstract screensavers need Android 13") }
         }
-        AmbientCaption(clock, style.name, style.origin, drift)
+        AmbientCaption(room, style.name, style.origin)
     }
 }
 
 @RequiresApi(33)
 @Composable
-private fun SaverSurface(style: ShaderStyle, lights: State<Float>, slow: Boolean, keepResolution: Boolean, onUnusable: (String) -> Unit) {
-    val finish = remember {
-        RuntimeShader(FINISH_SKSL).apply { setInputShader("blue", BitmapShader(BlueNoise.bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)) }
+private fun SaverSurface(style: ShaderStyle, lights: State<Float>, slow: Boolean, preview: Boolean, onUnusable: (String) -> Unit, onShown: () -> Unit) {
+    val context = LocalContext.current
+    val colors = LoungeTheme.colors
+    val panel = remember { PanelSize.of(context) }
+    // Each renderer has a finish of its own: one is still drawing as the next starts.
+    val finish = remember(style, colors) { SaverFinish() }
+    val renderer = remember(finish, slow, preview) {
+        SceneRenderer(
+            context,
+            style,
+            colors,
+            finish,
+            ladderFor = { w, h -> SceneLadder.saver(w, h, panel, style.fine) },
+            preview = preview,
+            speed = if (slow) 0.35f else 1f,
+            onUnusable = onUnusable,
+            onShown = onShown,
+        )
     }
-    // A scene with fine detail starts at full size on a TV with the GPU for it (DESIGN.md §5.5).
-    val full = style.fine && LoungeTheme.visuals.tierA
-    val quality = remember(keepResolution, full) { SceneQuality("saver", startDivisor = if (full) 1f else 2f, maxDivisor = 6f, gpuBudgetMs = 24f, keepResolution = keepResolution) }
-    SceneSurface(style, quality, finish, slow, paused = { false }, onUnusable = onUnusable, finishKey = lights.value) { width, height ->
-        finish.setFloatUniform("resolution", width, height)
-        finish.setFloatUniform("brightness", lights.value)
+    LaunchedEffect(finish) { snapshotFlow { lights.value }.collect { finish.brightness = it } }
+    // A new scene gets a new surface: the callbacks that start a renderer fire once per surface.
+    key(renderer) {
+        AndroidView(
+            factory = { c: Context ->
+                SurfaceView(c).apply {
+                    holder.addCallback(renderer)
+                    // Over a live background's surface, still under the window.
+                    setZOrderMediaOverlay(true)
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+    DisposableEffect(renderer) { onDispose { renderer.close() } }
+}
+
+@RequiresApi(33)
+private class SaverFinish : SceneFinish {
+    @Volatile var brightness: Float = 1f
+    override val shader = RuntimeShader(FINISH_SKSL).apply {
+        setInputShader("blue", BitmapShader(BlueNoise.bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT))
+    }
+
+    override fun prepare(width: Float, height: Float, scale: Float): Boolean {
+        shader.setFloatUniform("resolution", width, height)
+        shader.setFloatUniform("brightness", brightness)
+        return true
     }
 }

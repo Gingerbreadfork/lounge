@@ -1,23 +1,9 @@
 package tv.lounge.feature.home
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapShader
-import android.graphics.Canvas
-import android.graphics.HardwareRenderer
-import android.graphics.Matrix
-import android.graphics.Paint
-import android.graphics.PixelFormat
-import android.graphics.RenderNode
 import android.graphics.RuntimeShader
 import android.graphics.Shader
-import android.hardware.HardwareBuffer
-import android.media.Image
-import android.media.ImageReader
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
-import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.Animatable
@@ -37,39 +23,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.viewinterop.AndroidView
-import java.util.concurrent.Executors
-import kotlin.math.ceil
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import tv.lounge.design.BlueNoise
 import tv.lounge.design.Dimens
 import tv.lounge.design.FollowLight
 import tv.lounge.design.LightState
-import tv.lounge.design.LoungeColors
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.rememberIdleLevel
-
-private const val TAG = "Lounge"
-private const val WINDOW = 45
-private const val SETTLE_MS = 2_500L
-/**
- * Nothing is measured until the app has run this long: its own start keeps the GPU busy, and a
- * step down taken then would be remembered for good.
- */
-private const val WARM_MS = 15_000L
-/** What a frame may cost, scene and finish together, before the next step is taken. */
-private const val SLOW_MS = 24f
-/** Frames this slow, three in a row, mean no step down will save the scene, so it ends at once. */
-private const val HOPELESS_MS = 500f
-/** The steps a scene takes as it proves too heavy: a fraction of the screen and the interval between frames, the rate dropping before the picture shrinks. */
-private val LADDER = listOf(2 to 33L, 2 to 50L, 3 to 33L, 3 to 50L)
-private const val RENDERER = 6
 
 // The room's light over a live scene, drawn at the scene's own size: the scene dimmed and held
 // under a ceiling so the tiles stay the brightest things in the room, the focused tile's spill and
@@ -153,8 +113,12 @@ fun LiveBackdrop(style: ShaderStyle, state: LightState, onUnusable: (String) -> 
     val billAlpha = 0.22f * colors.spillScale
     val spillRadius = with(density) { Dimens.spillRadius.toPx() }
 
-    val renderer = remember(style, colors) { BackdropRenderer(context, style, colors, onUnusable) }
-    LaunchedEffect(renderer) {
+    // Each renderer has a finish of its own: one is still drawing as the next starts.
+    val finish = remember(style, colors) { LiveFinish() }
+    val renderer = remember(finish) {
+        SceneRenderer(context, style, colors, finish, { w, h -> SceneLadder.live(w, h) }, preview = false, speed = 1f, onUnusable = onUnusable)
+    }
+    LaunchedEffect(finish) {
         snapshotFlow {
             val level = idleLevel.value * state.warmth
             val bill = state.bill
@@ -169,7 +133,7 @@ fun LiveBackdrop(style: ShaderStyle, state: LightState, onUnusable: (String) -> 
                 billAlpha = if (bill != null) billAlpha * level * bill.strength().coerceIn(0f, 1f) else 0f,
                 billColor = bill?.color ?: Color.Black,
             )
-        }.collect { renderer.lights = it }
+        }.collect { finish.lights = it }
     }
     LaunchedEffect(renderer) { snapshotFlow { state.paused }.collect { renderer.paused = it } }
     // A new scene gets a new surface: the callbacks that start a renderer fire once per surface.
@@ -182,294 +146,34 @@ fun LiveBackdrop(style: ShaderStyle, state: LightState, onUnusable: (String) -> 
     DisposableEffect(renderer) { onDispose { renderer.close() } }
 }
 
-/**
- * Draws the scene on its own thread, thirty times a second, at a fraction of the window's size
- * in a layer of its own, then the lights and the dither over it at that same size into a surface
- * buffer of that size, which the compositor scales to the window. When frames take too long the
- * fraction gets smaller, and a scene too heavy even at a third is given up on.
- */
+/** The live background's finish: the lights of the frame being drawn, in the buffer's own pixels. */
 @RequiresApi(33)
-private class BackdropRenderer(context: Context, private val style: ShaderStyle, private val colors: LoungeColors, private val onUnusable: (String) -> Unit) : SurfaceHolder.Callback {
-    private val thread = Executors.newSingleThreadExecutor { r -> Thread(r, "lounge-backdrop") }
-    private val scope = CoroutineScope(SupervisorJob() + thread.asCoroutineDispatcher())
-    private val main = Handler(Looper.getMainLooper())
-    private val memory = context.getSharedPreferences("screensavers", Context.MODE_PRIVATE)
-    private val memoryKey = "$RENDERER:live:${style.id}:${style.source.hashCode()}"
+private class LiveFinish : SceneFinish {
     @Volatile var lights: Lights? = null
-    @Volatile var paused: Boolean = false
-    /** Held while a frame is drawn, so the surface is never used after it is destroyed. */
-    private val drawing = java.util.concurrent.locks.ReentrantLock()
-    @Volatile private var holder: SurfaceHolder? = null
-    private var loop: Job? = null
-    private var viewWidth = 0
-    private var viewHeight = 0
-    /** The divisor the surface's buffer was last sized for. */
-    private var sizedFor = 0
-    private var step = runCatching { memory.getInt(memoryKey, 0) }.getOrDefault(0).coerceIn(0, LADDER.lastIndex)
-    private val divisor: Int get() = LADDER[step].first
-    private val frameMs: Long get() = LADDER[step].second
-    private var program: Program? = null
-    private val finish = RuntimeShader(LIVE_FINISH_SKSL)
-    private val paint = Paint()
-    private val scenePaint = Paint()
-    // The scene is drawn small into a buffer the GPU can sample, and the finish reads it scaled.
-    private val sceneNode = RenderNode("lounge-scene")
-    private var sceneRenderer: HardwareRenderer? = null
-    private var sceneReader: ImageReader? = null
-    private var sceneWidth = 0
-    private var sceneHeight = 0
-    private var shownImage: Image? = null
-    private var lastImage: Image? = null
-    private var sceneShader: Shader? = null
-    private val sceneMatrix = Matrix()
-    private var given = false
-
-    override fun surfaceCreated(h: SurfaceHolder) {
-        holder = h
+    override val shader = RuntimeShader(LIVE_FINISH_SKSL).apply {
+        setInputShader("blue", BitmapShader(BlueNoise.bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT))
     }
 
-    override fun surfaceChanged(h: SurfaceHolder, format: Int, width: Int, height: Int) {
-        scope.launch {
-            if (viewWidth == 0) {
-                viewWidth = width
-                viewHeight = height
-                Log.i(TAG, "backdrop: ${style.id} surface ${width}x${height}, drawing at 1/$divisor")
-                start()
-            } else {
-                Log.i(TAG, "backdrop: ${style.id} buffer ${width}x${height}")
-            }
+    override fun prepare(width: Float, height: Float, scale: Float): Boolean {
+        val l = lights ?: return false
+        val k = scale
+        shader.setFloatUniform("level", l.level)
+        shader.setFloatUniform("spill", l.spill.x * k, l.spill.y * k)
+        shader.setFloatUniform("spillR", l.spillRadius * k)
+        shader.setFloatUniform("spillAlpha", l.spillAlpha)
+        shader.setColorUniform("spillColor", android.graphics.Color.valueOf(l.spillColor.red, l.spillColor.green, l.spillColor.blue, 1f))
+        val bill = l.bill
+        if (bill != null) {
+            shader.setFloatUniform("bill", bill.x * k, bill.y * k)
+            shader.setFloatUniform("billRadii", (l.billRadii.x * k).coerceAtLeast(1f), (l.billRadii.y * k).coerceAtLeast(1f))
+            shader.setFloatUniform("billAlpha", l.billAlpha)
+            shader.setColorUniform("billColor", android.graphics.Color.valueOf(l.billColor.red, l.billColor.green, l.billColor.blue, 1f))
+        } else {
+            shader.setFloatUniform("bill", -10000f, -10000f)
+            shader.setFloatUniform("billRadii", 1f, 1f)
+            shader.setFloatUniform("billAlpha", 0f)
+            shader.setColorUniform("billColor", android.graphics.Color.valueOf(0f, 0f, 0f, 1f))
         }
-    }
-
-    override fun surfaceDestroyed(h: SurfaceHolder) {
-        // Waits for at most the frame in flight; the loop finds no holder afterwards.
-        drawing.lock()
-        try {
-            holder = null
-        } finally {
-            drawing.unlock()
-        }
-    }
-
-    fun close() {
-        scope.cancel()
-        thread.execute {
-            drawing.lock()
-            try {
-                releaseSceneTarget()
-            } finally {
-                drawing.unlock()
-            }
-        }
-        thread.shutdown()
-    }
-
-    private fun giveUp(why: String) {
-        if (given) return
-        given = true
-        Log.w(TAG, "backdrop: ${style.id} given up: $why")
-        loop?.cancel()
-        loop = null
-        main.post { onUnusable(why) }
-    }
-
-    /** Sizes the surface's buffer to the scene, so the compositor scales it and no full-size pass is drawn. */
-    private fun sizeSurface() {
-        val d = divisor
-        if (sizedFor == d) return
-        sizedFor = d
-        val w = ceil(viewWidth / d.toFloat()).toInt().coerceAtLeast(1)
-        val hgt = ceil(viewHeight / d.toFloat()).toInt().coerceAtLeast(1)
-        main.post { holder?.setFixedSize(w, hgt) }
-    }
-
-    private fun start() {
-        val compiled = compileScene(style, colors)
-        program = compiled.getOrNull()
-        if (program == null) {
-            giveUp(compiled.exceptionOrNull()?.message ?: "the program does not compile")
-            return
-        }
-        sizeSurface()
-        finish.setInputShader("blue", BitmapShader(BlueNoise.bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT))
-        loop = scope.launch {
-            var started = System.nanoTime()
-            val warm = android.os.Process.getStartUptimeMillis() + WARM_MS - android.os.SystemClock.uptimeMillis()
-            var settleUntil = System.currentTimeMillis() + maxOf(SETTLE_MS, warm)
-            val frames = FloatArray(WINDOW)
-            var n = 0
-            var windows = 0
-            var pausedAt = 0L
-            var reported = false
-            var hopeless = 0
-            var slow = 0
-            while (true) {
-                if (paused) {
-                    if (pausedAt == 0L) pausedAt = System.nanoTime()
-                    delay(200)
-                    continue
-                }
-                if (pausedAt != 0L) {
-                    started += System.nanoTime() - pausedAt
-                    pausedAt = 0L
-                    settleUntil = System.currentTimeMillis() + SETTLE_MS
-                    n = 0
-                }
-                val t0 = System.nanoTime()
-                draw((t0 - started) / 1_000_000_000f)
-                val took = (System.nanoTime() - t0) / 1_000_000f
-                if (System.currentTimeMillis() > settleUntil) {
-                    frames[n++] = took
-                    hopeless = if (took > HOPELESS_MS) hopeless + 1 else 0
-                    if (hopeless >= 3) {
-                        giveUp("it is too heavy for this TV")
-                        return@launch
-                    }
-                }
-                if (n >= WINDOW) {
-                    n = 0
-                    windows++
-                    val median = frames.sorted()[WINDOW / 2]
-                    if (!reported || windows % 60 == 0) {
-                        Log.i(TAG, "backdrop: ${style.id} at 1/$divisor, ${1000L / frameMs} fps, $median ms a frame")
-                        reported = true
-                    }
-                    // The scene is waited for, so a frame's time is what the GPU spent on it. One
-                    // slow window can be the home loading its rows; two in a row is the TV.
-                    slow = if (median > SLOW_MS) slow + 1 else 0
-                    if (slow >= 2) {
-                        if (step >= LADDER.lastIndex) {
-                            giveUp("it is too heavy for this TV")
-                            return@launch
-                        }
-                        step++
-                        slow = 0
-                        memory.edit().putInt(memoryKey, step).apply()
-                        sizeSurface()
-                        settleUntil = System.currentTimeMillis() + SETTLE_MS
-                        reported = false
-                    }
-                }
-                delay((frameMs - took.toLong()).coerceIn(1L, frameMs))
-            }
-        }
-    }
-
-    private fun draw(time: Float) {
-        drawing.lock()
-        try {
-            drawLocked(time)
-        } finally {
-            drawing.unlock()
-        }
-    }
-
-    /** Draws the scene at [sw] by [sh] into a buffer the GPU can sample, as a shader scaled to the window. */
-    private fun renderScene(p: Program, sw: Int, sh: Int, time: Float, up: Float): Shader? {
-        if (sw != sceneWidth || sh != sceneHeight) {
-            releaseSceneTarget()
-            val reader = ImageReader.newInstance(sw, sh, PixelFormat.RGBA_8888, 3, HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
-            sceneReader = reader
-            sceneRenderer = HardwareRenderer().apply {
-                isOpaque = true
-                setLightSourceGeometry(0f, 0f, 800f, 20f)
-                setLightSourceAlpha(0f, 0f)
-                setSurface(reader.surface)
-                setContentRoot(sceneNode)
-            }
-            sceneWidth = sw
-            sceneHeight = sh
-        }
-        p.provide(sw.toFloat(), sh.toFloat(), time, 12f, colors)
-        scenePaint.shader = p.shader
-        sceneNode.setPosition(0, 0, sw, sh)
-        val sc = sceneNode.beginRecording(sw, sh)
-        try {
-            sc.drawRect(0f, 0f, sw.toFloat(), sh.toFloat(), scenePaint)
-        } finally {
-            sceneNode.endRecording()
-        }
-        sceneRenderer?.createRenderRequest()?.setWaitForPresent(true)?.syncAndDraw()
-        // One frame is drawn per acquire, and two stay held, so the third slot is always this one.
-        val image = sceneReader?.acquireNextImage() ?: return sceneShader
-        val buffer = image.hardwareBuffer
-        val bitmap = buffer?.let { Bitmap.wrapHardwareBuffer(it, null) }
-        buffer?.close()
-        if (bitmap == null) {
-            image.close()
-            return sceneShader
-        }
-        // The frame before stays open until this one is posted, so a buffer is never refilled
-        // while the GPU may still read it.
-        lastImage?.close()
-        lastImage = shownImage
-        shownImage = image
-        sceneMatrix.setScale(up, up)
-        return BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-            filterMode = BitmapShader.FILTER_MODE_LINEAR
-            setLocalMatrix(sceneMatrix)
-            sceneShader = this
-        }
-    }
-
-    private fun releaseSceneTarget() {
-        lastImage?.close()
-        lastImage = null
-        shownImage?.close()
-        shownImage = null
-        sceneShader = null
-        sceneRenderer?.destroy()
-        sceneRenderer = null
-        sceneReader?.close()
-        sceneReader = null
-        sceneWidth = 0
-        sceneHeight = 0
-    }
-
-    private fun drawLocked(time: Float) {
-        val h = holder ?: return
-        val p = program ?: return
-        val l = lights ?: return
-        val canvas: Canvas = try {
-            h.lockHardwareCanvas()
-        } catch (e: Exception) {
-            Log.w(TAG, "backdrop: no canvas: $e")
-            null
-        } ?: return
-        try {
-            val w = canvas.width
-            val hgt = canvas.height
-            val d = divisor.toFloat()
-            val sw = ceil(viewWidth / d).toInt().coerceAtLeast(1)
-            val sh = ceil(viewHeight / d).toInt().coerceAtLeast(1)
-            // The canvas is the scene's own size once the surface is resized, the window's until then.
-            val scene = renderScene(p, sw, sh, time, w.toFloat() / sw) ?: return
-            val k = w.toFloat() / viewWidth
-            finish.setInputShader("scene", scene)
-            finish.setFloatUniform("level", l.level)
-            finish.setFloatUniform("spill", l.spill.x * k, l.spill.y * k)
-            finish.setFloatUniform("spillR", l.spillRadius * k)
-            finish.setFloatUniform("spillAlpha", l.spillAlpha)
-            finish.setColorUniform("spillColor", android.graphics.Color.valueOf(l.spillColor.red, l.spillColor.green, l.spillColor.blue, 1f))
-            val bill = l.bill
-            if (bill != null) {
-                finish.setFloatUniform("bill", bill.x * k, bill.y * k)
-                finish.setFloatUniform("billRadii", (l.billRadii.x * k).coerceAtLeast(1f), (l.billRadii.y * k).coerceAtLeast(1f))
-                finish.setFloatUniform("billAlpha", l.billAlpha)
-                finish.setColorUniform("billColor", android.graphics.Color.valueOf(l.billColor.red, l.billColor.green, l.billColor.blue, 1f))
-            } else {
-                finish.setFloatUniform("bill", -10000f, -10000f)
-                finish.setFloatUniform("billRadii", 1f, 1f)
-                finish.setFloatUniform("billAlpha", 0f)
-                finish.setColorUniform("billColor", android.graphics.Color.valueOf(0f, 0f, 0f, 1f))
-            }
-            paint.shader = finish
-            canvas.drawRect(0f, 0f, w.toFloat(), hgt.toFloat(), paint)
-        } catch (e: Exception) {
-            Log.w(TAG, "backdrop: draw failed: $e")
-            giveUp("it does not draw: $e")
-        } finally {
-            h.unlockCanvasAndPost(canvas)
-        }
+        return true
     }
 }

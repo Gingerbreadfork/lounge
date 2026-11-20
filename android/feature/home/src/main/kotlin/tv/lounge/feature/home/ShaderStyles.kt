@@ -17,7 +17,7 @@ data class ShaderStyle(
     val source: String,
     val values: List<ShaderValue>,
     val origin: String,
-    /** Fine detail that blurs at half size, so it starts at full size where the TV allows. */
+    /** Fine detail that blurs at half size, so it may climb to full size on a TV that holds it there. */
     val fine: Boolean = false,
 )
 
@@ -97,6 +97,9 @@ object ShaderSource {
 /** Every abstract scene this TV can show, as a screensaver or a live background: Lounge's own, those from plugins, and local files. */
 object ShaderStyles {
     const val PICTURES = "pictures"
+    /** A different scene each time the screensaver starts. */
+    const val MIX = "mix"
+    private const val LAST_IN_MIX = "mix:last"
 
     fun all(context: Context, core: CoreClient): List<ShaderStyle> =
         if (Build.VERSION.SDK_INT < 33) emptyList() else bundled(context) + fromPlugins(core) + local(context)
@@ -108,6 +111,22 @@ object ShaderStyles {
         id.startsWith("local:") -> local(context).firstOrNull { it.id == id }
         else -> null
     }
+
+    /**
+     * The scene the mix shows next: the one after the last it showed, passing over any this TV
+     * could not draw. With [advance] it becomes the last shown; a preview looks without moving on.
+     */
+    fun nextInMix(context: Context, core: CoreClient, advance: Boolean): ShaderStyle? {
+        val memory = SceneMemory(context)
+        val scenes = all(context, core).filter { memory.problem(it) == null }
+        val prefs = context.getSharedPreferences(SceneMemory.FILE, Context.MODE_PRIVATE)
+        val next = scenes.getOrNull(indexAfter(scenes.map { it.id }, prefs.getString(LAST_IN_MIX, null))) ?: return null
+        if (advance) prefs.edit().putString(LAST_IN_MIX, next.id).apply()
+        return next
+    }
+
+    /** The place after [last] in [ids], round the list; the first when it is not there, -1 for an empty list. */
+    internal fun indexAfter(ids: List<String>, last: String?): Int = if (ids.isEmpty()) -1 else (ids.indexOf(last) + 1) % ids.size
 
     fun bundled(context: Context): List<ShaderStyle> = runCatching {
         val index = JSONArray(context.assets.open("screensavers/index.json").bufferedReader().use { it.readText() })

@@ -98,7 +98,7 @@ import tv.lounge.power.PowerAction
  * Right-hand `curtain` sheet over a scrim (DESIGN.md §5.4). One panel serves every sheet: it slides
  * in once, and moving between sheets crossfades the content with an 8 px shift in the direction of
  * travel. [visibleState] comes from `Presence` so Back plays the exit; [depth] gives the shift's
- * direction.
+ * direction. A sheet that shows its subject behind it goes without the [scrim].
  */
 @Composable
 fun <K : Any> RightSheet(
@@ -106,10 +106,12 @@ fun <K : Any> RightSheet(
     key: K,
     depth: Int,
     onDismiss: () -> Unit,
+    scrim: Boolean = true,
     content: @Composable (firstFocus: FocusRequester, key: K) -> Unit,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
+    val scrimLevel = animateFloatAsState(if (scrim) 1f else 0f, tween(if (motion.reducedMotion) 1 else 200), label = "sheetScrim")
     var lastDepth by remember { mutableStateOf(depth) }
     val forward = depth >= lastDepth
     LaunchedEffect(depth) { lastDepth = depth }
@@ -121,7 +123,7 @@ fun <K : Any> RightSheet(
             enter = fadeIn(tween(if (motion.reducedMotion) 1 else 200)),
             exit = fadeOut(tween(if (motion.reducedMotion) 1 else 180)),
         ) {
-            Box(Modifier.fillMaxSize().background(colors.scrim))
+            Box(Modifier.fillMaxSize().drawBehind { drawRect(colors.scrim, alpha = scrimLevel.value) })
         }
         AnimatedVisibility(
             visibleState,

@@ -36,7 +36,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -194,7 +196,8 @@ fun HomeScreen(
     // The rows read the open menu through these, so opening one recomposes only the tile it came from.
     val heldMenu: () -> Overlay.TileMenu? = { state.overlay as? Overlay.TileMenu }
     val heldHomeMenu: () -> Overlay.TileMenu? = { heldMenu()?.takeIf { it.under == Overlay.None } }
-    val opaqueOverlay = searchOpen || allAppsOpen || overlay == Overlay.Onboarding || overlay == Overlay.AmbientPreview
+    val saverShown = overlay == Overlay.Ambient || overlay == Overlay.AmbientPreview
+    val opaqueOverlay = searchOpen || allAppsOpen || overlay == Overlay.Onboarding || saverShown
     FieldSleep(light, { state.lastInputAt }, opaqueOverlay)
     // Rows off screen are built in idle time and every row is kept once built, so neither the
     // proscenium nor a move between rows composes a row in the middle of a frame.
@@ -700,12 +703,33 @@ fun HomeScreen(
             }
         }
 
+        // The screensaver as it will be: behind its sheet while a style is chosen, and alone for
+        // the full look, which any key ends.
+        Presence(if (saverShown) Unit else null) { _, visibleState ->
+            AnimatedVisibility(visibleState, enter = fadeIn(motion.curtain()), exit = fadeOut(motion.settle())) {
+                Box(Modifier.fillMaxSize()) {
+                    Screensaver(core = core, prefs = prefs, preview = true)
+                    // A scene's surface is behind the window and cannot fade, so black covers it as it leaves.
+                    if (!visibleState.targetState) Box(Modifier.fillMaxSize().background(Color.Black))
+                    if (state.overlay == Overlay.AmbientPreview) {
+                        AmbientPreviewKeys(onClose = {
+                            close()
+                            state.sheetLeft = Overlay.AmbientPreview
+                            state.overlay = Overlay.Ambient
+                        })
+                    }
+                }
+            }
+        }
+
         // Overlays stay composed through their exit so each can animate out.
         Presence(overlay.takeIf { it.isSheet() }) { ov, visibleState ->
             RightSheet(
                 visibleState = visibleState,
                 key = ov,
                 depth = ov.sheetDepth(),
+                // The screensaver behind its own sheet is shown as it will look, not dimmed.
+                scrim = ov != Overlay.Ambient,
                 onDismiss = {
                     val previous = state.sheetTrail.removeLastOrNull()
                     if (previous != null) {
@@ -861,12 +885,6 @@ fun HomeScreen(
                     }
                 },
             )
-        }
-
-        Presence(if (overlay == Overlay.AmbientPreview) Unit else null) { _, visibleState ->
-            AnimatedVisibility(visibleState, enter = fadeIn(motion.curtain()), exit = fadeOut(motion.settle())) {
-                AmbientPreview(core = core, prefs = prefs, onClose = { close(); state.overlay = Overlay.Ambient })
-            }
         }
 
         Presence(if (overlay == Overlay.Onboarding) Unit else null) { _, visibleState ->
@@ -1186,6 +1204,7 @@ private fun SheetContent(
             onPowerSetup = { open(Overlay.PowerSetup) },
             onPreview = { open(Overlay.AmbientPreview) },
             firstFocus = first,
+            fromPreview = cameFrom == Overlay.AmbientPreview,
         )
         Overlay.PowerSetup -> PowerSetupSheet(power = power, onHomeRoleChanged = onHomeChanged, say = say, firstFocus = first)
         Overlay.TvControls -> TvControlsSheet(

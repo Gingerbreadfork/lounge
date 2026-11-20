@@ -393,10 +393,11 @@ in a dark room, and dither so dark gradients do not band. The clock and the styl
 bottom left. Design for that: keep scenes dark, slow and calm, because they run for hours.
 
 **Cost.** Lounge draws the program at half the screen's resolution and upscales it, which suits
-soft, flowing scenes. It watches each frame's GPU time, and when a frame takes more than about
-24 ms it slows to twenty frames a second, then drops to a third of the resolution, and so on down
-to a sixth, and remembers where the program settled on that TV. A program too heavy even at a
-sixth falls back to pictures. A few octaves of value noise, warped two or three times, sits
+soft, flowing scenes. It times each frame, and when frames take more than about 24 ms it slows to
+twenty frames a second, then drops to a third of the resolution, and so on down to a sixth, and
+remembers where the program settled on that TV. Later starts try the step above again, less
+often each time it fails. A program too heavy even at a sixth gives way to pictures, and
+Settings says so. A few octaves of value noise, warped two or three times, sits
 comfortably on a Google TV Streamer; Lounge's Ink is about as heavy as a scene should get.
 
 **Trying one out.** A `.agsl` file in the TV's `screensavers` folder appears under Style as
@@ -407,9 +408,10 @@ adb push smoke.agsl /sdcard/Android/data/tv.lounge.launcher/files/screensavers/
 adb logcat -s Lounge | grep -E "scene|screensaver"
 ```
 
-Choose it, preview it, push again after each change and preview again. The log says what the
-program costs (`scene: saver local:smoke.agsl at 1/2, 30 fps, 33.3 ms a frame, 0.5 ms late, GPU
-14.2 ms`), and when it does not compile it falls back to pictures with the compiler's reason.
+Choose it and it runs behind the Screensaver sheet; push again after each change and choose it
+again. The log says what the program costs (`scene: saver local:smoke.agsl at 960x540, 30 fps,
+14.2 ms a frame`), and when it does not compile it gives way to pictures with the compiler's
+reason.
 Lounge's own scenes are in `android/feature/home/src/main/assets/screensavers` to read and
 borrow from.
 

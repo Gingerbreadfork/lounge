@@ -13,6 +13,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.tv.material3.Icon
+import tv.lounge.core.NowPlaying
+import tv.lounge.core.PlaybackStatus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -75,6 +84,11 @@ private const val DRIFT_MS = 60_000L
 internal const val LATE_AFTER_MS = 30 * 60_000L
 internal const val LATE_DIM_MS = 60_000L
 internal const val LATE_DIM_STEPS = 20
+/** The house lights late at night, against their level by day. */
+private const val NIGHT_LIGHTS = 0.8f
+/** Minutes the clock spends on one side of the screen before it crosses to the other. */
+internal const val SIDE_MINUTES = 10
+private const val LAST_PICTURE = "pictures:last"
 
 /**
  * One picture for the screensaver and the two lines under the clock that say what it is. A
@@ -102,42 +116,148 @@ fun ambientSlides(snapshot: HomeSnapshot): List<AmbientSlide> {
     return out.values.toList()
 }
 
+/** The picture after the one at [after], round the list; the first when that one is not in it. */
+internal fun nextSlide(slides: List<AmbientSlide>, after: String?): AmbientSlide? =
+    if (slides.isEmpty()) null else slides[(slides.indexOfFirst { it.art == after } + 1) % slides.size]
+
 /**
- * The screensaver: full-bleed artwork dimmed with the house lights, a slow stepped push-in, the
- * clock bottom-left with two lines naming the picture. Everything drifts two pixels a minute, and
- * after half an hour the lights go down one more step (DESIGN.md §5).
+ * The house lights at [hour] of the day: full by day, lower from eleven at night until six, and
+ * easing between the two over the hour either side.
+ */
+internal fun nightLights(hour: Float): Float {
+    val h = ((hour % 24f) + 24f) % 24f
+    val night = when {
+        h >= 22f -> (h - 22f).coerceAtMost(1f)
+        h < 7f -> 1f - (h - 6f).coerceIn(0f, 1f)
+        else -> 0f
+    }
+    return 1f - (1f - NIGHT_LIGHTS) * night
+}
+
+/**
+ * How far the clock has moved in from its corner after [minutes], across and up: two slow
+ * triangle waves, so it passes over its whole box evenly and never rests (OLED care).
+ */
+internal fun captionDrift(minutes: Int): IntOffset {
+    fun wave(period: Int, reach: Int): Int {
+        val phase = (minutes % period).toFloat() / period
+        return ((1f - kotlin.math.abs(2f * phase - 1f)) * reach).toInt()
+    }
+    return IntOffset(wave(48, 48), wave(34, 24))
+}
+
+/** Where the clock and its lines sit: which side, how far in from the corner, and how far they have faded for a crossing. */
+@androidx.compose.runtime.Stable
+internal class CaptionWander {
+    var right by mutableStateOf(false)
+    var drift by mutableStateOf(IntOffset.Zero)
+    val alpha = androidx.compose.animation.core.Animatable(1f)
+}
+
+/** The clock's place, moved a little each minute and across the screen every [SIDE_MINUTES]. */
+@Composable
+internal fun rememberCaptionWander(): CaptionWander {
+    val reduced = LoungeTheme.motion.reducedMotion
+    val wander = remember { CaptionWander() }
+    LaunchedEffect(wander, reduced) {
+        var minutes = 0
+        while (true) {
+            delay(DRIFT_MS)
+            minutes++
+            if (minutes % SIDE_MINUTES == 0) {
+                if (!reduced) wander.alpha.animateTo(0f, tween(900))
+                wander.right = !wander.right
+                wander.drift = captionDrift(minutes)
+                if (!reduced) wander.alpha.animateTo(1f, tween(900))
+            } else {
+                wander.drift = captionDrift(minutes)
+            }
+        }
+    }
+    return wander
+}
+
+/**
+ * The house lights over the screensaver, as a share of their full level: lower late at night, and
+ * a step lower again after half an hour (DESIGN.md §5).
  */
 @Composable
-fun AmbientScreen(core: CoreClient) {
+internal fun rememberHouseLights(): State<Float> {
+    val late = remember { mutableFloatStateOf(1f) }
+    val night = remember { mutableFloatStateOf(nightLights(localHour())) }
+    LaunchedEffect(Unit) {
+        delay(LATE_AFTER_MS)
+        repeat(LATE_DIM_STEPS) { i ->
+            late.floatValue = 1f - 0.2f * (i + 1) / LATE_DIM_STEPS
+            delay(LATE_DIM_MS / LATE_DIM_STEPS)
+        }
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L)
+            night.floatValue = nightLights(localHour())
+        }
+    }
+    return remember { derivedStateOf { late.floatValue * night.floatValue } }
+}
+
+/** What both kinds of screensaver share: the house lights, the clock and its place, and what is playing. */
+@androidx.compose.runtime.Stable
+internal class AmbientRoom(val lights: State<Float>, val wander: CaptionWander, val clock: State<String>, val playing: State<String?>)
+
+@Composable
+internal fun rememberAmbientRoom(core: CoreClient): AmbientRoom {
+    val lights = rememberHouseLights()
+    val wander = rememberCaptionWander()
+    val clock = rememberAmbientClock()
+    val snapshot = core.snapshots.collectAsStateWithLifecycle()
+    val playing = remember { derivedStateOf { playingLine(snapshot.value.nowPlaying) } }
+    return remember(lights, wander, clock, playing) { AmbientRoom(lights, wander, clock, playing) }
+}
+
+/** What is playing in one line, or null while nothing is. */
+internal fun playingLine(np: NowPlaying?): String? {
+    if (np == null || np.status != PlaybackStatus.PLAYING) return null
+    return listOfNotNull(np.title.trim().ifEmpty { null }, np.subtitle?.trim()?.ifEmpty { null }).joinToString(" · ").ifEmpty { null }
+}
+
+/**
+ * The screensaver's pictures: full-bleed artwork dimmed with the house lights, a slow stepped
+ * push-in, the clock with two lines naming the picture. It carries on from the picture after the
+ * last one shown, so every picture gets its turn across starts; a [preview] does not move that on.
+ */
+@Composable
+internal fun AmbientScreen(core: CoreClient, room: AmbientRoom, preview: Boolean = false) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
     val visuals = LoungeTheme.visuals
     val context = LocalContext.current
     val snapshot by core.snapshots.collectAsStateWithLifecycle()
     val slides = remember(snapshot) { ambientSlides(snapshot) }
-    var index by remember { mutableIntStateOf(0) }
+    val memory = remember { context.getSharedPreferences(SceneMemory.FILE, android.content.Context.MODE_PRIVATE) }
+    var slide by remember { mutableStateOf<AmbientSlide?>(null) }
+    var count by remember { mutableIntStateOf(0) }
     val drift = rememberAmbientDrift()
-    var brightness by remember { mutableFloatStateOf(0.6f) }
-    val clock = rememberAmbientClock()
-    val startedAt = remember { System.currentTimeMillis() }
+    val brightness = 0.6f * room.lights.value
     val filter = remember(brightness) { lightsFilter(brightness, 0.95f) }
+    val latest = androidx.compose.runtime.rememberUpdatedState(slides)
 
-    LaunchedEffect(slides.size) {
-        if (slides.size < 2) return@LaunchedEffect
+    fun show(next: AmbientSlide?) {
+        if (next == null || next.art == slide?.art) return
+        slide = next
+        count++
+        if (!preview) memory.edit().putString(LAST_PICTURE, next.art).apply()
+    }
+    LaunchedEffect(slides.isEmpty()) {
+        if (slides.isEmpty()) return@LaunchedEffect
+        if (slide == null) show(nextSlide(slides, withContext(Dispatchers.IO) { memory.getString(LAST_PICTURE, null) }))
         while (true) {
             delay(SLIDE_MS)
-            index = (index + 1) % slides.size
-        }
-    }
-    LaunchedEffect(Unit) {
-        delay(LATE_AFTER_MS - (System.currentTimeMillis() - startedAt).coerceAtLeast(0))
-        repeat(LATE_DIM_STEPS) { i ->
-            brightness = 0.6f - 0.12f * (i + 1) / LATE_DIM_STEPS
-            delay(LATE_DIM_MS / LATE_DIM_STEPS)
+            show(nextSlide(latest.value, slide?.art))
         }
     }
 
-    val slide = slides.getOrNull(index % slides.size.coerceAtLeast(1))
+    val stepMs = if (visuals.tierA) 250L else 500L
     // A panel with more pixels than the TV draws its apps at gets the pictures on a surface of
     // its own size; the captions stay in Compose over it.
     val panel = remember { PanelSize.of(context) }
@@ -147,16 +267,16 @@ fun AmbientScreen(core: CoreClient) {
         Box(Modifier.fillMaxSize()) {
             PanelPictures(
                 slide = slide,
-                slideIndex = index,
+                slideIndex = count,
                 brightness = brightness,
                 drift = drift,
                 panel = panel,
                 window = window,
-                stepMs = if (visuals.tierA) 250L else 500L,
+                stepMs = stepMs,
                 reducedMotion = motion.reducedMotion,
                 modifier = Modifier.fillMaxSize(),
             )
-            AmbientCaption(clock, slide?.title, slide?.category, drift)
+            AmbientCaption(room, slide?.title, slide?.category)
         }
         return
     }
@@ -166,8 +286,7 @@ fun AmbientScreen(core: CoreClient) {
                 if (s != null) {
                     // 6 % over the slide, in steps too small to see; nothing re-renders between steps.
                     val scale = remember(s.art) { mutableFloatStateOf(1f) }
-                    val stepMs = if (visuals.tierA) 250L else 500L
-                    val origin = remember(s.art) { if (slides.indexOf(s) % 2 == 0) TransformOrigin(0.35f, 0.4f) else TransformOrigin(0.65f, 0.55f) }
+                    val origin = remember(s.art) { if (count % 2 == 0) TransformOrigin(0.35f, 0.4f) else TransformOrigin(0.65f, 0.55f) }
                     LaunchedEffect(s.art) {
                         if (motion.reducedMotion) return@LaunchedEffect
                         val started = System.currentTimeMillis()
@@ -208,13 +327,13 @@ fun AmbientScreen(core: CoreClient) {
                 } else {
                     Box(
                         Modifier.fillMaxSize().background(
-                            Brush.radialGradient(listOf(colors.houselight.copy(alpha = 0.28f), colors.velvet), radius = 1400f),
+                            Brush.radialGradient(listOf(colors.houselight.copy(alpha = 0.28f * room.lights.value), colors.velvet), radius = 1400f),
                         ),
                     )
                 }
             }
-            AmbientCaption(clock, slide?.title, slide?.category, IntOffset.Zero)
         }
+        AmbientCaption(room, slide?.title, slide?.category)
     }
 }
 
@@ -253,12 +372,12 @@ private fun FramedPicture(path: String, filter: androidx.compose.ui.graphics.Col
 
 /** The time, updated on the minute. */
 @Composable
-internal fun rememberAmbientClock(): String {
+internal fun rememberAmbientClock(): State<String> {
     val context = LocalContext.current
-    var clock by remember { mutableStateOf(clockText(context)) }
+    val clock = remember { mutableStateOf(clockText(context)) }
     LaunchedEffect(Unit) {
         while (true) {
-            clock = clockText(context)
+            clock.value = clockText(context)
             delay(1_000L * (61 - (System.currentTimeMillis() / 1_000 % 60)))
         }
     }
@@ -271,7 +390,7 @@ private fun clockText(context: android.content.Context): String {
     return java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.getDefault()))
 }
 
-/** Two pixels of drift a minute, so nothing sits still on an OLED panel. */
+/** Two pixels of drift a minute for the pictures, so a frame's edge never sits still on an OLED panel. */
 @Composable
 internal fun rememberAmbientDrift(): IntOffset {
     var drift by remember { mutableStateOf(IntOffset.Zero) }
@@ -285,12 +404,16 @@ internal fun rememberAmbientDrift(): IntOffset {
 }
 
 /**
- * The clock bottom-left with two lines saying what is on screen, over a scrim deep enough that the
- * `dust` line stays readable over the brightest picture or scene.
+ * The clock with two lines saying what is on screen and a third for what is playing, over a
+ * scrim deep enough that the `dust` lines stay readable over the brightest picture or scene. It
+ * sits bottom-left to begin with, wanders as the [room] says and dims with its house lights.
  */
 @Composable
-internal fun AmbientCaption(clock: String, title: String?, line: String?, drift: IntOffset) {
+internal fun AmbientCaption(room: AmbientRoom, title: String?, line: String?) {
     val colors = LoungeTheme.colors
+    val wander = room.wander
+    val right = wander.right
+    val playing = room.playing.value
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
@@ -299,31 +422,57 @@ internal fun AmbientCaption(clock: String, title: String?, line: String?, drift:
                 .height(300.dp)
                 .background(Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color.Black.copy(alpha = 0.6f), 1f to Color.Black.copy(alpha = 0.92f))),
         )
-        Column(Modifier.align(Alignment.BottomStart).offset { drift }.padding(start = 96.dp, bottom = 72.dp)) {
-            Text(clock, style = LoungeTheme.typography.clock, color = colors.limelight)
+        Column(
+            Modifier
+                .align(if (right) Alignment.BottomEnd else Alignment.BottomStart)
+                .offset { IntOffset(if (right) -wander.drift.x else wander.drift.x, -wander.drift.y) }
+                .graphicsLayer { alpha = wander.alpha.value * room.lights.value }
+                .padding(start = 96.dp, end = 96.dp, bottom = 72.dp),
+            horizontalAlignment = if (right) Alignment.End else Alignment.Start,
+        ) {
+            Text(room.clock.value, style = LoungeTheme.typography.clock, color = colors.limelight)
             if (title != null) {
                 Spacer(Modifier.height(10.dp))
                 Text(title, style = LoungeTheme.typography.meta, color = colors.limelight, maxLines = 1)
                 if (line != null) Text(line, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1)
             }
+            if (playing != null) {
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                    Icon(LoungeIcons.Equaliser, contentDescription = "Playing", tint = colors.dust, modifier = Modifier.size(16.dp))
+                    Text(playing, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 760.dp))
+                }
+            }
         }
     }
 }
 
-/** The screensaver chosen in Settings: Lounge's pictures, or an abstract scene drawn on the GPU. */
+/**
+ * The screensaver chosen in Settings: Lounge's pictures, an abstract scene drawn on the GPU, or
+ * a different scene each time. A [preview] shows what the next start would without counting as one.
+ */
 @Composable
 fun Screensaver(core: CoreClient, prefs: Prefs, preview: Boolean = false) {
     val context = LocalContext.current
     val chosen by prefs.ambientStyle.collectAsState(initial = null)
     val id = chosen
+    val room = rememberAmbientRoom(core)
     if (id == null) {
         Box(Modifier.fillMaxSize().background(Color.Black))
         return
     }
+    // A scene in the mix that cannot be drawn gives way to the next one.
+    var passed by remember(id) { mutableIntStateOf(0) }
     // Read off the main thread; the screen stays black until it is known, so pictures never flash
     // before a scene.
-    val found by produceState<Pair<String, ShaderStyle?>?>(null, id) {
-        value = id to if (id == ShaderStyles.PICTURES) null else withContext(Dispatchers.IO) { ShaderStyles.find(context, core, id) }
+    val found by produceState<Pair<String, ShaderStyle?>?>(null, id, passed) {
+        value = id to withContext(Dispatchers.IO) {
+            when (id) {
+                ShaderStyles.PICTURES -> null
+                ShaderStyles.MIX -> ShaderStyles.nextInMix(context, core, advance = !preview)
+                else -> ShaderStyles.find(context, core, id)
+            }
+        }
     }
     val loaded = found
     if (loaded == null || loaded.first != id) {
@@ -333,22 +482,25 @@ fun Screensaver(core: CoreClient, prefs: Prefs, preview: Boolean = false) {
     val style = loaded.second
     var unusable by remember(id) { mutableStateOf(false) }
     if (style == null || unusable) {
-        AmbientScreen(core)
+        AmbientScreen(core, room, preview)
     } else {
         ShaderScreensaver(
             style,
+            room,
             onUnusable = { why ->
-                android.util.Log.w("Lounge", "screensaver: ${style.id} falls back to pictures: $why")
-                unusable = true
+                android.util.Log.w("Lounge", "screensaver: ${style.id} gives way: $why")
+                // A compile error's own text is for the log, not the screen (DESIGN.md §8).
+                SceneMemory.seen[style.id] = SceneMemory.words(if ("heavy" in why) SceneRecord.HEAVY else SceneRecord.BROKEN, style.name).orEmpty()
+                if (id == ShaderStyles.MIX) passed++ else unusable = true
             },
             preview = preview,
         )
     }
 }
 
-/** The screensaver shown in-app for a look; the first key press closes it, except volume and mute. */
+/** Closes the full preview on the first key press, except volume and mute, which pass through. */
 @Composable
-fun AmbientPreview(core: CoreClient, prefs: Prefs, onClose: () -> Unit) {
+fun AmbientPreviewKeys(onClose: () -> Unit) {
     val focus = remember { FocusRequester() }
     Box(
         Modifier
@@ -362,9 +514,7 @@ fun AmbientPreview(core: CoreClient, prefs: Prefs, onClose: () -> Unit) {
             }
             .focusRequester(focus)
             .focusable(),
-    ) {
-        Screensaver(core, prefs, preview = true)
-    }
+    )
     LaunchedEffect(Unit) { focus.requestWhenReady() }
 }
 
@@ -384,21 +534,34 @@ internal fun screensaverName(power: PowerSetup, context: android.content.Context
     }
 }
 
+/** The styles the Screensaver sheet offers, in order: id, name and one line about it. */
+internal fun styleChoices(scenes: List<ShaderStyle>): List<Triple<String, String, String>> = buildList {
+    add(Triple(ShaderStyles.PICTURES, "Pictures", "Artwork from your home screen"))
+    if (scenes.size > 1) add(Triple(ShaderStyles.MIX, "Mix", "A different scene each time it starts"))
+    scenes.forEach { add(Triple(it.id, it.name, it.description ?: it.origin)) }
+}
+
 /**
  * The Screensaver sheet: which screensaver the TV starts, which OK switches between Lounge's and
- * the one before through Power Setup, then the style and a preview.
+ * the one before through Power Setup, then the style, shown behind the sheet as it is chosen.
+ * Back from the full preview lands on its row ([fromPreview]).
  */
 @Composable
-fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup: () -> Unit, onPreview: () -> Unit, firstFocus: FocusRequester) {
+fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup: () -> Unit, onPreview: () -> Unit, firstFocus: FocusRequester, fromPreview: Boolean = false) {
     val colors = LoungeTheme.colors
     val sounds = LoungeTheme.sounds
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val styles by produceState(emptyList<ShaderStyle>()) { value = withContext(Dispatchers.IO) { ShaderStyles.all(context, core) } }
     val chosen by prefs.ambientStyle.collectAsState(initial = ShaderStyles.PICTURES)
-    val choices = listOf(Triple(ShaderStyles.PICTURES, "Pictures", "Artwork from your home screen")) +
-        styles.map { Triple(it.id, it.name, it.description ?: it.origin) }
+    val choices = styleChoices(styles)
     val at = choices.indexOfFirst { it.first == chosen }.coerceAtLeast(0)
+    val memory = remember { SceneMemory(context) }
+    // Why the chosen scene is not what shows, read again when the preview behind finds a problem.
+    val problem by produceState<String?>(null, chosen, styles, SceneMemory.seen.size) {
+        val style = styles.firstOrNull { it.id == chosen }
+        value = if (style == null) null else withContext(Dispatchers.IO) { memory.problem(style) }
+    }
     fun step(by: Int) {
         sounds?.tick()
         val next = choices[(at + by).mod(choices.size)].first
@@ -411,8 +574,19 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
     val ready = status is PowerStatus.Ready
     val ours = name == "Lounge"
 
+    // Not every TV has a screen for choosing a screensaver, and some that do list only their own.
+    val tvSettings = remember { Intent(android.provider.Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+    val tvHasSettings = remember { runCatching { context.packageManager.resolveActivity(tvSettings, 0) != null }.getOrDefault(false) }
+    var sentToTv by remember { mutableStateOf(false) }
+    var tvDidNotTake by remember { mutableStateOf(false) }
+    val viaTv = !ours && status is PowerStatus.Unavailable && tvHasSettings && !tvDidNotTake
+
     LaunchedEffect(Unit) { power.refresh() }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { name = screensaverName(power, context) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        name = screensaverName(power, context)
+        if (sentToTv && name != "Lounge") tvDidNotTake = true
+        sentToTv = false
+    }
 
     /**
      * Runs a switch, then reads the TV's setting again; [block] returns what to say when it did not
@@ -453,9 +627,10 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
                 }
                 if (r.ok && took) null else NOT_TAKEN
             }
-            !ours && status is PowerStatus.Unavailable -> runCatching {
-                context.startActivity(Intent(android.provider.Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }.onFailure { error = "This TV has no screensaver settings of its own. Power Setup can switch it instead." }
+            viaTv -> runCatching {
+                context.startActivity(tvSettings)
+                sentToTv = true
+            }.onFailure { tvDidNotTake = true }
             else -> onPowerSetup()
         }
     }
@@ -474,24 +649,33 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
                 ours && ready -> "OK puts back the one before"
                 ours -> "Power Setup can put back the one before"
                 ready -> "OK makes Lounge's the screensaver"
-                status is PowerStatus.Unavailable -> "OK opens the TV's screensaver settings: choose Lounge there, then press Back"
+                viaTv -> "OK opens the TV's screensaver settings: choose Lounge there, then press Back"
+                tvDidNotTake -> "The TV's own settings didn't make Lounge the screensaver. OK opens Power Setup, which can once USB debugging is on"
+                status is PowerStatus.Unavailable -> "This TV's own settings can't choose a screensaver. OK opens Power Setup, which can once USB debugging is on"
                 else -> "OK opens Power Setup, which can make Lounge's the screensaver"
             },
             subtitleLines = WHOLE,
             value = name,
             accent = if (ours) colors.signal else colors.dust,
             onClick = { if (!busy) switch() },
-            focusRequester = firstFocus,
+            focusRequester = firstFocus.takeUnless { fromPreview },
         )
         SheetRow(
             icon = SettingsGlyphs.Scene,
             title = "Style",
             value = choices[at].second,
-            subtitle = choices[at].third,
+            subtitle = problem?.let { "$it, so Pictures shows instead" } ?: choices[at].third,
+            subtitleLines = if (problem != null) WHOLE else 2,
             onClick = { step(1) },
             onCycle = { step(it) },
         )
-        SheetRow(icon = LoungeIcons.Play, title = "Preview it now", subtitle = "Any key brings you back", onClick = onPreview)
+        SheetRow(
+            icon = LoungeIcons.Play,
+            title = "See it full screen",
+            subtitle = "Any key brings you back",
+            onClick = onPreview,
+            focusRequester = firstFocus.takeIf { fromPreview },
+        )
         if (error != null) Text(error!!, style = LoungeTheme.typography.caption, color = colors.ember)
     }
     SheetFootnote(

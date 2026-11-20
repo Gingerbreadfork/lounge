@@ -142,7 +142,7 @@ a TV set up before Lounge had this it stays off until you turn it on there.
 **Search.** One box for apps, what you've been watching and whatever the plugins can find.
 
 **Screensaver.** Artwork from the Stage and the rows with a slow push-in, or one of thirteen
-abstract scenes drawn on the GPU in your theme's colours. Plugins can add scenes
+abstract scenes drawn on the GPU in your theme's colours, or a different one each time. Plugins can add scenes
 ([PLUGINS.md](PLUGINS.md#screensavers)), and any scene can also run behind the home screen,
 dimmed so the tiles stay the brightest thing in the room.
 
