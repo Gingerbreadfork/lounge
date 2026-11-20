@@ -1,0 +1,106 @@
+// Orbit: daybreak from orbit. The night side of a world slides by below, its towns lit and its
+// storms flickering, and the sun comes round its edge through the air.
+uniform float2 resolution;
+uniform float time;
+uniform shader noise;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+layout(color) uniform half4 signal;
+layout(color) uniform half4 dust;
+
+const float2 WORLD = float2(-0.55, -1.25);
+const float R = 1.4;
+// Where on the edge the sun comes up, and the way out from the world there.
+const float2 OUT = float2(0.607, 0.795);
+const float2 ALONG = float2(0.795, -0.607);
+
+float n(float2 p) {
+    return float(noise.eval(p * 16.0).r);
+}
+
+// Points of light, at most one to a cell and each kept inside it, so a pixel only needs its own
+// cell. Which cells are lit, and where, comes from the noise texture's lattice, read from a
+// different place for each block of sixteen cells so the pattern does not repeat in sight.
+float points(float2 c, float many, float sharp) {
+    float2 id = floor(c);
+    half3 draw = noise.eval((id + 5.0 * floor(id.yx / 16.0)) * 16.0 + 0.5).rgb;
+    float2 f = c - id - 0.2 - 0.6 * float2(draw.gb);
+    return clamp((many - float(draw.r)) / many, 0.0, 1.0) * exp(-dot(f, f) * sharp);
+}
+
+// Storms: one to a cell at most, each lighting up for an instant at its own times.
+float storms(float2 c) {
+    float2 id = floor(c);
+    half3 draw = noise.eval((id + 5.0 * floor(id.yx / 16.0) + 7.0) * 16.0 + 0.5).rgb;
+    float2 f = c - id - 0.3 - 0.4 * float2(draw.gb);
+    if (float(draw.r) > 0.45) {
+        return 0.0;
+    }
+    // Two beats of its own that seldom fall together, from waves of straight lines.
+    float quick = abs(fract(time * (0.19 + 0.3 * float(draw.g)) + float(draw.b) * 7.0) - 0.5);
+    float slow = abs(fract(time * 0.06 + float(draw.r) * 9.0) - 0.5);
+    float k = max(1.0 - dot(f, f) * 14.0, 0.0);
+    return smoothstep(0.4, 0.49, quick) * smoothstep(0.3, 0.45, slow) * k * k * k;
+}
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
+    float2 d = p - WORLD;
+    float r = length(d);
+    float h = r - R;
+    // The sun stands a little off the edge, further as the minutes pass and back again.
+    float rise = 0.002 + 0.02 * (0.5 + 0.5 * sin(time * 0.045));
+    float2 s = d - OUT * (R + rise);
+    float ss = dot(s, s);
+    float near = exp(-ss * 4.0);
+    half3 white = mix(houselight.rgb, half3(1.0), 0.6);
+    half3 col;
+
+    if (h > 0.0) {
+        // Space, with the galaxy lying across it, and the stars sliding by as we go round.
+        float2 sky = p + float2(time * 0.0025, 0.0);
+        float band = n(float2(sky.x * 0.9 + sky.y * 1.6, sky.y * 1.1 - sky.x * 0.5) * 0.9);
+        float river = smoothstep(0.45, 0.8, band) * (0.5 + 0.5 * n(sky * 5.0));
+        col = velvet.rgb * 0.25 + horizon.rgb * half(0.9 * river) + dust.rgb * half(0.05 * river * river);
+        if (h > 0.02) {
+            float stars = points(sky * 30.0, 0.16 + 0.3 * river, 80.0) + 1.5 * points(sky * 7.0 + 3.0, 0.1, 1800.0);
+            col += dust.rgb * half(0.9 * stars * (1.0 - near) * smoothstep(0.02, 0.06, h));
+        }
+        // The air: red at the ground, then gold, then thin and pale, and brightest by the sun.
+        half3 air = mix(ember.rgb, houselight.rgb, half(smoothstep(0.0, 0.014, h)));
+        air = mix(air, dust.rgb, half(smoothstep(0.012, 0.06, h)));
+        col += air * half((exp(-h * 38.0) + 0.5 * exp(-h * 9.0)) * (0.1 + 1.5 * near));
+        col += white * half(0.9 * exp(-h * 300.0) * (0.12 + near));
+        // Airglow: a thin shell of faint light standing off the edge all the way round.
+        float shell = h - 0.03;
+        col += signal.rgb * half(0.22 * exp(-shell * shell * 6000.0) * (1.0 - 0.8 * near));
+        // The sun, its bloom, and the streaks a lens draws through it.
+        float across = dot(s, OUT);
+        float along = dot(s, ALONG);
+        float streaks = exp(-across * across * 2600.0 - along * along * 5.0) + 0.5 * exp(-along * along * 2600.0 - across * across * 14.0);
+        col += white * half(1.6 * exp(-ss * 900.0) + 0.45 * exp(-ss * 45.0) + 0.3 * streaks);
+    } else {
+        // The ground, laid out by how far round from the edge it is, so it crowds toward the
+        // edge as a globe does, and sliding toward us as we go round.
+        float fall = sqrt(-2.0 * h / R);
+        float2 uv = float2(d.x / d.y * 1.5, fall * 1.5) * 2.4 + float2(0.3 * time * 0.01, -time * 0.01);
+        float deep = smoothstep(0.0, 0.25, fall);
+        // People live along the coasts and the roads between, and in a few great cities.
+        float coast = n(uv * 0.8 + 5.0);
+        float lines = exp(-abs(coast - 0.5) * 16.0) * smoothstep(0.3, 0.6, n(uv * 2.6 + 1.0));
+        float land = smoothstep(0.44, 0.56, coast + 0.15 * (n(uv * 4.5 + 2.0) - 0.5));
+        float metro = smoothstep(0.62, 0.86, n(uv * 1.9 + 9.0)) * land;
+        float lived = clamp(0.8 * lines + metro, 0.0, 1.0);
+        float towns = 0.8 * points(uv * 52.0, 0.06 + 0.8 * lived, 34.0) + points(uv * 23.0 + 4.0, 0.7 * lived * lived, 60.0) + 0.3 * lived * lived * (0.5 + n(uv * 13.0));
+        col = velvet.rgb * 0.14 + horizon.rgb * half(0.2 + 0.22 * land * n(uv * 3.0));
+        col += mix(houselight.rgb, half3(1.0), 0.2) * half(1.1 * towns * deep * (1.0 - near));
+        // Cloud: seen where a storm lights it from inside, and where first light reaches it.
+        float cloud = n(uv * 1.1 + 9.0) * n(uv * 3.1 + 2.0);
+        col += mix(dust.rgb, half3(1.0), 0.5) * half(2.6 * storms(uv * 2.2) * cloud * (0.4 + n(uv * 9.0 + 5.0)) * deep);
+        col += mix(ember.rgb, houselight.rgb, 0.5) * half((0.3 + 2.2 * cloud) * near * exp(h * 9.0) * 0.55);
+        col += white * half(0.35 * exp(h * 120.0) * (0.1 + near));
+    }
+    return half4(col, 1.0);
+}

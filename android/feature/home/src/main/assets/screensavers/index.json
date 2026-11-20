@@ -11,5 +11,11 @@
   { "id": "curtain", "name": "Curtain", "description": "The house curtain before the show, lit from the footlights", "file": "curtain.agsl" },
   { "id": "moonpath", "name": "Moonpath", "description": "The sea at night, and the road the moon lays across it", "file": "moonpath.agsl" },
   { "id": "city", "name": "City", "description": "The city at night, out of focus beyond the glass", "file": "city.agsl" },
-  { "id": "record", "name": "Record", "description": "A record turning under the lamp", "file": "record.agsl" }
+  { "id": "record", "name": "Record", "description": "A record turning under the lamp", "file": "record.agsl" },
+  { "id": "eclipse", "name": "Eclipse", "description": "The sun behind the moon, and a bead of it blazing at the edge", "file": "eclipse.agsl", "fine": true },
+  { "id": "gravity", "name": "Gravity", "description": "A black hole, and the light bent round it", "file": "gravity.agsl", "fine": true },
+  { "id": "orbit", "name": "Orbit", "description": "Daybreak from orbit, over the lights of the night side", "file": "orbit.agsl", "fine": true },
+  { "id": "tide", "name": "Tide", "description": "The sea coming in at night, glowing where it breaks", "file": "tide.agsl", "fine": true },
+  { "id": "lanterns", "name": "Lanterns", "description": "Paper lanterns let go over the lake", "file": "lanterns.agsl" },
+  { "id": "snow", "name": "Snow", "description": "A lane of street lamps in falling snow", "file": "snow.agsl", "fine": true }
 ]

@@ -1,0 +1,109 @@
+// Snow: a lane of street lamps going away into falling snow. Only the snow near a lamp is
+// seen, and each lamp lays a pool of light on the ground under it.
+uniform float2 resolution;
+uniform float time;
+uniform shader noise;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 dust;
+
+// The lamps, nearest first: where each stands on the screen and how large it is drawn.
+const float3 A = float3(0.5, 0.3, 1.0);
+const float3 B = float3(0.13, 0.165, 0.5);
+const float3 C = float3(-0.045, 0.103, 0.27);
+// The level the ground runs away to.
+const float FAR = 0.03;
+
+float n(float2 p) {
+    return float(noise.eval(p * 16.0).r);
+}
+
+// Flakes at one depth, at most one to a cell and each kept inside it, so a pixel only needs its
+// own cell. Which cells hold one, and where, comes from the noise texture's lattice. A flake
+// fades to nothing [reach] of a cell from its middle, a quarter at most.
+float flakes(float2 p, float scale, float fall, float many, float reach) {
+    // They come down on a slant, the wind behind them.
+    float2 c = float2((p.x + 0.22 * p.y) * scale + time * fall * 0.15, p.y * scale + time * fall);
+    float2 id = floor(c);
+    half3 draw = noise.eval((id + 5.0 * floor(id.yx / 16.0) + scale) * 16.0 + 0.5).rgb;
+    if (float(draw.r) > many) {
+        return 0.0;
+    }
+    float2 f = c - id - 0.25 - 0.5 * float2(draw.gb);
+    float k = max(1.0 - dot(f, f) / (reach * reach), 0.0);
+    return (many - float(draw.r)) / many * k * k;
+}
+
+// The pool a lamp lays on the ground, under it, flattened by the angle we see it at.
+float pool(float2 p, float3 l) {
+    float2 e = float2(p.x - l.x, p.y - (FAR - 0.35 * l.z)) / (l.z * float2(0.36, 0.085));
+    return exp(-dot(e, e));
+}
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
+    half3 light = mix(houselight.rgb, half3(1.0), 0.3);
+    // Each lamp, with the screen measured in its own size.
+    float2 a = (p - A.xy) / A.z;
+    float2 b = (p - B.xy) / B.z;
+    float2 c = (p - C.xy) / C.z;
+    float aa = dot(a, a);
+    float bb = dot(b, b);
+    float cc = dot(c, c);
+    // How brightly the snow falling here is lit: most of a lamp's light goes down.
+    float lit = clamp(0.65 - 0.9 * a.y, 0.3, 1.0) / (1.0 + 22.0 * aa) + 0.8 * clamp(0.65 - 0.9 * b.y, 0.3, 1.0) / (1.0 + 22.0 * bb) + 0.6 * clamp(0.65 - 0.9 * c.y, 0.3, 1.0) / (1.0 + 22.0 * cc);
+
+    half3 col;
+    // The ground runs away to the far level, where a wood stands dark in the mist.
+    half3 mist = velvet.rgb * 0.3 + horizon.rgb * 0.75;
+    if (p.y > FAR) {
+        // Night sky, paler low down where the snow in the air catches the lamps.
+        float up = p.y - FAR;
+        col = velvet.rgb * 0.35 + horizon.rgb * half(1.0 * exp(-up * 3.5));
+        if (up < 0.15) {
+            float wood = FAR + 0.035 + 0.05 * n(float2(p.x * 3.1, 3.0)) + 0.035 * n(float2(p.x * 13.0, 7.0)) + 0.012 * n(float2(p.x * 41.0, 5.0));
+            col = mix(col, velvet.rgb * 0.12 + horizon.rgb * 0.2, half(smoothstep(wood + 0.005, wood - 0.005, p.y)));
+            col = mix(col, mist, half(0.8 * exp(-up * 28.0)));
+        }
+    } else {
+        // Lying snow: blue in the dark, and gold in each lamp's pool, where its grain glints.
+        float depth = FAR - p.y;
+        float pools = pool(p, A) + 0.8 * pool(p, B) + 0.6 * pool(p, C);
+        float drift = 0.7 + 0.3 * n(float2(p.x * 2.0 / (0.3 + depth), 14.0 * depth));
+        col = velvet.rgb * 0.3 + horizon.rgb * half((0.28 + 0.5 * exp(-depth * 7.0)) * drift);
+        col = mix(col, mist, half(0.8 * exp(-depth * 28.0)));
+        col += light * half(0.62 * pools * drift);
+        if (pools > 0.04) {
+            col += half3(1.0) * half(0.7 * pools * flakes(p, 64.0, 0.0, 0.2, 0.15));
+        }
+    }
+    // The posts, dark against it all, and on the two nearest the arm and the hood over the light.
+    float posts = smoothstep(0.009, 0.006, abs(a.x - 0.085)) * step(a.y, 0.03) * step(-0.62, a.y);
+    posts = max(posts, smoothstep(0.009, 0.006, abs(b.x - 0.085)) * step(b.y, 0.03) * step(-0.62, b.y));
+    posts = max(posts, smoothstep(0.012, 0.007, abs(c.x - 0.085)) * step(c.y, 0.03) * step(-0.62, c.y));
+    if (aa < 0.02) {
+        posts = max(posts, smoothstep(0.007, 0.004, abs(a.y - 0.028)) * step(0.0, a.x) * step(a.x, 0.09));
+        posts = max(posts, smoothstep(0.034, 0.03, abs(a.x)) * step(0.003, a.y) * step(a.y, 0.02));
+    }
+    if (bb < 0.02) {
+        posts = max(posts, smoothstep(0.009, 0.005, abs(b.y - 0.028)) * step(0.0, b.x) * step(b.x, 0.09));
+        posts = max(posts, smoothstep(0.036, 0.03, abs(b.x)) * step(0.003, b.y) * step(b.y, 0.022));
+    }
+    col = mix(col, velvet.rgb * 0.1, half(posts));
+    // The air glows round each lamp, and the snow falling through it shows.
+    col += light * half(0.11 * lit);
+    if (lit > 0.045) {
+        float snow = 0.8 * flakes(p, 25.0, 2.3, 0.45, 0.2) + 0.9 * flakes(p, 10.0, 1.4, 0.4, 0.24);
+        if (lit > 0.1) {
+            snow += 0.55 * flakes(p, 50.0, 3.2, 0.5, 0.2);
+        }
+        col += mix(light, half3(1.0), 0.5) * half(1.9 * snow * lit);
+    }
+    // The lamps themselves, and their glare.
+    float near = min(aa, min(bb, cc));
+    if (near < 0.12) {
+        col += light * half(1.5 * exp(-aa * 5000.0) + 0.32 * exp(-aa * 60.0) + 0.8 * (1.5 * exp(-bb * 5000.0) + 0.32 * exp(-bb * 60.0)) + 0.6 * (1.5 * exp(-cc * 5000.0) + 0.32 * exp(-cc * 60.0)));
+    }
+    return half4(col, 1.0);
+}

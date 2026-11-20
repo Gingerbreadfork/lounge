@@ -1,0 +1,63 @@
+// Tide: the sea coming in over dark sand at night, seen from above and glowing where it is
+// stirred. Each wave runs up the beach in a cloud of light and leaves sparks behind as it goes.
+uniform float2 resolution;
+uniform float time;
+uniform shader noise;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 signal;
+layout(color) uniform half4 dust;
+
+float n(float2 p) {
+    return float(noise.eval(p * 16.0).r);
+}
+
+// Points of light, at most one to a cell and each kept inside it, so a pixel only needs its own
+// cell. Which cells are lit, and where, comes from the noise texture's lattice, read from a
+// different place for each block of sixteen cells so the pattern does not repeat in sight.
+float points(float2 c, float many, float sharp) {
+    float2 id = floor(c);
+    half3 draw = noise.eval((id + 5.0 * floor(id.yx / 16.0)) * 16.0 + 0.5).rgb;
+    float2 f = c - id - 0.2 - 0.6 * float2(draw.gb);
+    return clamp((many - float(draw.r)) / many, 0.0, 1.0) * exp(-dot(f, f) * sharp);
+}
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
+    // The beach lies across the frame, sea to the upper right.
+    float2 q = float2(0.92 * p.x - 0.39 * p.y, 0.39 * p.x + 0.92 * p.y);
+    // How far up the beach the water has run: in and out with each wave, never the same twice.
+    float run = 0.16 * sin(time * 0.42) + 0.09 * sin(time * 0.27 + 1.7);
+    float line = -0.02 - run + 0.24 * (n(float2(q.x * 0.8, time * 0.02)) - 0.5) + 0.11 * (n(float2(q.x * 2.7 + 3.0, time * 0.05)) - 0.5) + 0.03 * (n(float2(q.x * 9.0, time * 0.1)) - 0.5);
+    float h = q.y - line;
+    half3 glow = mix(signal.rgb, half3(1.0), 0.3);
+    half3 col;
+    if (h > 0.0) {
+        // Water. The light is noise fed through noise, so it billows like something stirred
+        // into the sea, and it drifts out and fades behind each wave.
+        float2 w = q * float2(1.7, 2.3) + float2(time * 0.01, -time * 0.035 - 0.6 * run);
+        float2 fold = float2(n(w + time * 0.02), n(w + float2(5.2, 1.3) - time * 0.02));
+        float cloud = n(w * 1.6 + 2.4 * fold + 3.0);
+        float wisp = n(w * 4.3 + 3.2 * fold + 7.0);
+        float fine = n(w * 11.0 + 5.0 * fold + 2.0);
+        float near = exp(-h * 3.6);
+        float stirred = smoothstep(0.42, 0.8, cloud + 0.3 * near) * (0.15 + 1.1 * wisp * wisp) * (0.6 + 0.55 * fine);
+        col = velvet.rgb * 0.3 + horizon.rgb * half(0.5 + 0.5 * cloud);
+        col += signal.rgb * half(stirred * (0.12 + 1.2 * near) + 0.22 * near * near);
+        // Specks in the brightest of it, and the breaking edge itself.
+        col += glow * half(0.9 * points(q * 58.0 + float2(0.0, time * 0.25), 0.4, 30.0) * stirred * near);
+        col += glow * half(0.9 * exp(-h * 60.0) + 0.5 * exp(-h * 14.0) * wisp);
+    } else {
+        // Sand: dry above the reach of the waves, wet and shining below it, where the water
+        // has left sparks that fade the longer it has been gone.
+        float gone = -h;
+        float wet = smoothstep(0.45, 0.0, gone);
+        float grain = n(q * 31.0);
+        col = velvet.rgb * 0.45 + dust.rgb * half(0.02 + 0.03 * grain) + horizon.rgb * half(0.4 * wet);
+        col += signal.rgb * half((0.32 * exp(-gone * 13.0) + 0.06 * wet) * (0.7 + 0.6 * grain));
+        float twinkle = 0.55 + 0.45 * n(q * 9.0 + float2(time * 0.5, 0.0));
+        float sparks = points(q * 52.0, 0.5, 30.0) + 0.7 * points(q * 23.0 + 9.0, 0.35, 44.0);
+        col += glow * half(1.1 * sparks * twinkle * wet * wet * exp(-gone * 3.5));
+    }
+    return half4(col, 1.0);
+}

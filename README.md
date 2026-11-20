@@ -72,7 +72,7 @@ Channels from the tuner and from plugins, with a programme guide.
 <td width="33%" valign="top">
 <img src="docs/icons/frame.svg" width="28" height="28" alt=""><br>
 <b>Screensaver</b><br>
-Your artwork or thirteen abstract scenes, which can also play behind the home screen.
+Your artwork or nineteen abstract scenes, which can also play behind the home screen.
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/plugin.svg" width="28" height="28" alt=""><br>
@@ -141,7 +141,7 @@ a TV set up before Lounge had this it stays off until you turn it on there.
 
 **Search.** One box for apps, what you've been watching and whatever the plugins can find.
 
-**Screensaver.** Artwork from the Stage and the rows with a slow push-in, or one of thirteen
+**Screensaver.** Artwork from the Stage and the rows with a slow push-in, or one of nineteen
 abstract scenes drawn on the GPU in your theme's colours, or a different one each time. Plugins can add scenes
 ([PLUGINS.md](PLUGINS.md#screensavers)), and any scene can also run behind the home screen,
 dimmed so the tiles stay the brightest thing in the room.

@@ -1,0 +1,96 @@
+// Gravity: a black hole, and the light of the disc round it. The near half of the disc crosses
+// in front; the far half is seen bent up over the top and, fainter, under the bottom, and the
+// stars behind are drawn out into arcs as they drift past.
+uniform float2 resolution;
+uniform float time;
+uniform shader noise;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+layout(color) uniform half4 dust;
+
+const float2 HOLE = float2(0.04, 0.05);
+// The shadow's radius, and the radius of the ring that light from straight behind is bent into.
+const float SHADOW = 0.168;
+const float BEND = 0.19;
+const float TILT = 0.11;
+const float INNER = 0.27;
+const float OUTER = 1.3;
+
+float n(float2 p) {
+    return float(noise.eval(p * 16.0).r);
+}
+
+// Points of light, at most one to a cell and each kept inside it, so a pixel only needs its own
+// cell. Which cells are lit, and where, comes from the noise texture's lattice, read from a
+// different place for each block of sixteen cells so the pattern does not repeat in sight.
+float points(float2 c, float many, float sharp) {
+    float2 id = floor(c);
+    half3 draw = noise.eval((id + 5.0 * floor(id.yx / 16.0)) * 16.0 + 0.5).rgb;
+    float2 f = c - id - 0.25 - 0.5 * float2(draw.gb);
+    return clamp((many - float(draw.r)) / many, 0.0, 1.0) * exp(-dot(f, f) * sharp);
+}
+
+// The disc's light at a place in its own plane seen from above: how bright in x, how hot in y.
+// Lanes by radius, and gas wound into arms that turn, [turn] being the cosine and sine of how far.
+float2 disc(float2 q, float2 turn) {
+    float rd = length(q);
+    float2 dir = q / rd;
+    float2 round = float2(dir.x * turn.x - dir.y * turn.y, dir.x * turn.y + dir.y * turn.x);
+    float lanes = 0.3 + 0.45 * n(float2(rd * 8.0, 2.5)) + 0.25 * n(float2(rd * 25.0, 6.5));
+    float arms = n(round * 1.6 + rd * 3.2);
+    float wisps = n(round * 4.4 + float2(6.0 - rd * 7.0 + time * 0.04, time * 0.025));
+    float gas = (0.25 + 0.75 * arms) * (0.45 + 0.55 * wisps);
+    float band = smoothstep(INNER, INNER * 1.12, rd) * smoothstep(OUTER, OUTER * 0.35, rd);
+    float heat = INNER / rd;
+    // The side turning toward us is the brighter and the whiter one.
+    float toward = 1.0 - 0.6 * dir.x;
+    return float2(2.4 * band * lanes * gas * toward * (0.3 + 0.7 * heat), heat * (0.6 + 0.4 * toward));
+}
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
+    // The whole view leans a little.
+    float2 d = p - HOLE;
+    d = float2(0.9945 * d.x + 0.1045 * d.y, 0.9945 * d.y - 0.1045 * d.x);
+    float rr = dot(d, d);
+    float r = sqrt(rr);
+    float a = time * 0.09;
+    float2 turn = float2(cos(a), sin(a));
+    half3 hot = mix(houselight.rgb, half3(1.0), 0.6);
+    // Space: a little gas far behind, and the hole's own glow on it.
+    half3 col = velvet.rgb * 0.3 + horizon.rgb * half(0.9 * n(p * 0.7 + 2.0) * n(p * 1.9 + float2(5.0, time * 0.003)));
+    col += houselight.rgb * half(0.1 * exp(-r * 2.6)) + ember.rgb * half(0.05 * exp(-abs(d.y) * 7.0 - abs(d.x) * 1.4));
+
+    float2 lit = float2(0.0);
+    float stars = 0.0;
+    if (r > SHADOW) {
+        float bend = BEND * BEND / rr;
+        // The stars behind drift past, each seen where the bend puts it.
+        float2 sky = d * (1.0 - bend) + float2(time * 0.009, 0.0);
+        stars = points(sky * 26.0, 0.22, 80.0) + 1.5 * points(sky * 6.0 + 3.0, 0.12, 2200.0) + 0.35 * points(sky * 6.0 + 3.0, 0.12, 300.0);
+        // Where this line of sight lands in the disc after its bend: all of the bend above the
+        // hole, none below it, where the near half lies in front.
+        float2 src = d * (1.0 - bend * smoothstep(-0.12, 0.12, d.y / r));
+        lit = disc(float2(src.x, src.y / TILT), turn);
+        if (d.y < 0.0 && r < BEND) {
+            // Just under the shadow, light from the far half that came round below.
+            float2 under = d * (1.0 - bend);
+            lit += 0.6 * disc(float2(under.x, under.y / TILT), turn);
+        }
+        // The thin ring of light that has been all the way round.
+        float ring = exp(-abs(r - SHADOW * 1.012) * 420.0) * (1.0 - 0.45 * d.x / r);
+        lit += float2(0.9 * ring, 0.6 * ring);
+    } else {
+        col = half3(0.0);
+        if (d.y < 0.0) {
+            lit = disc(float2(d.x, d.y / TILT), turn);
+        }
+    }
+    // Hot gas is white, cooler gas the lamp's colour, the coolest the ember's.
+    half3 gas = mix(mix(ember.rgb * 0.55, houselight.rgb, half(smoothstep(0.15, 0.55, lit.y))), hot, half(smoothstep(0.5, 0.95, lit.y)));
+    col += dust.rgb * half(0.8 * stars * (1.0 - clamp(2.0 * lit.x, 0.0, 1.0)));
+    col += gas * half(lit.x);
+    return half4(col, 1.0);
+}

@@ -1,0 +1,82 @@
+// Lanterns: paper lanterns let go over the lake, rising into the night, near and far, with
+// their light lying long on the water.
+uniform float2 resolution;
+uniform float time;
+uniform shader noise;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+layout(color) uniform half4 dust;
+
+const float WATER = -0.17;
+
+float n(float2 p) {
+    return float(noise.eval(p * 16.0).r);
+}
+
+// One depth of lanterns, at most one to a cell and each kept inside it with its glow, so a
+// pixel only needs its own cell. Which cells hold one, and where, comes from the noise texture's
+// lattice, read from a different place for each block of sixteen cells.
+half3 lanterns(float2 p, float scale, float rise, float many, float seed) {
+    float2 c = float2(p.x * scale + seed, p.y * scale - time * rise);
+    float2 id = floor(c);
+    half3 draw = noise.eval((id + 5.0 * floor(id.yx / 16.0) + seed) * 16.0 + 0.5).rgb;
+    if (float(draw.r) > many) {
+        return half3(0.0);
+    }
+    float2 f = c - id - 0.27 - 0.46 * float2(draw.gb);
+    // It sways from side to side, in a wave of straight lines that costs less than a sine.
+    float sway = abs(fract(time * 0.04 + float(draw.b) * 7.0) - 0.5) * 4.0 - 1.0;
+    f.x += 0.04 * sway;
+    float away = dot(f, f);
+    // Its glow falls to nothing a fifth of a cell out, and nothing of it is drawn past that.
+    if (away > 0.04) {
+        return half3(0.0);
+    }
+    f.x += 0.25 * f.y * sway;
+    // Each has its own size. The shade is a rounded box, a little wider at the top.
+    float size = 0.7 + 0.5 * float(draw.g);
+    float2 g = float2(f.x / (0.047 + 0.1 * f.y), f.y / 0.066) / size;
+    float2 gg = g * g;
+    float shade = smoothstep(1.0, 0.55, dot(gg, gg));
+    // Paper lit from inside by a flame at its mouth: gold and bright low down, redder and
+    // dimmer toward the top and the sides, with the flame itself showing through.
+    float low = 0.5 - 0.5 * g.y;
+    float round = 1.0 - 0.5 * gg.x;
+    half3 paper = mix(ember.rgb * 0.75, houselight.rgb, half(0.25 + 0.75 * low * low));
+    float2 fl = float2(f.x, f.y + 0.045 * size);
+    float flame = exp(-dot(fl, fl) * 5200.0 / (size * size));
+    half3 body = paper * half((0.3 + 0.8 * low) * round) + half3(1.0) * half(0.9 * flame + 0.25 * low * low * low);
+    float halo = 1.0 - away / 0.04;
+    halo *= halo;
+    return body * half(shade) + mix(ember.rgb, houselight.rgb, 0.6) * half(0.38 * halo * halo * (1.0 - 0.6 * shade));
+}
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
+    float dim = 1.0;
+    float below = WATER - p.y;
+    if (below > 0.0) {
+        // The lake shows the sky upside down, broken into dashes of light by the ripples,
+        // more the nearer the water is to us.
+        float ripple = n(float2(p.x * 1.5, below * 60.0 - time * 0.25)) + 0.5 * n(float2(p.x * 4.0 + 2.0, below * 140.0 + time * 0.4)) - 0.75;
+        p = float2(p.x + ripple * (0.01 + 0.22 * below), WATER + below * 1.25);
+        dim = 0.3 + 0.3 * smoothstep(-0.5, 0.35, ripple);
+    }
+    float up = p.y - WATER;
+    // The sky: deep overhead, and the air low down warm with the light of all of them.
+    half3 col = mix(horizon.rgb * 1.9 + houselight.rgb * 0.05, velvet.rgb * 0.35, half(smoothstep(0.0, 0.62, up)));
+    col += mix(ember.rgb, houselight.rgb, 0.5) * half(0.16 * exp(-up * 5.0));
+    col += lanterns(p, 7.0, 0.085, 0.55, 3.0) * 0.5;
+    col += lanterns(p, 2.6, 0.045, 0.55, 8.0) * 0.8;
+    // Hills beyond the far shore, paler with distance, and mist lying along the water.
+    float far = 0.02 + 0.06 * n(float2(p.x * 0.9 + 2.0, 4.0)) + 0.012 * n(float2(p.x * 4.0, 9.0));
+    float nearer = 0.006 + 0.045 * n(float2(p.x * 1.4 + 7.0, 6.0)) * n(float2(p.x * 3.1, 2.0));
+    col = mix(col, velvet.rgb * 0.3 + horizon.rgb * 0.7, half(smoothstep(far + 0.004, far - 0.004, up)));
+    col = mix(col, velvet.rgb * 0.16 + horizon.rgb * 0.2, half(smoothstep(nearer + 0.003, nearer - 0.003, up)));
+    col += mix(dust.rgb, houselight.rgb, 0.5) * half(0.07 * exp(-up * 40.0));
+    // The nearest ones are this side of the hills.
+    col += lanterns(p, 1.2, 0.03, 0.7, 13.0);
+    return half4(col * half(dim), 1.0);
+}

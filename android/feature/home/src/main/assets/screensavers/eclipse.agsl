@@ -1,0 +1,93 @@
+// Eclipse: the sun behind the moon. The corona streams outward round it, and every so often the
+// moon slips far enough aside for a bead of the sun itself to blaze at its edge and go out again.
+uniform float2 resolution;
+uniform float time;
+uniform shader noise;
+layout(color) uniform half4 velvet;
+layout(color) uniform half4 horizon;
+layout(color) uniform half4 houselight;
+layout(color) uniform half4 ember;
+layout(color) uniform half4 dust;
+
+const float2 SUN = float2(0.08, 0.06);
+const float DISC = 0.158;
+const float MOON = 0.166;
+// The way the moon slides, and the sun's axis, which leans a little as it does from the ground.
+const float2 SLIDE = float2(0.78, 0.63);
+const float2 AXIS = float2(0.34, 0.94);
+
+float n(float2 p) {
+    return float(noise.eval(p * 16.0).r);
+}
+
+// Points of light, at most one to a cell and each kept inside it, so a pixel only needs its own
+// cell. Which cells are lit, and where, comes from the noise texture's lattice, read from a
+// different place for each block of sixteen cells so the pattern does not repeat in sight.
+float points(float2 c, float many, float sharp) {
+    float2 id = floor(c);
+    half3 draw = noise.eval((id + 5.0 * floor(id.yx / 16.0)) * 16.0 + 0.5).rgb;
+    float2 f = c - id - 0.25 - 0.5 * float2(draw.gb);
+    return clamp((many - float(draw.r)) / many, 0.0, 1.0) * exp(-dot(f, f) * sharp);
+}
+
+half4 main(float2 coord) {
+    float2 p = float2((coord.x - 0.5 * resolution.x) / resolution.y, 0.5 - coord.y / resolution.y);
+    float2 d = p - SUN;
+    float r = length(d);
+    // The moon drifts to one side and back, then to the other, and rests in the middle between.
+    float swing = sin(time * 0.055);
+    float aside = 0.0135 * swing * swing * swing;
+    float2 m = d - SLIDE * aside;
+    float rm = length(m);
+    // How much of the sun shows past the moon's edge, from none to the most it ever does.
+    float open = clamp((abs(aside) - (MOON - DISC)) / 0.0055, 0.0, 1.0);
+    half3 light = mix(houselight.rgb, half3(1.0), 0.5);
+    half3 col = velvet.rgb * 0.4 + horizon.rgb * half((0.9 + 1.6 * open) * exp(-r * 2.4));
+
+    // The moon's edge is not smooth: its mountains break the last of the sun into beads.
+    float2 mdir = m / rm;
+    float edge = MOON * (1.0 + 0.004 * (n(mdir * 13.0 + 4.0) - 0.5));
+    if (rm < edge) {
+        // The moon's face, lit only by the earth: almost nothing, and darker toward its edge.
+        float face = 0.6 + 0.4 * n(m * 9.0 + 3.0);
+        col = velvet.rgb * 0.1 + dust.rgb * half(0.028 * face * (1.0 - 0.7 * rm / MOON));
+    } else {
+        // Read round a circle, so the rays join up where the angle would wrap.
+        float2 dir = d / r;
+        float h = max(r - DISC, 0.0);
+        float along = dot(dir, AXIS);
+        // The corona flows outward: its pattern slides away from the sun along every ray.
+        float flow = time * 0.028;
+        float petals = n(dir * 1.9 + float2(4.0 + time * 0.006, 1.5 - time * 0.004));
+        float rays = n(dir * 6.0 + (1.5 * h - flow));
+        float fine = n(dir * 17.0 + float2(3.0, 0.0) + (3.0 * h - 2.2 * flow));
+        // How far the corona reaches this way: furthest across the axis, and where a petal is.
+        float reach = (1.0 - 0.75 * along * along) * (0.35 + 0.65 * petals);
+        float streamers = exp(-h * mix(15.0, 1.9, reach)) * (0.25 + 0.45 * rays + 0.3 * fine);
+        float inner = exp(-h * 30.0);
+        float rim = exp(-h * 150.0);
+        float seen = 1.0 - 0.55 * open;
+        col += mix(dust.rgb, light, half(clamp(inner * 2.0, 0.0, 1.0))) * half(0.62 * streamers * seen);
+        col += light * half((0.45 * inner + 0.8 * rim) * seen);
+        // Prominences: small red flames standing off the edge.
+        float flame = smoothstep(0.58, 0.78, n(dir * 5.5 + float2(12.0 - time * 0.01, 7.0))) * exp(-h * 70.0);
+        col += ember.rgb * half(1.1 * flame);
+        // The sun itself, where the moon has left it uncovered.
+        col += half3(3.0) * half(smoothstep(DISC, DISC - 0.0015, r));
+        // The stars come out, away from the corona's light, and go in when the sun shows.
+        if (r > 0.4) {
+            col += dust.rgb * half(0.8 * points(p * 30.0 + 7.0, 0.2, 60.0) * smoothstep(0.4, 0.75, r) * (1.0 - open));
+        }
+    }
+
+    // The bead of sunlight, with the bloom and the spikes a lens gives it, fainter over the moon.
+    if (open > 0.0) {
+        open *= mix(0.3, 1.0, smoothstep(edge - 0.02, edge, rm));
+        float2 b = d + SLIDE * (sign(aside) * DISC);
+        float bb = dot(b, b);
+        float2 s = float2(0.94 * b.x + 0.34 * b.y, 0.94 * b.y - 0.34 * b.x);
+        float spikes = exp(-abs(s.x) * 110.0 - abs(s.y) * 5.0) + exp(-abs(s.y) * 110.0 - abs(s.x) * 5.0);
+        col += light * half(open * (1.6 * exp(-bb * 1500.0) + 0.5 * exp(-bb * 70.0) + 0.1 * exp(-bb * 6.0) + 0.5 * spikes));
+    }
+    return half4(col, 1.0);
+}
