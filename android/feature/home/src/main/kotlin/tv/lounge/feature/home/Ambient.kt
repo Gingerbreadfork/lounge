@@ -86,6 +86,8 @@ internal const val LATE_DIM_MS = 60_000L
 internal const val LATE_DIM_STEPS = 20
 /** The house lights late at night, against their level by day. */
 private const val NIGHT_LIGHTS = 0.8f
+/** How long the mix stays on one scene. */
+internal const val MIX_SCENE_MS = 4 * 60_000L
 /** Minutes the clock spends on one side of the screen before it crosses to the other. */
 internal const val SIDE_MINUTES = 10
 private const val LAST_PICTURE = "pictures:last"
@@ -449,7 +451,7 @@ internal fun AmbientCaption(room: AmbientRoom, title: String?, line: String?) {
 
 /**
  * The screensaver chosen in Settings: Lounge's pictures, an abstract scene drawn on the GPU, or
- * a different scene each time. A [preview] shows what the next start would without counting as one.
+ * every scene in shuffled order. A [preview] shows what the next start would without counting as one.
  */
 @Composable
 fun Screensaver(core: CoreClient, prefs: Prefs, preview: Boolean = false) {
@@ -461,18 +463,20 @@ fun Screensaver(core: CoreClient, prefs: Prefs, preview: Boolean = false) {
         Box(Modifier.fillMaxSize().background(Color.Black))
         return
     }
-    // A scene in the mix that cannot be drawn gives way to the next one.
-    var passed by remember(id) { mutableIntStateOf(0) }
+    // The mix takes a turn each time it moves on, to the next scene or past one that cannot be drawn.
+    var turn by remember(id) { mutableIntStateOf(0) }
     // Read off the main thread; the screen stays black until it is known, so pictures never flash
     // before a scene.
-    val found by produceState<Pair<String, ShaderStyle?>?>(null, id, passed) {
-        value = id to withContext(Dispatchers.IO) {
+    val found by produceState<Triple<String, ShaderStyle?, Int>?>(null, id, turn) {
+        val onScreen = value?.second?.id
+        val style = withContext(Dispatchers.IO) {
             when (id) {
                 ShaderStyles.PICTURES -> null
-                ShaderStyles.MIX -> ShaderStyles.nextInMix(context, core, advance = !preview)
+                ShaderStyles.MIX -> ShaderStyles.nextInMix(context, core, advance = !preview, after = onScreen)
                 else -> ShaderStyles.find(context, core, id)
             }
         }
+        value = Triple(id, style, turn)
     }
     val loaded = found
     if (loaded == null || loaded.first != id) {
@@ -483,19 +487,30 @@ fun Screensaver(core: CoreClient, prefs: Prefs, preview: Boolean = false) {
     var unusable by remember(id) { mutableStateOf(false) }
     if (style == null || unusable) {
         AmbientScreen(core, room, preview)
-    } else {
-        ShaderScreensaver(
-            style,
-            room,
-            onUnusable = { why ->
-                android.util.Log.w("Lounge", "screensaver: ${style.id} gives way: $why")
-                // A compile error's own text is for the log, not the screen (DESIGN.md §8).
-                SceneMemory.seen[style.id] = SceneMemory.words(if ("heavy" in why) SceneRecord.HEAVY else SceneRecord.BROKEN, style.name).orEmpty()
-                if (id == ShaderStyles.MIX) passed++ else unusable = true
-            },
-            preview = preview,
-        )
+        return
     }
+    // A scene in the mix stays a few minutes, then goes down into black for the next.
+    var leavingTurn by remember(id) { mutableIntStateOf(-1) }
+    if (id == ShaderStyles.MIX) {
+        LaunchedEffect(loaded.third) {
+            delay(MIX_SCENE_MS)
+            leavingTurn = loaded.third
+            delay(SCENE_FADE_MS + 100L)
+            turn++
+        }
+    }
+    ShaderScreensaver(
+        style,
+        room,
+        onUnusable = { why ->
+            android.util.Log.w("Lounge", "screensaver: ${style.id} gives way: $why")
+            // A compile error's own text is for the log, not the screen (DESIGN.md §8).
+            SceneMemory.seen[style.id] = SceneMemory.words(if ("heavy" in why) SceneRecord.HEAVY else SceneRecord.BROKEN, style.name).orEmpty()
+            if (id == ShaderStyles.MIX) turn++ else unusable = true
+        },
+        preview = preview,
+        leaving = leavingTurn == loaded.third,
+    )
 }
 
 /** Closes the full preview on the first key press, except volume and mute, which pass through. */
@@ -537,7 +552,7 @@ internal fun screensaverName(power: PowerSetup, context: android.content.Context
 /** The styles the Screensaver sheet offers, in order: id, name and one line about it. */
 internal fun styleChoices(scenes: List<ShaderStyle>): List<Triple<String, String, String>> = buildList {
     add(Triple(ShaderStyles.PICTURES, "Pictures", "Artwork from your home screen"))
-    if (scenes.size > 1) add(Triple(ShaderStyles.MIX, "Mix", "A different scene each time it starts"))
+    if (scenes.size > 1) add(Triple(ShaderStyles.MIX, "Mix", "Every scene in shuffled order, a few minutes each"))
     scenes.forEach { add(Triple(it.id, it.name, it.description ?: it.origin)) }
 }
 

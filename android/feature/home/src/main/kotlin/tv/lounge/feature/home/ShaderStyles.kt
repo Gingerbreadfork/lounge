@@ -97,9 +97,9 @@ object ShaderSource {
 /** Every abstract scene this TV can show, as a screensaver or a live background: Lounge's own, those from plugins, and local files. */
 object ShaderStyles {
     const val PICTURES = "pictures"
-    /** A different scene each time the screensaver starts. */
+    /** Every scene in turn, in shuffled order. */
     const val MIX = "mix"
-    private const val LAST_IN_MIX = "mix:last"
+    private const val SHOWN_IN_MIX = "mix:shown"
 
     fun all(context: Context, core: CoreClient): List<ShaderStyle> =
         if (Build.VERSION.SDK_INT < 33) emptyList() else bundled(context) + fromPlugins(core) + local(context)
@@ -113,20 +113,35 @@ object ShaderStyles {
     }
 
     /**
-     * The scene the mix shows next: the one after the last it showed, passing over any this TV
-     * could not draw. With [advance] it becomes the last shown; a preview looks without moving on.
+     * The scene the mix shows next: one drawn at random from those it has not shown this round
+     * and that is not [after], the one on screen, passing over any this TV could not draw. With
+     * [advance] it counts as shown; a preview looks without counting.
      */
-    fun nextInMix(context: Context, core: CoreClient, advance: Boolean): ShaderStyle? {
+    fun nextInMix(context: Context, core: CoreClient, advance: Boolean, after: String? = null): ShaderStyle? {
         val memory = SceneMemory(context)
         val scenes = all(context, core).filter { memory.problem(it) == null }
         val prefs = context.getSharedPreferences(SceneMemory.FILE, Context.MODE_PRIVATE)
-        val next = scenes.getOrNull(indexAfter(scenes.map { it.id }, prefs.getString(LAST_IN_MIX, null))) ?: return null
-        if (advance) prefs.edit().putString(LAST_IN_MIX, next.id).apply()
-        return next
+        val shown = prefs.getString(SHOWN_IN_MIX, null)?.split('\n').orEmpty().filter { it.isNotEmpty() }
+        val (id, now) = drawFromMix(scenes.map { it.id }, if (after == null || after in shown) shown else shown + after, kotlin.random.Random.Default) ?: return null
+        if (advance) prefs.edit().putString(SHOWN_IN_MIX, now.joinToString("\n")).apply()
+        return scenes.firstOrNull { it.id == id }
     }
 
-    /** The place after [last] in [ids], round the list; the first when it is not there, -1 for an empty list. */
-    internal fun indexAfter(ids: List<String>, last: String?): Int = if (ids.isEmpty()) -1 else (ids.indexOf(last) + 1) % ids.size
+    /**
+     * Draws one of [ids] at random from those not yet in [shown], and gives it with [shown] as
+     * it then stands. Once every one has been shown the round starts again, not with the last.
+     */
+    internal fun drawFromMix(ids: List<String>, shown: List<String>, random: kotlin.random.Random): Pair<String, List<String>>? {
+        if (ids.isEmpty()) return null
+        val left = ids.filter { it !in shown }
+        if (left.isNotEmpty()) {
+            val pick = left[random.nextInt(left.size)]
+            return pick to shown.filter { it in ids } + pick
+        }
+        val fresh = ids.filter { it != shown.lastOrNull() }.ifEmpty { ids }
+        val pick = fresh[random.nextInt(fresh.size)]
+        return pick to listOf(pick)
+    }
 
     fun bundled(context: Context): List<ShaderStyle> = runCatching {
         val index = JSONArray(context.assets.open("screensavers/index.json").bufferedReader().use { it.readText() })

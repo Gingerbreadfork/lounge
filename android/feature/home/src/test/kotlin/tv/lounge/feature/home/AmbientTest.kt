@@ -21,12 +21,34 @@ class AmbientTest {
     }
 
     @Test
-    fun theMixTakesTheSceneAfterTheLast() {
-        val ids = listOf("lounge:ink", "lounge:rain", "plugin:x:smoke")
-        assertEquals(0, ShaderStyles.indexAfter(ids, null))
-        assertEquals(2, ShaderStyles.indexAfter(ids, "lounge:rain"))
-        assertEquals(0, ShaderStyles.indexAfter(ids, "plugin:x:smoke"))
-        assertEquals(-1, ShaderStyles.indexAfter(emptyList(), "lounge:ink"))
+    fun theMixShowsEverySceneOnceBeforeAnyComesRoundAgain() {
+        val ids = listOf("lounge:ink", "lounge:rain", "plugin:x:smoke", "local:a.agsl")
+        val random = kotlin.random.Random(7)
+        var shown = emptyList<String>()
+        val round = List(ids.size) {
+            val (pick, now) = ShaderStyles.drawFromMix(ids, shown, random)!!
+            shown = now
+            pick
+        }
+        assertEquals(ids.toSet(), round.toSet())
+        // The next round does not open with the scene the last one closed on.
+        repeat(20) {
+            val (pick, now) = ShaderStyles.drawFromMix(ids, shown, random)!!
+            assertTrue(pick != shown.last())
+            assertEquals(listOf(pick), now)
+        }
+        assertNull(ShaderStyles.drawFromMix(emptyList(), shown, random))
+        assertEquals("only", ShaderStyles.drawFromMix(listOf("only"), listOf("only"), random)!!.first)
+    }
+
+    @Test
+    fun theMixForgetsScenesThatHaveGoneAndPassesOverTheOneOnScreen() {
+        val random = kotlin.random.Random(3)
+        val (pick, now) = ShaderStyles.drawFromMix(listOf("a", "b", "c"), listOf("gone", "a"), random)!!
+        assertTrue(pick == "b" || pick == "c")
+        assertEquals(listOf("a", pick), now)
+        // The scene on screen is given as shown, so a preview does not draw it twice running.
+        repeat(20) { assertEquals("b", ShaderStyles.drawFromMix(listOf("a", "b"), listOf("a"), random)!!.first) }
     }
 
     @Test

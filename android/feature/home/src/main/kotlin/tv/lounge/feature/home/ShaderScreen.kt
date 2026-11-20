@@ -54,15 +54,19 @@ half4 main(float2 coord) {
 }
 """
 
+/** How long a scene takes to come up out of black, or to go back into it. */
+internal const val SCENE_FADE_MS = 1_200
+
 /**
  * An abstract screensaver: the program drawn on the GPU behind the clock and its name. It comes
- * up out of black once its first frame is there, and the house lights are the [room]'s.
+ * up out of black once its first frame is there and goes back down into it while [leaving], and
+ * the house lights are the [room]'s.
  */
 @Composable
-internal fun ShaderScreensaver(style: ShaderStyle, room: AmbientRoom, onUnusable: (String) -> Unit, preview: Boolean = false) {
+internal fun ShaderScreensaver(style: ShaderStyle, room: AmbientRoom, onUnusable: (String) -> Unit, preview: Boolean = false, leaving: Boolean = false) {
     val motion = LoungeTheme.motion
     var shown by remember(style) { mutableStateOf(false) }
-    val cover = animateFloatAsState(if (shown) 0f else 1f, tween(if (motion.reducedMotion) 0 else 1_200), label = "sceneCover")
+    val cover = animateFloatAsState(if (shown && !leaving) 0f else 1f, tween(if (motion.reducedMotion) 0 else SCENE_FADE_MS), label = "sceneCover")
     // Whatever went wrong last time, this run decides afresh.
     LaunchedEffect(style) { SceneMemory.seen.remove(style.id) }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
