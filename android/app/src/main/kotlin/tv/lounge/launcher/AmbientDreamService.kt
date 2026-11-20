@@ -25,9 +25,9 @@ import kotlinx.coroutines.withContext
 import tv.lounge.core.CoreClient
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LoungeThemeVariant
-import tv.lounge.design.LoungeVisuals
 import tv.lounge.design.systemReducedMotion
 import tv.lounge.feature.home.Screensaver
+import tv.lounge.platform.DeviceTierDetector
 import tv.lounge.platform.Prefs
 
 /** The system screensaver, drawn with Compose from the same snapshot as the home screen. */
@@ -50,6 +50,7 @@ class AmbientDreamService : DreamService(), LifecycleOwner, SavedStateRegistryOw
         isFullscreen = true
         val app = application as LoungeApplication
         val prefs = app.prefs
+        val tier = DeviceTierDetector.detect(this)
         val view = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@AmbientDreamService)
             setViewTreeSavedStateRegistryOwner(this@AmbientDreamService)
@@ -59,7 +60,7 @@ class AmbientDreamService : DreamService(), LifecycleOwner, SavedStateRegistryOw
                 LoungeTheme(
                     variant = LoungeThemeVariant.valueOf(uiPrefs.theme.name),
                     reducedMotion = uiPrefs.reducedMotion ?: systemReducedMotion(),
-                    visuals = LoungeVisuals.Lite,
+                    visuals = visualsFor(tier, uiPrefs.liteMode),
                 ) {
                     // A dream started while the core is still opening waits for it off the main thread.
                     val opened by produceState<CoreClient?>(if (app.coreSettled) app.awaitCoreOrNull() else null) {

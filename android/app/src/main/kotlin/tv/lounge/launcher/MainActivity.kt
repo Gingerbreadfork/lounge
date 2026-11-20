@@ -129,13 +129,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val uiPrefs by prefs.all.collectAsState(initial = startPrefs)
             val reduced = uiPrefs.reducedMotion ?: systemReducedMotion()
-            val visuals = when {
-                uiPrefs.liteMode == true -> LoungeVisuals.Lite
-                uiPrefs.liteMode == false -> if (tier == DeviceTier.A) LoungeVisuals.TierA else LoungeVisuals.TierB
-                tier == DeviceTier.A -> LoungeVisuals.TierA
-                tier == DeviceTier.B -> LoungeVisuals.TierB
-                else -> LoungeVisuals.Lite
-            }
+            val visuals = visualsFor(tier, uiPrefs.liteMode)
             LoungeTheme(
                 variant = LoungeThemeVariant.valueOf(uiPrefs.theme.name),
                 reducedMotion = reduced,
@@ -505,4 +499,13 @@ class MainActivity : ComponentActivity() {
             android.util.Log.w("Lounge", "collecting $what failed", t)
         }
     }
+}
+
+/** The visuals for this TV's tier, with Lite mode as the person set it or left to the TV. */
+internal fun visualsFor(tier: DeviceTier, liteMode: Boolean?): LoungeVisuals = when {
+    liteMode == true -> LoungeVisuals.Lite
+    liteMode == false -> if (tier == DeviceTier.A) LoungeVisuals.TierA else LoungeVisuals.TierB
+    tier == DeviceTier.A -> LoungeVisuals.TierA
+    tier == DeviceTier.B -> LoungeVisuals.TierB
+    else -> LoungeVisuals.Lite
 }
