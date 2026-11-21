@@ -955,6 +955,11 @@ fn ingest_plugin_items(inner: &Inner, plugin: &str, ready: Vec<ReadyItem>) -> Re
         it.row = p.row.clone();
         it.flags.is_new = p.is_new;
         it.flags.framed = p.framed;
+        it.glyph = p.glyph.as_deref().map(|g| g.trim().to_ascii_lowercase()).filter(|g| !g.is_empty() && g.len() <= 32);
+        it.on = p.on;
+        it.tint = p.tint.as_deref().and_then(crate::screensavers::parse_color).map(lounge_graph::color::light_from_tint);
+        it.row_title = p.row_title.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(|t| t.chars().take(60).collect());
+        it.more = p.more.as_deref().map(str::trim).filter(|m| !m.is_empty() && m.len() <= 256).map(str::to_string);
         it.channel_id = p.channel_id.as_deref().map(|c| channel_key(plugin, c));
         it.channel_name = p.channel_name.clone();
         dress_content(&mut it, &w, &done.results);
@@ -1017,6 +1022,17 @@ pub(crate) fn play_link(a: &lounge_plugin_api::Action, url: &str, title: String)
     DeepLink::Play { url: url.to_string(), title, start_ms: a.start_ms, headers: a.play_headers(), audio: a.media == lounge_plugin_api::Media::Audio }
 }
 
+/// The control that opens a plugin's sheet. A plugin id never holds a colon, so it splits cleanly.
+pub(crate) fn sheet_control(plugin: &str, sheet: &str) -> String {
+    format!("sheet:{plugin}:{sheet}")
+}
+
+/// The control that shows a picture a plugin keeps renewing: the plugin, a title, then the address.
+pub(crate) fn live_control(plugin: &str, title: &str, url: &str) -> String {
+    let line = |s: &str| s.replace('\n', " ");
+    format!("live:{plugin}\n{}\n{}", line(title), line(url))
+}
+
 /// What selecting a plugin item does. Wallpapers do nothing; a schedule entry without an action
 /// plays through its channel; a programme put in a row without one is a tile to read, which
 /// opens nothing; anything else needs an action of its own.
@@ -1034,6 +1050,10 @@ pub(crate) fn plugin_link(plugin: &str, p: &lounge_plugin_api::Item) -> Option<D
         DeepLink::PluginResolve { plugin: plugin.to_string(), action: action.clone() }
     } else if let Some(query) = &a.search {
         DeepLink::Control(format!("search:{query}"))
+    } else if let Some(sheet) = &a.sheet {
+        DeepLink::Control(sheet_control(plugin, sheet))
+    } else if let Some(url) = &a.live {
+        DeepLink::Control(live_control(plugin, a.title.as_deref().unwrap_or(&p.title), url))
     } else if p.kind == PluginItemKind::Wallpaper || (p.kind == PluginItemKind::Schedule && p.channel_id.is_some()) || (p.kind == PluginItemKind::Program && p.row.is_some()) {
         DeepLink::None
     } else {
@@ -1399,6 +1419,9 @@ fn same_tiles(a: &[Tile], b: &[Tile]) -> bool {
             && a.provider == b.provider
             && a.provider_name == b.provider_name
             && a.hidden == b.hidden
+            && a.glyph == b.glyph
+            && a.on == b.on
+            && a.more == b.more
     })
 }
 

@@ -132,6 +132,21 @@ pub struct Item {
     /// Row a plugin put this in (its manifest's row id).
     #[serde(default)]
     pub row: Option<String>,
+    /// The glyph a control wears in place of a picture, by its name in Lounge's set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glyph: Option<String>,
+    /// Whether a control is on, when it can be on or off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<bool>,
+    /// The item's own light, as ARGB, in place of its pictures' palette.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tint: Option<u32>,
+    /// A title this item gives the row it is in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_title: Option<String>,
+    /// The plugin sheet with more to do with this item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub more: Option<String>,
 }
 
 impl Item {
@@ -160,6 +175,11 @@ impl Item {
             weight: 0,
             art_aspect: 0.0,
             row: None,
+            glyph: None,
+            on: None,
+            tint: None,
+            row_title: None,
+            more: None,
         }
     }
 
@@ -190,6 +210,11 @@ impl Item {
             weight: 0,
             art_aspect: 0.0,
             row: None,
+            glyph: None,
+            on: None,
+            tint: None,
+            row_title: None,
+            more: None,
         }
     }
 
@@ -219,12 +244,21 @@ impl Item {
         self.art_aspect > 0.0 && self.art_aspect < 1.2
     }
 
+    /// The light the tile gives off: its own while it is on or has no state, else its pictures'.
     pub fn light(&self) -> u32 {
+        if let Some(tint) = self.tint.filter(|_| self.on != Some(false)) {
+            return tint;
+        }
         self.artwork
             .palette
             .as_ref()
             .map(light_from_palette)
             .unwrap_or(color::HOUSELIGHT)
+    }
+
+    /// Whether this is something to switch or set, not something to watch.
+    pub fn is_control(&self) -> bool {
+        self.glyph.is_some() || self.on.is_some()
     }
 }
 
@@ -588,13 +622,29 @@ impl Graph {
     }
 
     /// Items a plugin published into one of its rows, by weight then recency.
+    /// The title a plugin's items give their row, when one of them does.
+    pub fn row_title(&self, plugin: &str, row: &str) -> Option<&str> {
+        self.plugin_row_titled(plugin, row).1
+    }
+
     pub fn plugin_row(&self, plugin: &str, row: &str) -> Vec<&Item> {
+        self.plugin_row_titled(plugin, row).0
+    }
+
+    /// A plugin row's items in order, with the title one of them gives the row, found in one
+    /// pass. A hidden item is left out of the row and still titles it.
+    pub fn plugin_row_titled(&self, plugin: &str, row: &str) -> (Vec<&Item>, Option<&str>) {
         let source = format!("plugin:{plugin}");
-        let mut v: Vec<&Item> = self.items()
-            .filter(|it| it.source == source && it.row.as_deref() == Some(row) && !self.is_hidden(&it.id))
-            .collect();
+        let mut title = None;
+        let mut v: Vec<&Item> = Vec::new();
+        for it in self.items().filter(|it| it.source == source && it.row.as_deref() == Some(row)) {
+            title = title.or(it.row_title.as_deref());
+            if !self.is_hidden(&it.id) {
+                v.push(it);
+            }
+        }
         v.sort_by(|a, b| b.weight.cmp(&a.weight).then_with(|| b.added_ms.cmp(&a.added_ms)).then_with(|| a.title.cmp(&b.title)));
-        v
+        (v, title)
     }
 
     /// Pictures plugins published for the screensaver, each source's by weight then recency, the
@@ -661,7 +711,8 @@ impl Graph {
                 break;
             }
             if let Some(it) = self.get(id) {
-                if !self.is_hidden(&it.id) {
+                // A control has nothing to show on the Stage.
+                if !self.is_hidden(&it.id) && !it.is_control() {
                     out.push(it);
                 }
             }
@@ -1022,6 +1073,58 @@ mod tests {
         g.replace_source("apps", apps);
         g.layout.stage_pins = (0..5).map(|i| format!("app:p{i}")).collect();
         assert_eq!(g.stage_candidates(3).len(), 3);
+    }
+
+    #[test]
+    fn a_control_is_lit_by_its_own_light_and_kept_off_the_stage() {
+        let mut lamp = Item::content("plugin:h:lamp", ItemKind::Program, "plugin:h", "Lamp", DeepLink::None);
+        assert!(!lamp.is_control());
+        lamp.glyph = Some("light".into());
+        lamp.on = Some(true);
+        lamp.tint = Some(0xFF5599FF);
+        assert!(lamp.is_control());
+        assert_eq!(lamp.light(), 0xFF5599FF);
+        // Off, it gives off no colour of its own.
+        lamp.on = Some(false);
+        assert_eq!(lamp.light(), color::HOUSELIGHT);
+        // A scene has no state, and keeps the colour it was given.
+        lamp.on = None;
+        assert_eq!(lamp.light(), 0xFF5599FF);
+
+        let mut g = Graph::default();
+        g.replace_source("plugin:h", vec![lamp]);
+        g.replace_source("apps", vec![app("p", "A", None)]);
+        g.layout.stage_pins = vec!["plugin:h:lamp".into(), "app:p".into()];
+        assert_eq!(g.stage_candidates(6).iter().map(|it| it.id.as_str()).collect::<Vec<_>>(), ["app:p"]);
+    }
+
+    #[test]
+    fn an_item_stored_before_controls_still_loads() {
+        let stored = serde_json::to_value(Item::content("plugin:h:film", ItemKind::Program, "plugin:h", "Film", DeepLink::None)).unwrap();
+        let mut old = stored.as_object().unwrap().clone();
+        for field in ["glyph", "on", "tint", "row_title", "more"] {
+            old.remove(field);
+        }
+        let item: Item = serde_json::from_value(old.into()).unwrap();
+        assert_eq!((item.glyph, item.on, item.tint, item.row_title, item.more), (None, None, None, None, None));
+    }
+
+    #[test]
+    fn a_row_takes_the_title_one_of_its_items_gives() {
+        let mut g = Graph::default();
+        let tile = |id: &str, row: &str, title: Option<&str>| {
+            let mut it = Item::content(id, ItemKind::Program, "plugin:h", id, DeepLink::None);
+            it.row = Some(row.into());
+            it.row_title = title.map(str::to_string);
+            it
+        };
+        g.replace_source("plugin:h", vec![tile("plugin:h:a", "here", None), tile("plugin:h:b", "here", Some("Den")), tile("plugin:h:c", "rooms", None)]);
+        assert_eq!(g.row_title("h", "here"), Some("Den"));
+        assert_eq!(g.row_title("h", "rooms"), None);
+        // The tile that names the row can be hidden without the row losing its name.
+        g.layout.hidden.insert("plugin:h:b".into());
+        let (shown, title) = g.plugin_row_titled("h", "here");
+        assert_eq!((shown.iter().map(|it| it.id.as_str()).collect::<Vec<_>>(), title), (vec!["plugin:h:a"], Some("Den")));
     }
 
     #[test]

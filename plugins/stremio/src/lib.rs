@@ -46,6 +46,7 @@ impl sdk::Plugin for Stremio {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["api.strem.io".into(), "link.stremio.com".into(), "v3-cinemeta.strem.io".into(), "*".into()],
             refresh_minutes: 15,
+            refresh_seconds: 0,
             rows: vec![RowSpec { id: "library".into(), title: "Library on Stremio".into(), style: RowStyle::Poster }],
             settings: vec![
                 SettingSpec {

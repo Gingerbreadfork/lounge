@@ -78,7 +78,14 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
                     subtitle: it.subtitle.clone().or_else(|| it.channel_name.clone()),
                     artwork_path: prepared.filter(|_| kind != TileKind::Compact).map(|p| p.path.clone()),
                     icon_path: prepared.filter(|_| kind == TileKind::Compact).map(|p| p.path.clone()),
-                    light_argb: prepared.map(|p| lounge_graph::light_from_palette(&p.palette)).unwrap_or(lounge_graph::color::HOUSELIGHT),
+                    light_argb: it
+                        .tint
+                        .as_deref()
+                        .filter(|_| it.on != Some(false))
+                        .and_then(crate::screensavers::parse_color)
+                        .map(lounge_graph::color::light_from_tint)
+                        .or_else(|| prepared.map(|p| lounge_graph::light_from_palette(&p.palette)))
+                        .unwrap_or(lounge_graph::color::HOUSELIGHT),
                     progress: it.progress,
                     badge: (it.kind == PluginItemKind::Channel).then_some(Badge::Live),
                     action: format!("open:{id}"),
@@ -92,6 +99,9 @@ fn rows_for(inner: &Inner, groups: Vec<SearchGroup>) -> Vec<Row> {
                     provider_name: None,
                     hidden: false,
                     time_left: None,
+                    glyph: it.glyph.as_deref().map(|g| g.trim().to_ascii_lowercase()).filter(|g| !g.is_empty() && g.len() <= 32),
+                    on: it.on,
+                    more: None,
                 });
                 links.insert(id, link);
             }
@@ -109,7 +119,7 @@ fn row_kind(items: &[ReadyItem]) -> TileKind {
     let most = |n: usize| n * 2 > items.len();
     if most(items.iter().filter(|r| r.poster.is_some()).count()) {
         TileKind::Poster
-    } else if most(items.iter().filter(|r| r.poster.is_none() && r.thumbnail.is_none() && r.logo.is_some()).count()) {
+    } else if most(items.iter().filter(|r| r.poster.is_none() && r.thumbnail.is_none() && (r.logo.is_some() || r.item.glyph.is_some())).count()) {
         TileKind::Compact
     } else {
         TileKind::Landscape

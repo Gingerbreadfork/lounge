@@ -205,9 +205,9 @@ impl CompanionActions for CoreActions {
         serde_json::to_string(&*inner.snapshot.read()).unwrap_or_else(|_| "null".to_string())
     }
 
-    fn perform(&self, action: &str) -> Result<(), String> {
+    fn perform(&self, action: &str) -> Result<Option<String>, String> {
         let inner = self.inner()?;
-        engine::perform(&inner, action).map_err(|e| failed_to(&inner, action, e))
+        engine::perform(&inner, action).map(|done| done.say).map_err(|e| failed_to(&inner, action, e))
     }
 
     fn launch(&self, package: &str) -> Result<(), String> {
@@ -334,6 +334,27 @@ impl CompanionActions for CoreActions {
 
     fn plugin_log(&self, id: &str) -> Vec<String> {
         self.inner().map(|i| i.plugins.logs(id)).unwrap_or_default()
+    }
+
+    /// Only a plugin that is asking for a sign-in is handed one, and only at the address it was
+    /// given, so the page cannot be used to write into a plugin or to finish a sign-in for it.
+    fn signed_in(&self, plugin: &str, key: &str, query: &str) -> Result<String, String> {
+        const NOT_WAITING: &str = "Nothing on the TV is waiting for this sign-in. Start it again from the plugin's page on the TV.";
+        let inner = self.inner()?;
+        let name = inner.state.lock().plugins.iter().find(|p| p.id == plugin && p.enabled).map(|p| p.manifest.name.clone());
+        let Some(name) = name else { return Err(NOT_WAITING.into()) };
+        if query.is_empty() || !inner.plugins.asking(plugin) || !inner.plugins.landing_is(plugin, key) {
+            return Err(NOT_WAITING.into());
+        }
+        let kept = crate::plugins::clip_bytes(query, lounge_plugin_api::MAX_CALLBACK_BYTES);
+        let stored = inner.state.lock().store.plugin_kv_set(plugin, lounge_plugin_api::CALLBACK_KEY, kept.as_bytes(), lounge_plugins::host::Limits::default().kv_keys);
+        if !matches!(stored, Ok(true)) {
+            tracing::warn!("companion: the sign-in for {plugin} could not be kept");
+            return Err("The TV couldn't keep the sign-in. Free some space on the TV, then start it again.".into());
+        }
+        inner.plugins.forget_landing(plugin);
+        inner.plugins.refresh_now(plugin);
+        Ok(name)
     }
 
     fn diagnostics_json(&self) -> String {

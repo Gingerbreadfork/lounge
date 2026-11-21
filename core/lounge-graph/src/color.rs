@@ -29,6 +29,20 @@ pub fn light_from_palette(p: &Palette) -> u32 {
     hsl_to_argb(h, s, l)
 }
 
+/// A colour a plugin gives as an item's own light, such as a lamp's. One near white is the
+/// house light, and a dark one is lifted until it reads on the room's walls.
+pub fn light_from_tint(argb: u32) -> u32 {
+    let argb = 0xFF00_0000 | argb;
+    if chroma(argb) < 0.12 {
+        return HOUSELIGHT;
+    }
+    let (h, s, l) = rgb_to_hsl(argb);
+    let mut l = l.clamp(0.55, 0.72);
+    while l < 0.86 && contrast_ratio(hsl_to_argb(h, s, l), VELVET) < 4.5 {
+        l += 0.03;
+    }
+    hsl_to_argb(h, s, l)
+}
 
 pub fn chroma(argb: u32) -> f32 {
     let (r, g, b) = rgb_f(argb);
@@ -269,6 +283,21 @@ mod tests {
             let (r1, g1, b1) = rgb_f(c);
             let (r2, g2, b2) = rgb_f(back);
             assert!((r1 - r2).abs() < 0.01 && (g1 - g2).abs() < 0.01 && (b1 - b2).abs() < 0.01);
+        }
+    }
+
+    #[test]
+    fn a_tint_becomes_a_light_that_reads_in_the_room() {
+        // A warm white lamp is the house light, not a colour of its own.
+        assert_eq!(light_from_tint(0x00FFF4E5), HOUSELIGHT);
+        assert_eq!(light_from_tint(0xFFFFFFFF), HOUSELIGHT);
+        // A deep blue and a pale pink both come out readable on the walls, and keep their hue.
+        for &tint in &[0x000000C8u32, 0x00FFD0E0, 0x00FF0000, 0x0000FF40] {
+            let light = light_from_tint(tint);
+            assert!(contrast_ratio(light, VELVET) >= 4.5, "{tint:06x} gave {light:08x}");
+            let (was, _, _) = rgb_to_hsl(0xFF00_0000 | tint);
+            let (now, _, _) = rgb_to_hsl(light);
+            assert!((was - now).abs() < 2.0 || (was - now).abs() > 358.0, "{tint:06x} changed hue from {was} to {now}");
         }
     }
 }

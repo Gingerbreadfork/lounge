@@ -29,6 +29,7 @@ impl sdk::Plugin for Twitch {
             kinds: vec![Kind::Content, Kind::Epg],
             fetch_hosts: vec!["id.twitch.tv".into(), "api.twitch.tv".into(), "static-cdn.jtvnw.net".into()],
             refresh_minutes: 5,
+            refresh_seconds: 0,
             rows: vec![],
             settings: vec![
                 SettingSpec {

@@ -40,6 +40,7 @@ impl sdk::Plugin for Jellyfin {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "recent".into(), title: "Recently added on Jellyfin".into(), style: RowStyle::Poster },
                 RowSpec { id: "favourites".into(), title: "Favourites on Jellyfin".into(), style: RowStyle::Poster },

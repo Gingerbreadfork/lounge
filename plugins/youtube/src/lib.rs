@@ -51,6 +51,7 @@ impl sdk::Plugin for YouTube {
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["www.youtube.com".into(), "m.youtube.com".into(), "*.ytimg.com".into(), "oauth2.googleapis.com".into(), "www.googleapis.com".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "new".into(), title: "New on YouTube".into(), style: RowStyle::Landscape },
                 RowSpec { id: "playlists".into(), title: "Your playlists on YouTube".into(), style: RowStyle::Landscape },

@@ -47,6 +47,7 @@ impl sdk::Plugin for Nuvio {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["api.nuvio.tv".into(), "$server".into(), "v3-cinemeta.strem.io".into(), "api.themoviedb.org".into(), "*".into()],
             refresh_minutes: 15,
+            refresh_seconds: 0,
             rows: vec![RowSpec { id: "library".into(), title: "Library on Nuvio".into(), style: RowStyle::Poster }],
             settings: vec![
                 SettingSpec {

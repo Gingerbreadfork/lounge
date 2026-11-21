@@ -3,9 +3,9 @@
 //! items to the worker; one answers searches and one answers tile presses, so none waits on another.
 
 use crate::{now_ms, screensavers, worker, Inner, PluginInfo, PluginSettingInfo};
-use lounge_plugin_api::{valid_plugin_id, Action, Ask, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext};
+use lounge_plugin_api::{valid_plugin_id, Action, Ask, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext, Sheet};
 use lounge_plugins::bundle::Bundle;
-use lounge_plugins::host::{kept, kept_results, Host, Limits, LoadedPlugin, Services, Stop, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
+use lounge_plugins::host::{kept, kept_results, kept_sheet, Host, Limits, LoadedPlugin, Services, Stop, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
 use lounge_plugins::http::{host_permitted, reach, redact, Fetcher, Reach};
 use lounge_store::PluginRow;
 use parking_lot::Mutex;
@@ -43,6 +43,11 @@ pub(crate) enum PluginJob {
         query: String,
         generation: u64,
         reply: crossbeam_channel::Sender<Vec<SearchGroup>>,
+    },
+    Sheet {
+        plugin: String,
+        id: String,
+        reply: crossbeam_channel::Sender<Result<Sheet, String>>,
     },
 }
 
@@ -108,6 +113,19 @@ pub(crate) struct PluginManager {
     refresh_tx: crossbeam_channel::Sender<PluginJob>,
     calls_tx: crossbeam_channel::Sender<PluginJob>,
     resolve_tx: crossbeam_channel::Sender<PluginJob>,
+    sheet_tx: crossbeam_channel::Sender<PluginJob>,
+    /// Tells the press thread a plugin did something on a press, so its tiles are read again.
+    pressed_tx: crossbeam_channel::Sender<String>,
+    /// The part of each plugin's sign-in page address that only the plugin is told.
+    landings: Mutex<HashMap<String, String>>,
+    /// The live picture each plugin last opened: its address and the action that gave it.
+    live: Mutex<HashMap<String, (String, String)>>,
+    /// Ends the schedule's sleep early, when what it sleeps until may have changed.
+    wake_tx: crossbeam_channel::Sender<()>,
+    /// When each plugin was last pressed, while its refresh for that is still to come.
+    pressed: Mutex<HashMap<String, Instant>>,
+    /// What each fast plugin's last refresh brought, so its log says so only when that changes.
+    quiet_log: Mutex<HashMap<String, (usize, i64)>>,
     fetchers: Arc<Fetchers>,
     services: Arc<CoreServices>,
     /// The newest search; older ones answer with nothing, and one still running is stopped.
@@ -139,6 +157,9 @@ pub(crate) struct Receivers {
     refresh: crossbeam_channel::Receiver<PluginJob>,
     calls: crossbeam_channel::Receiver<PluginJob>,
     resolve: crossbeam_channel::Receiver<PluginJob>,
+    sheets: crossbeam_channel::Receiver<PluginJob>,
+    pressed: crossbeam_channel::Receiver<String>,
+    wake: crossbeam_channel::Receiver<()>,
 }
 
 /// A plugin's ask, with when its wait began and the watch kept on it, if one is.
@@ -182,6 +203,17 @@ impl CoreServices {
         let mut state = inner.state.lock();
         Some(f(&mut state.store))
     }
+
+    /// Where a sign-in started by `plugin` comes back to: a page on the phone companion's
+    /// server, which is there only while the companion is on and the TV is on a network. Its
+    /// address ends in a key only the plugin is told, so nothing else on the network can land there.
+    fn callback(&self, plugin: &str) -> Option<String> {
+        let inner = self.inner.get()?.upgrade()?;
+        let port = inner.companion.lock().as_ref()?.port;
+        let ip = lounge_companion::local_ip()?;
+        let key = inner.plugins.landing_key(plugin)?;
+        Some(format!("http://{ip}:{port}/signin/{plugin}/{key}"))
+    }
 }
 
 impl Services for CoreServices {
@@ -198,6 +230,9 @@ impl Services for CoreServices {
         self.setting(plugin, key)
     }
     fn setting(&self, plugin: &str, key: &str) -> Option<String> {
+        if key == lounge_plugin_api::CALLBACK_SETTING {
+            return self.callback(plugin);
+        }
         self.with_store(|s| s.plugin_setting(plugin, key).ok().flatten()).flatten()
     }
     fn log(&self, plugin: &str, level: i32, message: &str) {
@@ -351,6 +386,9 @@ impl PluginManager {
         let (refresh_tx, refresh) = crossbeam_channel::unbounded();
         let (calls_tx, calls) = crossbeam_channel::unbounded();
         let (resolve_tx, resolve) = crossbeam_channel::unbounded();
+        let (sheet_tx, sheets) = crossbeam_channel::unbounded();
+        let (pressed_tx, pressed) = crossbeam_channel::unbounded();
+        let (wake_tx, wake) = crossbeam_channel::bounded(1);
         let manager = Arc::new(PluginManager {
             host: Host::new(services.clone(), Limits::default()),
             dir: data_dir.join("plugins"),
@@ -360,6 +398,13 @@ impl PluginManager {
             refresh_tx,
             calls_tx,
             resolve_tx,
+            sheet_tx,
+            pressed_tx,
+            landings: Mutex::new(HashMap::new()),
+            live: Mutex::new(HashMap::new()),
+            wake_tx,
+            pressed: Mutex::new(HashMap::new()),
+            quiet_log: Mutex::new(HashMap::new()),
             fetchers,
             services: Arc::clone(&services),
             search_generation: Arc::new(AtomicU64::new(0)),
@@ -370,7 +415,7 @@ impl PluginManager {
             ask_watches: AtomicU64::new(0),
             ask_dir: cache_dir.join("plugin-asks"),
         });
-        (manager, Receivers { refresh, calls, resolve }, services)
+        (manager, Receivers { refresh, calls, resolve, sheets, pressed, wake }, services)
     }
 
     pub fn logs(&self, plugin: &str) -> Vec<String> {
@@ -384,6 +429,50 @@ impl PluginManager {
             pending.since_ms = now_ms();
         }
         self.refresh_soon(id);
+        self.wake_schedule();
+    }
+
+    /// The key in a plugin's sign-in page address, made the first time it is asked for. Nothing
+    /// when the system has no randomness, since a key that can be guessed is no key.
+    pub fn landing_key(&self, plugin: &str) -> Option<String> {
+        let mut landings = self.landings.lock();
+        if let Some(key) = landings.get(plugin) {
+            return Some(key.clone());
+        }
+        let key = lounge_companion::unguessable()?;
+        landings.insert(plugin.to_string(), key.clone());
+        Some(key)
+    }
+
+    /// Whether `key` is the one `plugin` was given for its sign-in page.
+    pub fn landing_is(&self, plugin: &str, key: &str) -> bool {
+        self.landings.lock().get(plugin).is_some_and(|given| given == key)
+    }
+
+    /// Forgets a plugin's sign-in page key once a sign-in has landed there, so the next has another.
+    pub fn forget_landing(&self, plugin: &str) {
+        self.landings.lock().remove(plugin);
+    }
+
+    /// Remembers which action gave a live picture's address, for asking again when it lapses.
+    pub fn note_live(&self, plugin: &str, url: &str, action: &str) {
+        self.live.lock().insert(plugin.to_string(), (url.to_string(), action.to_string()));
+    }
+
+    /// The action behind the live picture a plugin is showing at `url`, if the core opened it.
+    pub fn live_action(&self, plugin: &str, url: &str) -> Option<String> {
+        self.live.lock().get(plugin).filter(|(shown, _)| shown == url).map(|(_, action)| action.clone())
+    }
+
+    /// Has the schedule look again now: the screen has come on, or a plugin's settings have
+    /// changed how often it refreshes.
+    pub fn wake_schedule(&self) {
+        let _ = self.wake_tx.try_send(());
+    }
+
+    /// Whether a plugin waits on the person now.
+    pub fn asking(&self, id: &str) -> bool {
+        self.asks.lock().contains_key(id)
     }
 
     /// Asks again each plugin that waits on the person. They are back at the screen, and may
@@ -419,10 +508,24 @@ impl PluginManager {
         refreshes.queued.iter().chain(refreshes.running.keys()).cloned().collect()
     }
 
-    /// Queue a resolve or a search. A press has a thread of its own, so it never waits on a search.
+    /// Queue a resolve, a sheet or a search. Each kind has a thread of its own, so a press
+    /// never waits on a search, nor on a sheet that is slow to read.
     pub fn call(&self, job: PluginJob) -> Result<(), String> {
-        let tx = if matches!(job, PluginJob::Resolve { .. }) { &self.resolve_tx } else { &self.calls_tx };
+        let tx = match job {
+            PluginJob::Resolve { .. } => &self.resolve_tx,
+            PluginJob::Sheet { .. } => &self.sheet_tx,
+            _ => &self.calls_tx,
+        };
         tx.send(job).map_err(|_| "plugin thread is gone".to_string())
+    }
+
+    /// Has the plugin's tiles read again shortly, after a press that changed something. Presses
+    /// in quick succession bring one refresh.
+    pub fn refresh_after_press(&self, id: &str) {
+        let waiting = self.pressed.lock().insert(id.to_string(), Instant::now()).is_some();
+        if !waiting {
+            let _ = self.pressed_tx.send(id.to_string());
+        }
     }
 
     /// Lets go of modules no call has used for a while.
@@ -586,7 +689,35 @@ impl PluginManager {
 
     fn resolve(&self, entry: &PluginEntry, action: &str) -> Result<Action, String> {
         let plugin = self.loaded(&entry.id, &entry.manifest)?;
-        self.host.resolve(&plugin, action).map_err(|e| e.to_string())
+        let mut resolved = self.host.resolve(&plugin, action).map_err(|e| e.to_string())?;
+        // What it says is shown as written, so it is cut down as an error is.
+        resolved.say = resolved.say.as_deref().map(|say| clip_bytes(&redact_urls(say.trim()), 200).to_string()).filter(|say| !say.is_empty());
+        Ok(resolved)
+    }
+
+    /// A picture a plugin's live view shows, fetched as the plugin itself may fetch and no larger
+    /// than a tile's picture may be. An answer that is not a picture says its status.
+    pub fn picture(&self, plugin: &str, url: &str) -> Result<Vec<u8>, String> {
+        let mut request = HttpRequest::get(url);
+        request.timeout_ms = 8_000;
+        let response = self.services.fetch(plugin, &request)?;
+        if !response.ok() {
+            return Err(format!("status {}", response.status));
+        }
+        let bytes = response.bytes();
+        if bytes.is_empty() || bytes.len() > MAX_ARTWORK_BYTES {
+            return Err("not a picture the TV can show".to_string());
+        }
+        Ok(bytes)
+    }
+
+    fn sheet(&self, entry: &PluginEntry, id: &str) -> Result<Sheet, String> {
+        let plugin = self.loaded(&entry.id, &entry.manifest)?;
+        let (sheet, notes) = kept_sheet(self.host.sheet(&plugin, id).map_err(|e| e.to_string())?);
+        for n in &notes {
+            push_log(&self.logs, &entry.id, 2, n);
+        }
+        Ok(sheet)
     }
 
     /// Ask every searchable plugin in `entries` at once; each answer gets one picture per item.
@@ -775,6 +906,8 @@ pub(crate) fn info_for(row: &PluginRow, manifest: &Manifest, settings: &[(String
             }
         })
         .collect();
+    // How often it refreshes with its settings as they stand, said in seconds under a minute.
+    let every_ms = manifest.refresh_every_ms(&|key| settings.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone()));
     PluginInfo {
         id: row.id.clone(),
         name: manifest.name.clone(),
@@ -788,7 +921,8 @@ pub(crate) fn info_for(row: &PluginRow, manifest: &Manifest, settings: &[(String
         enabled: row.enabled,
         built_in: row.built_in,
         configured: configured(manifest, settings),
-        refresh_minutes: manifest.refresh_minutes_or_default(),
+        refresh_minutes: if every_ms < 60_000 { manifest.refresh_minutes_or_default() } else { ((every_ms + 59_999) / 60_000) as u32 },
+        refresh_seconds: if every_ms < 60_000 { (every_ms / 1000) as u32 } else { 0 },
         last_refresh_ms: row.last_refresh_ms,
         last_error: row.last_error.clone(),
         ask: None,
@@ -821,21 +955,102 @@ pub(crate) fn spawn(inner: Arc<Inner>, jobs: Receivers, services: Arc<CoreServic
     };
     answering("lounge-plugin-calls", jobs.calls);
     answering("lounge-plugin-resolve", jobs.resolve);
+    answering("lounge-plugin-sheet", jobs.sheets);
     for n in 0..REFRESH_WORKERS {
         answering(&format!("lounge-plugin-refresh-{n}"), jobs.refresh.clone());
     }
     let weak = Arc::downgrade(&inner);
+    let pressed = jobs.pressed;
+    std::thread::Builder::new()
+        .name("lounge-plugin-press".into())
+        .spawn(move || refresh_after_presses(weak, pressed))
+        .expect("spawn the plugin press thread");
+    let weak = Arc::downgrade(&inner);
+    let wake = jobs.wake;
     std::thread::Builder::new()
         .name("lounge-plugins".into())
-        .spawn(move || loop {
-            std::thread::sleep(DUE_EVERY);
-            let Some(inner) = weak.upgrade() else { break };
-            crate::guarded("the plugin schedule", || {
-                refresh_what_is_due(&inner);
-                inner.plugins.forget_idle_modules();
-            });
+        .spawn(move || {
+            let mut idle_checked = Instant::now();
+            loop {
+                let pace = weak.upgrade().map(|inner| schedule_pace(&inner)).unwrap_or(DUE_EVERY);
+                if wake.recv_timeout(pace) == Err(crossbeam_channel::RecvTimeoutError::Disconnected) {
+                    break;
+                }
+                let Some(inner) = weak.upgrade() else { break };
+                crate::guarded("the plugin schedule", || {
+                    refresh_what_is_due(&inner);
+                    if idle_checked.elapsed() >= DUE_EVERY {
+                        idle_checked = Instant::now();
+                        inner.plugins.forget_idle_modules();
+                    }
+                });
+            }
         })
         .expect("spawn the plugin schedule thread");
+}
+
+/// How long a press waits for another before its plugin is refreshed, and the longest it waits.
+const PRESS_SETTLES: Duration = Duration::from_millis(250);
+const PRESS_WAITS_AT_MOST: Duration = Duration::from_secs(1);
+/// How long after that refresh the plugin is read once more, for a device that reports late.
+const SECOND_LOOK: Duration = Duration::from_secs(2);
+
+/// Refreshes a plugin a moment after a press that changed something, and once more a little
+/// later. It runs on a thread of its own, so a slow refresh elsewhere does not hold a press's up.
+fn refresh_after_presses(inner: Weak<Inner>, pressed: crossbeam_channel::Receiver<String>) {
+    let mut second_looks: Vec<(Instant, String)> = Vec::new();
+    loop {
+        let next = second_looks.iter().map(|(at, _)| *at).min();
+        let id = match next {
+            Some(at) => match pressed.recv_timeout(at.saturating_duration_since(Instant::now())) {
+                Ok(id) => Some(id),
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => None,
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
+            },
+            None => match pressed.recv() {
+                Ok(id) => Some(id),
+                Err(_) => break,
+            },
+        };
+        let Some(inner) = inner.upgrade() else { break };
+        match id {
+            Some(id) => {
+                // Wait until the presses stop, but not for long.
+                let first = Instant::now();
+                loop {
+                    let latest = inner.plugins.pressed.lock().get(&id).copied().unwrap_or(first);
+                    let until = (latest + PRESS_SETTLES).min(first + PRESS_WAITS_AT_MOST);
+                    let wait = until.saturating_duration_since(Instant::now());
+                    if wait.is_zero() {
+                        break;
+                    }
+                    std::thread::sleep(wait);
+                }
+                inner.plugins.pressed.lock().remove(&id);
+                second_looks.retain(|(_, other)| other != &id);
+                crate::guarded("a refresh after a press", || refresh_now(&inner, &id));
+                second_looks.push((Instant::now() + SECOND_LOOK, id));
+            }
+            None => {
+                let now = Instant::now();
+                let (due, later): (Vec<_>, Vec<_>) = second_looks.drain(..).partition(|(at, _)| *at <= now);
+                second_looks = later;
+                for (_, id) in due {
+                    // A newer press brings its own refresh.
+                    if !inner.plugins.pressed.lock().contains_key(&id) {
+                        crate::guarded("a refresh after a press", || refresh_now(&inner, &id));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Runs a plugin's refresh on this thread, or has the one already running followed by another.
+fn refresh_now(inner: &Arc<Inner>, id: &str) {
+    if let Some(_running) = Running::begin(&inner.plugins, id) {
+        run_refresh(inner, id);
+    }
 }
 
 /// Marks a plugin's refresh as running for as long as it is held. When it ends, a refresh asked
@@ -865,6 +1080,8 @@ impl Drop for Running<'_> {
         if again {
             self.plugins.refresh_soon(self.id);
         }
+        // The schedule works out afresh when this plugin is next due.
+        self.plugins.wake_schedule();
     }
 }
 
@@ -882,6 +1099,18 @@ fn answer(inner: &Arc<Inner>, job: PluginJob) {
             let entry = inner.state.lock().plugins.iter().find(|p| p.id == plugin && p.enabled).cloned();
             let result = match entry {
                 Some(e) => inner.plugins.resolve(&e, &action),
+                None => Err(NOT_RUNNING.into()),
+            };
+            // It did the work itself, so what its tiles say is out of date.
+            if result.as_ref().is_ok_and(Action::did_the_work) {
+                inner.plugins.refresh_after_press(&plugin);
+            }
+            let _ = reply.send(result);
+        }
+        PluginJob::Sheet { plugin, id, reply } => {
+            let entry = inner.state.lock().plugins.iter().find(|p| p.id == plugin && p.enabled).cloned();
+            let result = match entry {
+                Some(e) => inner.plugins.sheet(&e, &id),
                 None => Err(NOT_RUNNING.into()),
             };
             let _ = reply.send(result);
@@ -908,6 +1137,42 @@ fn answer(inner: &Arc<Inner>, job: PluginJob) {
 
 /// How often the refresh thread looks for plugins whose refresh is due.
 const DUE_EVERY: Duration = Duration::from_secs(60);
+/// The least it sleeps between looks, so a refresh that is running is not asked after in a spin.
+const DUE_NO_SOONER: Duration = Duration::from_millis(500);
+/// The soonest a failed refresh is tried again, however short the plugin's interval.
+const RETRY_NO_SOONER_MS: i64 = 60_000;
+/// How long a plugin that refreshes by the second may go without a line in its log.
+const QUIET_LOG_FOR_MS: i64 = 10 * 60_000;
+
+/// How long the schedule sleeps before its next look: a minute, or until the first plugin that
+/// refreshes by the second falls due, so its tiles are never older than it asked for.
+fn schedule_pace(inner: &Inner) -> Duration {
+    if !inner.screen_on.load(Ordering::Relaxed) {
+        return DUE_EVERY;
+    }
+    // One whose refresh is waiting or running wakes the schedule itself when it ends.
+    let refreshing = inner.plugins.refreshing();
+    let state = inner.state.lock();
+    let fast = |p: &&PluginEntry| p.enabled && p.manifest.refresh_seconds > 0 && !refreshing.contains(&p.id);
+    if !state.plugins.iter().any(|p| fast(&p)) {
+        return DUE_EVERY;
+    }
+    let rows = state.store.plugins().unwrap_or_default();
+    let unrecorded = inner.plugins.unrecorded_refresh.lock();
+    let now = now_ms();
+    let soonest = state
+        .plugins
+        .iter()
+        .filter(fast)
+        .map(|p| {
+            let row = rows.iter().find(|r| r.id == p.id);
+            let last = row.and_then(|r| r.last_refresh_ms).max(unrecorded.get(&p.id).copied());
+            due_in_ms(last, row.is_some_and(|r| r.last_error.is_some()), refresh_every_ms(&state.store, p), now)
+        })
+        .min()
+        .unwrap_or(i64::MAX);
+    Duration::from_millis(soonest.clamp(0, DUE_EVERY.as_millis() as i64) as u64).max(DUE_NO_SOONER)
+}
 
 /// How soon a failed refresh is tried again, when the plugin's own interval is longer. A sign-in
 /// that waits on the user fails until it is done, and its code must not expire in between.
@@ -919,14 +1184,28 @@ const RETRY_AFTER_FAILURE_MS: i64 = 5 * 60_000;
 const ASK_AGAIN_EVERY: Duration = Duration::from_secs(5);
 const ASK_AGAIN_FOR_MS: i64 = 5 * 60_000;
 
-/// Whether a plugin last refreshed at `last_ms` is due again at `now`.
-fn refresh_due(last_ms: Option<i64>, failed: bool, interval_minutes: u32, now: i64) -> bool {
-    let Some(last) = last_ms else { return true };
-    let mut every = interval_minutes as i64 * 60_000;
+/// Whether a plugin last refreshed at `last_ms` is due again at `now`, refreshing every `every_ms`.
+fn refresh_due(last_ms: Option<i64>, failed: bool, every_ms: i64, now: i64) -> bool {
+    due_in_ms(last_ms, failed, every_ms, now) <= 0
+}
+
+/// How long until such a plugin is due, in milliseconds; nothing or less once it is.
+fn due_in_ms(last_ms: Option<i64>, failed: bool, every_ms: i64, now: i64) -> i64 {
+    let Some(last) = last_ms else { return 0 };
+    let mut every = every_ms;
     if failed {
-        every = every.min(RETRY_AFTER_FAILURE_MS);
+        every = every.clamp(RETRY_NO_SOONER_MS, RETRY_AFTER_FAILURE_MS);
     }
-    now - last >= every
+    last + every - now
+}
+
+/// How long a plugin leaves between refreshes with its settings as they stand, in milliseconds.
+fn refresh_every_ms(store: &lounge_store::Store, plugin: &PluginEntry) -> i64 {
+    if plugin.manifest.refresh_seconds == 0 {
+        return plugin.manifest.refresh_every_ms(&|_| None);
+    }
+    let settings = store.plugin_settings(&plugin.id).unwrap_or_default();
+    plugin.manifest.refresh_every_ms(&|key| settings.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone()))
 }
 
 /// The enabled plugins whose refresh is due and neither waiting nor running, or none while the
@@ -947,7 +1226,7 @@ fn due(inner: &Inner) -> Vec<String> {
         .filter(|p| {
             let row = rows.iter().find(|r| r.id == p.id);
             let last = row.and_then(|r| r.last_refresh_ms).max(unrecorded.get(&p.id).copied());
-            refresh_due(last, row.is_some_and(|r| r.last_error.is_some()), p.manifest.refresh_minutes_or_default(), now)
+            refresh_due(last, row.is_some_and(|r| r.last_error.is_some()), refresh_every_ms(&state.store, p), now)
         })
         .map(|p| p.id.clone())
         .collect()
@@ -1018,8 +1297,19 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
     }
     match outcome {
         Ok((items, notes)) => {
-            tracing::info!("plugin {id}: {} items in {} ms", items.len(), started.elapsed().as_millis());
-            push_log(&inner.plugins.logs, id, 1, &format!("refreshed: {} items in {} ms", items.len(), started.elapsed().as_millis()));
+            // A plugin that refreshes by the second says so only when something is different.
+            let quiet = entry.manifest.refresh_seconds > 0 && {
+                let mut said = inner.plugins.quiet_log.lock();
+                let same = said.get(id).is_some_and(|(count, at)| *count == items.len() && ctx.now_ms - at < QUIET_LOG_FOR_MS);
+                if !same {
+                    said.insert(id.to_string(), (items.len(), ctx.now_ms));
+                }
+                same
+            };
+            if !quiet {
+                tracing::info!("plugin {id}: {} items in {} ms", items.len(), started.elapsed().as_millis());
+                push_log(&inner.plugins.logs, id, 1, &format!("refreshed: {} items in {} ms", items.len(), started.elapsed().as_millis()));
+            }
             for n in &notes {
                 push_log(&inner.plugins.logs, id, 2, n);
             }
@@ -1074,6 +1364,7 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
             }
         }
         Err(Stopped::Failed(e)) => {
+            inner.plugins.quiet_log.lock().remove(id);
             let e = clip_bytes(&redact_urls(&e), 1000).to_string();
             tracing::warn!("plugin {id}: {e}");
             push_log(&inner.plugins.logs, id, 3, &e);
@@ -1343,13 +1634,25 @@ mod tests {
     #[test]
     fn a_failed_refresh_is_tried_again_sooner() {
         let minute = 60_000;
-        assert!(refresh_due(None, false, 15, 0));
-        assert!(!refresh_due(Some(0), false, 15, 14 * minute));
-        assert!(refresh_due(Some(0), false, 15, 15 * minute));
-        assert!(refresh_due(Some(0), true, 15, 5 * minute));
-        assert!(!refresh_due(Some(0), true, 15, 4 * minute));
-        assert!(!refresh_due(Some(0), true, 60, 4 * minute));
-        assert!(refresh_due(Some(0), true, 5, 5 * minute));
+        assert!(refresh_due(None, false, 15 * minute, 0));
+        assert!(!refresh_due(Some(0), false, 15 * minute, 14 * minute));
+        assert!(refresh_due(Some(0), false, 15 * minute, 15 * minute));
+        assert!(refresh_due(Some(0), true, 15 * minute, 5 * minute));
+        assert!(!refresh_due(Some(0), true, 15 * minute, 4 * minute));
+        assert!(!refresh_due(Some(0), true, 60 * minute, 4 * minute));
+        assert!(refresh_due(Some(0), true, 5 * minute, 5 * minute));
+    }
+
+    #[test]
+    fn a_plugin_that_refreshes_by_the_second_waits_a_minute_after_a_failure() {
+        let second = 1_000;
+        assert!(!refresh_due(Some(0), false, 30 * second, 29 * second));
+        assert!(refresh_due(Some(0), false, 30 * second, 30 * second));
+        assert!(!refresh_due(Some(0), true, 30 * second, 59 * second));
+        assert!(refresh_due(Some(0), true, 30 * second, 60 * second));
+        // The schedule sleeps exactly until then.
+        assert_eq!(due_in_ms(Some(10 * second), false, 30 * second, 25 * second), 15 * second);
+        assert_eq!(due_in_ms(None, false, 30 * second, 0), 0);
     }
 
     #[test]

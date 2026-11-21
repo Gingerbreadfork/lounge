@@ -42,6 +42,7 @@ impl sdk::Plugin for Radio {
             // Each station's picture is on its own website.
             fetch_hosts: vec!["*.api.radio-browser.info".into(), "*".into()],
             refresh_minutes: 6 * 60,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "yours".into(), title: "Your radio stations".into(), style: RowStyle::Compact },
                 RowSpec { id: "popular".into(), title: "Popular radio".into(), style: RowStyle::Compact },

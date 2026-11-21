@@ -373,7 +373,7 @@ fn random_u32() -> Option<u32> {
     Some(u32::from_le_bytes(b))
 }
 
-fn random_token() -> Option<String> {
+pub(crate) fn random_token() -> Option<String> {
     let mut b = [0u8; 24];
     getrandom::fill(&mut b).ok()?;
     // URL-safe without padding, so it survives a QR code and a fragment.

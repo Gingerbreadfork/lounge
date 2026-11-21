@@ -52,6 +52,7 @@ impl sdk::Plugin for Spotify {
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["api.spotify.com".into(), "accounts.spotify.com".into(), "open.spotify.com".into(), "*.scdn.co".into(), "*.spotifycdn.com".into()],
             refresh_minutes: 15,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "recent".into(), title: "Recently played on Spotify".into(), style: RowStyle::Landscape },
                 RowSpec { id: "playlists".into(), title: "Your playlists on Spotify".into(), style: RowStyle::Landscape },

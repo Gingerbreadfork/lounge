@@ -30,6 +30,7 @@ impl sdk::Plugin for Iptv {
             kinds: vec![Kind::Content, Kind::Epg],
             fetch_hosts: vec!["$playlist_url".into(), "$epg_url".into(), "*".into()],
             refresh_minutes: 60,
+            refresh_seconds: 0,
             rows: Vec::new(),
             settings: vec![
                 SettingSpec { key: "playlist_url".into(), label: "Playlist address (M3U)".into(), kind: SettingKind::SecretUrl, required: true, help: Some("The .m3u or .m3u8 playlist your provider gave you.".into()), default: None },

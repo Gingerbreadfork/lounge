@@ -26,6 +26,7 @@ impl sdk::Plugin for Arr {
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["$sonarr".into(), "$radarr".into(), "*".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "upcoming".into(), title: "Coming up on Sonarr and Radarr".into(), style: RowStyle::Landscape },
                 RowSpec { id: "downloading".into(), title: "Downloading on Sonarr and Radarr".into(), style: RowStyle::Landscape },

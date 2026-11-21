@@ -24,6 +24,7 @@ impl sdk::Plugin for Immich {
             kinds: vec![Kind::Wallpaper],
             fetch_hosts: vec!["$link".into()],
             refresh_minutes: 6 * 60,
+            refresh_seconds: 0,
             rows: vec![],
             settings: vec![
                 SettingSpec {

@@ -31,6 +31,7 @@ impl sdk::Plugin for Plex {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into(), "plex.tv".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![RowSpec { id: "recent".into(), title: "Recently added on Plex".into(), style: RowStyle::Poster }],
             settings: vec![
                 SettingSpec {

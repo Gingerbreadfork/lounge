@@ -24,6 +24,7 @@ impl sdk::Plugin for Tvheadend {
             kinds: vec![Kind::Content, Kind::Epg, Kind::Search],
             fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![RowSpec { id: "recordings".into(), title: "Recordings on Tvheadend".into(), style: RowStyle::Landscape }],
             settings: vec![
                 SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:9981".into()), default: None },

@@ -95,6 +95,14 @@ different corner of the interface:
   and kept in the key-value store, a few looked up again each refresh once they are a week old,
   posters from TMDB through a second host in `fetch_hosts`, and `search` actions that find the
   title in whichever app or plugin has it.
+- `plugins/homeassistant`: tiles that switch things instead of opening them, with a glyph, a
+  state and the lamp's own colour, refreshed every 30 seconds on the home network and again
+  right after a press, sheets for a room, a thermostat, a lock that asks first and a list to
+  choose the TV's room from, a camera's snapshot shown live through an address that is asked
+  for again when its token runs out, a sign-in finished in the phone's browser and landed on
+  the TV, with a pasted token as the other way in, a refused sign-in remembered so it is never
+  sent twice, rooms read with one template and kept, and a large list of states read one
+  entry at a time and trimmed to fit the key-value store.
 
 ## Quick start
 
@@ -215,6 +223,22 @@ and for anything that shows only text. Two plugins refresh at a time, and a plug
 refreshes running: one asked for while it refreshes follows it. `search` and `resolve` each run
 on a thread of their own, so pressing a tile never waits for a refresh or a search.
 
+When `resolve` does the work itself and returns nothing to open, the TV refreshes the plugin a
+quarter of a second later and once more two seconds after that, for a device that reports late.
+Presses in quick succession bring one refresh. So a tile that says "Off" says "On" about a
+second after it is pressed, with no code for it in the plugin: let `refresh` read the state and
+`resolve` change it.
+
+A sign-in that ends in a browser needs no code. `host::callback()` gives the address of a page
+on the TV, such as `http://192.168.0.20:8787/signin/tv.example.mine/Hq3…`, for the service to
+send the person's phone back to; it is there while the phone companion is on, so say so when it
+is not. The address ends in a key only your plugin is told, and it changes after each sign-in
+that lands, so use it as given and do not keep it. Ask with a link and `watch`, and when the phone lands on the page the TV keeps the query it
+arrived with, shows "Signed in. Look at the TV." and refreshes the plugin, which reads the query
+once with `host::take_callback()`. Only a plugin that is asking is handed one, only at the address it was given,
+and the query is cut at 2 KB. Put a value of your own in the link all the same and check that it
+comes back, as the service's own rules for such a sign-in ask.
+
 `search` runs as the user types on the TV's search screen, for plugins whose manifest lists the
 `search` kind and whose required settings are filled in. Each plugin that finds something gets a
 row under its own name, with one picture for each result: its poster, else its thumbnail, else
@@ -260,6 +284,7 @@ already downloaded cost nothing. Downloads a refresh no longer names are deleted
 | `kinds` | What the plugin does: `content` (items and rows), `epg` (channels and schedule), `wallpaper`, `screensaver`, `search`. |
 | `fetch_hosts` | Hosts `fetch` may reach, including on redirects, each shown to the user in words. A name or IP address is that host, with no scheme, port or path; `*.example.com` is its subdomains, and a wildcard needs at least two labels under it; `*` is any host on the public internet. `$key` is whatever host the user enters in the setting `key`, or every host when they enter several separated by spaces, commas or semicolons, which is how a plugin reaches the servers they name, at home or not. `local-network` is any home-network IP address or local name, for a plugin that finds devices itself, such as a tuner; a local name is one label, or one under `.local`, `.lan`, `.home.arpa` or `.internal`. The TV checks the address every name resolves to. The home network is reachable only through `$key`, `local-network`, or an entry that is itself an IP address or a local name, never through a wildcard or a public name. Loopback and the TV's own addresses are reachable only through an entry that is literally `localhost` or an IP address. |
 | `refresh_minutes` | How often `refresh` runs while the screen is on; at least 5, 0 means the host's default. |
+| `refresh_seconds` | For a plugin that shows the state of things at home, such as lights: how often `refresh` runs instead, at least 15. It counts only while every host in `fetch_hosts` is on the home network with the settings as they stand, so a `$key` that names a public server falls back to `refresh_minutes`, and so does any `*`. A refresh that fails waits at least a minute before the next. Leave it out, or 0, for anything else. |
 | `rows` | Rows of your own, in order. `style` is `landscape` (16:9 tiles), `poster` (portrait) or `compact` (a small tile of two lines beside the item's `logo`). Items name a row by its `id`, which never changes. A row's `title` says what it holds and where from, such as "Recordings on Tvheadend", so two plugins never show the same header. |
 | `settings` | Fields the user fills in on the TV or the phone. `kind` is `text`, `list`, `url`, `secret_url`, `password`, `number` or `toggle`. A `toggle` is stored as `true` or `false`. A `list` is text with several entries, which the phone shows as a box of many lines and stores with its line breaks; the TV's field has one line, so split on spaces and commas as well. A `default` is what `setting` returns while nothing is set, and the TV and the phone show it in the field. A `password` is only readable through `secret`; `setting` returns nothing for it. It is never shown back. A `secret_url` is an address that carries credentials, such as a provider's playlist link: it is a secret in the same way, but shown while it is typed. Both stay out of backups. A `label` names the field, calling a web address an address ("Server address"); the TV and the phone add "(optional)" to a field that is not `required`, except a toggle, which always has a value. `help` goes under the field, a toggle's included: the TV shows a help of up to 160 characters whole, and of a longer one only its first sentence, up to the first full stop and space, so a longer help opens with one sentence that stands alone and the phone shows the rest. |
 | `homepage` | A link shown on the plugin's page. |
@@ -318,6 +343,22 @@ first; a resume item without one keeps the time Lounge first saw it. `added_ms` 
 new arrivals; `sdk::new_this_week` keeps the New badge to the past week. `weight` orders a row when recency does not. A row on the home shows its first 60
 items in that order; search and the guide still reach the rest.
 
+**Controls.** A tile can be something to switch or set instead of something to watch. In a
+`compact` row, give it a `glyph` from Lounge's own set and the TV draws that where the `logo`
+would go: `battery`, `blind`, `camera`, `door`, `drop`, `fan`, `garage`, `home`, `humidity`,
+`light`, `lock`, `motion`, `person`, `plug`, `scene`, `script`, `shield`, `smoke`, `speaker`,
+`sun`, `thermostat`, `toggle`, `tv`, `vacuum` or `window`. A name the TV does not know falls
+back to the `logo`, then to a plain ring, so an older Lounge still shows the tile. `on` says
+whether the thing is on: the glyph is lit for `true`, rests for `false`, and with no `on` at all
+the tile has no state to show, as a scene has none. `tint` is the thing's own colour as
+`"#RRGGBB"`, a lamp's for one; the TV makes it readable and uses it for the glyph and the glow
+while the tile is on. Put the state in words in `subtitle` ("On, 60%", "Locked"), since the
+glyph alone says only on or off. `more` names a sheet (see [Sheets](#sheets)) that holding OK
+offers as "Adjust". `row_title` on any item of a row gives the row that title in place of the
+manifest's, for a row named after something only a refresh knows, such as the room the TV is
+in. A control is never put on the Stage. Keep each tile's `weight` the same from one refresh to
+the next, so tiles do not change places as their state does.
+
 **Artwork.** `thumbnail` is 16:9 and feeds landscape tiles and the Stage's full-bleed picture.
 `poster` is portrait and feeds poster rows; on its own it is also cropped for landscape tiles and
 framed on the Stage over a soft backdrop. `logo` is a channel or publisher mark, fitted and never
@@ -343,8 +384,59 @@ What happens when the user selects an item. The first field that is set wins, in
 | `launch` | A package name to open. |
 | `resolve` | A string handed back to your `resolve` at selection time, which returns one of the actions here. Use it when the stream URL is only known at the moment of playing, or when the plugin does the work itself, such as telling a player on the network to start: then return an empty action, and nothing more is opened. |
 | `search` | A query for Lounge's own search: for a title that lives in some app the plugin cannot name. A search result never carries one. |
+| `sheet` | The id of a sheet of yours to open at the side of the screen; see [Sheets](#sheets). |
+| `live` | The address of a still picture, such as a camera's snapshot, shown full screen and fetched again about once a second through your `fetch_hosts`. `title` names it. It rests after five minutes without a key. When it came from a `resolve` and the address stops answering, the same action is resolved again for a new one, so an address that carries a short-lived token is fine. |
 
-In Rust, `Action::play(url, title)` takes `.header(name, value)` and `.audio()`.
+`say` goes beside any of these, or alone: a sentence the TV and the phone show once the press
+has worked, for a press with nothing else to show for it ("Movie time set"). Leave it out where
+the tile itself will show the change. It is cut at 200 bytes and an address in it loses its
+query.
+
+In Rust, `Action::play(url, title)` takes `.header(name, value)` and `.audio()`, and
+`Action::sheet(id)`, `Action::live(url, title)` and `.said(words)` build the rest.
+
+## Sheets
+
+A sheet is a panel at the side of the screen for what one press on a tile cannot reach: every
+light in a room, a thermostat's target, a list to choose from. The plugin describes it and the
+TV draws it, so it looks and moves like every other sheet. Implement `sheet(id)`:
+
+```rust
+fn sheet(id: &str) -> Result<Sheet, String> {
+    Ok(Sheet {
+        title: "Living room".into(),
+        subtitle: Some("2 lights on, 21°".into()),
+        footnote: None,
+        rows: vec![
+            SheetRow::group("lights", "Lights"),
+            SheetRow::press("light.sofa", "Sofa lamp", "toggle:light.sofa").glyph("light").value("On, 60%").on(true),
+            SheetRow::step("light.sofa:level", "Brightness", "dim:light.sofa", "brighten:light.sofa").value("60%"),
+            SheetRow::open("more", "More", "room:living_room:more"),
+            SheetRow::confirm("lock.front", "Front door", "Yes, unlock the front door", "unlock:lock.front").glyph("lock").value("Locked"),
+            SheetRow::text("sensor.window", "Window").value("Closed"),
+        ],
+    })
+}
+```
+
+| Row | What it does |
+|---|---|
+| `press` | OK hands its `resolve` string to your `resolve`, exactly as a tile's would be. |
+| `step` | Left and Right hand `down` and `up` to `resolve`; leave one empty at the end of the range. With a `resolve` of its own, which `.pressing(action)` sets, OK presses that. A held key steps as fast as you answer, one press at a time. |
+| `open` | OK opens the sheet its `sheet` names; Back returns. |
+| `confirm` | The first OK shows `ask` in place of the title and the second hands `resolve` over. Use it for anything hard to take back, such as unlocking a door, and word `ask` as Lounge words its own, "Yes, unlock the front door". |
+| `group` | A label over the rows that follow. |
+| `text` | A row to read. A kind the TV does not know is shown as one, so a newer plugin still reads on an older Lounge. |
+
+Every row has an `id` that stays the same while the sheet is open: the TV reads the sheet again
+every few seconds, and after each press, and keeps focus on the row by its id. `value` is the
+state in a few words, shown at the row's end, and `on` lights it. `resolve` answers as it does
+for a tile: nothing to open when it did the work, `say` for words, a `sheet` to open another, or
+an error as a sentence, which the row shows until it is pressed again. Answer `sheet` quickly
+and from what the last refresh kept in the key-value store where you can, since it is read
+often; when a press changes something, update what you kept so the next read shows it at once.
+A sheet opens from a tile whose action is `sheet`, from `more`, from a search result, or from
+another sheet.
 
 ## Screensavers
 
@@ -427,6 +519,8 @@ Everything a plugin can do, as the SDK exposes it under `host`:
 | `setting(key)` | A setting's value, or its manifest default. Nothing for a `password`. |
 | `required_setting(key, label)` | The same, or the error "Add the {label} in the plugin's settings.", so `label` is the field's name as it reads inside a sentence, such as "server address". `sdk::not_set(label)` words it for a secret. |
 | `secret(key)` | A `password` or `secret_url` setting's value. Only keys the manifest declares as one of those. |
+| `callback()` | The address of this plugin's sign-in page on the TV, or nothing while the phone companion is off. |
+| `take_callback()` | The query that page was last opened with, read once and then forgotten. |
 | `now_ms()` | Milliseconds since the epoch. |
 | `log(level, message)` | 0 debug, 1 info, 2 warn, 3 error. `sdk::info!`, `warn!` and `error!` format for you. Shown on the plugin's page on the TV and by `lgp-tool run`. |
 
@@ -456,8 +550,9 @@ TV's rules, the allow list on every redirect and loopback and the home network o
 would allow them, so a host refused here is refused on the TV too. `--state file` keeps the
 key-value store in a JSON file between runs, as the TV keeps it between refreshes, so a sign-in
 that takes a refresh or two can be walked through. `--search` runs `search`
-instead of `refresh`, and `--resolve action` runs `resolve` for one action and prints what came
-back. Each run keeps what the TV would keep, the first item with each id and at most 2000 of
+instead of `refresh`, `--resolve action` runs `resolve` for one action and prints what came
+back, and `--sheet id` prints a sheet as the TV would keep it, row by row. A control's glyph,
+state and tint are printed beside its item, with a note for a glyph the TV does not draw. Each run keeps what the TV would keep, the first item with each id and at most 2000 of
 them, or 12 search results, and prints the TV's notes about the rest. It prints the fuel it
 used; `--json` prints the items as JSON. After the items come any pictures the TV would not show:
 one from a host outside `fetch_hosts`, or a tile's picture over 4 MB among the fixtures.
@@ -497,9 +592,11 @@ no longer asks for it.
 | Memory | 32 MB of linear memory per call, one memory, tables of up to 100,000 entries, set when the module loads; `table.grow` answers -1 once a call runs |
 | Fuel | 20 billion instructions per call, handed out in slices; a runaway loop ends at its time limit or with "out of fuel". A start function gets the first 10 million |
 | Host calls | 10,000 fuel each, plus one per byte they move |
-| Time | 3 minutes for a refresh, 12 s for `search`, `resolve` and the manifest |
+| Time | 3 minutes for a refresh, 12 s for `search`, `resolve`, `sheet` and the manifest |
 | Fetches | 64 per call, 60 s of waiting in total, 20 s and 8 MB each, and 16 MB once encoded for the plugin |
-| Result | 8 MB of JSON from a refresh, 256 KB from `search`, `resolve` and the manifest |
+| Result | 8 MB of JSON from a refresh, 256 KB from `search`, `resolve`, `sheet` and the manifest |
+| Sheets | 60 rows, each id once; a title of 80 characters, a second line of 200, a value of 24, a question of 80 and a footnote of 300; an action of up to 1 KB |
+| Refresh | every 5 minutes at the soonest, or every 15 seconds with `refresh_seconds` on the home network |
 | Items | 2,000 per refresh, each id once; past the first 4,000 sent, items are only counted |
 | Artwork | 4 MB per picture, 12 MB for a wallpaper; 600 new pictures, 192 MB and two minutes per refresh |
 | Key-value | 256 keys of up to 256 bytes, values of 256 KB, 1,000 writes per call |
@@ -510,8 +607,8 @@ no longer asks for it.
 ## The wire interface, for other languages
 
 Any language that targets core WebAssembly works; the SDK is a convenience. A module exports
-`memory`, `lg_alloc`, `lg_free`, `lg_manifest`, `lg_refresh`, and optionally `lg_search` and
-`lg_resolve`, and imports the host functions from a module named `lounge`. Strings cross the
+`memory`, `lg_alloc`, `lg_free`, `lg_manifest`, `lg_refresh`, and optionally `lg_search`,
+`lg_resolve` and `lg_sheet`, and imports the host functions from a module named `lounge`. Strings cross the
 boundary as UTF-8 JSON in linear memory, and a `(ptr, len)` pair is packed into one `i64` as
 `ptr << 32 | len`; `0` means nothing.
 
@@ -524,6 +621,7 @@ boundary as UTF-8 JSON in linear memory, and a `(ptr, len)` pair is packed into 
 | `lg_refresh(ptr, len) -> packed` | `i32, i32 -> i64` | `RefreshContext` in; `{"ok": [Item]}`, `{"err": "…"}` or `{"ask": {"say": "…", "link": "…", "code": "…", "after": "…", "watch": true}}` out, where only `say` is required |
 | `lg_search(ptr, len) -> packed` | optional | `SearchQuery` (`query`, `limit`) in; items out |
 | `lg_resolve(ptr, len) -> packed` | optional | action string in; `Action` out |
+| `lg_sheet(ptr, len) -> packed` | optional | sheet id in; `Sheet` out |
 
 | Import (module `lounge`) | Signature | Meaning |
 |---|---|---|
@@ -532,7 +630,7 @@ boundary as UTF-8 JSON in linear memory, and a `(ptr, len)` pair is packed into 
 | `now() -> i64` | | milliseconds since the epoch |
 | `log(level, ptr, len)` | | 0 debug, 1 info, 2 warn, 3 error |
 | `secret(k, kl) -> packed` | | a `password` setting's value |
-| `setting(k, kl) -> packed` | | any other setting's value, or its default |
+| `setting(k, kl) -> packed` | | any other setting's value, or its default; the key `$callback` is the address of the plugin's sign-in page on the TV, with its key |
 
 Memory the host hands to the plugin (fetch responses, settings) is allocated with the plugin's
 `lg_alloc` and belongs to the plugin; memory the plugin returns is freed by the host with
@@ -561,6 +659,9 @@ one definition the host and the SDK share.
 - Row titles say where they come from ("Watchlist on Trakt"), tile lines are in sentence case
   with commas between facts, and lengths and times are in words.
 - Items keep stable `id`s between refreshes, so pins and hidden tiles survive.
+- A control says its state in words as well as with `on`, keeps its place in the row whatever
+  its state, does one safe thing on a press, and asks first, in a sheet, before anything that
+  is hard to take back.
 - A screensaver looks right in every theme, Blackout included, and its log line shows it holding
   half or a third of the resolution on the slowest TV you have.
 - The bundle is signed with a key you have backed up.

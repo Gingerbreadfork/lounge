@@ -6,6 +6,12 @@ mod auth;
 mod server;
 
 pub use auth::{PairingInfo, TokenStore};
+
+/// A value nobody can guess that is safe inside an address, or nothing when the system has no
+/// randomness to give.
+pub fn unguessable() -> Option<String> {
+    auth::random_token()
+}
 pub use server::Companion;
 
 use serde::{Deserialize, Serialize};
@@ -130,7 +136,8 @@ pub trait CompanionActions: Send + Sync {
     fn device_info(&self) -> DeviceInfo;
     /// The current `HomeSnapshot` as JSON.
     fn snapshot_json(&self) -> String;
-    fn perform(&self, action: &str) -> Result<(), String>;
+    /// Does what a tile's action says, and gives back anything the press has to say.
+    fn perform(&self, action: &str) -> Result<Option<String>, String>;
     fn launch(&self, package: &str) -> Result<(), String>;
     /// up, down, left, right, center, back, home, menu, play_pause, rewind, fast_forward, volume_up, volume_down, mute.
     fn send_key(&self, key: &str) -> Result<(), String>;
@@ -145,6 +152,10 @@ pub trait CompanionActions: Send + Sync {
     fn plugin_command(&self, id: &str, command: &str) -> Result<(), String>;
     fn set_plugin_setting(&self, id: &str, key: &str, value: Option<String>) -> Result<(), String>;
     fn plugin_log(&self, id: &str) -> Vec<String>;
+    /// A sign-in a plugin started has come back to its landing page with `query`. `key` is the
+    /// part of the page's address only that plugin was told. Gives the plugin's name, or a
+    /// sentence when no plugin by that id waits for one there.
+    fn signed_in(&self, plugin: &str, key: &str, query: &str) -> Result<String, String>;
     fn diagnostics_json(&self) -> String;
     fn export_json(&self) -> String;
     fn import_json(&self, json: &str) -> Result<(), String>;

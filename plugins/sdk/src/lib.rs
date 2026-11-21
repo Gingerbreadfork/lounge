@@ -27,6 +27,10 @@ pub trait Plugin {
     fn resolve(_action: &str) -> Result<Action, String> {
         Err("This plugin can't open that.".to_string())
     }
+    /// Describes the sheet an action or a sheet row named by its id.
+    fn sheet(_id: &str) -> Result<Sheet, String> {
+        Err("This plugin has nothing more to show here.".to_string())
+    }
 }
 
 thread_local! {
@@ -142,6 +146,10 @@ macro_rules! export_plugin {
         #[unsafe(no_mangle)]
         pub extern "C" fn lg_resolve(ptr: i32, len: i32) -> i64 {
             $crate::__call(ptr, len, |a: String| <$plugin as $crate::Plugin>::resolve(&a))
+        }
+        #[unsafe(no_mangle)]
+        pub extern "C" fn lg_sheet(ptr: i32, len: i32) -> i64 {
+            $crate::__call(ptr, len, |id: String| <$plugin as $crate::Plugin>::sheet(&id))
         }
     };
 }
@@ -271,6 +279,20 @@ pub mod host {
 
     /// A setting's value, or [crate::not_set] for `label`, the field's name as it reads inside a
     /// sentence, such as "server address".
+    /// The address of this plugin's sign-in landing page on the TV, for a service to send the
+    /// person's phone back to. None while the phone companion is off.
+    pub fn callback() -> Option<String> {
+        setting(lounge_plugin_api::CALLBACK_SETTING)
+    }
+
+    /// The query the landing page was last opened with, without its `?`. It is read once and
+    /// then forgotten.
+    pub fn take_callback() -> Option<String> {
+        let query = kv_get_string(lounge_plugin_api::CALLBACK_KEY)?;
+        kv_delete(lounge_plugin_api::CALLBACK_KEY);
+        Some(query)
+    }
+
     pub fn required_setting(key: &str, label: &str) -> Result<String, String> {
         setting(key).ok_or_else(|| crate::not_set(label))
     }

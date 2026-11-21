@@ -2,7 +2,7 @@
 //! core-wasm ABI, shared by the host (`lounge-plugins`) and the SDK (`plugins/sdk`).
 //!
 //! A plugin exports `memory`, `lg_alloc`, `lg_free`, `lg_manifest`, `lg_refresh` and optionally
-//! `lg_search` and `lg_resolve`. Strings cross as UTF-8 JSON in linear memory, a `(ptr, len)` pair
+//! `lg_search`, `lg_resolve` and `lg_sheet`. Strings cross as UTF-8 JSON in linear memory, a `(ptr, len)` pair
 //! packed into one `i64` as `ptr << 32 | len`. The host writes into memory from the plugin's
 //! `lg_alloc`; memory the plugin returns is freed with `lg_free`. Host functions live in the
 //! `lounge` import module.
@@ -86,6 +86,7 @@ pub mod exports {
     pub const REFRESH: &str = "lg_refresh";
     pub const SEARCH: &str = "lg_search";
     pub const RESOLVE: &str = "lg_resolve";
+    pub const SHEET: &str = "lg_sheet";
 }
 
 pub mod imports {
@@ -133,6 +134,11 @@ pub struct Manifest {
     /// How often `refresh` runs while the screen is on; 0 means the host default.
     #[serde(default)]
     pub refresh_minutes: u32,
+    /// A shorter interval in seconds, for a plugin that shows the state of things at home. It
+    /// holds only while every host the plugin may reach is on the home network; otherwise
+    /// `refresh_minutes` does. 0 means none.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub refresh_seconds: u32,
     /// Rows the plugin publishes items into, in order.
     #[serde(default)]
     pub rows: Vec<RowSpec>,
@@ -160,6 +166,13 @@ pub struct Manifest {
 fn is_false(b: &bool) -> bool {
     !b
 }
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
+/// The shortest interval `refresh_seconds` may ask for.
+pub const MIN_REFRESH_SECONDS: u32 = 15;
 
 /// What is wrong with an allow-list entry that is neither `*`, [LOCAL_NETWORK] nor `$key`: it
 /// must be a host name or an IP literal, with no scheme, port or path, and a wildcard must sit
@@ -298,6 +311,28 @@ impl Manifest {
 
     pub fn refresh_minutes_or_default(&self) -> u32 {
         if self.refresh_minutes == 0 { 60 } else { self.refresh_minutes.max(5) }
+    }
+
+    /// Whether everything the allow list names is on the home network, with the settings as
+    /// they stand: home-network addresses and local-style names only, and no wildcard.
+    pub fn home_only(&self, setting: &dyn Fn(&str) -> Option<String>) -> bool {
+        let home = |h: &str| is_home_name(h) || h.trim_start_matches('[').trim_end_matches(']').parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback());
+        !self.fetch_hosts.is_empty()
+            && self.fetch_hosts.iter().all(|h| match h.strip_prefix('$') {
+                Some(key) => setting(key).map(|v| hosts_in_setting(&v)).is_some_and(|hosts| !hosts.is_empty() && hosts.iter().all(|h| home(h))),
+                None if h == "*" || h.starts_with("*.") => false,
+                None => h.eq_ignore_ascii_case(LOCAL_NETWORK) || home(&h.to_ascii_lowercase()),
+            })
+    }
+
+    /// How long to leave between refreshes, in milliseconds: `refresh_seconds` while the plugin
+    /// reaches only the home network, `refresh_minutes` otherwise.
+    pub fn refresh_every_ms(&self, setting: &dyn Fn(&str) -> Option<String>) -> i64 {
+        if self.refresh_seconds > 0 && self.home_only(setting) {
+            i64::from(self.refresh_seconds.clamp(MIN_REFRESH_SECONDS, 3600)) * 1000
+        } else {
+            i64::from(self.refresh_minutes_or_default()) * 60_000
+        }
     }
 }
 
@@ -444,7 +479,29 @@ pub struct Item {
     /// The program a `screensaver` item draws.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shader: Option<Shader>,
+    /// One of [GLYPHS], Lounge's own set, drawn where a compact tile's picture goes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glyph: Option<String>,
+    /// Whether the thing is on, for something that can be on or off: the tile is lit or at rest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<bool>,
+    /// The item's own light as "#RRGGBB", such as a lamp's colour, in place of its pictures'.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tint: Option<String>,
+    /// A title for the item's row, in place of the manifest's: a room's name, say. One item
+    /// in the row needs to carry it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_title: Option<String>,
+    /// The id of a sheet with more to do with this item, offered as Adjust in its menu.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub more: Option<String>,
 }
+
+/// The glyphs an item or a sheet row may name. A name this Lounge does not know draws a plain ring.
+pub const GLYPHS: [&str; 25] = [
+    "battery", "blind", "camera", "door", "drop", "fan", "garage", "home", "humidity", "light", "lock", "motion", "person", "plug", "scene", "script", "shield",
+    "smoke", "speaker", "sun", "thermostat", "toggle", "tv", "vacuum", "window",
+];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -514,11 +571,10 @@ fn is_video(media: &Media) -> bool {
 pub const MAX_PLAY_HEADERS: usize = 16;
 pub const MAX_PLAY_HEADER_BYTES: usize = 4096;
 
-/// What selecting an item does. The first field that is set wins, in this order: `play`
-/// (a stream URL for a player), `view` (an Android URI), `launch` (a package), `resolve`
-/// (ask the plugin at selection time), `search` (Lounge's own search, with this query).
-/// `fallback_launch` runs if `view` finds no handler. An action `resolve` hands back with
-/// nothing set means the plugin has done the work itself.
+/// What selecting an item does. The first field that is set wins, in this order: `play`,
+/// `view`, `launch`, `resolve`, `search`, `sheet`, `live`. `fallback_launch` runs if `view`
+/// finds no handler. An action `resolve` hands back with none of those set means the plugin
+/// has done the work itself.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Action {
     #[serde(default)]
@@ -545,6 +601,16 @@ pub struct Action {
     /// What `play` is; video unless it says otherwise.
     #[serde(default, skip_serializing_if = "is_video")]
     pub media: Media,
+    /// The id of a sheet to open, which the plugin describes when asked through `lg_sheet`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sheet: Option<String>,
+    /// The address of a still picture to show full screen and fetch again about once a
+    /// second, such as a camera's. `title` names it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live: Option<String>,
+    /// A sentence to show once the press has worked, for something with nothing to see.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub say: Option<String>,
 }
 
 impl Action {
@@ -589,8 +655,132 @@ impl Action {
     pub fn search(query: impl Into<String>) -> Action {
         Action { search: Some(query.into()), ..Default::default() }
     }
+    /// Open the sheet the plugin describes under `id`.
+    pub fn sheet(id: impl Into<String>) -> Action {
+        Action { sheet: Some(id.into()), ..Default::default() }
+    }
+    /// Show the still picture at `url` full screen, renewed about once a second.
+    pub fn live(url: impl Into<String>, title: impl Into<String>) -> Action {
+        Action { live: Some(url.into()), title: Some(title.into()), ..Default::default() }
+    }
+    /// Adds a sentence to show once the press has worked.
+    pub fn said(mut self, words: impl Into<String>) -> Action {
+        self.say = Some(words.into());
+        self
+    }
     pub fn is_empty(&self) -> bool {
         self.play.is_none() && self.view.is_none() && self.launch.is_none() && self.resolve.is_none() && self.search.is_none()
+    }
+    /// Whether the plugin did the work itself: there is nothing to open, here or anywhere else.
+    pub fn did_the_work(&self) -> bool {
+        self.is_empty() && self.sheet.is_none() && self.live.is_none()
+    }
+}
+
+/// A sheet a plugin describes: a panel at the side of the screen with rows to press or step.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Sheet {
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    /// A quiet note under the rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub footnote: Option<String>,
+    #[serde(default)]
+    pub rows: Vec<SheetRow>,
+}
+
+/// What a sheet row is. A kind this Lounge does not know reads as text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SheetRowKind {
+    /// OK hands `resolve` to the plugin.
+    Press,
+    /// Left and Right hand `down` and `up` to the plugin; OK hands `resolve`, when there is one.
+    Step,
+    /// OK opens the sheet named in `sheet`; Back returns.
+    Open,
+    /// OK turns the title into `ask`; a second OK hands `resolve` to the plugin.
+    Confirm,
+    /// A label over the rows that follow, with nothing to press.
+    Group,
+    /// Words to read.
+    #[default]
+    #[serde(other)]
+    Text,
+}
+
+/// One row of a [Sheet]. Its `id` stays the same from one answer to the next, so focus stays on it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SheetRow {
+    pub id: String,
+    #[serde(default)]
+    pub kind: SheetRowKind,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glyph: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    /// A short value at the row's end: "60%", "On", "21°".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolve: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub down: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub up: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sheet: Option<String>,
+    /// What a confirm row asks before it acts: "Yes, unlock the front door".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ask: Option<String>,
+}
+
+impl SheetRow {
+    fn of(kind: SheetRowKind, id: impl Into<String>, title: impl Into<String>) -> SheetRow {
+        SheetRow { id: id.into(), kind, title: title.into(), ..Default::default() }
+    }
+    pub fn press(id: impl Into<String>, title: impl Into<String>, resolve: impl Into<String>) -> SheetRow {
+        SheetRow { resolve: Some(resolve.into()), ..SheetRow::of(SheetRowKind::Press, id, title) }
+    }
+    pub fn step(id: impl Into<String>, title: impl Into<String>, down: impl Into<String>, up: impl Into<String>) -> SheetRow {
+        SheetRow { down: Some(down.into()), up: Some(up.into()), ..SheetRow::of(SheetRowKind::Step, id, title) }
+    }
+    pub fn open(id: impl Into<String>, title: impl Into<String>, sheet: impl Into<String>) -> SheetRow {
+        SheetRow { sheet: Some(sheet.into()), ..SheetRow::of(SheetRowKind::Open, id, title) }
+    }
+    pub fn confirm(id: impl Into<String>, title: impl Into<String>, ask: impl Into<String>, resolve: impl Into<String>) -> SheetRow {
+        SheetRow { ask: Some(ask.into()), resolve: Some(resolve.into()), ..SheetRow::of(SheetRowKind::Confirm, id, title) }
+    }
+    pub fn text(id: impl Into<String>, title: impl Into<String>) -> SheetRow {
+        SheetRow::of(SheetRowKind::Text, id, title)
+    }
+    pub fn group(id: impl Into<String>, title: impl Into<String>) -> SheetRow {
+        SheetRow::of(SheetRowKind::Group, id, title)
+    }
+    pub fn glyph(mut self, name: &str) -> SheetRow {
+        self.glyph = Some(name.to_string());
+        self
+    }
+    pub fn subtitle(mut self, words: impl Into<String>) -> SheetRow {
+        self.subtitle = Some(words.into());
+        self
+    }
+    pub fn value(mut self, words: impl Into<String>) -> SheetRow {
+        self.value = Some(words.into());
+        self
+    }
+    pub fn on(mut self, on: bool) -> SheetRow {
+        self.on = Some(on);
+        self
+    }
+    /// What OK does on a step row, such as switching the thing on or off.
+    pub fn pressing(mut self, resolve: impl Into<String>) -> SheetRow {
+        self.resolve = Some(resolve.into());
+        self
     }
 }
 
@@ -646,6 +836,17 @@ impl HttpResponse {
         }
     }
 }
+
+/// The setting a plugin reads for the address of its sign-in landing page on the TV. A phone on
+/// the TV's network sent there lands on a page that says the sign-in is done. There is no address
+/// while the phone companion is off.
+pub const CALLBACK_SETTING: &str = "$callback";
+
+/// The key the query of that landing page is kept under, for the plugin to read and delete.
+pub const CALLBACK_KEY: &str = "callback";
+
+/// The most of a landing page's query that is kept.
+pub const MAX_CALLBACK_BYTES: usize = 2048;
 
 /// Something a plugin waits on the person for before it can go on, such as a sign-in on their
 /// phone. The TV shows it as a step to take, not as a failure.
@@ -908,5 +1109,102 @@ mod id_tests {
         for bad in ["", ".", "..", "a", "tv..lounge", ".lounge", "lounge.", "Tv.lounge", "tv/lounge", "tv.lou nge"] {
             assert!(!valid_plugin_id(bad), "{bad:?} accepted");
         }
+    }
+}
+
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+
+    /// A glyph named here and drawn nowhere would show as a plain ring, and one the two
+    /// screens drew differently would not be one glyph.
+    #[test]
+    fn every_glyph_is_drawn_the_same_on_the_tv_and_on_the_phone() {
+        let read = |path: &str| std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR"))).unwrap_or_else(|e| panic!("{path}: {e}"));
+        let tv = read("android/core/design/src/main/kotlin/tv/lounge/design/Glyphs.kt");
+        let phone = read("companion/src/lib/Icon.svelte");
+        for name in GLYPHS {
+            let drawn = tv.lines().find(|line| line.contains(&format!("\"{name}\" to listOf("))).unwrap_or_else(|| panic!("the TV does not draw {name}"));
+            let on_phone = phone.lines().find(|line| line.starts_with(&format!("    {name}: ["))).unwrap_or_else(|| panic!("the phone does not draw {name}"));
+            let paths: Vec<&str> = drawn.split("Shape(\"").skip(1).filter_map(|shape| shape.split('"').next()).collect();
+            assert!(!paths.is_empty(), "{name} has no shapes");
+            for path in paths {
+                assert!(on_phone.contains(&format!("d: '{path}'")), "the phone draws {name} differently: {path}");
+            }
+        }
+    }
+
+    fn manifest(hosts: &[&str], seconds: u32) -> Manifest {
+        Manifest {
+            id: "tv.example.home".into(),
+            name: "Home".into(),
+            version: "1".into(),
+            fetch_hosts: hosts.iter().map(|h| h.to_string()).collect(),
+            refresh_minutes: 5,
+            refresh_seconds: seconds,
+            settings: vec![SettingSpec { key: "server".into(), label: "Server".into(), kind: SettingKind::Url, required: true, help: None, default: None }],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn an_older_answer_reads_without_the_new_fields() {
+        let item: Item = serde_json::from_str(r#"{"id": "a", "title": "A"}"#).unwrap();
+        assert_eq!((item.glyph, item.on, item.tint, item.row_title, item.more), (None, None, None, None, None));
+        let written = serde_json::to_string(&Item::default()).unwrap();
+        for field in ["glyph", "\"on\"", "tint", "row_title", "more"] {
+            assert!(!written.contains(field), "{field} is written when unset");
+        }
+        let action: Action = serde_json::from_str(r#"{"resolve": "x"}"#).unwrap();
+        assert_eq!((action.sheet, action.live, action.say), (None, None, None));
+        assert!(serde_json::from_str::<Manifest>(r#"{"id": "tv.example.a", "name": "A", "version": "1"}"#).unwrap().refresh_seconds == 0);
+    }
+
+    #[test]
+    fn a_press_that_opens_a_sheet_or_a_picture_is_not_done() {
+        assert!(Action::default().did_the_work());
+        assert!(Action::default().said("Movie time set").did_the_work());
+        assert!(!Action::sheet("room:kitchen").did_the_work());
+        assert!(!Action::live("http://ha/camera.jpg", "Porch").did_the_work());
+        assert!(!Action::launch("org.example").did_the_work());
+    }
+
+    #[test]
+    fn seconds_hold_only_on_the_home_network() {
+        let at = |value: &'static str| move |key: &str| (key == "server").then(|| value.to_string());
+        let m = manifest(&["$server"], 30);
+        assert_eq!(m.refresh_every_ms(&at("http://192.168.0.20:8123")), 30_000);
+        assert_eq!(m.refresh_every_ms(&at("homeassistant.local:8123")), 30_000);
+        assert_eq!(m.refresh_every_ms(&at("http://nas:8123")), 30_000);
+        // A public name, an unset address and a wildcard all fall back to the minutes.
+        assert_eq!(m.refresh_every_ms(&at("https://example.ui.nabu.casa")), 300_000);
+        assert_eq!(m.refresh_every_ms(&|_| None), 300_000);
+        assert_eq!(manifest(&["$server", "*"], 30).refresh_every_ms(&at("http://192.168.0.20")), 300_000);
+        assert_eq!(manifest(&["$server", "image.tmdb.org"], 30).refresh_every_ms(&at("http://192.168.0.20")), 300_000);
+        assert_eq!(manifest(&["$server", "127.0.0.1", LOCAL_NETWORK], 30).refresh_every_ms(&at("http://192.168.0.20")), 30_000);
+        // The floor is fifteen seconds, and no seconds means the minutes.
+        assert_eq!(manifest(&["$server"], 2).refresh_every_ms(&at("http://192.168.0.20")), 15_000);
+        assert_eq!(manifest(&["$server"], 0).refresh_every_ms(&at("http://192.168.0.20")), 300_000);
+    }
+
+    #[test]
+    fn a_sheet_row_of_an_unknown_kind_reads_as_text() {
+        let sheet: Sheet = serde_json::from_str(r#"{"title": "Kitchen", "rows": [
+            {"id": "a", "kind": "step", "title": "Lamp", "value": "60%", "down": "d", "up": "u", "resolve": "t"},
+            {"id": "b", "kind": "dial", "title": "Oven"},
+            {"id": "c", "title": "Plain"}]}"#).unwrap();
+        assert_eq!(sheet.rows.iter().map(|r| r.kind).collect::<Vec<_>>(), [SheetRowKind::Step, SheetRowKind::Text, SheetRowKind::Text]);
+        let built = SheetRow::step("a", "Lamp", "d", "u").pressing("t").value("60%");
+        assert_eq!(built, sheet.rows[0]);
+        let confirm = SheetRow::confirm("u", "Unlock", "Yes, unlock the front door", "unlock:lock.front");
+        assert_eq!((confirm.kind, confirm.ask.as_deref(), confirm.resolve.as_deref()), (SheetRowKind::Confirm, Some("Yes, unlock the front door"), Some("unlock:lock.front")));
+    }
+
+    #[test]
+    fn the_glyph_names_are_in_order_and_once_each() {
+        let mut sorted = GLYPHS.to_vec();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted, GLYPHS);
     }
 }

@@ -2,7 +2,7 @@
 //! cap and a deadline, so a misbehaving plugin can burn its own budget and nothing else. Host
 //! functions read and write the plugin's linear memory through its own `lg_alloc`.
 
-use crate::api::{self, exports, imports, Action, HttpRequest, HttpResponse, Item, Manifest, Outcome, RefreshContext, SearchQuery};
+use crate::api::{self, exports, imports, Action, HttpRequest, HttpResponse, Item, Manifest, Outcome, RefreshContext, SearchQuery, Sheet, SheetRowKind};
 use crate::{PluginError, Result};
 use serde::de::{DeserializeOwned, Deserializer, IgnoredAny, SeqAccess, Visitor};
 use serde::{Deserialize, Serialize};
@@ -253,6 +253,14 @@ impl Host {
         self.outcome(self.call_json(plugin, exports::RESOLVE, Some(&action.to_string()), self.limits.call_time, self.limits.call_result_bytes)?)
     }
 
+    /// The sheet the plugin describes under `id`.
+    pub fn sheet(&self, plugin: &LoadedPlugin, id: &str) -> Result<Sheet> {
+        if plugin.module.get_export(exports::SHEET).is_none() {
+            return Err(PluginError::Failed(format!("{} has nothing more to show here.", named(&plugin.manifest.name))));
+        }
+        self.outcome(self.call_json(plugin, exports::SHEET, Some(&id.to_string()), self.limits.call_time, self.limits.call_result_bytes)?)
+    }
+
     fn outcome<T>(&self, o: Outcome<T>) -> Result<T> {
         match o {
             Outcome::Ok(v) => Ok(v),
@@ -445,6 +453,7 @@ fn stopped(name: &str, export: &str) -> String {
     match export {
         exports::REFRESH => format!("{name} stopped partway through. It tries again in a few minutes."),
         exports::RESOLVE => format!("{name} stopped before it could open this. Try again in a moment."),
+        exports::SHEET => format!("{name} stopped before it could show this. Try again in a moment."),
         exports::MANIFEST => format!("{name} stopped while Lounge was installing it. Ask its publisher for a version that works."),
         _ => format!("{name} stopped partway through."),
     }
@@ -456,6 +465,7 @@ fn call_name(export: &str) -> &str {
         exports::REFRESH => "Refresh",
         exports::SEARCH => "Search",
         exports::RESOLVE => "Opening a tile",
+        exports::SHEET => "Reading a sheet",
         exports::MANIFEST => "Reading the manifest",
         other => other,
     }
@@ -775,6 +785,64 @@ pub fn kept(items: Vec<Item>, sent: usize) -> (Vec<Item>, Vec<String>) {
     (items, notes)
 }
 
+/// Most rows of a sheet the TV keeps.
+pub const MAX_SHEET_ROWS: usize = 60;
+
+/// What the TV keeps of a sheet: the first titled row with each id, at most [MAX_SHEET_ROWS] of
+/// them, with their texts cut to length, and sentences for the plugin's log about the rest. A
+/// row that lacks what its kind needs is kept as words to read.
+pub fn kept_sheet(mut sheet: Sheet) -> (Sheet, Vec<String>) {
+    let mut notes = Vec::new();
+    let before = sheet.rows.len();
+    let mut seen = std::collections::HashSet::new();
+    sheet.rows.retain(|r| !r.id.trim().is_empty() && !r.title.trim().is_empty() && seen.insert(r.id.clone()));
+    if sheet.rows.len() < before {
+        notes.push(format!("{} sheet rows had no id or title, or repeated an id, and were left out", before - sheet.rows.len()));
+    }
+    if sheet.rows.len() > MAX_SHEET_ROWS {
+        notes.push(format!("{} sheet rows sent; only the first {MAX_SHEET_ROWS} are kept", sheet.rows.len()));
+        sheet.rows.truncate(MAX_SHEET_ROWS);
+    }
+    let cut = |text: &mut String, max: usize| {
+        let trimmed = text.trim();
+        *text = if trimmed.chars().count() > max { trimmed.chars().take(max).collect() } else { trimmed.to_string() };
+    };
+    let cut_some = |text: &mut Option<String>, max: usize| {
+        if let Some(t) = text {
+            cut(t, max);
+        }
+        if text.as_ref().is_some_and(String::is_empty) {
+            *text = None;
+        }
+    };
+    cut(&mut sheet.title, 80);
+    cut_some(&mut sheet.subtitle, 200);
+    cut_some(&mut sheet.footnote, 300);
+    for row in &mut sheet.rows {
+        cut(&mut row.title, 80);
+        cut_some(&mut row.subtitle, 200);
+        cut_some(&mut row.value, 24);
+        cut_some(&mut row.ask, 80);
+        for action in [&mut row.resolve, &mut row.down, &mut row.up, &mut row.sheet] {
+            if action.as_ref().is_some_and(|a| a.is_empty() || a.len() > 1024) {
+                *action = None;
+            }
+        }
+        let whole = match row.kind {
+            SheetRowKind::Press => row.resolve.is_some(),
+            SheetRowKind::Step => row.down.is_some() || row.up.is_some(),
+            SheetRowKind::Open => row.sheet.is_some(),
+            SheetRowKind::Confirm => row.resolve.is_some() && row.ask.is_some(),
+            SheetRowKind::Group | SheetRowKind::Text => true,
+        };
+        if !whole {
+            notes.push(format!("sheet row {:?} lacks what its kind needs and is shown as text", row.id));
+            row.kind = SheetRowKind::Text;
+        }
+    }
+    (sheet, notes)
+}
+
 /// What the TV keeps of a search: the first titled item with each id, never a screensaver or
 /// wallpaper, at most [SEARCH_LIMIT] of them.
 pub fn kept_results(items: Vec<Item>) -> Vec<Item> {
@@ -891,6 +959,28 @@ mod tests {
     fn host() -> (Host, Arc<FakeServices>) {
         let services = Arc::new(FakeServices { kv: Mutex::new(HashMap::new()), logs: Mutex::new(Vec::new()) });
         (Host::new(services.clone(), Limits::default()), services)
+    }
+
+    #[test]
+    fn a_sheet_keeps_its_first_sound_rows() {
+        use crate::api::SheetRow;
+        let mut rows = vec![
+            SheetRow::press("a", "Lamp", "toggle:light.lamp").value("On, 60% and a great deal more than fits"),
+            SheetRow::press("a", "Lamp again", "toggle:light.lamp"),
+            SheetRow::text("", "No id"),
+            SheetRow { resolve: None, ..SheetRow::press("b", "Nothing to do", "x") },
+            SheetRow::step("c", "Brightness", "", "up"),
+        ];
+        rows.extend((0..MAX_SHEET_ROWS + 5).map(|n| SheetRow::text(format!("t{n}"), "Words")));
+        let (sheet, notes) = kept_sheet(Sheet { title: "  Kitchen  ".into(), subtitle: Some("  ".into()), footnote: None, rows });
+        assert_eq!(sheet.title, "Kitchen");
+        assert_eq!(sheet.subtitle, None);
+        assert_eq!(sheet.rows.len(), MAX_SHEET_ROWS);
+        assert_eq!(sheet.rows[0].value.as_deref().map(|v| v.chars().count()), Some(24));
+        assert_eq!((sheet.rows[1].id.as_str(), sheet.rows[1].kind), ("b", SheetRowKind::Text));
+        // An empty action is no action, and one side is enough for a step.
+        assert_eq!((sheet.rows[2].kind, sheet.rows[2].down.as_deref(), sheet.rows[2].up.as_deref()), (SheetRowKind::Step, None, Some("up")));
+        assert_eq!(notes.len(), 3, "{notes:?}");
     }
 
     #[test]

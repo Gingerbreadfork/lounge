@@ -18,6 +18,7 @@ impl sdk::Plugin for Channels {
             kinds: vec![Kind::Content, Kind::Epg],
             fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![RowSpec { id: "recordings".into(), title: "Recordings on Channels DVR".into(), style: RowStyle::Landscape }],
             settings: vec![
                 SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8089".into()), default: None },

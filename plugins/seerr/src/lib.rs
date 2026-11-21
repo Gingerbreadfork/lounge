@@ -32,6 +32,7 @@ impl sdk::Plugin for Seerr {
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["$server".into(), "image.tmdb.org".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![
                 // Landscape tiles carry a second line, which says where each request stands.
                 RowSpec { id: "requested".into(), title: "Requested on Seerr".into(), style: RowStyle::Landscape },

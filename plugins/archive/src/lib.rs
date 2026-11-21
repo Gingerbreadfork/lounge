@@ -27,6 +27,7 @@ impl sdk::Plugin for Archive {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["archive.org".into(), "*.archive.org".into()],
             refresh_minutes: 24 * 60,
+            refresh_seconds: 0,
             rows: ROWS.iter().map(|(id, title, _)| RowSpec { id: (*id).into(), title: format!("{title} on the Internet Archive"), style: RowStyle::Landscape }).collect(),
             settings: ROWS
                 .iter()

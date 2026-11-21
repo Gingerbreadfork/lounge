@@ -485,3 +485,205 @@ fn a_stream_reaches_the_player_with_its_headers_and_its_kind() {
     assert!(core.plugin_log(id.into()).iter().any(|line| line.contains("1 headers on play actions were left out")), "{:?}", core.plugin_log(id.into()));
 }
 
+
+const LAMP_ID: &str = "tv.lounge.testlamp";
+
+/// A plugin for one lamp. Its state lives in the plugin's own storage: a press flips it and says
+/// so, a refresh reads it, and a sheet describes the room.
+fn lamp_bundle(dir: &std::path::Path) -> std::path::PathBuf {
+    let manifest = format!(r#"{{"id":"{LAMP_ID}","name":"Lamps","version":"1","kinds":["content"],"fetch_hosts":[],"rows":[{{"id":"here","title":"This room","style":"compact"}}]}}"#);
+    let items = |on: bool| {
+        format!(
+            r##"[{{"id":"lamp","title":"Lamp","subtitle":"{}","row":"here","row_title":"Den","glyph":"light","on":{on},"tint":"#3366ff","more":"lamp","weight":3,"action":{{"resolve":"toggle"}}}},
+                {{"id":"room","title":"Den","row":"here","glyph":"home","weight":2,"action":{{"sheet":"room"}}}},
+                {{"id":"door","title":"Door","subtitle":"Closed","row":"here","glyph":"door","weight":1,"on":false}}]"##,
+            if on { "On" } else { "Off" }
+        )
+    };
+    let said = r#"{"ok":{"say":"Lamp switched, as asked. See http://den.local/lamp?token=secret for more"}}"#;
+    let sheet = r#"{"ok":{"title":"Den","subtitle":"1 light","rows":[
+        {"id":"lamp","kind":"press","title":"Lamp","glyph":"light","value":"Off","on":false,"resolve":"toggle"},
+        {"id":"level","kind":"step","title":"Brightness","value":"40%","down":"dim","up":"brighten"},
+        {"id":"more","kind":"open","title":"More","sheet":"more"},
+        {"id":"unlock","kind":"confirm","title":"Unlock the door","resolve":"unlock","ask":"Unlock the door?"},
+        {"id":"lamp","kind":"press","title":"Lamp again","resolve":"toggle"},
+        {"id":"dial","kind":"dial","title":"Something newer"}]}}"#;
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
+    let m = format!(r#"{{"ok":{manifest}}}"#);
+    let off = format!(r#"{{"ok":{}}}"#, items(false));
+    let on = format!(r#"{{"ok":{}}}"#, items(true));
+    let (mo, fo, no, so, sho) = (65536, 70000, 75000, 80000, 85000);
+    let wasm = wat::parse_str(format!(
+        r#"(module
+          (import "lounge" "kv_get" (func $kv_get (param i32 i32) (result i64)))
+          (import "lounge" "kv_set" (func $kv_set (param i32 i32 i32 i32)))
+          (import "lounge" "kv_delete" (func $kv_delete (param i32 i32)))
+          (memory (export "memory") 4)
+          (global $heap (mut i32) (i32.const 200000))
+          (data (i32.const 60000) "on")
+          (data (i32.const {mo}) "{me}")
+          (data (i32.const {fo}) "{fe}")
+          (data (i32.const {no}) "{ne}")
+          (data (i32.const {so}) "{se}")
+          (data (i32.const {sho}) "{she}")
+          (func (export "lg_alloc") (param $len i32) (result i32)
+            (local $p i32)
+            (local.set $p (global.get $heap))
+            (global.set $heap (i32.add (global.get $heap) (i32.add (local.get $len) (i32.const 8))))
+            (local.get $p))
+          (func (export "lg_free") (param i32 i32))
+          (func (export "lg_manifest") (result i64) (i64.or (i64.shl (i64.const {mo}) (i64.const 32)) (i64.const {ml})))
+          (func (export "lg_refresh") (param i32 i32) (result i64)
+            (if (result i64) (i64.eqz (call $kv_get (i32.const 60000) (i32.const 2)))
+              (then (i64.or (i64.shl (i64.const {fo}) (i64.const 32)) (i64.const {fl})))
+              (else (i64.or (i64.shl (i64.const {no}) (i64.const 32)) (i64.const {nl})))))
+          (func (export "lg_resolve") (param i32 i32) (result i64)
+            (if (i64.eqz (call $kv_get (i32.const 60000) (i32.const 2)))
+              (then (call $kv_set (i32.const 60000) (i32.const 2) (i32.const 60000) (i32.const 2)))
+              (else (call $kv_delete (i32.const 60000) (i32.const 2))))
+            (i64.or (i64.shl (i64.const {so}) (i64.const 32)) (i64.const {sl})))
+          (func (export "lg_sheet") (param i32 i32) (result i64) (i64.or (i64.shl (i64.const {sho}) (i64.const 32)) (i64.const {shl}))))"#,
+        me = esc(&m),
+        fe = esc(&off),
+        ne = esc(&on),
+        se = esc(said),
+        she = esc(sheet),
+        ml = m.len(),
+        fl = off.len(),
+        nl = on.len(),
+        sl = said.len(),
+        shl = sheet.replace('\n', " ").len(),
+    ))
+    .unwrap();
+    signed(dir, &manifest, &wasm)
+}
+
+fn lamp_core(dir: &std::path::Path) -> (Arc<Core>, Arc<Recorder>) {
+    let config = CoreConfig {
+        data_dir: dir.join("data").to_string_lossy().into_owned(),
+        cache_dir: dir.join("cache").to_string_lossy().into_owned(),
+        tier: DeviceTier::B,
+        utc_offset_minutes: 0,
+        has_tv_controls: false,
+        device_name: "TV".into(),
+        screen_width: 1920,
+        screen_height: 1080,
+    };
+    let platform = Arc::new(Recorder::default());
+    let core = Core::open(config, platform.clone()).unwrap();
+    core.install_plugin(lamp_bundle(dir).to_string_lossy().into_owned(), false).unwrap();
+    core.set_plugin_enabled(LAMP_ID.into(), true);
+    wait_for("the lamp", || lamp(&core).is_some());
+    (core, platform)
+}
+
+fn lamp_row(core: &Core) -> Option<lounge_core::Row> {
+    core.snapshot().rows.into_iter().find(|r| r.tiles.iter().any(|t| t.id == format!("plugin:{LAMP_ID}:lamp")))
+}
+
+fn lamp(core: &Core) -> Option<lounge_core::Tile> {
+    lamp_row(core)?.tiles.into_iter().find(|t| t.id == format!("plugin:{LAMP_ID}:lamp"))
+}
+
+fn refreshes(core: &Core) -> usize {
+    core.plugin_log(LAMP_ID.into()).iter().filter(|line| line.contains("refreshed:")).count()
+}
+
+#[test]
+fn a_control_shows_its_state_and_a_press_brings_the_new_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let (core, platform) = lamp_core(dir.path());
+
+    // The row takes the name the refresh gave it.
+    let row = lamp_row(&core).unwrap();
+    assert_eq!(row.title, "Den");
+    assert_eq!(row.kind, lounge_core::TileKind::Compact);
+    assert_eq!(row.tiles.iter().map(|t| (t.title.as_str(), t.glyph.as_deref(), t.on)).collect::<Vec<_>>(), [("Lamp", Some("light"), Some(false)), ("Den", Some("home"), None), ("Door", Some("door"), Some(false))]);
+    let off = lamp(&core).unwrap();
+    assert_eq!(off.more.as_deref(), Some(format!("{LAMP_ID}:lamp").as_str()));
+    // A tile to read opens nothing, and one that opens a sheet says so in its action.
+    assert_eq!(row.tiles[2].action, "");
+    assert_eq!(row.tiles[1].action, format!("control:sheet:{LAMP_ID}:room"));
+    // None of them is put forward for the Stage.
+    assert!(core.snapshot().stage.strip.iter().all(|t| !t.id.starts_with(&format!("plugin:{LAMP_ID}:"))));
+
+    // A press says what the plugin said, less anything secret in an address, and the tile follows by itself.
+    let pressed = Instant::now();
+    let done = core.perform(off.action.clone()).unwrap();
+    assert_eq!(done.say.as_deref(), Some("Lamp switched, as asked. See http://den.local/lamp for more"));
+    wait_for("the lamp to come on", || lamp(&core).is_some_and(|t| t.on == Some(true)));
+    assert!(pressed.elapsed() < Duration::from_millis(1500), "the tile took {:?} to follow the press", pressed.elapsed());
+    let on = lamp(&core).unwrap();
+    assert_eq!(on.subtitle.as_deref(), Some("On"));
+    // Lit, it takes its own colour; resting, it has none of its own.
+    assert_ne!(on.light_argb, off.light_argb);
+    assert!(platform.calls.lock().is_empty(), "{:?}", platform.calls.lock());
+
+    // Opening the room's sheet is handed to the screen.
+    core.perform(row.tiles[1].action.clone()).unwrap();
+    assert_eq!(platform.calls.lock().as_slice(), [format!("control sheet:{LAMP_ID}:room")]);
+}
+
+#[test]
+fn presses_in_quick_succession_bring_one_refresh_and_a_second_look() {
+    let dir = tempfile::tempdir().unwrap();
+    let (core, _platform) = lamp_core(dir.path());
+    let before = refreshes(&core);
+    let action = lamp(&core).unwrap().action;
+    for _ in 0..5 {
+        core.perform(action.clone()).unwrap();
+    }
+    wait_for("the lamp to come on", || lamp(&core).is_some_and(|t| t.on == Some(true)));
+    std::thread::sleep(Duration::from_millis(3200));
+    assert_eq!(refreshes(&core) - before, 2, "{:?}", core.plugin_log(LAMP_ID.into()));
+}
+
+#[test]
+fn a_sheet_is_read_row_by_row_and_its_presses_reach_the_plugin() {
+    use lounge_core::PluginSheetRowKind as Kind;
+    let dir = tempfile::tempdir().unwrap();
+    let (core, _platform) = lamp_core(dir.path());
+
+    let sheet = core.plugin_sheet(LAMP_ID.into(), "room".into()).unwrap();
+    assert_eq!((sheet.title.as_str(), sheet.subtitle.as_deref()), ("Den", Some("1 light")));
+    // A second row under one id is left out, and a kind this TV does not know is a row to read.
+    assert_eq!(
+        sheet.rows.iter().map(|r| (r.id.as_str(), r.kind.clone())).collect::<Vec<_>>(),
+        [
+            ("lamp", Kind::Press { action: "toggle".into() }),
+            ("level", Kind::Step { down: Some("dim".into()), up: Some("brighten".into()), press: None }),
+            ("more", Kind::Open { sheet: "more".into() }),
+            ("unlock", Kind::Confirm { action: "unlock".into(), ask: "Unlock the door?".into() }),
+            ("dial", Kind::Text),
+        ]
+    );
+    assert_eq!((sheet.rows[0].glyph.as_deref(), sheet.rows[0].value.as_deref(), sheet.rows[0].on), (Some("light"), Some("Off"), Some(false)));
+
+    // A row's press does what a tile's does, and the home follows it.
+    let done = core.plugin_sheet_press(LAMP_ID.into(), "toggle".into()).unwrap();
+    assert!(done.say.is_some_and(|say| say.starts_with("Lamp switched")));
+    wait_for("the lamp to come on", || lamp(&core).is_some_and(|t| t.on == Some(true)));
+}
+
+#[test]
+fn a_plugin_without_sheets_says_it_has_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let (core, _platform) = slow_core(dir.path());
+    let refused = core.plugin_sheet(SLOW_ID.into(), "anything".into()).unwrap_err();
+    assert_eq!(refused.to_string(), "plugin: Slow has nothing more to show here.");
+}
+
+#[test]
+fn a_live_picture_can_only_be_asked_about_by_what_opened_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (core, platform) = lamp_core(dir.path());
+    // A control from outside cannot open one, so it cannot name an action to run either.
+    let crafted = format!("control:live:{LAMP_ID}\nDoor\nhttp://camera.local/1.jpg\ntoggle");
+    assert!(matches!(core.perform(crafted), Err(lounge_core::CoreError::UnknownAction { .. })));
+    assert!(platform.calls.lock().is_empty(), "{:?}", platform.calls.lock());
+    // A picture the core never opened has no action behind it, and the plugin is not asked.
+    let refused = core.plugin_live(LAMP_ID.into(), "http://camera.local/1.jpg".into()).unwrap_err();
+    assert_eq!(refused.to_string(), "plugin: The picture has no address now.");
+    std::thread::sleep(Duration::from_millis(600));
+    assert_eq!(lamp(&core).unwrap().on, Some(false));
+}

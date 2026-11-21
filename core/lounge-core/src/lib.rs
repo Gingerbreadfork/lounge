@@ -265,6 +265,11 @@ pub struct PluginInfo {
     /// Every required setting has a value.
     pub configured: bool,
     pub refresh_minutes: u32,
+    /// How often it refreshes while it reaches only the home network, in seconds; 0 when it
+    /// refreshes by the minute.
+    #[serde(default)]
+    #[uniffi(default = 0)]
+    pub refresh_seconds: u32,
     pub last_refresh_ms: Option<i64>,
     pub last_error: Option<String>,
     /// What the plugin waits on the person for, in place of an error.
@@ -422,6 +427,86 @@ pub struct Tile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[uniffi(default = None)]
     pub time_left: Option<String>,
+    /// The glyph a control wears in place of a picture, by its name in Lounge's set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[uniffi(default = None)]
+    pub glyph: Option<String>,
+    /// Whether a control is on, when it can be on or off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[uniffi(default = None)]
+    pub on: Option<bool>,
+    /// The plugin sheet with more to do with this tile, as "<plugin id>:<sheet id>".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[uniffi(default = None)]
+    pub more: Option<String>,
+}
+
+/// What a press did, when it worked.
+#[derive(Clone, Debug, Default, PartialEq, uniffi::Record)]
+pub struct Performed {
+    /// A sentence the plugin gives for a press with nothing to see, such as "Movie time set".
+    pub say: Option<String>,
+}
+
+/// A sheet a plugin describes: rows to press or step, in a panel at the side.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct PluginSheet {
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub footnote: Option<String>,
+    pub rows: Vec<PluginSheetRow>,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct PluginSheetRow {
+    /// The same from one answer to the next, so focus can stay on the row.
+    pub id: String,
+    pub glyph: Option<String>,
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub value: Option<String>,
+    pub on: Option<bool>,
+    pub kind: PluginSheetRowKind,
+}
+
+/// What a sheet row does. Each action is handed back through `plugin_sheet_press`.
+#[derive(Clone, Debug, PartialEq, uniffi::Enum)]
+pub enum PluginSheetRowKind {
+    Text,
+    Group,
+    Press { action: String },
+    /// Left and Right, and OK when the row has a press of its own.
+    Step { down: Option<String>, up: Option<String>, press: Option<String> },
+    Open { sheet: String },
+    /// The first OK asks `ask`; the second acts.
+    Confirm { action: String, ask: String },
+}
+
+impl From<lounge_plugin_api::Sheet> for PluginSheet {
+    fn from(sheet: lounge_plugin_api::Sheet) -> PluginSheet {
+        use lounge_plugin_api::SheetRowKind as Kind;
+        let rows = sheet
+            .rows
+            .into_iter()
+            .map(|r| PluginSheetRow {
+                kind: match (r.kind, r.resolve, r.sheet, r.ask) {
+                    (Kind::Press, Some(action), _, _) => PluginSheetRowKind::Press { action },
+                    (Kind::Step, press, _, _) => PluginSheetRowKind::Step { down: r.down, up: r.up, press },
+                    (Kind::Open, _, Some(sheet), _) => PluginSheetRowKind::Open { sheet },
+                    (Kind::Confirm, Some(action), _, Some(ask)) => PluginSheetRowKind::Confirm { action, ask },
+                    (Kind::Group, ..) => PluginSheetRowKind::Group,
+                    _ => PluginSheetRowKind::Text,
+                },
+                id: r.id,
+                glyph: r.glyph,
+                title: r.title,
+                subtitle: r.subtitle,
+                value: r.value,
+                on: r.on,
+            })
+            .collect();
+        PluginSheet { title: sheet.title, subtitle: sheet.subtitle, footnote: sheet.footnote, rows }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum, Serialize, Deserialize)]
@@ -1022,9 +1107,52 @@ impl Core {
 
     /// Dispatch a tile or stage action. Returns an error only for malformed actions;
     /// platform failures are reported by the platform itself.
-    pub fn perform(&self, action: String) -> Result<(), CoreError> {
+    pub fn perform(&self, action: String) -> Result<Performed, CoreError> {
         self.count();
         engine::perform(&self.inner, &action)
+    }
+
+    /// The sheet a plugin describes under `id`. Blocks while the plugin answers.
+    pub fn plugin_sheet(&self, plugin: String, id: String) -> Result<PluginSheet, CoreError> {
+        self.count();
+        let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
+        self.inner.plugins.call(plugins::PluginJob::Sheet { plugin: plugin.clone(), id, reply: reply_tx }).map_err(|detail| CoreError::Plugin { detail })?;
+        reply_rx
+            .recv_timeout(std::time::Duration::from_secs(15))
+            .map_err(|_| CoreError::Plugin { detail: format!("{plugin} did not answer in time") })?
+            .map(PluginSheet::from)
+            .map_err(|detail| CoreError::Plugin { detail })
+    }
+
+    /// Hands a sheet row's action to its plugin. Only the TV's own screens call this, so a
+    /// phone cannot send a plugin an action it never put on a tile.
+    pub fn plugin_sheet_press(&self, plugin: String, action: String) -> Result<Performed, CoreError> {
+        self.count();
+        engine::dispatch(&self.inner, lounge_graph::DeepLink::PluginResolve { plugin, action })
+    }
+
+    /// Asks a plugin for a new address for the live picture it is showing at `url`. Only a
+    /// picture a tile or a sheet opened can be asked about, with the action that opened it.
+    pub fn plugin_live(&self, plugin: String, url: String) -> Result<String, CoreError> {
+        self.count();
+        let none = || CoreError::Plugin { detail: "The picture has no address now.".to_string() };
+        let action = self.inner.plugins.live_action(&plugin, &url).ok_or_else(none)?;
+        let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
+        self.inner.plugins.call(plugins::PluginJob::Resolve { plugin: plugin.clone(), action: action.clone(), reply: reply_tx }).map_err(|detail| CoreError::Plugin { detail })?;
+        let fresh = reply_rx
+            .recv_timeout(std::time::Duration::from_secs(15))
+            .map_err(|_| CoreError::Plugin { detail: format!("{plugin} did not answer in time") })?
+            .map_err(|detail| CoreError::Plugin { detail })?
+            .live
+            .ok_or_else(none)?;
+        self.inner.plugins.note_live(&plugin, &fresh, &action);
+        Ok(fresh)
+    }
+
+    /// Fetches a picture for a plugin's live view, by the rules the plugin itself fetches under.
+    pub fn plugin_picture(&self, plugin: String, url: String) -> Result<Vec<u8>, CoreError> {
+        self.count();
+        self.inner.plugins.picture(&plugin, &url).map_err(|detail| CoreError::Plugin { detail })
     }
 
     pub fn set_screen_state(&self, on: bool) {
@@ -1036,6 +1164,7 @@ impl Core {
                 self.inner.plugins.refresh_soon(&plugin);
             }
             self.inner.plugins.refresh_asking();
+            self.inner.plugins.wake_schedule();
             self.enqueue(worker::Job::Tick);
         }
     }

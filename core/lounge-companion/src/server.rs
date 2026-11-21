@@ -273,6 +273,7 @@ fn routes(app: Shared) -> Router {
         .route_layer(middleware::from_fn_with_state(Arc::clone(&app), require_token));
     Router::new()
         .route("/api/pair", post(pair).layer(DefaultBodyLimit::max(1024)))
+        .route("/signin/{plugin}/{key}", get(signed_in))
         .merge(paired)
         .fallback(get(static_file))
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
@@ -558,9 +559,13 @@ async fn text(State(app): State<Shared>, Json(b): Json<TextBody>) -> Result<Stat
 struct ActionBody {
     action: String,
 }
-async fn open(State(app): State<Shared>, Json(b): Json<ActionBody>) -> Result<StatusCode, ApiError> {
-    on_core(&app, move |a| a.perform(&b.action)).await?.map_err(refused("The TV couldn't open that. Try it from the TV."))?;
-    Ok(StatusCode::NO_CONTENT)
+/// Answers with what the press said, when it said anything.
+async fn open(State(app): State<Shared>, Json(b): Json<ActionBody>) -> Result<Response, ApiError> {
+    let say = on_core(&app, move |a| a.perform(&b.action)).await?.map_err(refused("The TV couldn't open that. Try it from the TV."))?;
+    Ok(match say {
+        Some(say) => Json(serde_json::json!({ "say": say })).into_response(),
+        None => StatusCode::NO_CONTENT.into_response(),
+    })
 }
 
 #[derive(Deserialize)]
@@ -722,6 +727,36 @@ async fn art(State(app): State<Shared>, Query(q): Query<ArtQuery>) -> Result<Res
     let bytes = tokio::fs::read(&canonical).await.map_err(|_| ApiError(StatusCode::NOT_FOUND, "no such image".into()))?;
     let mime = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) { "image/png" } else if bytes.starts_with(&[0xFF, 0xD8]) { "image/jpeg" } else { "application/octet-stream" };
     Ok(([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, "private, max-age=86400")], bytes).into_response())
+}
+
+/// Where a sign-in a plugin started comes back to, on whatever phone made it. The phone need not
+/// be paired: the page hands its query to the plugin and says to look at the TV.
+async fn signed_in(State(app): State<Shared>, AxPath((plugin, key)): AxPath<(String, String)>, uri: Uri) -> Response {
+    let query = uri.query().unwrap_or_default().to_string();
+    let (status, title, words) = match on_core(&app, move |a| a.signed_in(&plugin, &key, &query)).await {
+        Ok(Ok(name)) => (StatusCode::OK, "Signed in", format!("{name} has what it needs. Look at the TV.")),
+        Ok(Err(why)) => (StatusCode::CONFLICT, "Not signed in", why),
+        Err(ApiError(status, why)) => (status, "Not signed in", why),
+    };
+    (status, [(header::CONTENT_TYPE, "text/html; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], landing_page(title, &words)).into_response()
+}
+
+/// The page a sign-in ends on. It stands alone, so it reads the same on a phone that has never
+/// opened the companion.
+fn landing_page(title: &str, words: &str) -> String {
+    let escape = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    format!(
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
+         <title>{title}</title><style>\
+         @font-face{{font-family:'Bricolage Headline';src:url('/fonts/bricolage-headline.ttf') format('truetype');font-weight:600;font-display:swap}}\
+         @font-face{{font-family:'Figtree';src:url('/fonts/figtree-regular.ttf') format('truetype');font-weight:400;font-display:swap}}\
+         html{{color-scheme:dark}}body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#120e27;color:#f6efe7;font-family:'Figtree',system-ui,sans-serif}}\
+         main{{padding:32px;max-width:26em}}h1{{font-family:'Bricolage Headline',system-ui,sans-serif;font-weight:600;font-size:28px;margin:0 0 12px}}\
+         p{{margin:0;color:#a8a0c2;font-size:17px;line-height:1.45}}\
+         </style></head><body><main><h1>{title}</h1><p>{}</p></main></body></html>",
+        escape(words),
+        title = escape(title),
+    )
 }
 
 async fn static_file(uri: Uri) -> Response {

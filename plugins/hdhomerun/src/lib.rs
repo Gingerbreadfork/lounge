@@ -21,6 +21,7 @@ impl sdk::Plugin for HdHomeRun {
             // the guide and its pictures are all under hdhomerun.com.
             fetch_hosts: vec!["$device".into(), "local-network".into(), "*.hdhomerun.com".into()],
             refresh_minutes: 60,
+            refresh_seconds: 0,
             rows: vec![],
             settings: vec![
                 SettingSpec { key: "device".into(), label: "Tuner address".into(), kind: SettingKind::Url, required: false, help: Some("Leave it empty and the tuner is found automatically. Otherwise use its address, like http://192.168.0.20.".into()), default: None },

@@ -37,6 +37,7 @@ impl sdk::Plugin for Emby {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "recent".into(), title: "Recently added on Emby".into(), style: RowStyle::Poster },
                 RowSpec { id: "favourites".into(), title: "Favourites on Emby".into(), style: RowStyle::Poster },

@@ -61,6 +61,7 @@ impl sdk::Plugin for Simkl {
             fetch_hosts: vec!["api.simkl.com".into(), "simkl.in".into(), "data.simkl.in".into()],
             // Simkl asks TV apps for 15 to 30 minutes, and counts every call against the day.
             refresh_minutes: 20,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "upnext".into(), title: "Up next on Simkl".into(), style: RowStyle::Landscape },
                 RowSpec { id: "airing".into(), title: "Coming up on Simkl".into(), style: RowStyle::Landscape },

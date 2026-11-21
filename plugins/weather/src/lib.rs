@@ -38,6 +38,7 @@ impl sdk::Plugin for Weather {
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["api.open-meteo.com".into(), "geocoding-api.open-meteo.com".into(), "cdn.jsdelivr.net".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![RowSpec { id: ROW.into(), title: "Weather".into(), style: RowStyle::Compact }],
             settings: vec![
                 SettingSpec {

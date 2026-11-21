@@ -16,12 +16,22 @@ impl CompanionActions for Fake {
     fn snapshot_json(&self) -> String {
         "{}".into()
     }
-    /// An action of `fail:` and some words fails with those words.
-    fn perform(&self, action: &str) -> Result<(), String> {
-        action.strip_prefix("fail:").map_or(Ok(()), |said| Err(said.to_string()))
+    /// An action of `fail:` and some words fails with those words, and one of `say:` says them.
+    fn perform(&self, action: &str) -> Result<Option<String>, String> {
+        match action.strip_prefix("fail:") {
+            Some(said) => Err(said.to_string()),
+            None => Ok(action.strip_prefix("say:").map(str::to_string)),
+        }
     }
     fn launch(&self, _: &str) -> Result<(), String> {
         Ok(())
+    }
+    /// Only the plugin called `waiting` waits for a sign-in, at the key `k3y`, and its name is the query it was given.
+    fn signed_in(&self, plugin: &str, key: &str, query: &str) -> Result<String, String> {
+        if plugin != "waiting" || key != "k3y" {
+            return Err("Nothing on the TV is waiting for this sign-in.".into());
+        }
+        Ok(format!("<{query}>"))
     }
     fn send_key(&self, _: &str) -> Result<(), String> {
         Ok(())
@@ -285,6 +295,52 @@ fn a_sentence_the_tv_wrote_reaches_the_phone_as_it_is() {
     for raw in ["No space left on device (os error 28)", "platform: busy", "no"] {
         assert_eq!(told(raw), "The TV couldn't open that. Try it from the TV.");
     }
+}
+
+#[test]
+fn a_press_that_says_something_is_answered_with_its_words() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let token = pair(&companion, &host);
+    let open = |action: &str| {
+        let body = serde_json::json!({ "action": action }).to_string();
+        exchange(port, &format!("POST /api/open HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()))
+    };
+    let said = open("say:Movie time set");
+    assert_eq!(status(&said), 200);
+    assert_eq!(json_body(&said)["say"], "Movie time set");
+    // A press with nothing to say is answered with nothing, as before.
+    assert_eq!(status(&open("app:tv.example")), 204);
+}
+
+#[test]
+fn a_sign_in_lands_without_pairing_and_only_where_one_is_waited_for() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let get = |path: &str| exchange(port, &format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"));
+
+    // The query reaches the plugin whole, and what the page shows of it is escaped.
+    let landed = get("/signin/waiting/k3y?code=abc&state=1");
+    assert_eq!(status(&landed), 200);
+    assert!(landed.contains("<h1>Signed in</h1>"), "{landed}");
+    assert!(landed.contains("&lt;code=abc&amp;state=1&gt; has what it needs. Look at the TV."), "{landed}");
+    assert!(landed.to_ascii_lowercase().contains("cache-control: no-store"), "{landed}");
+
+    // Another plugin's page, a guess at the key and an address with no key are all turned away.
+    for path in ["/signin/other/k3y?code=abc", "/signin/waiting/guess?code=abc"] {
+        let stray = get(path);
+        assert_eq!(status(&stray), 409, "{path}");
+        assert!(stray.contains("<h1>Not signed in</h1>") && stray.contains("Nothing on the TV is waiting for this sign-in."), "{stray}");
+    }
+    assert!(!get("/signin/waiting?code=abc").contains("Signed in"));
+
+    // A name the TV does not go by is not answered here either.
+    let (code, _) = send(port, "GET /signin/waiting/k3y?code=abc HTTP/1.1\r\nHost: rebind.attacker.example\r\n\r\n");
+    assert_eq!(code, 421);
 }
 
 #[test]

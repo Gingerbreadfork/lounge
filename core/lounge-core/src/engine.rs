@@ -1,7 +1,7 @@
 //! Turns the graph into a `HomeSnapshot` and resolves actions back into platform calls.
 
 use crate::{
-    now_ms, Badge, CoreConfig, CoreError, HomeSnapshot, Inner, ItemRef, Row, RowInfo, RowSize, SourceInfo, Stage, StageAction,
+    now_ms, Badge, CoreConfig, CoreError, HomeSnapshot, Inner, ItemRef, Performed, Row, RowInfo, RowSize, SourceInfo, Stage, StageAction,
     StageSpotlight, State, Tile, TileKind,
 };
 use lounge_graph::{DeepLink, Graph, Item, ItemKind};
@@ -148,11 +148,12 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
                 let (pid, rid) = rest.split_once(':').unwrap_or((rest, ""));
                 let plugin = state.plugins.iter().find(|p| p.id == pid);
                 let name = plugin.map(|p| p.manifest.name.clone()).unwrap_or_else(|| pid.to_string());
-                let title = plugin
-                    .and_then(|p| p.manifest.rows.iter().find(|r| r.id == rid))
-                    .map(|r| r.title.clone())
+                let (items, titled) = graph.plugin_row_titled(pid, rid);
+                let title = titled
+                    .map(str::to_string)
+                    .or_else(|| plugin.and_then(|p| p.manifest.rows.iter().find(|r| r.id == rid)).map(|r| r.title.clone()))
                     .unwrap_or_else(|| rid.to_string());
-                let n = graph.plugin_row(pid, rid).len();
+                let n = items.len();
                 (title, n, format!("{name}, {}", counted(n, "title", "titles", "nothing yet")))
             } else if let Some(cid) = id.strip_prefix("channel:") {
                 let cid: i64 = cid.parse().unwrap_or(0);
@@ -442,7 +443,7 @@ fn plugin_row(state: &State, index: &BuildIndex, key: &str) -> Option<Row> {
     let (pid, rid) = key.split_once(':')?;
     let p = state.plugins.iter().find(|p| p.id == pid && p.enabled)?;
     let spec = p.manifest.rows.iter().find(|r| r.id == rid)?;
-    let items = graph.plugin_row(&p.id, &spec.id);
+    let (items, titled) = graph.plugin_row_titled(&p.id, &spec.id);
     if items.is_empty() {
         return None;
     }
@@ -453,7 +454,7 @@ fn plugin_row(state: &State, index: &BuildIndex, key: &str) -> Option<Row> {
     };
     Some(Row {
         id: format!("plugin:{key}"),
-        title: spec.title.clone(),
+        title: titled.map(str::to_string).unwrap_or_else(|| spec.title.clone()),
         kind,
         size: RowSize::M,
         badge: None,
@@ -530,6 +531,9 @@ fn plugin_suggestions(state: &State) -> Vec<Tile> {
                 provider_name: None,
                 hidden: false,
                 time_left: None,
+                glyph: None,
+                on: None,
+                more: None,
             })
         })
         .collect()
@@ -593,6 +597,9 @@ fn notice_row(id: &str, row_title: &str, title: &str, subtitle: &str, action: &s
             provider_name: None,
             hidden: false,
             time_left: None,
+            glyph: None,
+            on: None,
+            more: None,
         }],
         note: None,
     }
@@ -647,6 +654,9 @@ fn all_apps_tile(count: usize) -> Tile {
         provider_name: None,
         hidden: false,
         time_left: None,
+        glyph: None,
+        on: None,
+        more: None,
     }
 }
 
@@ -672,6 +682,9 @@ fn tv_controls_tile(config: &CoreConfig) -> Tile {
         provider_name: None,
         hidden: false,
         time_left: None,
+        glyph: None,
+        on: None,
+        more: None,
     }
 }
 
@@ -799,8 +812,9 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         progress: it.progress,
         badge,
         action: match &it.deep_link {
-            // Said outright, so search can leave out a tile that would only open search again.
-            DeepLink::Control(c) if c.starts_with("search:") => format!("control:{c}"),
+            // Said outright, so search can leave out a tile that would only open search again,
+            // and a screen knows a tile opens a sheet before it is pressed.
+            DeepLink::Control(c) if c.starts_with("search:") || c.starts_with("sheet:") => format!("control:{c}"),
             // A plugin's tile to read has no action, so a screen can tell it opens nothing.
             DeepLink::None if it.kind == ItemKind::Program && it.channel_id.is_none() && it.source.starts_with("plugin:") => String::new(),
             _ => format!("open:{}", it.id),
@@ -817,6 +831,9 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         // The screens draw and say this themselves; as a second line it would be searched like a title.
         hidden: graph.is_hidden(&it.id),
         time_left: it.progress.and_then(|p| remaining_text(it, p)),
+        glyph: it.glyph.clone(),
+        on: it.on,
+        more: it.more.as_ref().and_then(|m| it.source.strip_prefix("plugin:").map(|plugin| format!("{plugin}:{m}"))),
     }
 }
 
@@ -1131,7 +1148,7 @@ pub(crate) fn local_hour(now_ms: i64, utc_offset_minutes: i32) -> u32 {
 }
 
 /// Actions are `<verb>:<target>`; verbs: `open`, `info`, `control`, `permission`, `media`.
-pub(crate) fn perform(inner: &Inner, action: &str) -> Result<(), CoreError> {
+pub(crate) fn perform(inner: &Inner, action: &str) -> Result<Performed, CoreError> {
     wait_for_graph(inner);
     let (verb, target) = action
         .split_once(':')
@@ -1169,23 +1186,31 @@ pub(crate) fn perform(inner: &Inner, action: &str) -> Result<(), CoreError> {
                     .and_then(|it| it.package().map(|p| p.to_string()))
                     .ok_or_else(unknown)?
             };
-            inner.platform.open_app_info(package).map_err(platform_err)
+            inner.platform.open_app_info(package).map_err(platform_err).map(done)
         }
-        "control" => inner.platform.control(target.to_string()).map_err(platform_err),
+        // A live picture is only ever opened by its own tile, never by a control from outside.
+        "control" if target.starts_with("live:") => Err(unknown()),
+        "control" => inner.platform.control(target.to_string()).map_err(platform_err).map(done),
         // A link shared from the phone: Android picks the app that owns it.
         "url" if target.starts_with("http://") || target.starts_with("https://") => {
-            inner.platform.view_uri(target.to_string()).map_err(platform_err)
+            inner.platform.view_uri(target.to_string()).map_err(platform_err).map(done)
         }
-        "permission" => inner.platform.request_permission(target.to_string()).map_err(platform_err),
+        "permission" => inner.platform.request_permission(target.to_string()).map_err(platform_err).map(done),
         "media" => {
             let (package, command) = target.rsplit_once(':').ok_or_else(unknown)?;
             inner
                 .platform
                 .media_command(package.to_string(), command.to_string())
                 .map_err(platform_err)
+                .map(done)
         }
         _ => Err(unknown()),
     }
+}
+
+/// A press that worked and has nothing to say.
+fn done(_: ()) -> Performed {
+    Performed::default()
 }
 
 /// The plugin an opened item came from: a home item's source, or a plugin search tile's id.
@@ -1209,26 +1234,28 @@ pub(crate) fn wait_for_graph(inner: &Inner) {
     }
 }
 
-fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
+pub(crate) fn dispatch(inner: &Inner, link: DeepLink) -> Result<Performed, CoreError> {
     let platform_err = |e: crate::PlatformError| CoreError::Platform { detail: e.to_string() };
     match link {
         DeepLink::LaunchApp { package, activity } => {
             inner.platform.launch_app(package.clone(), activity).map_err(platform_err)?;
             // An app opened from here counts as used even when usage access is off.
             inner.enqueue_job(crate::worker::Job::Usage(vec![crate::AppUsage { package, last_used_ms: now_ms() }]));
-            Ok(())
+            Ok(Performed::default())
         }
-        DeepLink::ViewUri(uri) => inner.platform.view_uri(uri).map_err(platform_err),
+        DeepLink::ViewUri(uri) => inner.platform.view_uri(uri).map_err(platform_err).map(done),
         DeepLink::ViewOrLaunch { uri, package } => match inner.platform.view_uri(uri) {
-            Ok(()) => Ok(()),
-            Err(_) => inner.platform.launch_app(package, String::new()).map_err(platform_err),
+            Ok(()) => Ok(Performed::default()),
+            Err(_) => inner.platform.launch_app(package, String::new()).map_err(platform_err).map(done),
         },
-        DeepLink::Play { url, title, start_ms, headers, audio } => inner.platform.play_stream(url, title, start_ms, headers.into_iter().collect(), audio).map_err(platform_err),
+        DeepLink::Play { url, title, start_ms, headers, audio } => {
+            inner.platform.play_stream(url, title, start_ms, headers.into_iter().collect(), audio).map_err(platform_err).map(done)
+        }
         DeepLink::PluginResolve { plugin, action } => {
             let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
             inner
                 .plugins
-                .call(crate::plugins::PluginJob::Resolve { plugin: plugin.clone(), action, reply: reply_tx })
+                .call(crate::plugins::PluginJob::Resolve { plugin: plugin.clone(), action: action.clone(), reply: reply_tx })
                 .map_err(|detail| CoreError::Plugin { detail })?;
             let resolved = reply_rx
                 .recv_timeout(std::time::Duration::from_secs(15))
@@ -1244,16 +1271,27 @@ fn dispatch(inner: &Inner, link: DeepLink) -> Result<(), CoreError> {
                 DeepLink::LaunchApp { package: pkg, activity: String::new() }
             } else if let Some(query) = resolved.search {
                 DeepLink::Control(format!("search:{query}"))
+            } else if let Some(sheet) = &resolved.sheet {
+                DeepLink::Control(crate::worker::sheet_control(&plugin, sheet))
+            } else if let Some(url) = &resolved.live {
+                // The action stays here, so only the core can ask the plugin for the address again.
+                inner.plugins.note_live(&plugin, url, &action);
+                DeepLink::Control(crate::worker::live_control(&plugin, resolved.title.as_deref().unwrap_or_default(), url))
             } else {
-                // The plugin did the work itself (told a player on the network to start, say).
-                return Ok(());
+                // The plugin did the work itself, so nothing was opened to come back from.
+                let mut opened = inner.opened_plugin.lock();
+                if opened.as_deref() == Some(plugin.as_str()) {
+                    *opened = None;
+                }
+                return Ok(Performed { say: resolved.say });
             };
-            dispatch(inner, link)
+            let say = resolved.say;
+            dispatch(inner, link).map(|_| Performed { say })
         }
-        DeepLink::None => Ok(()),
-        DeepLink::SwitchInput(id) => inner.platform.switch_input(id).map_err(platform_err),
-        DeepLink::Tune(uri) => inner.platform.tune(uri).map_err(platform_err),
-        DeepLink::Control(cmd) => inner.platform.control(cmd).map_err(platform_err),
+        DeepLink::None => Ok(Performed::default()),
+        DeepLink::SwitchInput(id) => inner.platform.switch_input(id).map_err(platform_err).map(done),
+        DeepLink::Tune(uri) => inner.platform.tune(uri).map_err(platform_err).map(done),
+        DeepLink::Control(cmd) => inner.platform.control(cmd).map_err(platform_err).map(done),
     }
 }
 

@@ -4,9 +4,9 @@
 //! lgp-tool keygen <key-file>                       write a new Ed25519 signing key (hex seed, mode 0600, never over a file)
 //! lgp-tool bundle <plugin.wasm> <key-file> <out.lgp> [--manifest manifest.json]
 //! lgp-tool inspect <bundle.lgp>                    print the manifest and verify the signature
-//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--now ms] [--artwork] [--state file] [--search query] [--resolve action] [--json]
+//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--now ms] [--artwork] [--state file] [--search query] [--resolve action] [--sheet id] [--json]
 //! ```
-//! `run` executes `refresh` (or `search`) with a host that keeps key-values in memory, or in
+//! `run` executes `refresh`, or `search`, `resolve` or `sheet`, with a host that keeps key-values in memory, or in
 //! the `--state` file between runs as the TV keeps them between refreshes, reads settings from
 //! the flags, and fetches live unless `--fixtures` points at a directory of fixtures; [`FIXTURES`]
 //! describes them. `--now` fixes the clock a refresh is given. It prints the log, the fuel used
@@ -14,10 +14,10 @@
 //! the TV would not show; `--artwork` downloads each one as the TV would to find out.
 
 use ed25519_dalek::{Signer, SigningKey};
-use lounge_plugin_api::{HttpRequest, HttpResponse, Item, ItemKind, Manifest, RefreshContext};
+use lounge_plugin_api::{HttpRequest, HttpResponse, Item, ItemKind, Manifest, RefreshContext, GLYPHS};
 use lounge_plugins::bundle::Bundle;
 use lounge_plugins::PluginError;
-use lounge_plugins::host::{kept, kept_results, Host, Limits, Services, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
+use lounge_plugins::host::{kept, kept_results, kept_sheet, Host, Limits, Services, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
 use lounge_plugins::http::{host_of, host_permitted, reach, redact, too_large, Fetcher};
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashMap};
@@ -39,7 +39,7 @@ fn main() {
     }
 }
 
-const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--now ms] [--artwork] [--state file] [--search q] [--resolve action] [--json]";
+const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--now ms] [--artwork] [--state file] [--search q] [--resolve action] [--sheet id] [--json]";
 
 const FIXTURES: &str = "fixtures: --fixtures dir answers each fetch from <sha256 of the url, hex>.body in dir.
 A request that is not a GET, or carries a body, first looks for <sha256 of \"METHOD url\\nbody\">.body, so
@@ -155,6 +155,43 @@ fn run(args: &[String]) -> Result<(), String> {
         println!("resolved in {:.0} ms: {resolved:?}", started.elapsed().as_secs_f64() * 1000.0);
         return Ok(());
     }
+    if let Some(id) = flag(args, "--sheet") {
+        let sheet = host.sheet(&plugin, &id).inspect_err(|_| print_logs(&services));
+        if let Some(file) = &state {
+            save_state(file, &services.kv.lock())?;
+        }
+        let (sheet, notes) = kept_sheet(sheet.map_err(|e| e.to_string())?);
+        services.logs.lock().extend(notes.into_iter().map(|n| format!("tv: {n}")));
+        if args.iter().any(|a| a == "--json") {
+            for line in services.logs.lock().iter() {
+                eprintln!("log: {line}");
+            }
+            println!("{}", serde_json::to_string_pretty(&sheet).map_err(|e| e.to_string())?);
+            return Ok(());
+        }
+        print_logs(&services);
+        println!("sheet in {:.0} ms: {}{}", started.elapsed().as_secs_f64() * 1000.0, sheet.title, sheet.subtitle.as_ref().map(|s| format!(" — {s}")).unwrap_or_default());
+        for row in &sheet.rows {
+            let does: Vec<String> = [("ok", &row.resolve), ("left", &row.down), ("right", &row.up), ("opens", &row.sheet)]
+                .into_iter()
+                .filter_map(|(key, action)| action.as_ref().map(|a| format!("{key} {a}")))
+                .collect();
+            println!(
+                "  [{:?}] {}{}{}{}{}{}",
+                row.kind,
+                row.title,
+                row.value.as_ref().map(|v| format!(": {v}")).unwrap_or_default(),
+                row.subtitle.as_ref().map(|s| format!(" — {s}")).unwrap_or_default(),
+                row.on.map(|on| if on { " (on)" } else { " (off)" }).unwrap_or_default(),
+                row.ask.as_ref().map(|a| format!(" asks {a:?}")).unwrap_or_default(),
+                if does.is_empty() { String::new() } else { format!(" -> {}", does.join(", ")) },
+            );
+        }
+        if let Some(note) = &sheet.footnote {
+            println!("  {note}");
+        }
+        return Ok(());
+    }
     // What the TV would keep of the answer, with the notes it would put in the plugin's log.
     let items = match flag(args, "--search") {
         Some(q) => host.search(&plugin, &q, SEARCH_LIMIT).map(kept_results),
@@ -208,12 +245,13 @@ fn run(args: &[String]) -> Result<(), String> {
     println!("{} items in {:.0} ms{fuel}", items.len(), elapsed.as_secs_f64() * 1000.0);
     for it in items.iter().take(40) {
         println!(
-            "  [{:?}] {}{}{}{}",
+            "  [{:?}] {}{}{}{}{}",
             it.kind,
             it.title,
             it.subtitle.as_ref().map(|s| format!(" — {s}")).unwrap_or_default(),
             it.progress.map(|p| format!(" ({:.0}%)", p * 100.0)).unwrap_or_default(),
             it.channel_number.as_ref().map(|n| format!(" ch {n}")).unwrap_or_default(),
+            control_of(it),
         );
         if let Some(shader) = &it.shader {
             let names: Vec<&str> = shader.uniforms.keys().map(String::as_str).collect();
@@ -227,6 +265,24 @@ fn run(args: &[String]) -> Result<(), String> {
         println!("{line}");
     }
     Ok(())
+}
+
+/// How a control item looks and what it leads to: its glyph, state, light, row and sheet.
+fn control_of(it: &Item) -> String {
+    let parts: Vec<String> = [
+        it.glyph.as_ref().map(|g| if GLYPHS.contains(&g.as_str()) { g.clone() } else { format!("{g}, a glyph Lounge does not draw") }),
+        it.on.map(|on| if on { "on".to_string() } else { "off".to_string() }),
+        it.tint.clone(),
+        it.row.as_ref().map(|r| format!("row {r}")),
+        it.row_title.as_ref().map(|t| format!("titles its row {t:?}")),
+        it.more.as_ref().map(|m| format!("more {m}")),
+        it.action.resolve.as_ref().map(|a| format!("ok {a}")),
+        it.action.sheet.as_ref().map(|a| format!("opens {a}")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if it.glyph.is_none() && it.on.is_none() { String::new() } else { format!(" [{}]", parts.join(", ")) }
 }
 
 /// What the TV would make of the items' pictures: any from a host the plugin may not reach and,

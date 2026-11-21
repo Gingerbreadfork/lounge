@@ -32,6 +32,7 @@ impl sdk::Plugin for Audiobookshelf {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "recent".into(), title: "Recently added on Audiobookshelf".into(), style: RowStyle::Landscape },
                 RowSpec { id: "episodes".into(), title: "New episodes on Audiobookshelf".into(), style: RowStyle::Landscape },

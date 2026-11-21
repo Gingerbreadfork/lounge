@@ -48,6 +48,7 @@ impl sdk::Plugin for Podcasts {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["itunes.apple.com".into(), "*".into()],
             refresh_minutes: 30,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "new".into(), title: "New podcast episodes".into(), style: RowStyle::Landscape },
                 RowSpec { id: "shows".into(), title: "Your podcasts".into(), style: RowStyle::Landscape },

@@ -33,6 +33,7 @@ impl sdk::Plugin for Moonlight {
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$hosts".into(), "local-network".into()],
             refresh_minutes: 5,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "games".into(), title: "Games on Moonlight".into(), style: RowStyle::Poster },
                 RowSpec { id: "pcs".into(), title: "Gaming PCs on Moonlight".into(), style: RowStyle::Compact },

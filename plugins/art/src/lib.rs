@@ -30,6 +30,7 @@ impl sdk::Plugin for Art {
             kinds: vec![Kind::Wallpaper],
             fetch_hosts: vec!["collectionapi.metmuseum.org".into(), "images.metmuseum.org".into(), "openaccess-api.clevelandart.org".into(), "openaccess-cdn.clevelandart.org".into()],
             refresh_minutes: 6 * 60,
+            refresh_seconds: 0,
             rows: vec![],
             settings: vec![
                 SettingSpec { key: "met".into(), label: "The Met, New York".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },

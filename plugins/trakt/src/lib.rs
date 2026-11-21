@@ -32,6 +32,7 @@ impl sdk::Plugin for Trakt {
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["api.trakt.tv".into(), "*.trakt.tv".into()],
             refresh_minutes: 15,
+            refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "upnext".into(), title: "Up next on Trakt".into(), style: RowStyle::Landscape },
                 RowSpec { id: "watchlist".into(), title: "Watchlist on Trakt".into(), style: RowStyle::Poster },
