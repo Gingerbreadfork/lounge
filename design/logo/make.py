@@ -135,6 +135,9 @@ def about_page(pre):
     out[..., :3] = 255
     out[..., 3] = np.clip(mark, 0, 255).astype(np.uint8)
     save(Image.fromarray(out, "RGBA"), DESIGN_RES, "drawable-nodpi", "maker_gingerbreadfork.png")
+    # The phone tints nothing, so its copy is already the colour of its words.
+    out[..., :3] = LIMELIGHT
+    save(Image.fromarray(out, "RGBA"), COMPANION, "maker.png")
 
 
 def web_icons(pre, gradient):

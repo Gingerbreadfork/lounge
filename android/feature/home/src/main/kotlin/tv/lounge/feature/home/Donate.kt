@@ -101,7 +101,7 @@ internal fun DonateScreen(
                 // What Lounge never took comes first, then the one thing it asks, then how little that is.
                 Column(Modifier.width(820.dp).arrives(arriving(up, 1)), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("No adverts. No tracking. No price.", style = type.displayL, color = colors.limelight)
-                    Text("This page is the only place Lounge asks for anything.", style = type.headline, color = colors.houselight)
+                    Text("This is the one thing Lounge asks for.", style = type.headline, color = colors.houselight)
                 }
                 Spacer(Modifier.height(28.dp))
                 Column(Modifier.width(760.dp).arrives(arriving(up, 2)), verticalArrangement = Arrangement.spacedBy(14.dp)) {

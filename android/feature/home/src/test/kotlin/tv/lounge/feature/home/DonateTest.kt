@@ -91,4 +91,21 @@ class DonateTest {
         assertTrue(donateAsk(null).startsWith("If it has earned its place,"))
         assertTrue(donateAsk(null).endsWith("absolutely anything helps."))
     }
+
+    @Test
+    fun thePhoneGivesTheSameAddressesAndLinksAsTheTv() {
+        val phone = java.io.File("../../../companion/src/lib/giving.ts").readText()
+        for (gift in Gifts) assertTrue("the phone has no ${gift.name} as the TV has it", phone.contains("'${gift.code}'"))
+        for (link in AboutLinks) assertTrue("the phone has no ${link.name}", phone.contains("'${link.code}'"))
+        // And nothing more: every address the phone holds is one of the TV's.
+        val known = (Gifts + AboutLinks).map { it.code }.toSet()
+        val held = Regex("href: '([^']+)'").findAll(phone).map { it.groupValues[1] }.toList()
+        assertEquals(known.size, held.size)
+        assertTrue(held.all { it in known })
+        // A coin's written address is the one in its link.
+        val coins = Regex("href: '[a-z]+:([a-z0-9]+)', address: '([a-z0-9]+)'").findAll(phone).toList()
+        // Every way to give but PayPal is a coin.
+        assertEquals(Gifts.size - 1, coins.size)
+        for (m in coins) assertEquals(m.groupValues[1], m.groupValues[2])
+    }
 }

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { api, type Device, type Diagnostics } from '../lib/api';
   import Confirm from '../lib/Confirm.svelte';
-  import { act, app, done, quiet, unpair } from '../lib/state.svelte';
+  import { aboutLinks, coins, copyText, paypal, spaced, type Coin } from '../lib/giving';
+  import { act, app, done, quiet, toast, unpair } from '../lib/state.svelte';
   import { ago, span } from '../lib/words';
 
   let diag = $state<Diagnostics | null>(null);
@@ -45,6 +46,9 @@
     const mine = list?.find((d) => d.current);
     if (mine) await forget(mine);
     else if (list) unpair(null);
+  }
+  async function copy(coin: Coin) {
+    toast((await copyText(coin.address)) ? `${coin.name} address copied` : `Couldn't copy it. Press and hold the address to copy it.`);
   }
   function bytes(n: number) {
     return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
@@ -113,8 +117,43 @@
   </section>
 
   <section class="section">
+    <div class="section-head"><h3>Support Lounge</h3></div>
+    <div class="card give">
+      <p class="pitch">No adverts. No tracking. No price.</p>
+      <p class="only">This is the one thing Lounge asks for.</p>
+      <p>If it has earned its place on your TV, give what it has been worth to you. Even the price of a coffee keeps it going, and absolutely anything helps.</p>
+      <a class="btn primary" href={paypal.href} target="_blank" rel="noopener">Give with PayPal</a>
+      <p class="caption">You choose the amount. All of it goes straight to its maker, and Lounge stays just the same whether you give or not.</p>
+    </div>
+    <div class="list">
+      {#each coins as coin (coin.name)}
+        <div class="card coin">
+          <div class="coin-head">
+            <span class="title">{coin.name}</span>
+            <button class="btn small" onclick={() => copy(coin)}>Copy address</button>
+          </div>
+          <p class="address">{spaced(coin.address)}</p>
+          <p class="caption">Send only {coin.name} to this address. <a href={coin.href}>Open it in a wallet</a></p>
+        </div>
+      {/each}
+    </div>
+  </section>
+
+  <section class="section">
     <div class="section-head"><h3>About</h3></div>
-    <p class="caption">Lounge {app.state?.device.version ?? ''} on {app.state?.device.model ?? 'this TV'}. Everything on this page goes between this phone and the TV over your own network.</p>
+    <div class="card about">
+      <div class="lockup"><img src="/mark.png" alt="" width="66" height="36" /><span class="name">Lounge</span></div>
+      <p>A home screen for your TV, laid out around what you're watching. Free and open source under the MIT licence.</p>
+      <p class="caption">Lounge {app.state?.device.version ?? ''} on {app.state?.device.model ?? 'this TV'}. Everything these pages show goes between this phone and the TV over your own network. The links below and the ways to give open on the internet.</p>
+    </div>
+    <div class="list">
+      {#each aboutLinks as link (link.href)}
+        <a class="list-row" href={link.href} target="_blank" rel="noopener">
+          <span class="grow"><span class="title">{link.name}</span><span class="caption">{link.shown}</span></span>
+        </a>
+      {/each}
+    </div>
+    <div class="maker"><img src="/maker.png" alt="" width="32" height="32" /><span><span class="caption">Made by</span><span class="title">Gingerbreadfork</span></span></div>
     <Confirm quiet label="Forget this phone" confirm="Yes, forget this phone" onconfirm={forgetThisPhone} />
   </section>
 </main>
@@ -124,4 +163,19 @@
   .diag { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
   .kv { display: flex; flex-direction: column; gap: 2px; }
   .mono { color: var(--limelight); }
+  .give, .about, .coin { display: flex; flex-direction: column; gap: 10px; }
+  .give .btn { align-self: flex-start; }
+  .pitch { font-family: var(--headline); font-size: 22px; font-weight: 600; line-height: 1.2; }
+  .only { color: var(--houselight); font-weight: 600; }
+  .coin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .coin-head .title, .maker .title { font-weight: 600; font-size: 16px; }
+  .btn.small { min-height: 36px; padding: 0 14px; font-size: 14px; background: var(--curtain-edge); }
+  /* The address is one thing to copy: a hold on it selects all of it. */
+  .address { font-variant-numeric: tabular-nums; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
+  .coin a { color: var(--limelight); text-decoration: underline; }
+  .lockup { display: flex; align-items: flex-end; gap: 12px; }
+  .lockup .name { font-family: var(--display); font-size: 30px; font-weight: 650; line-height: 1; }
+  .list-row .grow { display: flex; flex-direction: column; gap: 2px; }
+  .maker { display: flex; align-items: center; gap: 12px; }
+  .maker > span { display: flex; flex-direction: column; }
 </style>

@@ -200,7 +200,8 @@ the TV shows a fresh one as soon as it is used.
 - **More** backs up your layout, your plugins' settings and the TV's own settings, such as the
   theme, the background and whether notifications show, to one file and restores it, asking first
   before a restore replaces anything. Passwords and sign-ins stay out of the file. It also lists
-  the paired phones with when each was last seen, and shows the TV's diagnostics.
+  the paired phones with when each was last seen, shows the TV's diagnostics, and has the ways
+  to support Lounge and the links to this repository a tap away.
 
 ## Plugins
 
