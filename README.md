@@ -76,8 +76,8 @@ Your artwork or nineteen abstract scenes, which can also play behind the home sc
 </td>
 <td width="33%" valign="top">
 <img src="docs/icons/plugin.svg" width="28" height="28" alt=""><br>
-<b>Twenty-six plugins</b><br>
-Jellyfin, Plex, Kodi, Stremio, IPTV, Trakt, Twitch and more. Each is sandboxed WebAssembly in a signed bundle.
+<b>Twenty-seven plugins</b><br>
+Jellyfin, Plex, Kodi, Stremio, IPTV, Trakt, Twitch, Home Assistant and more. Each is sandboxed WebAssembly in a signed bundle.
 </td>
 </tr>
 </table>
@@ -200,10 +200,10 @@ rows of its own.
 
 The TV pins each publisher's key when you install a plugin and refuses an update signed by
 anyone else. Plugins built into the APK are vouched for by the APK itself. Any language that
-targets core WebAssembly will do: the interface is eight imports and six exports with JSON in
+targets core WebAssembly will do: the interface is eight imports and seven exports with JSON in
 between.
 
-Twenty-six ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
+Twenty-seven ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
 use from the phone or the TV's settings. One that needs a sign-in shows a code and a QR code on
 its page, and carries on by itself once you have entered the code on your phone. If an app such as Plex or Jellyfin is on the TV and its
 plugin is off, the home offers to set it up until you do or dismiss the offer.
@@ -233,6 +233,7 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | Internet Archive | Free films, cartoons and television from archive.org, with search. |
 | Immich photos | A shared Immich album as the screensaver. |
 | Art mode | Public-domain paintings from the Met and the Cleveland Museum of Art as the screensaver. |
+| Home Assistant | The lights, scenes, blinds, heating, fans, speakers, locks and cameras of your home. The room the TV is in has a row of its own, where OK switches a thing and its tile says what it did within a second. Holding OK opens a panel to dim a lamp, change its colour, set a temperature or reach everything in a room, and anything hard to take back, such as unlocking a door, asks first. Cameras open full screen. Sign in on your phone or paste an access token. |
 | Weather | The temperature and sky now and each day's high for the week ahead in a town you name, as a row of small tiles to read. Celsius or Fahrenheit. From Open-Meteo, with no account or key. |
 
 Lounge has no player of its own, so a plugin that plays a stream hands it to a player app on
@@ -240,7 +241,7 @@ the TV, such as VLC. Sound, like a radio station, a podcast or an audiobook, is 
 players first and to a video player on a TV that has none. Headers a stream needs go with it,
 though whether they are sent is up to the player: the ones some TVs come with ignore them.
 
-A twenty-seventh, **Sample library**, lives in the repository but not the APK: eighteen
+A twenty-eighth, **Sample library**, lives in the repository but not the APK: eighteen
 public-domain films with their posters, so you can see Lounge with something on it. The pictures
 in this file show a made-up horror library instead; every title, poster and name in them is
 invented.

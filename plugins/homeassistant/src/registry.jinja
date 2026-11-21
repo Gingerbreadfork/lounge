@@ -1,0 +1,26 @@
+{#- Rooms and what is in them. `dom` matches the ids of the kinds to list, and `label` is the label to keep to, or empty. -#}
+{%- set ns = namespace(areas=[], hidden=[], label=[], phones=[]) -%}
+{%- for a in areas() -%}
+  {%- set g = namespace(d=[]) -%}
+  {%- for d in area_devices(a) -%}
+    {%- set es = device_entities(d) | select('match', dom) | list -%}
+    {%- if es | count > 1 -%}{%- set g.d = g.d + [es] -%}{%- endif -%}
+  {%- endfor -%}
+  {%- set ns.areas = ns.areas + [{'id': a, 'name': area_name(a), 'e': area_entities(a) | select('match', dom) | list, 'd': g.d}] -%}
+{%- endfor -%}
+{%- if is_hidden_entity is defined -%}
+  {%- set ns.hidden = states | map(attribute='entity_id') | select('match', dom) | select('is_hidden_entity') | list -%}
+{%- endif -%}
+{%- if label and label_entities is defined -%}
+  {%- set ns.label = label_entities(label) | list -%}
+  {%- for d in label_devices(label) -%}{%- set ns.label = ns.label + (device_entities(d) | list) -%}{%- endfor -%}
+  {%- for a in label_areas(label) -%}{%- set ns.label = ns.label + (area_entities(a) | list) -%}{%- endfor -%}
+{%- endif -%}
+{%- if integration_entities is defined -%}
+  {%- set ns.phones = integration_entities('mobile_app') | select('match', 'sensor[.]') | list -%}
+{%- endif -%}
+{{ {'areas': ns.areas, 'hidden': ns.hidden,
+    'labels': (label_entities is defined),
+    'label_found': ((label_id(label) is not none) if (label and label_id is defined) else false),
+    'label': ns.label | select('match', dom) | unique | list,
+    'phones': ns.phones} | tojson }}
