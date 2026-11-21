@@ -115,7 +115,7 @@ entries Lounge is allowed to read, so turn on TV listings in Settings.
 [TV listings troubleshooting](docs/TV_LISTINGS.md) shows how to check what an app publishes.
 
 **The hold-OK menu.** Hold OK on any tile to pin it to the Stage, hide it, or hide its whole
-row. An app can also be pinned to the front of Your apps and moved, and gets app info, the store
+row. A light or anything else you switch offers Adjust first, which opens its panel. An app can also be pinned to the front of Your apps and moved, and gets app info, the store
 page and uninstall. On something in Continue watching you can hide everything from its app,
 which keeps that app out of the row and off the Stage until you show it again in Settings, Rows.
 
@@ -129,6 +129,12 @@ schedule out by channel and time.
 **The TV itself.** HDMI inputs carry the names their devices announce over CEC and show whether
 anything is plugged in. On a streamer, a TV controls card turns the TV on, switches input, sends
 sound to a soundbar, changes the volume or turns everything off.
+
+**The room.** With the Home Assistant plugin, the room the TV is in has a row of its own. OK
+switches a lamp, a blind or a scene, and the tile says what it now is, lit in the lamp's own
+colour. Holding OK opens a panel beside the home screen to dim it, change its colour, set the
+heating or reach everything else in the room, and unlocking a door asks before it does it. A
+camera opens full screen.
 
 **Now playing.** Music or a podcast playing in the background gets a chip in the top bar and a
 card with play, pause and skip.
@@ -174,7 +180,8 @@ the TV shows a fresh one as soon as it is used.
 </p>
 
 - **Home** shows what's on: it mirrors the TV's home screen. Tap a tile to open it on the TV, or
-  hold it for the same menu as the remote's. With another app in front, Android lets Lounge open
+  hold it for the same menu as the remote's. A tile that switches something, such as a light,
+  switches it from the phone too and shows its new state. With another app in front, Android lets Lounge open
   things only as the TV's home screen; where it is not, the phone says so and asks you to open
   Lounge on the TV first.
 - **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into Lounge's
@@ -196,7 +203,7 @@ A plugin is a WebAssembly module in a signed `.lgp` bundle. It runs inside the c
 budget and a memory cap, and it can't touch Android, the file system, sockets or other plugins.
 All it can do is fetch from the hosts its manifest names, keep a small private store, read its
 settings and log. What it publishes becomes tiles, Stage spotlights, channels in the guide or
-rows of its own.
+rows of its own, and a tile can be a control that says its state, with a panel to adjust it.
 
 The TV pins each publisher's key when you install a plugin and refuses an update signed by
 anyone else. Plugins built into the APK are vouched for by the APK itself. Any language that
@@ -204,8 +211,9 @@ targets core WebAssembly will do: the interface is eight imports and seven expor
 between.
 
 Twenty-seven ship in the APK, written against the same SDK as anyone else's. Turn on the ones you
-use from the phone or the TV's settings. One that needs a sign-in shows a code and a QR code on
-its page, and carries on by itself once you have entered the code on your phone. If an app such as Plex or Jellyfin is on the TV and its
+use from the phone or the TV's settings. One that needs a sign-in shows a QR code on its page, with a
+code to enter where the service asks for one, and carries on by itself once you have signed in on
+your phone. If an app such as Plex or Jellyfin is on the TV and its
 plugin is off, the home offers to set it up until you do or dismiss the offer.
 
 | Plugin | What it adds |
@@ -333,9 +341,9 @@ ranking into the Stage and the rows, a SQLite store, and an artwork pipeline tha
 picture once and writes every size the screen needs. Plugins run in
 [wasmi](https://github.com/wasmi-labs/wasmi) inside that core. The companion is an
 [axum](https://github.com/tokio-rs/axum) server in the same process, with the Svelte 5 app
-embedded at build time, about 140 KB, or 48 KB gzipped.
+embedded at build time, about 145 KB, or 50 KB gzipped.
 
-The APK is 24 MB. On a Google TV Streamer the release build is on screen in about a second
+The APK is 25 MB. On a Google TV Streamer the release build is on screen in about a second
 from a cold start, sits a little over 100 MB, and keeps the main thread under 5 ms on nine
 frames out of ten while you move around. A TCL television with a Mali GPU runs the same build
 at about 75 MB and is bound by its GPU rather than its CPU. Both are measured with the scripts
@@ -402,7 +410,7 @@ plugins/     Rust workspace: the plugin SDK, the built-in plugins, lgp-tool
 companion/   Svelte 5 phone app, embedded into the core at build time
 design/      fonts, the mark's sources and renderer, the sound renderer
 docs/        the pictures in this file, how to release, and TV listings troubleshooting
-tools/       device drives, frame timing, the baseline profile, builds, the README's icons
+tools/       device drives, frame timing, the baseline profile, builds, a test Home Assistant, the README's icons
 workdir/     ignored by git: your own notes, logs and measurements
 ```
 
