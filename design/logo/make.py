@@ -4,9 +4,10 @@
 sofa.png           the plush coral sofa on transparency
 sofa-gradient.png  the same sofa on its indigo-to-orange gradient; only the gradient is used,
                    refitted as a smooth surface so it can be drawn at any aspect without the sofa
+gingerbreadfork.png  the maker's mark, white on black at 64 px
 
-Writes the adaptive launcher icon layers, the Android TV banner, the top-bar mark, the
-companion web icons and design/icon-512.png. Usage: python3 design/logo/make.py
+Writes the adaptive launcher icon layers, the Android TV banner, the top-bar mark, the About
+page's sofa and maker's mark, the companion web icons and design/icon-512.png. Usage: python3 design/logo/make.py
 """
 import os
 
@@ -124,6 +125,18 @@ def top_bar_mark(pre):
         save(sofa_at(pre, round(56 * DENSITIES[name])), DESIGN_RES, f"drawable-{name}", "mark_sofa.png")
 
 
+def about_page(pre):
+    """The sofa for the About page, drawn 168 dp wide, and the maker's mark beside it."""
+    save(sofa_at(pre, 672), DESIGN_RES, "drawable-nodpi", "mark_sofa_large.png")
+    # The maker's mark is white on black. Its brightness becomes its coverage, so it sits on
+    # any wall, and its pixels are kept as they are: it is drawn at its own size.
+    mark = np.array(Image.open(os.path.join(HERE, "gingerbreadfork.png")).convert("RGB")).astype(np.float64).mean(axis=2)
+    out = np.zeros(mark.shape + (4,), dtype=np.uint8)
+    out[..., :3] = 255
+    out[..., 3] = np.clip(mark, 0, 255).astype(np.uint8)
+    save(Image.fromarray(out, "RGBA"), DESIGN_RES, "drawable-nodpi", "maker_gingerbreadfork.png")
+
+
 def web_icons(pre, gradient):
     """Full-bleed maskable icons: the sofa inside the central 80 %."""
     for size, path in ((512, (COMPANION, "icon-512.png")), (192, (COMPANION, "icon-192.png")), (180, (COMPANION, "apple-touch-icon.png")), (512, (ROOT, "design", "icon-512.png"))):
@@ -138,6 +151,7 @@ def main():
     launcher_icon(pre, gradient)
     banner(pre, gradient)
     top_bar_mark(pre)
+    about_page(pre)
     web_icons(pre, gradient)
     save(sofa_at(pre, 264), COMPANION, "mark.png")
     save(sofa_at(pre, 480), ROOT, "docs", "logo.png")

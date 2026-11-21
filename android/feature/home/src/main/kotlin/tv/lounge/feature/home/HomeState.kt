@@ -53,6 +53,10 @@ sealed interface Overlay {
     /** The screensaver drawn in-app, until any key. */
     data object AmbientPreview : Overlay
     data object Onboarding : Overlay
+    /** What Lounge is, where its code lives and who made it. */
+    data object About : Overlay
+    /** The ways to give to Lounge's maker. */
+    data object Donate : Overlay
 }
 
 /**

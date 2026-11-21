@@ -441,6 +441,14 @@ pub struct Tile {
     pub more: Option<String>,
 }
 
+/// A QR code for the screen to draw itself: `size` modules a side, and row by row whether
+/// each is dark.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct QrCode {
+    pub size: u32,
+    pub dark: Vec<bool>,
+}
+
 /// What a press did, when it worked.
 #[derive(Clone, Debug, Default, PartialEq, uniffi::Record)]
 pub struct Performed {
@@ -1110,6 +1118,13 @@ impl Core {
     pub fn perform(&self, action: String) -> Result<Performed, CoreError> {
         self.count();
         engine::perform(&self.inner, &action)
+    }
+
+    /// The QR code that leads to `text`, such as an address to open on a phone.
+    pub fn qr_code(&self, text: String) -> Result<QrCode, CoreError> {
+        self.count();
+        let (size, dark) = lounge_companion::qr_modules(&text).map_err(|e| CoreError::Companion { detail: e.to_string() })?;
+        Ok(QrCode { size, dark })
     }
 
     /// The sheet a plugin describes under `id`. Blocks while the plugin answers.

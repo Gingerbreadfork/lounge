@@ -155,6 +155,11 @@ behind the home screen, dimmed so the tiles stay the brightest thing in the room
 **Setup.** Five screens on first run: the look, what to allow, making it the home screen, pairing
 a phone, done. All of it is in Settings afterwards.
 
+**About.** A row near the end of Settings says what Lounge is and which version this is, with a
+code to scan that leads here, to the page for reporting a problem, to what's new, or to its maker
+on X. The row after it, Support Lounge, has codes for giving with Bitcoin, DigiByte, Bitcoin Cash
+or PayPal. Absolutely anything helps.
+
 <p align="center">
   <img src="docs/screenshots/rows.png" width="49%" alt="The Stage lowered to a band of its picture's own light, with the rows below it: Just added, then a row of posters">
   <img src="docs/screenshots/tile-menu.png" width="49%" alt="The long-press menu beside a poster, with Pin to Stage and Hide, and the room dimmed around it">

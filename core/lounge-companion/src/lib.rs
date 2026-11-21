@@ -260,6 +260,12 @@ fn private_ipv4s() -> Vec<Ipv4Addr> {
     Vec::new()
 }
 
+/// The QR code of `text` as its side in modules and, row by row, whether each module is dark.
+pub fn qr_modules(text: &str) -> Result<(u32, Vec<bool>), CompanionError> {
+    let code = qrcode::QrCode::new(text.as_bytes()).map_err(|e| CompanionError::Other(e.to_string()))?;
+    Ok((code.width() as u32, code.to_colors().iter().map(|c| *c == qrcode::Color::Dark).collect()))
+}
+
 /// Render a QR code of `text` to a PNG file; black modules on the house's light.
 pub fn qr_png(text: &str, out: &Path, module_px: u32) -> Result<(), CompanionError> {
     let code = qrcode::QrCode::new(text.as_bytes()).map_err(|e| CompanionError::Other(e.to_string()))?;
@@ -288,6 +294,19 @@ pub fn qr_png(text: &str, out: &Path, module_px: u32) -> Result<(), CompanionErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_qr_code_comes_as_a_square_of_modules_with_its_three_eyes() {
+        let (size, dark) = qr_modules("https://github.com/Gingerbreadfork/lounge").unwrap();
+        assert!(size >= 21 && (size - 21) % 4 == 0, "{size}");
+        assert_eq!(dark.len(), (size * size) as usize);
+        let at = |x: u32, y: u32| dark[(y * size + x) as usize];
+        // Each eye is a dark ring round a light one round a dark centre, at three of the corners.
+        for (ex, ey) in [(0, 0), (size - 7, 0), (0, size - 7)] {
+            assert!(at(ex, ey) && at(ex + 6, ey + 6) && !at(ex + 1, ey + 1) && at(ex + 3, ey + 3), "the eye at {ex},{ey}");
+        }
+        assert!(qr_modules(&"x".repeat(8000)).is_err());
+    }
 
     #[test]
     fn only_written_sentences_reach_the_phone() {

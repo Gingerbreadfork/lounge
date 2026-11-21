@@ -388,6 +388,8 @@ fun QuickSettingsSheet(
     /** The screensaver's name as the Screensaver sheet gives it, read again on return to Lounge. */
     screensaver: () -> String,
     onSetupAgain: () -> Unit,
+    onAbout: () -> Unit,
+    onDonate: () -> Unit,
     onUpdates: () -> Unit,
     updateStatus: String,
     firstFocus: FocusRequester,
@@ -411,7 +413,7 @@ fun QuickSettingsSheet(
     var saverName by remember { mutableStateOf(screensaver()) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { saverName = screensaver() }
     // Back from one of its pages puts focus on the row that opened it.
-    val pages = listOf(Overlay.Rows, Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding)
+    val pages = listOf(Overlay.Rows, Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate)
     val returnTo = cameFrom?.takeIf { it in pages }
     fun focusFor(page: Overlay?) = firstFocus.takeIf { page == returnTo }
 
@@ -597,6 +599,8 @@ fun QuickSettingsSheet(
             }
         }
         SheetRow(icon = LoungeIcons.Refresh, title = "Run the setup steps again", onClick = onSetupAgain, focusRequester = focusFor(Overlay.Onboarding))
+        SheetRow(icon = SettingsGlyphs.Sofa, title = "About Lounge", subtitle = "What it is, where its code lives and who made it", onClick = onAbout, focusRequester = focusFor(Overlay.About))
+        SheetRow(icon = SettingsGlyphs.Heart, title = "Support Lounge", subtitle = "Ways to give. Anything helps", onClick = onDonate, focusRequester = focusFor(Overlay.Donate))
     }
     SheetFootnote("Left and Right change a value. Back closes.")
 }

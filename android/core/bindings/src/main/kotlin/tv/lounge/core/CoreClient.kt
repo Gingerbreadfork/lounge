@@ -42,6 +42,9 @@ class CoreClient(val core: Core) : SnapshotListener {
     /** Does what a tile's action says; a press with nothing to see may come back with words to show. */
     fun perform(action: String): Result<Performed> = runCatching { core.perform(action) }
 
+    /** The QR code that leads to [text], as modules for the screen to draw. */
+    fun qrCode(text: String): Result<QrCode> = runCatching { core.qrCode(text) }
+
     /** The sheet a plugin describes under [id]. Blocks while the plugin answers. */
     fun pluginSheet(plugin: String, id: String): Result<PluginSheet> = runCatching { core.pluginSheet(plugin, id) }
 

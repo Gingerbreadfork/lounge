@@ -181,7 +181,7 @@ private fun Mark() {
 }
 
 /** Where the sofa's seat meets its legs, as a fraction of the picture's height. */
-private const val SEAT = 0.85f
+internal const val SEAT = 0.85f
 
 /**
  * A top-bar button: glyph and label. Focus is a `curtainEdge` pill behind it with the tiles' rim,

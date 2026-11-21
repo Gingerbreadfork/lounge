@@ -327,6 +327,18 @@ fun HomeScreen(
         scope.launch { if (back == null || !back.requestWhenReady(6)) focusHome() }
     }
 
+    /** Back from a full page that a sheet or another page opened: to that one, or home when there was none. */
+    fun backFrom(page: Overlay) {
+        val previous = state.sheetTrail.removeLastOrNull()
+        if (previous != null) {
+            close()
+            state.sheetLeft = page
+            state.overlay = previous
+        } else {
+            closeOverlay()
+        }
+    }
+
     /** One sheet opening another: Back from [next] returns to the sheet that opened it. */
     fun openSheet(next: Overlay) {
         val current = state.overlay
@@ -815,6 +827,11 @@ fun HomeScreen(
                         open = { next ->
                             uiSounds?.open()
                             if (next == Overlay.Onboarding) state.setupFromSettings = true
+                            // Back from one of the two full pages returns to the sheet that opened it.
+                            if (next == Overlay.About || next == Overlay.Donate) {
+                                state.sheetTrail += state.overlay
+                                state.sheetLeft = null
+                            }
                             openSheet(next)
                         },
                         forget = { gone -> state.sheetTrail.removeAll { it == gone } },
@@ -970,6 +987,38 @@ fun HomeScreen(
                         scope.launch { ov.returnFocus.requestWhenReady() }
                     }
                 },
+            )
+        }
+
+        Presence(if (overlay == Overlay.About) Unit else null) { _, visibleState ->
+            AboutScreen(
+                qr = { address -> core.qrCode(address).getOrNull() },
+                version = updates.currentVersion,
+                facts = {
+                    listOf(
+                        AboutFact(core.plugins().size, "plugin", "plugins"),
+                        AboutFact(ShaderStyles.all(context, core).size, "scene", "scenes"),
+                        AboutFact(Prefs.Theme.entries.size, "theme", "themes"),
+                    )
+                },
+                visibleState = visibleState,
+                fromDonate = state.sheetLeft == Overlay.Donate,
+                onDonate = {
+                    uiSounds?.open()
+                    state.sheetTrail += Overlay.About
+                    state.sheetLeft = null
+                    state.overlay = Overlay.Donate
+                },
+                onClose = { backFrom(Overlay.About) },
+            )
+        }
+
+        Presence(if (overlay == Overlay.Donate) Unit else null) { _, visibleState ->
+            DonateScreen(
+                qr = { text -> core.qrCode(text).getOrNull() },
+                installedMs = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).firstInstallTime }.getOrNull() },
+                visibleState = visibleState,
+                onClose = { backFrom(Overlay.Donate) },
             )
         }
 
@@ -1206,6 +1255,8 @@ private fun SheetContent(
                 powerStatus = powerStatus,
                 onAmbient = { open(Overlay.Ambient) },
                 onSetupAgain = { open(Overlay.Onboarding) },
+                onAbout = { open(Overlay.About) },
+                onDonate = { open(Overlay.Donate) },
                 screensaver = { screensaverName(power, context) },
                 onUpdates = { open(Overlay.Updates) },
                 updateStatus = updateStatusWord(updateState, updateAuto),

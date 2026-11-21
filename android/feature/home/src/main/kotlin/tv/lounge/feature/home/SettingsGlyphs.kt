@@ -33,6 +33,30 @@ internal object SettingsGlyphs {
         path(fill = SolidColor(Color.White), stroke = null, pathBuilder = d)
     }
 
+    /** A heart: giving to the project. */
+    val Heart: ImageVector by lazy {
+        icon("heart") {
+            stroke {
+                moveTo(14f, 23.5f); curveTo(14f, 23.5f, 4.5f, 17.5f, 4.5f, 10.8f); arcTo(5.3f, 5.3f, 0f, false, true, 14f, 7.6f)
+                arcTo(5.3f, 5.3f, 0f, false, true, 23.5f, 10.8f); curveTo(23.5f, 17.5f, 14f, 23.5f, 14f, 23.5f); close()
+            }
+        }
+    }
+
+    /** A sofa: about Lounge itself. */
+    val Sofa: ImageVector by lazy {
+        icon("sofa") {
+            stroke { moveTo(8f, 12.5f); lineTo(8f, 9.5f); arcTo(3f, 3f, 0f, false, true, 11f, 6.5f); lineTo(17f, 6.5f); arcTo(3f, 3f, 0f, false, true, 20f, 9.5f); lineTo(20f, 12.5f) }
+            stroke {
+                moveTo(5.5f, 12f); arcTo(2.5f, 2.5f, 0f, false, true, 8f, 14.5f); lineTo(8f, 16f); lineTo(20f, 16f); lineTo(20f, 14.5f)
+                arcTo(2.5f, 2.5f, 0f, false, true, 25f, 14.5f); lineTo(25f, 19f); arcTo(2f, 2f, 0f, false, true, 23f, 21f); lineTo(5f, 21f)
+                arcTo(2f, 2f, 0f, false, true, 3f, 19f); lineTo(3f, 14.5f); arcTo(2.5f, 2.5f, 0f, false, true, 5.5f, 12f); close()
+            }
+            stroke { moveTo(7f, 21f); lineTo(7f, 23.5f) }
+            stroke { moveTo(21f, 21f); lineTo(21f, 23.5f) }
+        }
+    }
+
     /** An arrow leaving a frame: goes to the app. */
     val Open: ImageVector by lazy {
         icon("open") {
