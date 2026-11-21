@@ -166,7 +166,10 @@ fun OnboardingScreen(
                                     1 -> StepAccess(core, choiceFocus[1], say, onPowerSetup = { step = 2 })
                                     2 -> StepPower(power, context, choiceFocus[2])
                                     3 -> StepPhone(core, prefs, uiPrefs, choiceFocus[3])
-                                    else -> StepDone()
+                                    else -> StepDone(
+                                        showGuide = (snapshot.rows + snapshot.hiddenRows).any { it.id == "live" },
+                                        showTvControls = power.hasTvControls,
+                                    )
                                 }
                             }
                         }
@@ -283,10 +286,11 @@ private fun StepLook(prefs: Prefs, uiPrefs: Prefs.UiPrefs, choiceFocus: FocusReq
 
 /**
  * The right-hand panel on the first step: a 560 × 315 miniature of the home screen in the focused
- * theme, crossfading over `curtain` as focus moves.
+ * theme, crossfading over `curtain` as focus moves. It is the Stage at that scale (DESIGN.md
+ * §5.1): the playbill's lines on the left, the picture on the right, and the strip of six below.
  */
 @Composable
-private fun ThemePreview(theme: Prefs.Theme, snapshot: HomeSnapshot) {
+internal fun ThemePreview(theme: Prefs.Theme, snapshot: HomeSnapshot) {
     val motion = LoungeTheme.motion
     val palette = theme.palette()
     val velvet = androidx.compose.animation.animateColorAsState(palette.velvet, motion.curtain(), label = "previewVelvet")
@@ -299,32 +303,36 @@ private fun ThemePreview(theme: Prefs.Theme, snapshot: HomeSnapshot) {
             .clip(RoundedCornerShape(20.dp))
             .drawBehind {
                 drawRect(velvet.value)
-                drawSpill(SpillMask.soft, Offset(size.width * 0.3f, size.height * 0.48f), size.width * 0.42f, size.height * 0.5f, palette.houselight, 0.22f * palette.spillScale)
+                // The picture's light falls leftward onto the words, as on the Stage.
+                drawSpill(SpillMask.soft, Offset(size.width * 0.42f, size.height * 0.42f), size.width * 0.42f, size.height * 0.5f, palette.houselight, 0.22f * palette.spillScale)
             }
             .border(1.dp, edge.value, RoundedCornerShape(20.dp)),
     ) {
-        Text("9:41", style = LoungeTheme.typography.title, color = palette.limelight, modifier = Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 28.dp))
+        Box(Modifier.offset(28.dp, 21.dp).size(46.dp, 8.dp).clip(RoundedCornerShape(4.dp)).background(palette.limelight))
+        Text("9:41", style = LoungeTheme.typography.caption, color = palette.limelight, modifier = Modifier.align(Alignment.TopEnd).padding(top = 15.dp, end = 28.dp))
+        Column(Modifier.offset(28.dp, 122.dp)) {
+            Box(Modifier.width(72.dp).height(6.dp).clip(RoundedCornerShape(3.dp)).background(palette.dust))
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.width(140.dp).height(12.dp).clip(RoundedCornerShape(6.dp)).background(palette.limelight))
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.width(96.dp).height(8.dp).clip(RoundedCornerShape(4.dp)).background(palette.dust))
+            Spacer(Modifier.height(16.dp))
+            Box(Modifier.width(72.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).background(palette.houselight))
+        }
         Box(
             Modifier
-                .offset(32.dp, 56.dp)
-                .size(300.dp, 170.dp)
-                .lightGlow(palette.houselight, 0.26f * palette.spillScale, cornerRadius = 10.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .offset(205.dp, 40.dp)
+                .size(327.dp, 184.dp)
+                .lightGlow(palette.houselight, 0.26f * palette.spillScale, cornerRadius = 6.dp)
+                .clip(RoundedCornerShape(6.dp))
                 .background(curtain.value),
         ) {
             art.firstOrNull()?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         }
-        Column(Modifier.offset(352.dp, 110.dp)) {
-            Box(Modifier.width(140.dp).height(10.dp).clip(RoundedCornerShape(5.dp)).background(palette.limelight))
-            Spacer(Modifier.height(10.dp))
-            Box(Modifier.width(96.dp).height(8.dp).clip(RoundedCornerShape(4.dp)).background(palette.dust))
-            Spacer(Modifier.height(18.dp))
-            Box(Modifier.width(72.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).background(palette.houselight))
-        }
-        Row(Modifier.offset(32.dp, 246.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            repeat(5) { i ->
-                Box(Modifier.size(80.dp, 45.dp).clip(RoundedCornerShape(5.dp)).background(curtain.value)) {
-                    art.getOrNull(i + 1)?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+        Row(Modifier.offset(28.dp, 240.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            repeat(6) { i ->
+                Box(Modifier.size(68.dp, 38.dp).clip(RoundedCornerShape(4.dp)).background(curtain.value)) {
+                    art.getOrNull(i)?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                 }
             }
         }
@@ -498,13 +506,20 @@ private fun StepPhone(core: CoreClient, prefs: Prefs, uiPrefs: Prefs.UiPrefs, ch
     Text("Everything stays on your home network. To forget a phone later, in Settings open Phone companion.", style = LoungeTheme.typography.caption, color = colors.dust)
 }
 
+/** What Up from the Stage reaches on this TV: the top bar's buttons as it has them, in their order. */
+internal fun topBarWords(showGuide: Boolean, showTvControls: Boolean): String {
+    val buttons = listOfNotNull("Search", "the TV guide".takeIf { showGuide }, "TV controls".takeIf { showTvControls }, "Settings")
+    return "Up from the Stage reaches ${buttons.dropLast(1).joinToString(", ")} and ${buttons.last()}."
+}
+
 @Composable
-private fun StepDone() {
+private fun StepDone(showGuide: Boolean, showTvControls: Boolean) {
     val colors = LoungeTheme.colors
-    Heading("That's the house", "Press Home any time to come back to the Stage. Long-press a tile for its menu, Settings has the essentials, and the rest is on your phone.")
+    Heading("That's the house", "Press Home any time to come back to the Stage. Hold OK on a tile for its menu, Settings has the essentials, and the rest is on your phone.")
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Up from the Stage reaches Search, the TV guide and Settings.", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text(topBarWords(showGuide, showTvControls), style = LoungeTheme.typography.meta, color = colors.dust)
         Text("Back always goes up one level; from the rows it returns to the Stage.", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text("Plugins bring in your media server, live TV and the lights at home. In Settings, open Plugins.", style = LoungeTheme.typography.meta, color = colors.dust)
     }
 }
 

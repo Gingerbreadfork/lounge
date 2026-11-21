@@ -27,6 +27,14 @@ class FocusRulesTest {
     }
 
     @Test
+    fun theLastSetupStepNamesTheTopBarThisTvHas() {
+        assertEquals("Up from the Stage reaches Search and Settings.", topBarWords(showGuide = false, showTvControls = false))
+        assertEquals("Up from the Stage reaches Search, TV controls and Settings.", topBarWords(showGuide = false, showTvControls = true))
+        assertEquals("Up from the Stage reaches Search, the TV guide and Settings.", topBarWords(showGuide = true, showTvControls = false))
+        assertEquals("Up from the Stage reaches Search, the TV guide, TV controls and Settings.", topBarWords(showGuide = true, showTvControls = true))
+    }
+
+    @Test
     fun backFromEachRegion() {
         assertEquals(HomeBack.ToStage, homeBack(FocusRegion.Rows, playbillFocused = false))
         assertEquals(HomeBack.ToStage, homeBack(FocusRegion.TopBar, playbillFocused = false))
