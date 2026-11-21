@@ -204,6 +204,7 @@ fun menuItemsFor(
     onPlay: () -> Unit,
     onDismissNotice: () -> Unit,
     onGuide: () -> Unit,
+    onAdjust: () -> Unit = {},
 ): List<MenuItem> {
     val isApp = tile.id.startsWith("app:")
     val items = mutableListOf<MenuItem>()
@@ -235,11 +236,13 @@ fun menuItemsFor(
             MenuItem(PinWords.PIN_APP, LoungeIcons.Pin, detail = PinWords.PIN_APP_DETAIL, onSelect = onPin)
         }
     }
+    // What a control's one press does not reach is a sheet away, and comes first.
+    if (tile.more != null) items += MenuItem("Adjust", LoungeIcons.Settings, onSelect = onAdjust)
     if (tile.id.startsWith("chan:")) items += MenuItem("TV guide", LoungeIcons.Guide, onSelect = onGuide)
     if (isStagePinned) {
         items += MenuItem(PinWords.UNPIN_STAGE, LoungeIcons.Pin, detail = PinWords.UNPIN_STAGE_DETAIL, onSelect = onUnpinStage)
-    } else if (tile.action.isNotEmpty()) {
-        // The Stage is for what can be opened, which a tile to read cannot.
+    } else if (tile.action.isNotEmpty() && tile.glyph == null) {
+        // The Stage is for what can be opened, which a tile to read and a control cannot.
         items += MenuItem(PinWords.PIN_STAGE, LoungeIcons.Pin, detail = PinWords.PIN_STAGE_DETAIL, onSelect = onPinStage)
     }
     items += MenuItem("Hide", LoungeIcons.Hide, detail = PinWords.HIDE_DETAIL, onSelect = onHide)

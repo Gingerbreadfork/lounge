@@ -331,7 +331,7 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
     }
     SheetFootnote(
         "It can reach ${reachText(p)}.",
-        "It refreshes every ${Words.counted(p.refreshMinutes.toLong(), "minute", "minutes")} while the TV is on.",
+        refreshWords(p.refreshMinutes, p.refreshSeconds),
         "Updates are taken only from its publisher, whose key starts ${p.publisher.take(8).chunked(4).joinToString(" ")}.",
     )
 }
@@ -601,3 +601,11 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
         setting.help?.let { Text(shortHelp(it), style = LoungeTheme.typography.caption, color = colors.dust) }
     }
 }
+
+/** How often a plugin refreshes: by the second for one that follows things at home, else by the minute. */
+internal fun refreshWords(minutes: UInt, seconds: UInt): String =
+    if (seconds > 0u) {
+        "It refreshes every ${Words.counted(seconds.toLong(), "second", "seconds")} while Lounge is on the screen."
+    } else {
+        "It refreshes every ${Words.counted(minutes.toLong(), "minute", "minutes")} while the TV is on."
+    }

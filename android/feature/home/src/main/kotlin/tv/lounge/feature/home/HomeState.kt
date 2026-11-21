@@ -10,8 +10,10 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Rect
 import tv.lounge.core.Tile
@@ -39,6 +41,10 @@ sealed interface Overlay {
     data object Guide : Overlay
     data object Plugins : Overlay
     data class PluginDetail(val id: String) : Overlay
+    /** A sheet a plugin describes: a room, a thermostat, a list to choose from. */
+    data class PluginSheet(val plugin: String, val id: String) : Overlay
+    /** A plugin's still picture, full screen and renewed about once a second. */
+    data class Live(val plugin: String, val title: String, val url: String) : Overlay
     data object Companion : Overlay
     data object Updates : Overlay
     data object PowerSetup : Overlay
@@ -48,6 +54,45 @@ sealed interface Overlay {
     data object AmbientPreview : Overlay
     data object Onboarding : Overlay
 }
+
+/**
+ * The controls pressed whose new state has not come back yet. Each sits half lit until its
+ * tile says something different or [SETTLES_MS] passes.
+ */
+@Stable
+class PendingPresses {
+    private class Was(val on: Boolean?, val subtitle: String?, val at: Long)
+
+    // One state for each tile, so a press redraws that tile's glyph and no other.
+    private val pressed = HashMap<String, MutableState<Was?>>()
+
+    private fun of(id: String): MutableState<Was?> = pressed.getOrPut(id) { mutableStateOf(null) }
+
+    /** Whether [tile] still says what it said when it was pressed. */
+    fun waiting(tile: Tile): Boolean = of(tile.id).value?.let { it.on == tile.on && it.subtitle == tile.subtitle } == true
+
+    fun pressed(tile: Tile, now: Long = System.currentTimeMillis()) {
+        if (tile.on != null) of(tile.id).value = Was(tile.on, tile.subtitle, now)
+    }
+
+    /** A press that failed changes nothing, so its tile stops waiting at once. */
+    fun forget(id: String) {
+        pressed[id]?.value = null
+    }
+
+    /** Drops every press that has waited long enough. */
+    fun expire(now: Long = System.currentTimeMillis()) {
+        for (state in pressed.values) {
+            if (state.value?.let { now - it.at >= SETTLES_MS } == true) state.value = null
+        }
+    }
+
+    companion object {
+        const val SETTLES_MS = 4_000L
+    }
+}
+
+val LocalPendingPresses = staticCompositionLocalOf { PendingPresses() }
 
 /** Where focus lives on the home screen. The Stage is expanded only while focus is in it. */
 enum class FocusRegion { TopBar, Stage, Rows }
@@ -93,6 +138,8 @@ class HomeState(private val tierA: Boolean = true) {
     val topBar = TopBarFocus()
     val topBarFocus: FocusRequester get() = topBar.search
     var playbillFocused by mutableStateOf(false)
+    /** The controls pressed and not yet heard back from. */
+    val pending = PendingPresses()
     /** A query the companion asked us to search for, until the search screen takes it. */
     var pendingSearch by mutableStateOf<String?>(null)
 
@@ -103,6 +150,9 @@ class HomeState(private val tierA: Boolean = true) {
 
     /** The sheet Back last left, so the sheet under it can focus the row that opened it. */
     var sheetLeft: Overlay? = null
+
+    /** The row focus was last on in each plugin sheet, for coming back to it; not read by composition. */
+    val pluginSheetRows = HashMap<Overlay.PluginSheet, String>()
 
     /** The place in the list of the notification last opened, for when it is gone on the way back; not read by composition. */
     var notificationIndex = 0

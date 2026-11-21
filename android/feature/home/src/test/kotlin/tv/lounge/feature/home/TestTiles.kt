@@ -16,6 +16,9 @@ internal fun testTile(
     provider: String? = null,
     hidden: Boolean = false,
     action: String = "open:$id",
+    glyph: String? = null,
+    on: Boolean? = null,
+    more: String? = null,
 ) = Tile(
     id = id,
     kind = kind,
@@ -37,6 +40,9 @@ internal fun testTile(
     providerName = null,
     hidden = hidden,
     timeLeft = null,
+    glyph = glyph,
+    on = on,
+    more = more,
 )
 
 internal fun testRow(id: String, vararg tiles: Tile, title: String = id, kind: TileKind = TileKind.LANDSCAPE) =

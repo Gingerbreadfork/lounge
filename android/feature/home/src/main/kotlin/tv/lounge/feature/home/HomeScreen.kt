@@ -28,6 +28,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -96,6 +97,9 @@ import tv.lounge.platform.UiCommand
 import kotlin.math.roundToInt
 
 private const val IDLE_AFTER_MS = 20_000L
+
+/** How long after a control is pressed in search its plugin is asked again, once the press has had time to show. */
+private const val SEARCH_AGAIN_AFTER_MS = 900L
 /** Home within this long of the last Home press keeps the strip's selection; later it starts over. */
 private const val HOME_KEEPS_PLACE_MS = 10 * 60_000L
 
@@ -238,10 +242,18 @@ fun HomeScreen(
     // What the updater says before it hands over to one of Android's screens.
     LaunchedEffect(updates) { updates.hints.collect { say(it) } }
 
+    // Counts the times search should ask the plugins again for the query it has.
+    var searchAgain by remember { mutableIntStateOf(0) }
+
     /** Core actions run off the main thread: a plugin may take a moment to answer. */
-    fun perform(action: String, title: String) {
+    fun perform(action: String, title: String, pressed: String? = null) {
         scope.launch {
-            withContext(Dispatchers.IO) { core.perform(action) }.onFailure { e -> say(friendlyError(e, title)) }
+            withContext(Dispatchers.IO) { core.perform(action) }
+                .onSuccess { done -> done.say?.let { say(it) } }
+                .onFailure { e ->
+                    pressed?.let { state.pending.forget(it) }
+                    say(friendlyError(e, title))
+                }
         }
     }
 
@@ -286,6 +298,7 @@ fun HomeScreen(
     }
 
     fun clearOverlays() {
+        state.pluginSheetRows.clear()
         state.overlay = Overlay.None
         state.opener = null
         state.sheetTrail.clear()
@@ -333,6 +346,24 @@ fun HomeScreen(
     fun perform(tile: Tile) {
         // A tile to read opens nothing, so nothing sounds.
         if (tile.action.isEmpty()) return
+        // A control answers where it sits, so it ticks like a switch and does not sound like a door.
+        if (tile.glyph != null && !tile.action.startsWith("control:")) {
+            uiSounds?.tick()
+            state.pending.pressed(tile)
+            scope.launch {
+                delay(PendingPresses.SETTLES_MS)
+                state.pending.expire()
+            }
+            // A result from a plugin's search is not on the home, so the search is made again to bring its new state.
+            if (state.overlay == Overlay.Search) {
+                scope.launch {
+                    delay(SEARCH_AGAIN_AFTER_MS)
+                    searchAgain++
+                }
+            }
+            perform(tile.action, tile.title, pressed = tile.id)
+            return
+        }
         uiSounds?.open()
         // The All apps tile opens a screen of this app's own; no need to go through the core for that.
         if (tile.action == "control:allapps") {
@@ -365,6 +396,25 @@ fun HomeScreen(
                 // From the phone: only while Lounge is in front with nothing open, or the screen would wait behind another app.
                 UiCommand.OpenAllApps -> if (state.overlay == Overlay.None && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { uiSounds?.open(); openOverlay(Overlay.AllApps) }
                 is UiCommand.OpenPlugin -> if (state.overlay == Overlay.None && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { uiSounds?.open(); openOverlay(Overlay.PluginDetail(cmd.id)) }
+                // A plugin's own screens open over the home, or over the sheet a press was made in.
+                is UiCommand.OpenPluginSheet -> if (state.overlay != Overlay.Onboarding && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                    uiSounds?.open()
+                    val next = Overlay.PluginSheet(cmd.plugin, cmd.id)
+                    if (state.overlay.isSheet()) openSheet(next) else openOverlay(next)
+                }
+                is UiCommand.OpenLive -> if (state.overlay != Overlay.Onboarding && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                    uiSounds?.open()
+                    val next = Overlay.Live(cmd.plugin, cmd.title, cmd.url)
+                    val under = state.overlay
+                    if (under.isSheet()) {
+                        // Back from the picture returns to the sheet it was opened from.
+                        state.sheetTrail += under
+                        state.sheetLeft = null
+                        state.overlay = next
+                    } else {
+                        openOverlay(next)
+                    }
+                }
                 is UiCommand.RequestPermission, is UiCommand.Key -> Unit
                 is UiCommand.TypeText -> if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) typed.tryEmit(cmd.text)
                 is UiCommand.Search -> {
@@ -620,7 +670,7 @@ fun HomeScreen(
                 val collapsedPx = with(density) { StageCollapsedHeight.toPx() }
                 val belowStage = remember(collapsedPx) { TopInsetShape(collapsedPx) }
                 BandRise(state, firstRowId)
-                CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec(collapsedPx + headerPx)) {
+                CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec(collapsedPx + headerPx), LocalPendingPresses provides state.pending) {
                     LazyColumn(
                         state = listState,
                         // Room for the lowered Stage above the first row, and enough below the last row for it to reach the focus line.
@@ -727,7 +777,8 @@ fun HomeScreen(
             RightSheet(
                 visibleState = visibleState,
                 key = ov,
-                depth = ov.sheetDepth(),
+                // A plugin's sheets open one from another, each a step deeper.
+                depth = ov.sheetDepth() + if (ov is Overlay.PluginSheet) state.sheetTrail.size else 0,
                 // The screensaver behind its own sheet is shown as it will look, not dimmed.
                 scrim = ov != Overlay.Ambient,
                 onDismiss = {
@@ -771,9 +822,31 @@ fun HomeScreen(
                         notifications = notifications,
                         notificationIndex = { state.notificationIndex },
                         onNotificationIndex = { state.notificationIndex = it },
+                        pluginSheetRow = { state.pluginSheetRows[it] },
+                        onPluginSheetRow = { sheet, row -> state.pluginSheetRows[sheet] = row },
                     )
                 }
             }
+        }
+
+        Presence(overlay as? Overlay.Live) { ov, visibleState ->
+            LivePictureScreen(
+                core = core,
+                plugin = ov.plugin,
+                title = ov.title,
+                url = ov.url,
+                visibleState = visibleState,
+                onClose = {
+                    val previous = state.sheetTrail.removeLastOrNull()
+                    if (previous != null) {
+                        close()
+                        state.sheetLeft = ov
+                        state.overlay = previous
+                    } else {
+                        closeOverlay()
+                    }
+                },
+            )
         }
 
         Presence(if (overlay == Overlay.Guide) Unit else null) { _, visibleState ->
@@ -796,7 +869,7 @@ fun HomeScreen(
         }
 
         Presence(if (searchOpen) Unit else null) { _, visibleState ->
-            CompositionLocalProvider(LocalPhoneText provides phoneText) {
+            CompositionLocalProvider(LocalPhoneText provides phoneText, LocalPendingPresses provides state.pending) {
                 SearchScreen(
                     snapshot = snapshot,
                     visibleState = visibleState,
@@ -810,6 +883,7 @@ fun HomeScreen(
                     onTileLongPress = { tile, rowId, bounds, fr -> openMenu(tile, rowId, bounds, fr) },
                     onClose = { closeOverlay() },
                     searchPlugins = { q -> core.searchPlugins(q) },
+                    again = searchAgain,
                 )
             }
         }
@@ -875,6 +949,18 @@ fun HomeScreen(
                     onPlay = { openPlayListing(context, pkg) },
                     onDismissNotice = { core.command(LayoutCommand.DismissNotice(ov.tile.id)) },
                     onGuide = { openOverlay(Overlay.Guide, from = ov.returnFocus) },
+                    onAdjust = {
+                        ov.tile.more?.let { more ->
+                            uiSounds?.open()
+                            // The tile takes focus back before its sheet opens, so its row
+                            // remembers it as the tile to return to.
+                            state.overlay = ov.under
+                            scope.launch {
+                                ov.returnFocus.requestWhenReady(6)
+                                openOverlay(Overlay.PluginSheet(more.substringBefore(':'), more.substringAfter(':')), from = ov.returnFocus)
+                            }
+                        }
+                    },
                 ),
                 visibleState = visibleState,
                 onDismiss = {
@@ -965,7 +1051,7 @@ private data class TopInsetShape(val top: Float) : androidx.compose.ui.graphics.
 
 private fun Overlay.isSheet(): Boolean = when (this) {
     Overlay.QuickSettings, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels, Overlay.Rows,
-    Overlay.Plugins, is Overlay.PluginDetail, Overlay.HomeRole, Overlay.Companion, Overlay.Updates,
+    Overlay.Plugins, is Overlay.PluginDetail, is Overlay.PluginSheet, Overlay.HomeRole, Overlay.Companion, Overlay.Updates,
     Overlay.Notifications, is Overlay.NotificationDetail, Overlay.NotificationSettings,
     -> true
     else -> false
@@ -1063,6 +1149,9 @@ private fun SheetContent(
     /** The place in the list of the notification last opened. */
     notificationIndex: () -> Int,
     onNotificationIndex: (Int) -> Unit,
+    /** The row focus was last on in a plugin's sheet. */
+    pluginSheetRow: (Overlay.PluginSheet) -> String?,
+    onPluginSheetRow: (Overlay.PluginSheet, String) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1288,6 +1377,19 @@ private fun SheetContent(
             )
         }
         Overlay.Plugins -> PluginsSheet(core = core, onOpen = { id -> open(Overlay.PluginDetail(id)) }, firstFocus = first, cameFrom = cameFrom)
+        is Overlay.PluginSheet -> PluginSheetContent(
+            core = core,
+            plugin = overlay.plugin,
+            id = overlay.id,
+            firstFocus = first,
+            cameFrom = (cameFrom as? Overlay.PluginSheet)?.takeIf { it.plugin == overlay.plugin }?.id,
+            // Only on the way back: a sheet opened afresh starts at its top.
+            leftOn = if (cameFrom != null) pluginSheetRow(overlay) else null,
+            onRowFocused = { row -> onPluginSheetRow(overlay, row) },
+            changes = core.snapshots,
+            say = say,
+            onOpen = { sheet -> open(Overlay.PluginSheet(overlay.plugin, sheet)) },
+        )
         is Overlay.PluginDetail -> PluginDetailSheet(
             core = core,
             pluginId = overlay.id,

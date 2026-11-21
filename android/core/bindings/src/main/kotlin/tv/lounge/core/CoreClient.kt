@@ -39,7 +39,20 @@ class CoreClient(val core: Core) : SnapshotListener {
 
     fun command(command: LayoutCommand) = core.command(command)
 
-    fun perform(action: String): Result<Unit> = runCatching { core.perform(action) }
+    /** Does what a tile's action says; a press with nothing to see may come back with words to show. */
+    fun perform(action: String): Result<Performed> = runCatching { core.perform(action) }
+
+    /** The sheet a plugin describes under [id]. Blocks while the plugin answers. */
+    fun pluginSheet(plugin: String, id: String): Result<PluginSheet> = runCatching { core.pluginSheet(plugin, id) }
+
+    /** Hands a sheet row's action to its plugin. */
+    fun pluginSheetPress(plugin: String, action: String): Result<Performed> = runCatching { core.pluginSheetPress(plugin, action) }
+
+    /** A still picture for a plugin's live view. */
+    fun pluginPicture(plugin: String, url: String): Result<ByteArray> = runCatching { core.pluginPicture(plugin, url) }
+
+    /** A new address for the live picture a plugin is showing at [url]. */
+    fun pluginLive(plugin: String, url: String): Result<String> = runCatching { core.pluginLive(plugin, url) }
 
     fun setScreenState(on: Boolean) = core.setScreenState(on)
 

@@ -94,6 +94,8 @@ fun SearchScreen(
     heldRowId: () -> String? = { null },
     /** Rows from the search plugins for a query; may take seconds. */
     searchPlugins: suspend (String) -> List<CoreRow> = { emptyList() },
+    /** A change in this asks the plugins again for the same query. */
+    again: Int = 0,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -130,7 +132,7 @@ fun SearchScreen(
     val local: List<CoreRow> = remember(query, snapshot) { search(snapshot, query) }
     // The plugins are asked once typing pauses; their last answer stays until the next arrives.
     var fromPlugins by remember { mutableStateOf(emptyList<CoreRow>()) }
-    LaunchedEffect(query) {
+    LaunchedEffect(query, again) {
         val q = query.trim()
         if (q.length < 2) {
             fromPlugins = emptyList()
@@ -139,7 +141,7 @@ fun SearchScreen(
         delay(PLUGIN_SEARCH_PAUSE_MS)
         fromPlugins = withContext(Dispatchers.IO) { searchPlugins(q) }
     }
-    val results: List<CoreRow> = remember(local, fromPlugins) { local + fromPlugins.filter { p -> local.none { it.id == p.id } } }
+    val results: List<CoreRow> = remember(local, fromPlugins) { mergedResults(local, fromPlugins) }
     val recent: List<CoreRow> = remember(snapshot) { recentlyOpened(snapshot) }
     val shown = if (query.isBlank()) recent else results
 
@@ -290,7 +292,7 @@ internal fun search(snapshot: HomeSnapshot, query: String): List<CoreRow> {
         // A tile that only opens search or another screen would lead away from the result, and
         // one that opens nothing is no result at all.
         val hits = row.tiles
-            .mapNotNull { t -> matchScore(t.title, t.subtitle, tokens)?.takeIf { t.action.isNotEmpty() && !t.action.startsWith("control:") && seen.add(t.id) }?.let { t to it } }
+            .mapNotNull { t -> matchScore(t.title, t.subtitle, tokens)?.takeIf { t.action.isNotEmpty() && !t.leadsAway() && seen.add(t.id) }?.let { t to it } }
             .sortedByDescending { it.second }
         if (hits.isEmpty()) null else row.copy(tiles = hits.map { it.first }) to hits.first().second
     }
@@ -358,4 +360,23 @@ private fun recentlyOpened(snapshot: HomeSnapshot): List<CoreRow> {
         out += it.copy(id = "recent:apps", title = "Your apps", tiles = it.tiles.filter { t -> !t.id.startsWith("control:") }.take(6))
     }
     return out
+}
+
+/** Whether a tile only opens search or another of Lounge's screens. A plugin's sheet is the result itself. */
+private fun Tile.leadsAway(): Boolean = action.startsWith("control:") && !action.startsWith("control:sheet:")
+
+/**
+ * What the home found, then what the plugins found beyond it. A plugin's result that is already
+ * a tile among the home's results is left out, so a lamp found in its room's row is not shown
+ * again under its plugin's name.
+ */
+internal fun mergedResults(local: List<CoreRow>, fromPlugins: List<CoreRow>): List<CoreRow> {
+    val found = local.flatMap { it.tiles }.mapTo(HashSet()) { it.id }
+    val more = fromPlugins
+        .filter { p -> local.none { it.id == p.id } }
+        .mapNotNull { row ->
+            val tiles = row.tiles.filter { "plugin:" + it.id.removePrefix("search:") !in found }
+            if (tiles.isEmpty()) null else if (tiles.size == row.tiles.size) row else row.copy(tiles = tiles)
+        }
+    return local + more
 }

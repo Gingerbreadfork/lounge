@@ -33,6 +33,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
@@ -77,6 +81,7 @@ import tv.lounge.design.Badge as BadgeView
 import tv.lounge.design.Dimens
 import tv.lounge.design.HouseLight
 import tv.lounge.design.Lights
+import tv.lounge.design.LoungeGlyphs
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.ProgressBar
@@ -197,7 +202,7 @@ fun TileView(
                 onFocused(it.isFocused, bounds())
             }
             // Held on a tile with no menu, OK is a press like any other.
-            .tilePress(onClick, { if (menu) onLongPress(bounds()) else onClick() }, clickLabel = "Open", longPressLabel = if (menu) "Options" else null, opens = tile.action.isNotEmpty())
+            .tilePress(onClick, { if (menu) onLongPress(bounds()) else onClick() }, clickLabel = if (tile.glyph != null) "Press" else "Open", longPressLabel = if (menu) "Options" else null, opens = tile.action.isNotEmpty())
             .focusable()
             .semantics { contentDescription = spoken }
             // Two layers on purpose: the glow redraws every frame of a focus change, and inside the
@@ -223,7 +228,7 @@ fun TileView(
             TileKind.POSTER -> PosterContent(tile, filter, size)
             TileKind.LANDSCAPE -> LandscapeContent(tile, filter, brightnessNow, chrome, size, badged, focused)
             TileKind.APP_BANNER -> AppBannerContent(tile, filter, size)
-            TileKind.COMPACT -> CompactContent(tile, filter, drawn, focused)
+            TileKind.COMPACT -> CompactContent(tile, filter, brightnessNow, lightColor, drawn, focused)
         }
         // A pinned tile says so where it sits, so the word in the menu has something to point at.
         // The live badge owns the top-right corner, so the mark steps down beside the progress bar.
@@ -249,6 +254,47 @@ internal fun tileDescription(tile: Tile, rowName: String): String = buildString 
     if (tile.stagePinned) append(", pinned to the Stage")
     if (tile.pinned) append(", pinned")
     if (tile.hidden) append(", hidden from every row")
+}
+
+/** How lit a control's glyph is drawn: resting, half lit while a press is on its way, and lit. */
+internal fun glyphLevel(on: Boolean?, pending: Boolean): Float = when {
+    pending -> 0.5f
+    on == true -> 1f
+    else -> 0f
+}
+
+/** The filter a glyph was last drawn with, and the colour it is for. */
+private class GlyphTint {
+    var color = Color.Unspecified
+    var filter: ColorFilter? = null
+}
+
+/**
+ * A control's glyph. One that is on takes the thing's own light and one that is off rests in
+ * `dust`; a control with no state to show is `houselight`. It dims with its tile, so a row of lit
+ * lamps never outshines the focused one (DESIGN.md §3.2).
+ */
+@Composable
+private fun ControlGlyph(tile: Tile, glyph: ImageVector, light: Color, brightness: () -> Float) {
+    val colors = LoungeTheme.colors
+    val pending = tile.on != null && LocalPendingPresses.current.waiting(tile)
+    val level = animateFloatAsState(glyphLevel(tile.on, pending), LoungeTheme.motion.settle(), label = "glyphLit")
+    val stateless = tile.on == null
+    val painter = rememberVectorPainter(glyph)
+    val tint = remember { GlyphTint() }
+    Box(
+        Modifier.size(32.dp).drawBehind {
+            val base = if (stateless) colors.houselight else lerp(colors.dust, light, level.value)
+            val b = brightness()
+            val color = Color(base.red * b, base.green * b, base.blue * b, base.alpha)
+            // The same filter until the colour changes, so a still tile allocates nothing.
+            if (tint.filter == null || tint.color != color) {
+                tint.color = color
+                tint.filter = ColorFilter.tint(color)
+            }
+            with(painter) { draw(size, colorFilter = tint.filter) }
+        },
+    )
 }
 
 private val episodeCode = Regex("\\bS(\\d+) E(\\d+)\\b")
@@ -514,12 +560,22 @@ private fun AppBannerContent(tile: Tile, filter: () -> androidx.compose.ui.graph
 
 /** An icon and two lines; both are cut at a word and run across once the tile has held focus a while. */
 @Composable
-private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphics.ColorFilter?, size: DpSize, focused: Boolean) {
+private fun CompactContent(
+    tile: Tile,
+    filter: () -> androidx.compose.ui.graphics.ColorFilter?,
+    brightness: () -> Float,
+    light: Color,
+    size: DpSize,
+    focused: Boolean,
+) {
     val colors = LoungeTheme.colors
     val pinned = tile.pinned || tile.stagePinned
     val connected = tile.badge == Badge.CONNECTED
+    // A glyph Lounge does not draw gives way to the plugin's logo, and to a ring without one.
+    val glyph = tile.glyph?.let { LoungeGlyphs.named(it) ?: LoungeGlyphs.Thing.takeIf { tile.iconPath == null } }
     // A tile to read that brings no picture is its words alone.
     val icon = when {
+        glyph != null -> 32.dp
         tile.iconPath != null -> 48.dp
         tile.action.isEmpty() && !tile.id.startsWith("device:") && !tile.id.startsWith("notice:") -> 0.dp
         else -> 32.dp
@@ -533,6 +589,7 @@ private fun CompactContent(tile: Tile, filter: () -> androidx.compose.ui.graphic
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         when {
+            glyph != null -> ControlGlyph(tile, glyph, light, brightness)
             tile.iconPath != null -> FilteredPicture(tile.iconPath!!, filter, null, DpSize(48.dp, 48.dp), ContentScale.Fit, Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
             tile.id.startsWith("device:") -> Icon(LoungeIcons.Tv, contentDescription = null, tint = colors.houselight, modifier = Modifier.size(32.dp))
             tile.id.startsWith("notice:") -> Icon(LoungeIcons.Info, contentDescription = null, tint = colors.houselight, modifier = Modifier.size(32.dp))

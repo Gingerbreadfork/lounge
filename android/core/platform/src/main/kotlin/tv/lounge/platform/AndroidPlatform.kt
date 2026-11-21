@@ -37,7 +37,14 @@ sealed interface UiCommand {
     data object OpenAllApps : UiCommand
     /** Open a plugin's page, to turn it on and set it up. */
     data class OpenPlugin(val id: String) : UiCommand
+    /** Open the sheet a plugin describes under [id]. */
+    data class OpenPluginSheet(val plugin: String, val id: String) : UiCommand
+    /** Show a plugin's still picture full screen and keep fetching it. */
+    data class OpenLive(val plugin: String, val title: String, val url: String) : UiCommand
 }
+
+/** What a press is told when it would open one of Lounge's own screens behind another app. */
+internal const val NOT_IN_FRONT = "That opens on Lounge's own screen. Open Lounge on the TV, then try again."
 
 /** What the phone is told when Android would drop a start made from behind another app. */
 internal const val OPENED_FROM_BEHIND =
@@ -165,6 +172,11 @@ class AndroidPlatform(private val context: Context) : Platform {
             command == "allapps" -> _commands.tryEmit(UiCommand.OpenAllApps)
             command.startsWith("plugin:") -> _commands.tryEmit(UiCommand.OpenPlugin(command.removePrefix("plugin:")))
             command.startsWith("search:") -> _commands.tryEmit(UiCommand.Search(command.removePrefix("search:")))
+            command.startsWith("sheet:") || command.startsWith("live:") -> {
+                val screen = pluginScreen(command) ?: throw PlatformException.Failed("Unknown control: $command")
+                if (!inFront()) throw PlatformException.Failed(NOT_IN_FRONT)
+                _commands.tryEmit(screen)
+            }
             else -> throw PlatformException.Failed("Unknown control: $command")
         }
     }
@@ -344,4 +356,24 @@ class AndroidPlatform(private val context: Context) : Platform {
         const val URI_GRANTS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
     }
+}
+
+/**
+ * The screen a plugin's control opens: `sheet:<plugin>:<sheet id>`, or `live:<plugin>` with the
+ * title and the picture's address on the lines after.
+ */
+internal fun pluginScreen(command: String): UiCommand? {
+    if (command.startsWith("sheet:")) {
+        val rest = command.removePrefix("sheet:")
+        val plugin = rest.substringBefore(':')
+        val id = rest.substringAfter(':', "")
+        return if (plugin.isEmpty() || id.isEmpty()) null else UiCommand.OpenPluginSheet(plugin, id)
+    }
+    if (command.startsWith("live:")) {
+        val lines = command.removePrefix("live:").split('\n')
+        val plugin = lines.getOrNull(0).orEmpty()
+        val url = lines.getOrNull(2).orEmpty()
+        return if (plugin.isEmpty() || url.isEmpty()) null else UiCommand.OpenLive(plugin, lines.getOrNull(1).orEmpty(), url)
+    }
+    return null
 }
