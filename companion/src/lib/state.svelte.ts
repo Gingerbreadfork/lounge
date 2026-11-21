@@ -269,6 +269,23 @@ export async function act<T>(label: string, f: () => Promise<T>): Promise<T | un
   }
 }
 
+/** Whether a tap on a tile does its work where the tile sits, as a light or a scene does. */
+export function isControl(t: { glyph?: string | null; action: string }): boolean {
+  return !!t.glyph && !t.action.startsWith('control:');
+}
+
+/**
+ * Presses a tile on the TV. What the press says is shown; a control that says nothing shows the
+ * change on its own tile, and anything else is said to be opening.
+ */
+export async function press(t: { title: string; action: string; glyph?: string | null }) {
+  let failed = false;
+  const said = await act('', () => api.open(t.action).catch((e) => { failed = true; throw e; }));
+  if (failed) return;
+  const words = said?.say ?? (isControl(t) ? '' : `Opening ${t.title} on the TV`);
+  if (words) toast(words);
+}
+
 /** Like `act`, for a request that answers nothing: true when it worked. */
 export async function done(label: string, f: () => Promise<unknown>): Promise<boolean> {
   return (await act(label, () => f().then(() => true))) ?? false;

@@ -3,7 +3,7 @@
   // what it does. It opens over the page and leaves on a tap outside, Escape or the Back button.
   import { api, art, type Layout, type Tile } from './api';
   import Icon from './Icon.svelte';
-  import { act, quiet } from './state.svelte';
+  import { act, isControl, press, quiet } from './state.svelte';
   import { words } from './words';
 
   let {
@@ -63,7 +63,7 @@
     if (done) close();
   }
   function open() {
-    act(`Opening ${tile.title} on the TV`, () => api.open(tile.action));
+    press(tile);
     close();
   }
   function toggleStage() {
@@ -127,9 +127,9 @@
   {:else}
   <div class="list">
     {#if opens}
-      <button class="list-row" {@attach focus} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">Open on the TV</span></button>
+      <button class="list-row" {@attach focus} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">{isControl(tile) ? 'Press' : 'Open on the TV'}</span></button>
     {/if}
-    {#if opens || tile.stagePinned}
+    {#if (opens && !tile.glyph) || tile.stagePinned}
       <button class="list-row" disabled={busy} onclick={toggleStage}>
         <span class="glyph" class:on={tile.stagePinned}><Icon name="pin" size={24} /></span>
         <span class="grow"><span class="title">{tile.stagePinned ? words.unpinStage : words.pinStage}</span><span class="caption">{tile.stagePinned ? words.unpinStageDetail : words.pinStageDetail}</span></span>

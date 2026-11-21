@@ -230,7 +230,7 @@
     </section>
 
     <section class="section">
-      <p class="caption">It can reach {reachText(current)}. It refreshes every {counted(current.refreshMinutes, 'minute')} while the TV is on. Updates are taken only from its publisher, whose key starts {current.publisher.slice(0, 4)} {current.publisher.slice(4, 8)}.</p>
+      <p class="caption">It can reach {reachText(current)}. {current.refreshSeconds ? `It refreshes every ${counted(current.refreshSeconds, 'second')} while Lounge is on the TV's screen.` : `It refreshes every ${counted(current.refreshMinutes, 'minute')} while the TV is on.`} Updates are taken only from its publisher, whose key starts {current.publisher.slice(0, 4)} {current.publisher.slice(4, 8)}.</p>
       {#if !current.builtIn}<Confirm label="Remove plugin" confirm="Yes, remove it and its settings" onconfirm={() => command(current!, 'remove')} />{/if}
     </section>
   {:else}

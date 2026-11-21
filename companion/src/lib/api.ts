@@ -13,6 +13,8 @@ export type Tile = {
   openedRank?: number | null; installedRank?: number | null;
   /** The app or plugin something to continue comes from, as the layout knows it, and its name. */
   provider?: string | null; providerName?: string | null;
+  /** A control: the glyph drawn where a picture would go, and whether the thing is on. */
+  glyph?: string | null; on?: boolean | null;
 };
 export type Row = { id: string; title: string; kind: string; size: string; badge?: string | null; note?: string | null; tiles: Tile[] };
 export type Spotlight = {
@@ -54,6 +56,8 @@ export type PluginAsk = { say: string; link?: string | null; linkText?: string |
 export type Plugin = {
   id: string; name: string; version: string; description: string; publisher: string; publisherName: string; kinds: string[];
   fetchHosts: string[]; selfSignedServers: boolean; enabled: boolean; builtIn: boolean; configured: boolean; refreshMinutes: number;
+  /** Set for a plugin that follows things at home by the second; 0 otherwise. */
+  refreshSeconds?: number;
   lastRefreshMs?: number | null; lastError?: string | null; ask?: PluginAsk | null; items: number; settings: PluginSetting[];
   /** Where an update that turned the plugin off also asks to reach; empty otherwise. */
   updateAsksToReach?: string[];
@@ -142,7 +146,8 @@ export const api = {
   state: () => call<State>('GET', '/api/state'),
   key: (key: string) => call<void>('POST', '/api/key', { key }),
   text: (text: string) => call<void>('POST', '/api/text', { text }),
-  open: (action: string) => call<void>('POST', '/api/open', { action }),
+  /** Answers with what the press said, when it said anything. */
+  open: (action: string) => call<{ say?: string } | undefined>('POST', '/api/open', { action }),
   launch: (pkg: string) => call<void>('POST', '/api/launch', { package: pkg }),
   search: (query: string) => call<void>('POST', '/api/search', { query }),
   layout: () => call<Layout>('GET', '/api/layout'),

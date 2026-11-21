@@ -1,8 +1,8 @@
 <script lang="ts">
   import { api, art, light, lit, tag, type Tile } from '../lib/api';
   import { hold } from '../lib/hold';
-  import Icon from '../lib/Icon.svelte';
-  import { act, app, connectionLabel, dismissShare, go, openShare } from '../lib/state.svelte';
+  import Icon, { drawn } from '../lib/Icon.svelte';
+  import { act, app, connectionLabel, dismissShare, go, openShare, press } from '../lib/state.svelte';
   import TileSheet from '../lib/TileSheet.svelte';
 
   let snapshot = $derived(app.state?.snapshot ?? null);
@@ -21,7 +21,7 @@
     if (!t.action) return;
     // A suggested plugin is set up here on the phone, where its settings are easy to type.
     if (t.action.startsWith('control:plugin:')) return go('plugins', t.action.slice('control:plugin:'.length));
-    act(`Opening ${t.title} on the TV`, () => api.open(t.action));
+    press(t);
   }
   function menu(t: Tile, rowId: string | null, rowTitle: string | null) {
     sheet = { tile: t, rowId, rowTitle };
@@ -44,6 +44,7 @@
   function describe(t: Tile) {
     const parts = [t.title];
     if (t.subtitle) parts.push(t.subtitle);
+    else if (t.on != null) parts.push(t.on ? 'on' : 'off');
     if (tag(t.badge) === 'LIVE') parts.push('live');
     if (t.stagePinned) parts.push('pinned to the Stage');
     else if (t.pinned) parts.push('pinned');
@@ -142,7 +143,9 @@
           {#each row.tiles.filter((t) => !t.id.startsWith('control:')) as t (t.id)}
             <button class="tile {tag(row.kind).toLowerCase()}" class:borrowed={t.borrowedArt} style={lit(t.lightArgb)} aria-label={describe(t)} onclick={() => open(t)} use:hold={t.id.startsWith('control:') ? null : () => menu(t, row.id, row.title)}>
               {#if tag(row.kind) === 'COMPACT'}
-                {#if t.iconPath}<img class="icon" src={art(t.iconPath)} alt="" loading="lazy" />{/if}
+                {#if drawn(t.glyph) || (t.glyph && !t.iconPath)}
+                  <span class="glyph" class:on={t.on === true} class:off={t.on === false} aria-hidden="true"><Icon name={drawn(t.glyph) ? t.glyph : 'thing'} size={26} /></span>
+                {:else if t.iconPath}<img class="icon" src={art(t.iconPath)} alt="" loading="lazy" />{/if}
                 <span class="lines">
                   <span class="t">{t.title}</span>
                   {#if t.subtitle}<span class="s">{t.subtitle}</span>{/if}
@@ -197,6 +200,10 @@
   .tile.compact .lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
   .tile.compact .t { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tile.compact .s { font-size: 12px; font-weight: 500; color: var(--dust); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* A control's glyph takes the thing's own light while it is on and rests in dust while it is off. */
+  .tile.compact .glyph { flex: none; display: grid; place-items: center; color: var(--houselight); transition: color 0.2s; }
+  .tile.compact .glyph.on { color: var(--light); }
+  .tile.compact .glyph.off { color: var(--dust); }
   .hint { margin: -12px 0 -8px; }
   .pinmark { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--velvet) 72%, transparent); color: var(--limelight); }
   .pin-inline { color: var(--dust); display: grid; place-items: center; flex: none; }
