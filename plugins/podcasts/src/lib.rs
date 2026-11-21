@@ -234,7 +234,7 @@ fn fetch_feed(url: &str, cached: Option<&Show>, timeout_ms: u32) -> Result<Fetch
 }
 
 fn fetch_feed_once(url: &str, cached: Option<&Show>, partial: bool, timeout_ms: u32) -> Result<Fetched, FeedError> {
-    let mut req = HttpRequest::get(url).header("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, */*").header("User-Agent", "Lounge/0.5 (Android TV podcast reader)");
+    let mut req = HttpRequest::get(url).header("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, */*").header("User-Agent", concat!("Lounge/", env!("CARGO_PKG_VERSION"), " (Android TV podcast reader)"));
     req.timeout_ms = timeout_ms;
     if partial {
         req = req.header("Range", &format!("bytes=0-{}", PARTIAL_BYTES - 1)).header("Accept-Encoding", "identity");

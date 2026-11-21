@@ -13,7 +13,7 @@ const APP_PACKAGE: &str = "tv.emby.embyatv";
 /// The client header. It names this TV by an id of its own, since the server signs out an older
 /// session of the same user and id.
 fn auth_header(device_id: &str) -> String {
-    format!("MediaBrowser Client=\"Lounge\", Device=\"Android TV\", DeviceId=\"{device_id}\", Version=\"0.1\"")
+    format!("MediaBrowser Client=\"Lounge\", Device=\"Android TV\", DeviceId=\"{device_id}\", Version=\"{}\"", env!("CARGO_PKG_VERSION"))
 }
 
 /// This TV's device id, made the first time and kept; the clock is the only thing that differs

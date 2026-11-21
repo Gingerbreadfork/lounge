@@ -357,7 +357,7 @@ fn client_id(now_ms: i64) -> String {
 }
 
 fn plex_tv(request: HttpRequest, client: &str) -> HttpRequest {
-    request.header("Accept", "application/json").header("X-Plex-Product", "Lounge").header("X-Plex-Client-Identifier", client)
+    request.header("Accept", "application/json").header("X-Plex-Product", "Lounge").header("X-Plex-Version", env!("CARGO_PKG_VERSION")).header("X-Plex-Client-Identifier", client)
 }
 
 /// The error for an answer from plex.tv that cannot be read; the cause goes to the log.
@@ -568,6 +568,7 @@ impl Server {
             .header("X-Plex-Token", &self.token)
             .header("X-Plex-Client-Identifier", "lounge-launcher")
             .header("X-Plex-Product", "Lounge")
+            .header("X-Plex-Version", env!("CARGO_PKG_VERSION"))
             .header("Accept", "application/json")
     }
 

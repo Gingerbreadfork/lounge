@@ -16,7 +16,7 @@ const QUICK_OFF: &str = "Quick Connect is turned off on this Jellyfin server. Tu
 /// `X-Emby-Authorization` and `api_key` unless legacy authorization is switched on. It names this
 /// TV by an id of its own, since the server signs out an older session of the same user and id.
 fn auth_header(device_id: &str) -> String {
-    format!("MediaBrowser Client=\"Lounge\", Device=\"Android TV\", DeviceId=\"{device_id}\", Version=\"0.1\"")
+    format!("MediaBrowser Client=\"Lounge\", Device=\"Android TV\", DeviceId=\"{device_id}\", Version=\"{}\"", env!("CARGO_PKG_VERSION"))
 }
 
 /// This TV's device id, made the first time and kept; the clock is the only thing that differs
@@ -649,6 +649,9 @@ mod tests {
         );
         let request = quick_request("POST", "http://jf:8096/Users/AuthenticateWithQuickConnect".into(), "tv-1", Some(r#"{"Secret":"0123abcd"}"#.into()));
         assert_eq!(request.headers.get("Authorization").map(String::as_str), Some(auth_header("tv-1").as_str()));
+        // The server lists this TV under Lounge's own version, not a number fixed long ago.
+        assert_eq!(auth_header("tv-1"), format!("MediaBrowser Client=\"Lounge\", Device=\"Android TV\", DeviceId=\"tv-1\", Version=\"{}\"", env!("CARGO_PKG_VERSION")));
+        assert!(!auth_header("tv-1").contains("Version=\"0.1\""));
         assert_eq!(request.headers.get("Content-Type").map(String::as_str), Some("application/json"));
         let auth: AuthResponse = serde_json::from_str(r#"{"User":{"Name":"me","Id":"u1"},"AccessToken":"tok","ServerId":"s1"}"#).unwrap();
         assert_eq!((auth.access_token.as_str(), auth.user.id.as_str()), ("tok", "u1"));
