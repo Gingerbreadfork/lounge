@@ -60,6 +60,8 @@ impl Platform for Recorder {
     fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), PlatformError> {
         Ok(())
     }
+    fn tv_controls(&self) -> Result<lounge_core::TvControls, PlatformError> { Ok(lounge_core::TvControls::default()) }
+    fn run_tv_control(&self, _: String) -> Result<(), PlatformError> { Ok(()) }
 }
 
 struct Snapshots(Mutex<Option<HomeSnapshot>>);
@@ -491,16 +493,20 @@ const LAMP_ID: &str = "tv.lounge.testlamp";
 /// A plugin for one lamp. Its state lives in the plugin's own storage: a press flips it and says
 /// so, a refresh reads it, and a sheet describes the room.
 fn lamp_bundle(dir: &std::path::Path) -> std::path::PathBuf {
+    lamp_bundle_answering(dir, r#"{"ok":{"say":"Lamp switched, as asked. See http://den.local/lamp?token=secret for more"}}"#, "")
+}
+
+/// The lamp plugin with another answer to every press, and more items after its own.
+fn lamp_bundle_answering(dir: &std::path::Path, said: &str, more_items: &str) -> std::path::PathBuf {
     let manifest = format!(r#"{{"id":"{LAMP_ID}","name":"Lamps","version":"1","kinds":["content"],"fetch_hosts":[],"rows":[{{"id":"here","title":"This room","style":"compact"}}]}}"#);
     let items = |on: bool| {
         format!(
             r##"[{{"id":"lamp","title":"Lamp","subtitle":"{}","row":"here","row_title":"Den","glyph":"light","on":{on},"tint":"#3366ff","more":"lamp","weight":3,"action":{{"resolve":"toggle"}}}},
                 {{"id":"room","title":"Den","row":"here","glyph":"home","weight":2,"action":{{"sheet":"room"}}}},
-                {{"id":"door","title":"Door","subtitle":"Closed","row":"here","glyph":"door","weight":1,"on":false}}]"##,
+                {{"id":"door","title":"Door","subtitle":"Closed","row":"here","glyph":"door","weight":1,"on":false}}{more_items}]"##,
             if on { "On" } else { "Off" }
         )
     };
-    let said = r#"{"ok":{"say":"Lamp switched, as asked. See http://den.local/lamp?token=secret for more"}}"#;
     let sheet = r#"{"ok":{"title":"Den","subtitle":"1 light","rows":[
         {"id":"lamp","kind":"press","title":"Lamp","glyph":"light","value":"Off","on":false,"resolve":"toggle"},
         {"id":"level","kind":"step","title":"Brightness","value":"40%","down":"dim","up":"brighten"},
@@ -559,6 +565,11 @@ fn lamp_bundle(dir: &std::path::Path) -> std::path::PathBuf {
 }
 
 fn lamp_core(dir: &std::path::Path) -> (Arc<Core>, Arc<Recorder>) {
+    let bundle = lamp_bundle(dir);
+    lamp_core_from(dir, &bundle)
+}
+
+fn lamp_core_from(dir: &std::path::Path, bundle: &std::path::Path) -> (Arc<Core>, Arc<Recorder>) {
     let config = CoreConfig {
         data_dir: dir.join("data").to_string_lossy().into_owned(),
         cache_dir: dir.join("cache").to_string_lossy().into_owned(),
@@ -571,7 +582,7 @@ fn lamp_core(dir: &std::path::Path) -> (Arc<Core>, Arc<Recorder>) {
     };
     let platform = Arc::new(Recorder::default());
     let core = Core::open(config, platform.clone()).unwrap();
-    core.install_plugin(lamp_bundle(dir).to_string_lossy().into_owned(), false).unwrap();
+    core.install_plugin(bundle.to_string_lossy().into_owned(), false).unwrap();
     core.set_plugin_enabled(LAMP_ID.into(), true);
     wait_for("the lamp", || lamp(&core).is_some());
     (core, platform)
@@ -663,6 +674,85 @@ fn a_sheet_is_read_row_by_row_and_its_presses_reach_the_plugin() {
     let done = core.plugin_sheet_press(LAMP_ID.into(), "toggle".into()).unwrap();
     assert!(done.say.is_some_and(|say| say.starts_with("Lamp switched")));
     wait_for("the lamp to come on", || lamp(&core).is_some_and(|t| t.on == Some(true)));
+}
+
+#[test]
+fn a_phone_shows_a_sheet_itself_and_presses_its_rows_by_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let (core, platform) = lamp_core(dir.path());
+    let phone = core.as_phone();
+    let room = lamp_row(&core).unwrap().tiles[1].action.clone();
+
+    // The room's sheet is handed to the phone, and the TV's screen is left as it is.
+    let opened = phone.perform_here(&room).unwrap();
+    assert_eq!(opened.sheet.map(|s| (s.plugin, s.id)), Some((LAMP_ID.to_string(), "room".to_string())));
+    assert!(platform.calls.lock().is_empty(), "{:?}", platform.calls.lock());
+
+    // The phone is told what each row can do, and none of the actions behind them.
+    let sheet: serde_json::Value = serde_json::from_str(&phone.sheet_json(LAMP_ID, "room").unwrap()).unwrap();
+    assert_eq!((sheet["title"].as_str(), sheet["subtitle"].as_str()), (Some("Den"), Some("1 light")));
+    assert_eq!(sheet["rows"][0], serde_json::json!({ "id": "lamp", "kind": "press", "title": "Lamp", "glyph": "light", "subtitle": null, "value": "Off", "on": false }));
+    assert_eq!(sheet["rows"][1], serde_json::json!({ "id": "level", "kind": "step", "title": "Brightness", "glyph": null, "subtitle": null, "value": "40%", "on": null, "down": true, "up": true, "press": false }));
+    assert_eq!((sheet["rows"][2]["kind"].as_str(), sheet["rows"][2]["sheet"].as_str()), (Some("open"), Some("more")));
+    assert_eq!((sheet["rows"][3]["kind"].as_str(), sheet["rows"][3]["ask"].as_str()), (Some("confirm"), Some("Unlock the door?")));
+    assert_eq!(sheet["rows"][4]["kind"].as_str(), Some("text"));
+    for action in ["toggle", "dim", "brighten", "resolve", "action"] {
+        assert!(!sheet.to_string().contains(action), "{action} reached the phone in {sheet}");
+    }
+
+    // A row is pressed by its name, and the home follows.
+    let done = phone.sheet_press(LAMP_ID, "room", "lamp", "press").unwrap();
+    assert!(done.say.is_some_and(|say| say.starts_with("Lamp switched")));
+    wait_for("the lamp to come on", || lamp(&core).is_some_and(|t| t.on == Some(true)));
+    assert!(phone.sheet_press(LAMP_ID, "room", "level", "up").is_ok());
+
+    // A row that has no such press, or an action in place of a row, reaches no plugin.
+    let changed = "That has changed since it was shown. Close this and open it again.";
+    assert_eq!(phone.sheet_press(LAMP_ID, "room", "level", "press").unwrap_err(), changed);
+    assert_eq!(phone.sheet_press(LAMP_ID, "room", "toggle", "press").unwrap_err(), changed);
+    assert_eq!(phone.sheet_press(LAMP_ID, "room", "dial", "press").unwrap_err(), changed);
+
+    // A picture no press handed out is not fetched, shown on the TV or asked about.
+    assert!(phone.live_picture(LAMP_ID, "http://camera.local/1.jpg").is_err());
+    assert!(phone.live_on_tv(LAMP_ID, "http://camera.local/1.jpg", "Door").is_err());
+    assert!(phone.live_again(LAMP_ID, "http://camera.local/1.jpg").is_err());
+    assert!(platform.calls.lock().is_empty(), "{:?}", platform.calls.lock());
+}
+
+#[test]
+fn a_live_picture_reaches_the_phone_with_what_opened_it_behind_it() {
+    let dir = tempfile::tempdir().unwrap();
+    // Every press answers with a camera's picture, and one more tile names a picture outright.
+    let door = r#"{"ok":{"live":"http://camera.local/door.jpg","title":"Door camera"}}"#;
+    let yard = r#",{"id":"yard","title":"Yard","row":"here","weight":0,"action":{"live":"http://camera.local/yard.jpg"}}"#;
+    let (core, platform) = lamp_core_from(dir.path(), &lamp_bundle_answering(dir.path(), door, yard));
+    let phone = core.as_phone();
+    let not_shown = "not a picture that is being shown";
+
+    // The picture a press answered with is the phone's to show, and the TV's screen is left alone.
+    let shown = phone.perform_here(&lamp(&core).unwrap().action).unwrap().live.unwrap();
+    assert_eq!((shown.plugin.as_str(), shown.title.as_str(), shown.url.as_str()), (LAMP_ID, "Door camera", "http://camera.local/door.jpg"));
+    assert!(platform.calls.lock().is_empty(), "{:?}", platform.calls.lock());
+    // It may be fetched: what stops it here is the plugin's own list of hosts, not the phone's leave.
+    assert_ne!(phone.live_picture(LAMP_ID, &shown.url).unwrap_err(), not_shown);
+    // A new address is asked of the action that opened it, and the TV opens it by that action too.
+    assert_eq!(phone.live_again(LAMP_ID, &shown.url).unwrap(), shown.url);
+    phone.live_on_tv(LAMP_ID, &shown.url, "Anything").unwrap();
+    assert_eq!(platform.calls.lock().as_slice(), [format!("control live:{LAMP_ID}\nDoor camera\nhttp://camera.local/door.jpg")]);
+    platform.calls.lock().clear();
+
+    // A picture a tile names outright is shown the same, though no action can renew it.
+    let tile = lamp_row(&core).unwrap().tiles.into_iter().find(|t| t.title == "Yard").unwrap();
+    let named = phone.perform_here(&tile.action).unwrap().live.unwrap();
+    assert_eq!((named.title.as_str(), named.url.as_str()), ("Yard", "http://camera.local/yard.jpg"));
+    assert!(platform.calls.lock().is_empty(), "{:?}", platform.calls.lock());
+    assert_ne!(phone.live_picture(LAMP_ID, &named.url).unwrap_err(), not_shown);
+    assert!(phone.live_again(LAMP_ID, &named.url).is_err());
+    phone.live_on_tv(LAMP_ID, &named.url, "Yard").unwrap();
+    assert_eq!(platform.calls.lock().as_slice(), [format!("control live:{LAMP_ID}\nYard\nhttp://camera.local/yard.jpg")]);
+
+    // An address neither of them gave stays out of reach.
+    assert_eq!(phone.live_picture(LAMP_ID, "http://camera.local/other.jpg").unwrap_err(), not_shown);
 }
 
 #[test]

@@ -1149,6 +1149,12 @@ pub(crate) fn local_hour(now_ms: i64, utc_offset_minutes: i32) -> u32 {
 
 /// Actions are `<verb>:<target>`; verbs: `open`, `info`, `control`, `permission`, `media`.
 pub(crate) fn perform(inner: &Inner, action: &str) -> Result<Performed, CoreError> {
+    perform_for(inner, action, false).map(|did| Performed { say: did.say })
+}
+
+/// As [perform]. With `here`, a sheet or a live picture is not opened on the TV: it is handed
+/// back for the phone that pressed to show.
+pub(crate) fn perform_for(inner: &Inner, action: &str, here: bool) -> Result<Did, CoreError> {
     wait_for_graph(inner);
     let (verb, target) = action
         .split_once(':')
@@ -1175,7 +1181,7 @@ pub(crate) fn perform(inner: &Inner, action: &str) -> Result<Performed, CoreErro
                     None => inner.search_links.lock().get(target).cloned().ok_or_else(unknown)?,
                 }
             };
-            dispatch(inner, link)
+            dispatch_for(inner, link, here)
         }
         "info" => {
             let package = {
@@ -1190,6 +1196,7 @@ pub(crate) fn perform(inner: &Inner, action: &str) -> Result<Performed, CoreErro
         }
         // A live picture is only ever opened by its own tile, never by a control from outside.
         "control" if target.starts_with("live:") => Err(unknown()),
+        "control" if here && target.starts_with("sheet:") => Ok(Did { say: None, shows: Some(target.to_string()) }),
         "control" => inner.platform.control(target.to_string()).map_err(platform_err).map(done),
         // A link shared from the phone: Android picks the app that owns it.
         "url" if target.starts_with("http://") || target.starts_with("https://") => {
@@ -1209,8 +1216,41 @@ pub(crate) fn perform(inner: &Inner, action: &str) -> Result<Performed, CoreErro
 }
 
 /// A press that worked and has nothing to say.
-fn done(_: ()) -> Performed {
-    Performed::default()
+fn done(_: ()) -> Did {
+    Did::default()
+}
+
+/// What a press did, and what it left for the one who pressed to show.
+#[derive(Debug, Default, PartialEq)]
+pub(crate) struct Did {
+    pub say: Option<String>,
+    /// A sheet or a live picture, as the control that opens it, kept back for a phone.
+    pub shows: Option<String>,
+}
+
+/// Whether a control opens something a phone can show on its own screen.
+fn phone_shows(control: &str) -> bool {
+    control.starts_with("sheet:") || control.starts_with("live:")
+}
+
+/// Asks a plugin for a new address for the live picture it is showing at `url`. Only a picture
+/// a tile or a sheet opened can be asked about, with the action that opened it.
+pub(crate) fn live_again(inner: &Inner, plugin: &str, url: &str) -> Result<String, CoreError> {
+    let none = || CoreError::Plugin { detail: "The picture has no address now.".to_string() };
+    let action = inner.plugins.live_action(plugin, url).filter(|action| !action.is_empty()).ok_or_else(none)?;
+    let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
+    inner
+        .plugins
+        .call(crate::plugins::PluginJob::Resolve { plugin: plugin.to_string(), action: action.clone(), reply: reply_tx })
+        .map_err(|detail| CoreError::Plugin { detail })?;
+    let fresh = reply_rx
+        .recv_timeout(std::time::Duration::from_secs(15))
+        .map_err(|_| CoreError::Plugin { detail: format!("{plugin} did not answer in time") })?
+        .map_err(|detail| CoreError::Plugin { detail })?
+        .live
+        .ok_or_else(none)?;
+    inner.plugins.note_live(plugin, &fresh, &action);
+    Ok(fresh)
 }
 
 /// The plugin an opened item came from: a home item's source, or a plugin search tile's id.
@@ -1235,17 +1275,22 @@ pub(crate) fn wait_for_graph(inner: &Inner) {
 }
 
 pub(crate) fn dispatch(inner: &Inner, link: DeepLink) -> Result<Performed, CoreError> {
+    dispatch_for(inner, link, false).map(|did| Performed { say: did.say })
+}
+
+/// As [dispatch]. With `here`, a sheet or a live picture is handed back, not opened on the TV.
+pub(crate) fn dispatch_for(inner: &Inner, link: DeepLink, here: bool) -> Result<Did, CoreError> {
     let platform_err = |e: crate::PlatformError| CoreError::Platform { detail: e.to_string() };
     match link {
         DeepLink::LaunchApp { package, activity } => {
             inner.platform.launch_app(package.clone(), activity).map_err(platform_err)?;
             // An app opened from here counts as used even when usage access is off.
             inner.enqueue_job(crate::worker::Job::Usage(vec![crate::AppUsage { package, last_used_ms: now_ms() }]));
-            Ok(Performed::default())
+            Ok(Did::default())
         }
         DeepLink::ViewUri(uri) => inner.platform.view_uri(uri).map_err(platform_err).map(done),
         DeepLink::ViewOrLaunch { uri, package } => match inner.platform.view_uri(uri) {
-            Ok(()) => Ok(Performed::default()),
+            Ok(()) => Ok(Did::default()),
             Err(_) => inner.platform.launch_app(package, String::new()).map_err(platform_err).map(done),
         },
         DeepLink::Play { url, title, start_ms, headers, audio } => {
@@ -1278,19 +1323,32 @@ pub(crate) fn dispatch(inner: &Inner, link: DeepLink) -> Result<Performed, CoreE
                 inner.plugins.note_live(&plugin, url, &action);
                 DeepLink::Control(crate::worker::live_control(&plugin, resolved.title.as_deref().unwrap_or_default(), url))
             } else {
-                // The plugin did the work itself, so nothing was opened to come back from.
+                DeepLink::None
+            };
+            let on_phone = here && matches!(&link, DeepLink::Control(c) if phone_shows(c));
+            if link == DeepLink::None || on_phone {
+                // Nothing was opened on the TV, so there is nothing to come back from.
                 let mut opened = inner.opened_plugin.lock();
                 if opened.as_deref() == Some(plugin.as_str()) {
                     *opened = None;
                 }
-                return Ok(Performed { say: resolved.say });
-            };
+            }
             let say = resolved.say;
-            dispatch(inner, link).map(|_| Performed { say })
+            dispatch_for(inner, link, here).map(|did| Did { say, ..did })
         }
-        DeepLink::None => Ok(Performed::default()),
+        DeepLink::None => Ok(Did::default()),
         DeepLink::SwitchInput(id) => inner.platform.switch_input(id).map_err(platform_err).map(done),
         DeepLink::Tune(uri) => inner.platform.tune(uri).map_err(platform_err).map(done),
+        DeepLink::Control(cmd) if here && phone_shows(&cmd) => {
+            // A picture a tile names outright has no action behind it. It is noted as shown, so
+            // the phone may fetch it, and it cannot be asked for anew.
+            if let Some((plugin, _, url)) = crate::worker::live_parts(&cmd) {
+                if inner.plugins.live_action(plugin, url).is_none() {
+                    inner.plugins.note_live(plugin, url, "");
+                }
+            }
+            Ok(Did { say: None, shows: Some(cmd) })
+        }
         DeepLink::Control(cmd) => inner.platform.control(cmd).map_err(platform_err).map(done),
     }
 }

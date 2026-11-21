@@ -186,13 +186,19 @@ the TV shows a fresh one as soon as it is used.
 
 - **Home** shows what's on: it mirrors the TV's home screen. Tap a tile to open it on the TV, or
   hold it for the same menu as the remote's. A tile that switches something, such as a light,
-  switches it from the phone too and shows its new state. With another app in front, Android lets Lounge open
+  switches it from the phone too and shows its new state. A room, a thermostat or a light's own
+  settings open as a panel on the phone, and a camera opens full screen there, so the TV carries
+  on with what it was showing; "On the TV" puts the camera on the big screen. All apps lists
+  every app on the TV to open from the phone. With another app in front, Android lets Lounge open
   things only as the TV's home screen; where it is not, the phone says so and asks you to open
   Lounge on the TV first.
 - **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into Lounge's
   search and other fields, and a place to paste a link that opens on the TV. Home, the volume and
   the media keys work whatever is on screen. The d-pad, OK, Back and Menu reach another app only
-  while Power Setup is connected; without it they work in Lounge alone.
+  while Power Setup is connected; without it they work in Lounge alone. The power button opens
+  the TV controls, which need Power Setup too: on a box plugged into a TV, wake the TV, turn it
+  or everything off and switch its input, as the TV controls on the TV do; on a television,
+  turn it off.
 - **Layout** shows, hides and reorders rows, pins and orders the apps at the front of Your apps,
   unpins things from the Stage, shows or hides each source of Continue watching, and brings back
   anything you hid.

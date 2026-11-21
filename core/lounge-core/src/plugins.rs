@@ -28,6 +28,10 @@ const ART_THREADS: usize = 4;
 const SEARCH_ART_TIME: Duration = Duration::from_secs(4);
 /// How many plugins refresh at once, so one waiting on a server that is off does not hold up the rest.
 const REFRESH_WORKERS: usize = 2;
+/// How many addresses of one plugin's live pictures are remembered, across the TV and its phones.
+const LIVE_KEPT: usize = 8;
+/// How many sheets given to phones are remembered.
+const PHONE_SHEETS_KEPT: usize = 8;
 /// How long a loaded module is kept after its last use. Loading one again is quick, and a plugin
 /// that refreshes every few seconds while it waits on a sign-in stays loaded.
 const MODULE_KEPT: Duration = Duration::from_secs(120);
@@ -119,7 +123,9 @@ pub(crate) struct PluginManager {
     /// The part of each plugin's sign-in page address that only the plugin is told.
     landings: Mutex<HashMap<String, String>>,
     /// The live picture each plugin last opened: its address and the action that gave it.
-    live: Mutex<HashMap<String, (String, String)>>,
+    live: Mutex<HashMap<String, Vec<(String, String)>>>,
+    /// The sheets last given to a phone, by plugin and sheet id, so a phone's press names a row.
+    phone_sheets: Mutex<Vec<((String, String), crate::PluginSheet)>>,
     /// Ends the schedule's sleep early, when what it sleeps until may have changed.
     wake_tx: crossbeam_channel::Sender<()>,
     /// When each plugin was last pressed, while its refresh for that is still to come.
@@ -402,6 +408,7 @@ impl PluginManager {
             pressed_tx,
             landings: Mutex::new(HashMap::new()),
             live: Mutex::new(HashMap::new()),
+            phone_sheets: Mutex::new(Vec::new()),
             wake_tx,
             pressed: Mutex::new(HashMap::new()),
             quiet_log: Mutex::new(HashMap::new()),
@@ -456,12 +463,43 @@ impl PluginManager {
 
     /// Remembers which action gave a live picture's address, for asking again when it lapses.
     pub fn note_live(&self, plugin: &str, url: &str, action: &str) {
-        self.live.lock().insert(plugin.to_string(), (url.to_string(), action.to_string()));
+        let mut live = self.live.lock();
+        let shown = live.entry(plugin.to_string()).or_default();
+        shown.retain(|(u, _)| u != url);
+        shown.push((url.to_string(), action.to_string()));
+        // The TV and a few phones may each have a picture open, each at an address of its own.
+        if shown.len() > LIVE_KEPT {
+            shown.remove(0);
+        }
     }
 
     /// The action behind the live picture a plugin is showing at `url`, if the core opened it.
+    /// It is empty for a picture a tile named outright.
     pub fn live_action(&self, plugin: &str, url: &str) -> Option<String> {
-        self.live.lock().get(plugin).filter(|(shown, _)| shown == url).map(|(_, action)| action.clone())
+        self.live.lock().get(plugin)?.iter().find(|(shown, _)| shown == url).map(|(_, action)| action.clone())
+    }
+
+    /// The sheet a plugin describes under `id`. Blocks while the plugin answers.
+    pub fn read_sheet(&self, plugin: &str, id: &str) -> Result<Sheet, String> {
+        let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
+        self.call(PluginJob::Sheet { plugin: plugin.to_string(), id: id.to_string(), reply: reply_tx })?;
+        reply_rx.recv_timeout(Duration::from_secs(15)).map_err(|_| format!("{plugin} did not answer in time"))?
+    }
+
+    /// Remembers a sheet as a phone was given it.
+    pub fn note_phone_sheet(&self, plugin: &str, id: &str, sheet: crate::PluginSheet) {
+        let key = (plugin.to_string(), id.to_string());
+        let mut sheets = self.phone_sheets.lock();
+        sheets.retain(|(k, _)| *k != key);
+        sheets.push((key, sheet));
+        if sheets.len() > PHONE_SHEETS_KEPT {
+            sheets.remove(0);
+        }
+    }
+
+    /// A sheet as a phone was last given it.
+    pub fn phone_sheet(&self, plugin: &str, id: &str) -> Option<crate::PluginSheet> {
+        self.phone_sheets.lock().iter().find(|((p, i), _)| p == plugin && i == id).map(|(_, sheet)| sheet.clone())
     }
 
     /// Has the schedule look again now: the screen has come on, or a plugin's settings have

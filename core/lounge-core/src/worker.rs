@@ -1033,6 +1033,12 @@ pub(crate) fn live_control(plugin: &str, title: &str, url: &str) -> String {
     format!("live:{plugin}\n{}\n{}", line(title), line(url))
 }
 
+/// The plugin, title and address a live control holds.
+pub(crate) fn live_parts(control: &str) -> Option<(&str, &str, &str)> {
+    let mut lines = control.strip_prefix("live:")?.splitn(3, '\n');
+    Some((lines.next()?, lines.next()?, lines.next()?))
+}
+
 /// What selecting a plugin item does. Wallpapers do nothing; a schedule entry without an action
 /// plays through its channel; a programme put in a row without one is a tile to read, which
 /// opens nothing; anything else needs an action of its own.

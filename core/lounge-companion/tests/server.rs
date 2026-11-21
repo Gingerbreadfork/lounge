@@ -1,6 +1,6 @@
 //! The server over a real socket: what an unpaired client gets, and what the cookie opens.
 
-use lounge_companion::{Companion, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch};
+use lounge_companion::{Companion, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, LiveRef, Pressed, SheetRef};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
@@ -22,6 +22,41 @@ impl CompanionActions for Fake {
             Some(said) => Err(said.to_string()),
             None => Ok(action.strip_prefix("say:").map(str::to_string)),
         }
+    }
+    /// An action of `sheet:` or `live:` hands that back for the phone to show.
+    fn perform_here(&self, action: &str) -> Result<Pressed, String> {
+        let mut pressed = Pressed::default();
+        if let Some(id) = action.strip_prefix("sheet:") {
+            pressed.sheet = Some(SheetRef { plugin: "lamps".into(), id: id.into() });
+        } else if let Some(url) = action.strip_prefix("live:") {
+            pressed.live = Some(LiveRef { plugin: "lamps".into(), title: "Door".into(), url: url.into() });
+        } else {
+            pressed.say = self.perform(action)?;
+        }
+        Ok(pressed)
+    }
+    fn sheet_json(&self, plugin: &str, id: &str) -> Result<String, String> {
+        Ok(serde_json::json!({ "title": format!("{plugin} {id}"), "rows": [] }).to_string())
+    }
+    fn sheet_press(&self, _: &str, sheet: &str, row: &str, which: &str) -> Result<Pressed, String> {
+        Ok(Pressed { say: Some(format!("{sheet} {row} {which}")), ..Pressed::default() })
+    }
+    /// Only the picture at `shown` was handed out.
+    fn live_picture(&self, _: &str, url: &str) -> Result<Vec<u8>, String> {
+        if url == "http://camera.local/shown.jpg" { Ok(vec![0xFF, 0xD8, 0xFF, 1, 2, 3]) } else { Err("not a picture that is being shown".into()) }
+    }
+    fn live_again(&self, _: &str, url: &str) -> Result<String, String> {
+        Ok(format!("{url}?again"))
+    }
+    fn live_on_tv(&self, _: &str, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn tv_controls_json(&self) -> Result<String, String> {
+        Ok(r#"{"note":null,"controls":[{"id":"sleep","title":"Everything off","value":null,"group":null,"glyph":"power"}]}"#.into())
+    }
+    /// Only `sleep` is a control here; anything else fails in the TV's own words.
+    fn tv_control(&self, id: &str) -> Result<(), String> {
+        if id == "sleep" { Ok(()) } else { Err("It didn't go to sleep. Try again.".into()) }
     }
     fn launch(&self, _: &str) -> Result<(), String> {
         Ok(())
@@ -109,9 +144,10 @@ fn exchange(port: u16, request: &str) -> String {
     let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
     s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
     s.write_all(request.as_bytes()).unwrap();
-    let mut out = String::new();
-    let _ = s.read_to_string(&mut out);
-    out
+    // A picture's bytes are not text, so the reply is read as bytes first.
+    let mut out = Vec::new();
+    let _ = s.read_to_end(&mut out);
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 fn status(response: &str) -> u16 {
@@ -313,6 +349,66 @@ fn a_press_that_says_something_is_answered_with_its_words() {
     assert_eq!(json_body(&said)["say"], "Movie time set");
     // A press with nothing to say is answered with nothing, as before.
     assert_eq!(status(&open("app:tv.example")), 204);
+}
+
+#[test]
+fn a_phone_is_handed_sheets_and_live_pictures_to_show_itself() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let token = pair(&companion, &host);
+    let post = |path: &str, body: serde_json::Value| {
+        let body = body.to_string();
+        exchange(port, &format!("POST {path} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()))
+    };
+    let get = |path: &str, token: &str| exchange(port, &format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"));
+
+    // A press made for the phone's own screen says which sheet or picture to show.
+    let sheet = json_body(&post("/api/open", serde_json::json!({ "action": "sheet:room", "here": true })));
+    assert_eq!(sheet, serde_json::json!({ "sheet": { "plugin": "lamps", "id": "room" } }));
+    let live = json_body(&post("/api/open", serde_json::json!({ "action": "live:http://camera.local/shown.jpg", "here": true })));
+    assert_eq!(live, serde_json::json!({ "live": { "plugin": "lamps", "title": "Door", "url": "http://camera.local/shown.jpg" } }));
+    assert_eq!(json_body(&post("/api/open", serde_json::json!({ "action": "say:Lamp on", "here": true }))), serde_json::json!({ "say": "Lamp on" }));
+
+    // The sheet is read by name, and a row is pressed by name.
+    assert_eq!(json_body(&get("/api/plugins/lamps/sheet?id=room%3Aden", &token))["title"], "lamps room:den");
+    let pressed = post("/api/plugins/lamps/sheet", serde_json::json!({ "sheet": "room", "row": "lamp", "which": "press" }));
+    assert_eq!(json_body(&pressed), serde_json::json!({ "say": "room lamp press" }));
+
+    // The picture comes as a picture that nothing keeps, and only the one that was handed out.
+    let frame = get("/api/plugins/lamps/picture?url=http%3A%2F%2Fcamera.local%2Fshown.jpg", &token);
+    assert_eq!(status(&frame), 200);
+    let head = frame.to_ascii_lowercase();
+    assert!(head.contains("content-type: image/jpeg") && head.contains("cache-control: no-store"), "{frame}");
+    assert_eq!(status(&get("/api/plugins/lamps/picture?url=http%3A%2F%2Fcamera.local%2Fother.jpg", &token)), 502);
+    assert_eq!(json_body(&post("/api/plugins/lamps/live", serde_json::json!({ "url": "http://camera.local/shown.jpg" })))["url"], "http://camera.local/shown.jpg?again");
+    assert_eq!(status(&post("/api/plugins/lamps/live", serde_json::json!({ "url": "http://camera.local/shown.jpg", "tv": true }))), 204);
+
+    // None of it answers a phone the TV does not know.
+    for path in ["/api/plugins/lamps/sheet?id=room", "/api/plugins/lamps/picture?url=http%3A%2F%2Fcamera.local%2Fshown.jpg", "/api/tv"] {
+        assert_eq!(status(&get(path, "not-a-token")), 401, "{path}");
+    }
+}
+
+#[test]
+fn the_phone_lists_the_tv_s_controls_and_runs_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let token = pair(&companion, &host);
+    let listed = exchange(port, &format!("GET /api/tv HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"));
+    assert_eq!(json_body(&listed)["controls"][0]["title"], "Everything off");
+    let run = |id: &str| {
+        let body = serde_json::json!({ "id": id }).to_string();
+        exchange(port, &format!("POST /api/tv HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()))
+    };
+    assert_eq!(status(&run("sleep")), 204);
+    // A control that fails says why in the TV's own sentence.
+    let failed = run("cec_tv_power");
+    assert_eq!(status(&failed), 400);
+    assert_eq!(json_body(&failed)["error"], "It didn't go to sleep. Try again.");
 }
 
 #[test]

@@ -263,6 +263,10 @@ fn routes(app: Shared) -> Router {
         .route("/api/plugins/install-url", post(install_plugin_url))
         .route("/api/plugins/{id}/settings", put(plugin_setting).layer(DefaultBodyLimit::max(SETTING_LIMIT)))
         .route("/api/plugins/{id}/log", get(plugin_log))
+        .route("/api/plugins/{id}/sheet", get(plugin_sheet).post(plugin_sheet_press))
+        .route("/api/plugins/{id}/picture", get(plugin_picture))
+        .route("/api/plugins/{id}/live", post(plugin_live))
+        .route("/api/tv", get(tv_controls).post(tv_control))
         .route("/api/plugins/{id}/{command}", post(plugin_command))
         .route("/api/diagnostics", get(diagnostics))
         .route("/api/devices", get(devices))
@@ -558,9 +562,17 @@ async fn text(State(app): State<Shared>, Json(b): Json<TextBody>) -> Result<Stat
 #[derive(Deserialize)]
 struct ActionBody {
     action: String,
+    /// The phone shows a sheet or a live picture itself, so the TV is left as it is.
+    #[serde(default)]
+    here: bool,
 }
+const NOT_OPENED: &str = "The TV couldn't open that. Try it from the TV.";
 /// Answers with what the press said, when it said anything.
 async fn open(State(app): State<Shared>, Json(b): Json<ActionBody>) -> Result<Response, ApiError> {
+    if b.here {
+        let pressed = on_core(&app, move |a| a.perform_here(&b.action)).await?.map_err(refused(NOT_OPENED))?;
+        return Ok(Json(pressed).into_response());
+    }
     let say = on_core(&app, move |a| a.perform(&b.action)).await?.map_err(refused("The TV couldn't open that. Try it from the TV."))?;
     Ok(match say {
         Some(say) => Json(serde_json::json!({ "say": say })).into_response(),
@@ -663,6 +675,72 @@ async fn plugin_log(State(app): State<Shared>, AxPath(id): AxPath<String>) -> Re
     Ok(Json(on_core(&app, move |a| a.plugin_log(&id)).await?).into_response())
 }
 
+#[derive(Deserialize)]
+struct SheetQuery {
+    id: String,
+}
+const NO_SHEET: &str = "The TV couldn't read that from the plugin. Try again.";
+async fn plugin_sheet(State(app): State<Shared>, AxPath(plugin): AxPath<String>, Query(q): Query<SheetQuery>) -> Result<Response, ApiError> {
+    let json = on_core(&app, move |a| a.sheet_json(&plugin, &q.id)).await?.map_err(refused(NO_SHEET))?;
+    Ok(([(header::CONTENT_TYPE, "application/json")], json).into_response())
+}
+
+#[derive(Deserialize)]
+struct SheetPressBody {
+    sheet: String,
+    row: String,
+    which: String,
+}
+async fn plugin_sheet_press(State(app): State<Shared>, AxPath(plugin): AxPath<String>, Json(b): Json<SheetPressBody>) -> Result<Response, ApiError> {
+    let pressed = on_core(&app, move |a| a.sheet_press(&plugin, &b.sheet, &b.row, &b.which)).await?.map_err(refused("The TV couldn't do that. Try again."))?;
+    Ok(Json(pressed).into_response())
+}
+
+#[derive(Deserialize)]
+struct PictureQuery {
+    url: String,
+}
+/// A live picture's frame. It is never kept, so each request shows what the camera sees now.
+async fn plugin_picture(State(app): State<Shared>, AxPath(plugin): AxPath<String>, Query(q): Query<PictureQuery>) -> Result<Response, ApiError> {
+    let bytes = on_core(&app, move |a| a.live_picture(&plugin, &q.url)).await?.map_err(|e| {
+        tracing::debug!("companion: no live picture ({e})");
+        ApiError(StatusCode::BAD_GATEWAY, "The picture isn't arriving.".into())
+    })?;
+    Ok(([(header::CONTENT_TYPE, picture_mime(&bytes)), (header::CACHE_CONTROL, "no-store")], bytes).into_response())
+}
+
+#[derive(Deserialize)]
+struct LiveBody {
+    url: String,
+    #[serde(default)]
+    title: String,
+    /// Open the picture on the TV, where the phone would otherwise ask for a new address.
+    #[serde(default)]
+    tv: bool,
+}
+async fn plugin_live(State(app): State<Shared>, AxPath(plugin): AxPath<String>, Json(b): Json<LiveBody>) -> Result<Response, ApiError> {
+    if b.tv {
+        on_core(&app, move |a| a.live_on_tv(&plugin, &b.url, &b.title)).await?.map_err(refused(NOT_OPENED))?;
+        return Ok(StatusCode::NO_CONTENT.into_response());
+    }
+    let url = on_core(&app, move |a| a.live_again(&plugin, &b.url)).await?.map_err(refused("The picture has no address now."))?;
+    Ok(Json(serde_json::json!({ "url": url })).into_response())
+}
+
+async fn tv_controls(State(app): State<Shared>) -> Result<Response, ApiError> {
+    let json = on_core(&app, |a| a.tv_controls_json()).await?.map_err(refused("The TV couldn't list its controls. Try again."))?;
+    Ok(([(header::CONTENT_TYPE, "application/json")], json).into_response())
+}
+
+#[derive(Deserialize)]
+struct TvControlBody {
+    id: String,
+}
+async fn tv_control(State(app): State<Shared>, Json(b): Json<TvControlBody>) -> Result<StatusCode, ApiError> {
+    on_core(&app, move |a| a.tv_control(&b.id)).await?.map_err(refused("The TV didn't answer. Check that HDMI-CEC is on in the TV's settings, then try again."))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn plugin_command(State(app): State<Shared>, AxPath((id, command)): AxPath<(String, String)>) -> Result<StatusCode, ApiError> {
     on_core(&app, move |a| a.plugin_command(&id, &command)).await?.map_err(refused("The TV couldn't do that with the plugin. Try again."))?;
     Ok(StatusCode::NO_CONTENT)
@@ -725,8 +803,18 @@ async fn art(State(app): State<Shared>, Query(q): Query<ArtQuery>) -> Result<Res
         return Err(ApiError(StatusCode::FORBIDDEN, "not an artwork file".into()));
     }
     let bytes = tokio::fs::read(&canonical).await.map_err(|_| ApiError(StatusCode::NOT_FOUND, "no such image".into()))?;
-    let mime = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) { "image/png" } else if bytes.starts_with(&[0xFF, 0xD8]) { "image/jpeg" } else { "application/octet-stream" };
-    Ok(([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, "private, max-age=86400")], bytes).into_response())
+    Ok(([(header::CONTENT_TYPE, picture_mime(&bytes)), (header::CACHE_CONTROL, "private, max-age=86400")], bytes).into_response())
+}
+
+/// A picture's type from its first bytes; anything else is sent as plain bytes, never as a page.
+fn picture_mime(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        "image/png"
+    } else if bytes.starts_with(&[0xFF, 0xD8]) {
+        "image/jpeg"
+    } else {
+        "application/octet-stream"
+    }
 }
 
 /// Where a sign-in a plugin started comes back to, on whatever phone made it. The phone need not

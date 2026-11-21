@@ -3,7 +3,8 @@
   // what it does. It opens over the page and leaves on a tap outside, Escape or the Back button.
   import { api, art, type Layout, type Tile } from './api';
   import Icon from './Icon.svelte';
-  import { act, isControl, press, quiet } from './state.svelte';
+  import BottomSheet from './BottomSheet.svelte';
+  import { act, app, isControl, openOnTv, panelOf, press, quiet } from './state.svelte';
   import { words } from './words';
 
   let {
@@ -15,35 +16,12 @@
 
   let layout = $state<Layout | null>(null);
   let busy = $state(false);
-  let sheet: HTMLDivElement;
+  let shell: BottomSheet;
   // The sheet's first choice takes focus as it opens.
   const focus = (el: HTMLElement) => el.focus();
-  // The sheet is one history entry, so Back closes it, and closing it any other way pops that
-  // entry. Focus goes back to whatever had it before the sheet opened.
-  let pushed = false;
-  $effect(() => {
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    history.pushState({ tileSheet: true }, '');
-    pushed = true;
-    // Pinned state comes with the tile; the layout is read so a change can be written back whole.
-    quiet(() => api.layout()).then((l) => (layout = l ?? null));
-    return () => {
-      if (pushed) {
-        pushed = false;
-        history.back();
-      }
-      if (opener?.isConnected) opener.focus({ preventScroll: true });
-    };
-  });
-  function onpopstate() {
-    if (!pushed) return;
-    pushed = false;
-    onclose();
-  }
-  function close() {
-    if (pushed) history.back();
-    else onclose();
-  }
+  // Pinned state comes with the tile; the layout is read so a change can be written back whole.
+  quiet(() => api.layout()).then((l) => (layout = l ?? null));
+  const close = () => shell.close();
 
   const isApp = $derived(tile.id.startsWith('app:'));
   // A notice has nothing to pin or hide; it can only be told not to come back.
@@ -62,8 +40,10 @@
     busy = false;
     if (done) close();
   }
+  // A control is pressed as a tap presses it; anything else opens on the TV, as the row says.
   function open() {
-    press(tile);
+    if (isControl(tile)) press(tile);
+    else openOnTv(tile);
     close();
   }
   function toggleStage() {
@@ -90,33 +70,19 @@
     if (!rowId) return;
     change(`${rowTitle} row hidden`, (l) => ({ rowVisibility: { ...l.rowVisibility, [rowId]: false } }));
   }
-  function onkeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
-    // Tab stays among the sheet's own choices while it is open.
-    if (e.key !== 'Tab' || !sheet) return;
-    const choices = [...sheet.querySelectorAll<HTMLElement>('button:not(:disabled)')];
-    if (choices.length === 0) return;
-    const [first, last] = [choices[0], choices[choices.length - 1]];
-    const inside = sheet.contains(document.activeElement);
-    if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+  // A control's own panel opens here on the phone, in this sheet's place.
+  const panel = $derived(panelOf(tile.more));
+  function adjust() {
+    const p = panel;
+    close();
+    app.panel = p;
   }
-  // A tap that began on the scrim closes the sheet; the release of the hold that opened it does not.
-  let scrimPress = false;
 </script>
 
-<svelte:window {onkeydown} {onpopstate} />
-
-<div class="scrim" role="presentation" onpointerdown={() => (scrimPress = true)} onclick={() => { if (scrimPress) close(); scrimPress = false; }}></div>
-<div class="sheet" role="dialog" aria-modal="true" aria-label={tile.title} bind:this={sheet}>
-  <div class="sheet-head">
+<BottomSheet bind:this={shell} title={tile.title} subtitle={tile.subtitle} {onclose}>
+  {#snippet lead()}
     {#if tile.iconPath}<img class="sheet-icon" src={art(tile.iconPath)} alt="" />{:else if tile.artworkPath}<img class="sheet-art" src={art(tile.artworkPath)} alt="" />{/if}
-    <div class="grow">
-      <div class="title">{tile.title}</div>
-      {#if tile.subtitle}<div class="caption">{tile.subtitle}</div>{/if}
-    </div>
-    <button class="icon-btn" onclick={close} aria-label="Close"><Icon name="close" size={22} /></button>
-  </div>
+  {/snippet}
   {#if isNotice}
     <div class="list">
       <button class="list-row" {@attach focus} disabled={busy} onclick={dismiss}>
@@ -126,8 +92,14 @@
     </div>
   {:else}
   <div class="list">
+    {#if panel}
+      <button class="list-row" {@attach focus} onclick={adjust}>
+        <span class="glyph"><Icon name="adjust" size={24} /></span>
+        <span class="grow"><span class="title">{words.adjust}</span><span class="caption">{words.adjustDetail}</span></span>
+      </button>
+    {/if}
     {#if opens}
-      <button class="list-row" {@attach focus} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">{isControl(tile) ? 'Press' : 'Open on the TV'}</span></button>
+      <button class="list-row" {@attach !panel && focus} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">{isControl(tile) ? 'Press' : 'Open on the TV'}</span></button>
     {/if}
     {#if (opens && !tile.glyph) || tile.stagePinned}
       <button class="list-row" disabled={busy} onclick={toggleStage}>
@@ -141,7 +113,7 @@
         <span class="grow"><span class="title">{tile.pinned ? words.unpinApp : words.pinApp}</span><span class="caption">{tile.pinned ? words.unpinAppDetail : words.pinAppDetail}</span></span>
       </button>
     {/if}
-    <button class="list-row" {@attach !opens && focus} disabled={busy} onclick={hide}>
+    <button class="list-row" {@attach !opens && !panel && focus} disabled={busy} onclick={hide}>
       <span class="glyph"><Icon name="hide" size={24} /></span>
       <span class="grow"><span class="title">{words.hide} {tile.title}</span><span class="caption">{words.hideDetail}</span></span>
     </button>
@@ -159,22 +131,12 @@
     {/if}
   </div>
   {/if}
-</div>
+</BottomSheet>
 
 <style>
-  .scrim { position: fixed; inset: 0; background: color-mix(in srgb, var(--velvet) 60%, transparent); z-index: 20; animation: fade 160ms ease-out; }
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; background: var(--curtain); border-radius: var(--radius-l) var(--radius-l) 0 0; border-top: 1px solid var(--curtain-edge); padding: 14px var(--side-r) calc(env(safe-area-inset-bottom) + 16px) var(--side-l); display: flex; flex-direction: column; gap: 14px; animation: rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1); max-height: 85vh; overflow-y: auto; }
-  .sheet-head { display: flex; align-items: center; gap: 12px; }
   .sheet-icon { width: 44px; height: 44px; border-radius: 11px; object-fit: cover; flex: none; }
   .sheet-art { width: 72px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; }
-  .sheet-head .title { font-weight: 600; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-  .sheet .list-row { background: var(--velvet); }
-  .sheet .list-row .title, .sheet .list-row .caption { white-space: normal; }
-  .sheet .list-row:disabled { opacity: 0.5; }
-  .sheet .list-row:focus-visible { outline: 2px solid var(--light); outline-offset: -2px; }
   .glyph { width: 32px; height: 32px; display: grid; place-items: center; color: var(--dust); flex: none; }
   .glyph.on { color: var(--light); }
-  @keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
-  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 </style>

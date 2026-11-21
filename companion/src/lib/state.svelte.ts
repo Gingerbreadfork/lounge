@@ -1,5 +1,5 @@
 // Shared, reactive app state: the live snapshot, connection, the current route and toasts.
-import { api, contact, explain, liveState, setToken, token, type State } from './api';
+import { api, contact, explain, liveState, setToken, token, type Live, type State } from './api';
 
 export const app = $state({
   route: parseRoute(location.hash),
@@ -15,6 +15,12 @@ export const app = $state({
   away: false,
   /** Why the phone is on the Pair page when it did not choose to be. */
   pairNote: null as string | null,
+  /** A plugin's panel open on the phone: a room, a thermostat, a light's own settings. */
+  panel: null as { plugin: string; id: string } | null,
+  /** A plugin's live picture open on the phone, such as a camera. */
+  live: null as Live | null,
+  /** Whether the TV's power and input controls are open on the phone. */
+  tvControls: false,
 });
 
 export type Route = { page: 'home' | 'remote' | 'layout' | 'plugins' | 'more' | 'pair'; id?: string };
@@ -238,6 +244,9 @@ export function unpair(note: string | null = FORGOTTEN) {
   app.away = false;
   app.paired = false;
   app.state = null;
+  app.panel = null;
+  app.live = null;
+  app.tvControls = false;
   app.pairNote = note;
   app.route = { page: 'pair' };
   history.replaceState(null, '', '#/pair');
@@ -274,16 +283,38 @@ export function isControl(t: { glyph?: string | null; action: string }): boolean
   return !!t.glyph && !t.action.startsWith('control:');
 }
 
+/** Shows what a press handed back for the phone's own screen. True when there was something. */
+export function show(pressed: { sheet?: { plugin: string; id: string }; live?: Live } | undefined): boolean {
+  if (pressed?.sheet) app.panel = pressed.sheet;
+  else if (pressed?.live) app.live = pressed.live;
+  return !!(pressed?.sheet || pressed?.live);
+}
+
+/** The panel a control tile's `more` names. */
+export function panelOf(more: string | null | undefined): { plugin: string; id: string } | null {
+  const at = more?.indexOf(':') ?? -1;
+  return more && at > 0 ? { plugin: more.slice(0, at), id: more.slice(at + 1) } : null;
+}
+
 /**
- * Presses a tile on the TV. What the press says is shown; a control that says nothing shows the
- * change on its own tile, and anything else is said to be opening.
+ * Presses a tile. A panel or a live picture opens here on the phone. Otherwise what the press
+ * says is shown; a control that says nothing shows the change on its own tile, and anything
+ * else is said to be opening on the TV.
  */
 export async function press(t: { title: string; action: string; glyph?: string | null }) {
   let failed = false;
-  const said = await act('', () => api.open(t.action).catch((e) => { failed = true; throw e; }));
+  const pressed = await act('', () => api.press(t.action).catch((e) => { failed = true; throw e; }));
   if (failed) return;
-  const words = said?.say ?? (isControl(t) ? '' : `Opening ${t.title} on the TV`);
+  const shown = show(pressed);
+  const words = pressed?.say ?? (shown || isControl(t) ? '' : `Opening ${t.title} on the TV`);
   if (words) toast(words);
+}
+
+/** Opens a tile on the TV itself, whatever a tap on it would show on the phone. */
+export async function openOnTv(t: { title: string; action: string }) {
+  let failed = false;
+  const said = await act('', () => api.open(t.action).catch((e) => { failed = true; throw e; }));
+  if (!failed) toast(said?.say ?? `Opening ${t.title} on the TV`);
 }
 
 /** Like `act`, for a request that answers nothing: true when it worked. */

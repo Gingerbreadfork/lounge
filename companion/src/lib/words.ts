@@ -13,6 +13,8 @@ export const words = {
   hideAllFromDetail: 'Off Continue watching until you show it',
   hideRow: 'Hide this row',
   hideRowDetail: 'The Layout tab brings it back',
+  adjust: 'Adjust',
+  adjustDetail: 'Its own settings, here on the phone',
 };
 
 /** A count with its noun: "1 minute", "15 minutes". */

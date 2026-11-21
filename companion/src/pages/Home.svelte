@@ -19,6 +19,9 @@
   function open(t: Tile) {
     // A tile to read opens nothing on the TV, so a tap is not passed on.
     if (!t.action) return;
+    // The TV's controls and its apps have a place of their own on the phone.
+    if (t.action === 'control:tv:open') return void (app.tvControls = true);
+    if (t.action === 'control:allapps') return go('home', 'apps');
     // A suggested plugin is set up here on the phone, where its settings are easy to type.
     if (t.action.startsWith('control:plugin:')) return go('plugins', t.action.slice('control:plugin:'.length));
     press(t);
@@ -137,7 +140,11 @@
     {/if}
     {#each snapshot.rows as row (row.id)}
       <section class="section">
-        <div class="section-head"><h3>{row.title}</h3>{#if tag(row.badge) === 'LIVE'}<span class="pill bad"><span class="dot"></span>Live</span>{/if}</div>
+        <div class="section-head">
+          <h3>{row.title}</h3>
+          {#if tag(row.badge) === 'LIVE'}<span class="pill bad"><span class="dot"></span>Live</span>{/if}
+          {#if row.id === 'apps'}<button class="all" onclick={() => go('home', 'apps')}>All apps<Icon name="chevron" size={16} /></button>{/if}
+        </div>
         {#if row.note}<p class="caption dust">{row.note}</p>{/if}
         <div class="row-scroller">
           {#each row.tiles.filter((t) => !t.id.startsWith('control:')) as t (t.id)}
@@ -163,6 +170,13 @@
         </div>
       </section>
     {/each}
+    {#if !snapshot.rows.some((r) => r.id === 'apps')}
+      <button class="list-row" onclick={() => go('home', 'apps')}>
+        <span class="glyph"><Icon name="apps" size={24} /></span>
+        <span class="grow"><span class="title">All apps</span><span class="caption">Open any app on the TV</span></span>
+        <Icon name="chevron" size={20} />
+      </button>
+    {/if}
   {:else if !app.error}
     <p class="empty">Waiting for the TV…</p>
   {/if}
@@ -173,6 +187,9 @@
 {/if}
 
 <style>
+  .all { display: inline-flex; align-items: center; gap: 2px; color: var(--dust); font-size: 14px; font-weight: 600; min-height: 32px; margin-left: auto; }
+  .list-row .grow { display: flex; flex-direction: column; gap: 1px; }
+  .list-row { color: var(--limelight); }
   .share { display: flex; flex-direction: column; gap: 10px; }
   .share-link { overflow-wrap: anywhere; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .share-actions { display: flex; gap: 10px; flex-wrap: wrap; }

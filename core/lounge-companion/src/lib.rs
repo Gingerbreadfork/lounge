@@ -130,6 +130,32 @@ pub struct LayoutPatch {
     pub dismissed_notices: Option<Vec<String>>,
 }
 
+/// What a press from the phone did: words to show, or something for the phone itself to open.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct Pressed {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub say: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sheet: Option<SheetRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub live: Option<LiveRef>,
+}
+
+/// A plugin's sheet by name.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct SheetRef {
+    pub plugin: String,
+    pub id: String,
+}
+
+/// A picture a plugin keeps renewing, and where it is now.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct LiveRef {
+    pub plugin: String,
+    pub title: String,
+    pub url: String,
+}
+
 /// Everything the API can do, provided by the core. An `Err` is a sentence the page shows as it
 /// is, so the implementer words every failure; see [`sentence_or`] for text it did not write.
 pub trait CompanionActions: Send + Sync {
@@ -138,6 +164,21 @@ pub trait CompanionActions: Send + Sync {
     fn snapshot_json(&self) -> String;
     /// Does what a tile's action says, and gives back anything the press has to say.
     fn perform(&self, action: &str) -> Result<Option<String>, String>;
+    /// As `perform`, but a sheet or a live picture is given back for the phone to show.
+    fn perform_here(&self, action: &str) -> Result<Pressed, String>;
+    /// A plugin's sheet as JSON, with what each row can do but not the actions behind it.
+    fn sheet_json(&self, plugin: &str, id: &str) -> Result<String, String>;
+    /// Presses a row of a sheet this phone was given. `which` is press, down or up.
+    fn sheet_press(&self, plugin: &str, sheet: &str, row: &str, which: &str) -> Result<Pressed, String>;
+    /// A live picture a press handed to a phone, fetched now.
+    fn live_picture(&self, plugin: &str, url: &str) -> Result<Vec<u8>, String>;
+    /// A new address for a live picture whose address has stopped answering.
+    fn live_again(&self, plugin: &str, url: &str) -> Result<String, String>;
+    /// Opens on the TV a live picture a phone is showing, under the title the phone shows it by.
+    fn live_on_tv(&self, plugin: &str, url: &str, title: &str) -> Result<(), String>;
+    /// The TV's power and input controls as JSON.
+    fn tv_controls_json(&self) -> Result<String, String>;
+    fn tv_control(&self, id: &str) -> Result<(), String>;
     fn launch(&self, package: &str) -> Result<(), String>;
     /// up, down, left, right, center, back, home, menu, play_pause, rewind, fast_forward, volume_up, volume_down, mute.
     fn send_key(&self, key: &str) -> Result<(), String>;

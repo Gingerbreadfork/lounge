@@ -206,6 +206,10 @@ class MainActivity : ComponentActivity() {
         platform.inFront = { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
         platform.onScreen = { started }
         platform.keysForOtherApps = { power.status.value is tv.lounge.power.PowerStatus.Ready }
+        // The phone's TV controls are the TV controls sheet's own rows.
+        val phoneTv = tv.lounge.feature.home.PhoneTvControls(power)
+        platform.listTvControls = { kotlinx.coroutines.runBlocking { phoneTv.list() } }
+        platform.pressTvControl = { id -> kotlinx.coroutines.runBlocking { phoneTv.run(id) } }
         lifecycleScope.launch {
             platform.commands.collect { cmd ->
                 when (cmd) {

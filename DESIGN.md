@@ -349,6 +349,14 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
   replaced by a fresh one as soon as a phone uses it. The phone app mirrors these tokens (`companion/src/app.css`) so TV and
   phone read as one product; on the phone the focused tile's light becomes the accent, with velvet
   or limelight on it, whichever reads better, and the core's fallback light shows as `houselight`.
+  What opens over a page on the phone is a sheet rising from the bottom edge, `curtain` with a
+  20 px top radius, closed by its own button, a tap outside or Back. A plugin's sheet (5.4) is
+  one of these with the TV's rows: a step row ends in minus, its value and plus, a confirm row
+  takes `ember` while it asks, and a row that opens another sheet puts a back arrow in the
+  header. TV controls is another, opened from the power button on the Remote tab or the TV controls tile, each row
+  saying "Sending…", "Sent" or "Didn't work" with the reason under its title. A live picture
+  is full screen on black with its title at the bottom left and "On the TV" beside it. None of
+  these changes what the TV shows.
 
 - **Power Setup sheet**: heading, one status sentence, then a single row that is the only thing
   to do right now: Connect (houselight), Waiting for you to allow it…, Connected (signal), or

@@ -1,6 +1,10 @@
 <script lang="ts">
   import { AWAY, light, onLight } from './lib/api';
   import { app, go } from './lib/state.svelte';
+  import LiveView from './lib/LiveView.svelte';
+  import PluginPanel from './lib/PluginPanel.svelte';
+  import TvControls from './lib/TvControls.svelte';
+  import Apps from './pages/Apps.svelte';
   import Home from './pages/Home.svelte';
   import Remote from './pages/Remote.svelte';
   import Layout from './pages/Layout.svelte';
@@ -39,11 +43,20 @@
     {#if app.away}<p class="away">{AWAY}</p>{/if}
   </div>
 
-  {#if app.route.page === 'home'}<Home />
+  {#if app.route.page === 'home' && app.route.id === 'apps'}<Apps />
+  {:else if app.route.page === 'home'}<Home />
   {:else if app.route.page === 'remote'}<Remote />
   {:else if app.route.page === 'layout'}<Layout />
   {:else if app.route.page === 'plugins'}<Plugins id={app.route.id} />
   {:else}<More />{/if}
+
+  {#if app.panel}
+    {#key app.panel}<PluginPanel plugin={app.panel.plugin} id={app.panel.id} onclose={() => (app.panel = null)} />{/key}
+  {/if}
+  {#if app.tvControls}<TvControls onclose={() => (app.tvControls = false)} />{/if}
+  {#if app.live}
+    {#key app.live}<LiveView live={app.live} onclose={() => (app.live = null)} />{/key}
+  {/if}
 
   <nav class="tabs" aria-label="Sections">
     {#each tabs as t (t.page)}

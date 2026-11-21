@@ -15,7 +15,24 @@ export type Tile = {
   provider?: string | null; providerName?: string | null;
   /** A control: the glyph drawn where a picture would go, and whether the thing is on. */
   glyph?: string | null; on?: boolean | null;
+  /** The panel that adjusts a control, as its plugin's id, a colon and the panel's own id. */
+  more?: string | null;
 };
+/** A picture a plugin keeps renewing, such as a camera, and where it is now. */
+export type Live = { plugin: string; title: string; url: string };
+/** What a press did: words to show, or a panel or a live picture for the phone to open. */
+export type Pressed = { say?: string; sheet?: { plugin: string; id: string }; live?: Live };
+/** One row of a plugin's panel. A step row says which of down, up and a press of its own it has. */
+export type PanelRow = {
+  id: string; kind: 'press' | 'step' | 'open' | 'confirm' | 'group' | 'text'; title: string;
+  glyph?: string | null; subtitle?: string | null; value?: string | null; on?: boolean | null;
+  down?: boolean; up?: boolean; press?: boolean; sheet?: string; ask?: string;
+};
+export type Panel = { title: string; subtitle?: string | null; footnote?: string | null; rows: PanelRow[] };
+/** One of the TV's power or input controls; `group` is the label it sits under. */
+export type TvControl = { id: string; title: string; value?: string | null; group?: string | null; glyph: string };
+/** With a `note` there is nothing to press, and the note says how to set that up. */
+export type TvControls = { note?: string | null; controls: TvControl[] };
 export type Row = { id: string; title: string; kind: string; size: string; badge?: string | null; note?: string | null; tiles: Tile[] };
 export type Spotlight = {
   id: string; kind: string; category: string; title: string; lines: string[]; progress?: number | null;
@@ -85,6 +102,10 @@ const SLOW = 'The TV took too long to answer. Check it is on, then try again.';
 /** How long a request may take before the phone gives up on it; uploads and installs get longer. */
 const WAIT_MS = 8000;
 const UPLOAD_WAIT_MS = 120000;
+/** A TV control is tried for as long as the TV itself tries it. */
+const CONTROL_WAIT_MS = 25000;
+/** A live picture's frame may take as long as the TV waits for the camera. */
+const LIVE_WAIT_MS = 10000;
 
 /** Told whenever the TV answers, or fails to, so the page can say when it is away. */
 export const contact = { heard: () => {}, missed: () => {} };
@@ -109,6 +130,25 @@ export function explain(e: unknown): string {
   if (e instanceof ApiError) return e.message;
   console.warn(e);
   return "That didn't work. Try again.";
+}
+
+/** A picture from the TV, sent with the token as every request is. */
+async function picture(path: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const t = token();
+  if (t) headers.Authorization = `Bearer ${t}`;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), LIVE_WAIT_MS);
+  try {
+    const res = await fetch(path, { headers, signal: abort.signal, cache: 'no-store' });
+    if (!res.ok) throw new ApiError(res.status, said(res.status, ''));
+    return await res.blob();
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(0, abort.signal.aborted ? SLOW : AWAY);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function call<T>(method: string, path: string, body?: unknown, raw?: BodyInit, wait = WAIT_MS): Promise<T> {
@@ -148,6 +188,18 @@ export const api = {
   text: (text: string) => call<void>('POST', '/api/text', { text }),
   /** Answers with what the press said, when it said anything. */
   open: (action: string) => call<{ say?: string } | undefined>('POST', '/api/open', { action }),
+  /** Presses a tile for this phone: a panel or a live picture comes back to be shown here. */
+  press: (action: string) => call<Pressed | undefined>('POST', '/api/open', { action, here: true }),
+  panel: (plugin: string, id: string) => call<Panel>('GET', `/api/plugins/${encodeURIComponent(plugin)}/sheet?id=${encodeURIComponent(id)}`),
+  /** Presses a row of a panel this phone was given: its own press, or a step down or up. */
+  panelPress: (plugin: string, sheet: string, row: string, which: 'press' | 'down' | 'up') =>
+    call<Pressed>('POST', `/api/plugins/${encodeURIComponent(plugin)}/sheet`, { sheet, row, which }),
+  livePicture: (live: Live) => picture(`/api/plugins/${encodeURIComponent(live.plugin)}/picture?url=${encodeURIComponent(live.url)}`),
+  /** A new address for a live picture whose address has stopped answering. */
+  liveAgain: (live: Live) => call<{ url: string }>('POST', `/api/plugins/${encodeURIComponent(live.plugin)}/live`, { url: live.url }),
+  liveOnTv: (live: Live) => call<void>('POST', `/api/plugins/${encodeURIComponent(live.plugin)}/live`, { url: live.url, title: live.title, tv: true }),
+  tv: () => call<TvControls>('GET', '/api/tv'),
+  tvControl: (id: string) => call<void>('POST', '/api/tv', { id }, undefined, CONTROL_WAIT_MS),
   launch: (pkg: string) => call<void>('POST', '/api/launch', { package: pkg }),
   search: (query: string) => call<void>('POST', '/api/search', { query }),
   layout: () => call<Layout>('GET', '/api/layout'),

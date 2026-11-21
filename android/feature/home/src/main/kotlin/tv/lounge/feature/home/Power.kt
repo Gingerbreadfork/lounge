@@ -35,6 +35,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import tv.lounge.core.PlatformException
+import tv.lounge.core.TvControl
+import tv.lounge.core.TvControls
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.power.CecDevice
@@ -284,6 +288,66 @@ private fun controlFailure(action: PowerAction, power: PowerSetup): String = whe
     else -> "The TV didn't answer. Check that HDMI-CEC is on in the TV's settings, then try again."
 }
 
+/** The other devices the TV can be switched to, when there is more than this one to choose from. */
+internal fun switchable(devices: List<CecDevice>): List<CecDevice> =
+    devices.filter { !it.isTv && it.physicalAddress != 0 }.takeIf { it.size > 1 }.orEmpty()
+
+internal const val PHONE_NEEDS_POWER_SETUP = "Power and input need Power Setup. On the TV, open Settings, then Power Setup."
+
+/**
+ * What the phone lists as TV controls. A box plugged into a TV gets the TV controls sheet's
+ * power and input rows, each under the id of the action it runs. A television, or a box whose
+ * cable carries no control, can only be put to sleep.
+ */
+internal fun phoneTvControls(ready: Boolean, hasCec: Boolean, isTelevision: Boolean, devices: List<CecDevice>): TvControls {
+    if (!ready) return TvControls(note = PHONE_NEEDS_POWER_SETUP, controls = emptyList())
+    if (isTelevision) return TvControls(note = null, controls = listOf(TvControl("sleep", "Turn the TV off", null, null, "power")))
+    if (!hasCec) return TvControls(note = null, controls = listOf(TvControl("sleep", "Go to sleep", null, null, "power")))
+    val tv = devices.firstOrNull { it.isTv }
+    val rows = buildList {
+        add(TvControl("cec_otp", "Wake the TV and switch to Lounge", tv?.let { if (it.isOn) "TV is on" else "TV is off" }, null, "tv"))
+        add(TvControl("cec_tv_power", "TV power", "On or off", null, "power"))
+        add(TvControl("sleep", "Everything off", "Sleep, TV follows", null, "power"))
+        switchable(devices).forEach { d ->
+            add(TvControl("cec_select_${d.logicalAddress}", d.name, if (d.isOn) "On" else "Standby", "Switch the TV to", "input"))
+        }
+    }
+    return TvControls(note = null, controls = rows)
+}
+
+/** How long the phone's list waits for Power Setup, which is busy while it is being connected. */
+private const val PHONE_STATUS_WAIT_MS = 4_000L
+
+/** The TV's power and input controls for a paired phone: what there is, and running one. */
+class PhoneTvControls(private val power: PowerSetup) {
+    /** The rows as they stand now. Nothing is shown on the TV to find out. */
+    suspend fun list(): TvControls {
+        val status = withTimeoutOrNull(PHONE_STATUS_WAIT_MS) { power.refresh() } ?: power.status.value
+        val ready = status is PowerStatus.Ready
+        val onCable = ready && power.hasTvControls
+        return phoneTvControls(ready, power.hasCec, power.isTelevision, if (onCable) power.cecDevices() else emptyList())
+    }
+
+    /** Runs the row with this id, if it is one the list holds now. A failure is thrown as a sentence saying what to check. */
+    suspend fun run(id: String) {
+        val devices = if (power.hasTvControls) power.cecDevices() else emptyList()
+        val listed = phoneTvControls(ready = true, power.hasCec, power.isTelevision, devices).controls.any { it.id == id }
+        val action = when {
+            !listed -> null
+            id == power.oneTouchPlay.id -> power.oneTouchPlay
+            id == power.tvPower.id -> power.tvPower
+            id == power.everythingOff.id -> power.everythingOff
+            else -> switchable(devices).map { power.selectDevice(it) }.firstOrNull { it.id == id }
+        } ?: throw PlatformException.Failed("That control isn't there any more. Close TV controls and open it again.")
+        val worked = try {
+            power.run(action).ok
+        } catch (e: PrivilegedException) {
+            throw PlatformException.Failed(e.message ?: controlFailure(action, power))
+        }
+        if (!worked) throw PlatformException.Failed(controlFailure(action, power))
+    }
+}
+
 /**
  * The TV controls card's sheet: power, input and sound through Power Setup, with volume and
  * playback working even without it.
@@ -354,8 +418,8 @@ fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Un
                 SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the soundbar", subtitle = reasonFor(power.systemAudioOn), subtitleLines = WHOLE, value = valueFor(power.systemAudioOn), accent = accentFor(power.systemAudioOn), onClick = { run(power.systemAudioOn) })
                 SheetRow(icon = LoungeIcons.Soundbar, title = "Sound through the TV", subtitle = reasonFor(power.systemAudioOff), subtitleLines = WHOLE, value = valueFor(power.systemAudioOff), accent = accentFor(power.systemAudioOff), onClick = { run(power.systemAudioOff) })
             }
-            val others = devices.filter { !it.isTv && it.physicalAddress != 0 }
-            if (others.size > 1) {
+            val others = switchable(devices)
+            if (others.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 Text("Switch the TV to", style = LoungeTheme.typography.meta, color = colors.dust)
                 others.forEach { d ->

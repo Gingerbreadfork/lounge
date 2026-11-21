@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.runBlocking
 import tv.lounge.core.Platform
 import tv.lounge.core.PlatformException
+import tv.lounge.core.TvControls
 
 /** Commands the core asks the shell to show in its own UI rather than hand to Android. */
 sealed interface UiCommand {
@@ -205,6 +206,16 @@ class AndroidPlatform(private val context: Context) : Platform {
 
     /** Set by the shell: whether Power Setup can press keys for another app in front. */
     @Volatile var keysForOtherApps: () -> Boolean = { false }
+
+    /** Set by the shell: the TV's power and input controls, as the phone lists them. */
+    @Volatile var listTvControls: () -> TvControls = { TvControls(note = null, controls = emptyList()) }
+
+    /** Set by the shell: runs one of those rows by its id, or throws with a sentence saying why not. */
+    @Volatile var pressTvControl: (String) -> Unit = { throw PlatformException.Failed("Lounge on the TV is still starting. Try again in a moment.") }
+
+    override fun tvControls(): TvControls = listTvControls()
+
+    override fun runTvControl(id: String) = pressTvControl(id)
 
     /**
      * A key from the phone. Home, volume and media keys always arrive; the d-pad, Back and Menu

@@ -2,7 +2,7 @@
 //! failure it hands the phone is a sentence with the cause and the fix.
 
 use crate::{engine, now_ms, plugins, worker, CompanionStatus, CoreError, Inner, PairingInfo};
-use lounge_companion::{reads_as_sentence, sentence_or, AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, NamedRef, RowRef, SourceRef};
+use lounge_companion::{reads_as_sentence, sentence_or, AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, LiveRef, NamedRef, Pressed, RowRef, SheetRef, SourceRef};
 use lounge_graph::Layout;
 use lounge_plugins::http::{Fetcher, Reach};
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,56 @@ struct CoreActions {
 impl CoreActions {
     fn inner(&self) -> Result<Arc<Inner>, String> {
         self.inner.upgrade().ok_or_else(|| "Lounge on the TV is restarting. Try again in a moment.".to_string())
+    }
+}
+
+/// What a press left, in the phone's terms: a sheet's plugin and id, or a live picture's
+/// plugin, title and address.
+fn pressed(did: engine::Did) -> Pressed {
+    let mut pressed = Pressed { say: did.say, ..Pressed::default() };
+    let Some(shows) = did.shows else { return pressed };
+    if let Some((plugin, id)) = shows.strip_prefix("sheet:").and_then(|s| s.split_once(':')) {
+        pressed.sheet = Some(SheetRef { plugin: plugin.to_string(), id: id.to_string() });
+    } else if let Some((plugin, title, url)) = worker::live_parts(&shows) {
+        pressed.live = Some(LiveRef { plugin: plugin.to_string(), title: title.to_string(), url: url.to_string() });
+    }
+    pressed
+}
+
+/// A sheet for the phone: every row with what it can do, and none of the actions behind it.
+fn phone_sheet(sheet: &crate::PluginSheet) -> serde_json::Value {
+    use crate::PluginSheetRowKind as Kind;
+    let rows: Vec<serde_json::Value> = sheet
+        .rows
+        .iter()
+        .map(|r| {
+            let mut row = serde_json::json!({ "id": r.id, "title": r.title, "glyph": r.glyph, "subtitle": r.subtitle, "value": r.value, "on": r.on });
+            let does = match &r.kind {
+                Kind::Text => serde_json::json!({ "kind": "text" }),
+                Kind::Group => serde_json::json!({ "kind": "group" }),
+                Kind::Press { .. } => serde_json::json!({ "kind": "press" }),
+                Kind::Step { down, up, press } => serde_json::json!({ "kind": "step", "down": down.is_some(), "up": up.is_some(), "press": press.is_some() }),
+                Kind::Open { sheet } => serde_json::json!({ "kind": "open", "sheet": sheet }),
+                Kind::Confirm { ask, .. } => serde_json::json!({ "kind": "confirm", "ask": ask }),
+            };
+            if let (Some(row), Some(does)) = (row.as_object_mut(), does.as_object()) {
+                row.extend(does.clone());
+            }
+            row
+        })
+        .collect();
+    serde_json::json!({ "title": sheet.title, "subtitle": sheet.subtitle, "footnote": sheet.footnote, "rows": rows })
+}
+
+/// The action behind one press of a sheet's row: `which` is press, down or up.
+fn row_action(sheet: &crate::PluginSheet, row: &str, which: &str) -> Option<String> {
+    use crate::PluginSheetRowKind as Kind;
+    match (&sheet.rows.iter().find(|r| r.id == row)?.kind, which) {
+        (Kind::Press { action } | Kind::Confirm { action, .. }, "press") => Some(action.clone()),
+        (Kind::Step { press, .. }, "press") => press.clone(),
+        (Kind::Step { down, .. }, "down") => down.clone(),
+        (Kind::Step { up, .. }, "up") => up.clone(),
+        _ => None,
     }
 }
 
@@ -64,14 +114,18 @@ fn not_installed(e: String) -> String {
     "That file isn't a Lounge plugin, or it was damaged on the way. Get it again, then install it.".into()
 }
 
+/// The calls a paired phone makes, as the server hands them to the core.
+pub(crate) fn actions(inner: &Arc<Inner>) -> Arc<dyn CompanionActions> {
+    Arc::new(CoreActions { inner: Arc::downgrade(inner) })
+}
+
 pub(crate) fn start(inner: &Arc<Inner>, port: u16) -> Result<(), String> {
     let mut slot = inner.companion.lock();
     if slot.as_ref().is_some_and(|c| port == 0 || c.port == port) {
         return Ok(());
     }
     *slot = None;
-    let actions: Arc<dyn CompanionActions> = Arc::new(CoreActions { inner: Arc::downgrade(inner) });
-    let companion = lounge_companion::Companion::start(port, Path::new(&inner.config.data_dir), actions).map_err(|e| e.to_string())?;
+    let companion = lounge_companion::Companion::start(port, Path::new(&inner.config.data_dir), actions(inner)).map_err(|e| e.to_string())?;
     tracing::info!("companion listening on port {}", companion.port);
     *slot = Some(companion);
     Ok(())
@@ -208,6 +262,62 @@ impl CompanionActions for CoreActions {
     fn perform(&self, action: &str) -> Result<Option<String>, String> {
         let inner = self.inner()?;
         engine::perform(&inner, action).map(|done| done.say).map_err(|e| failed_to(&inner, action, e))
+    }
+
+    fn perform_here(&self, action: &str) -> Result<Pressed, String> {
+        let inner = self.inner()?;
+        engine::perform_for(&inner, action, true).map(pressed).map_err(|e| failed_to(&inner, action, e))
+    }
+
+    fn sheet_json(&self, plugin: &str, id: &str) -> Result<String, String> {
+        let inner = self.inner()?;
+        let sheet = crate::PluginSheet::from(inner.plugins.read_sheet(plugin, id)?);
+        let json = phone_sheet(&sheet).to_string();
+        inner.plugins.note_phone_sheet(plugin, id, sheet);
+        Ok(json)
+    }
+
+    fn sheet_press(&self, plugin: &str, sheet: &str, row: &str, which: &str) -> Result<Pressed, String> {
+        let inner = self.inner()?;
+        // The row is pressed as the phone was shown it; a TV that has since restarted reads it again.
+        let shown = match inner.plugins.phone_sheet(plugin, sheet) {
+            Some(shown) => shown,
+            None => crate::PluginSheet::from(inner.plugins.read_sheet(plugin, sheet)?),
+        };
+        let action = row_action(&shown, row, which).ok_or("That has changed since it was shown. Close this and open it again.")?;
+        let link = lounge_graph::DeepLink::PluginResolve { plugin: plugin.to_string(), action };
+        engine::dispatch_for(&inner, link, true).map(pressed).map_err(|e| failed_to(&inner, "press:", e))
+    }
+
+    fn live_picture(&self, plugin: &str, url: &str) -> Result<Vec<u8>, String> {
+        let inner = self.inner()?;
+        // Only an address a press handed out is fetched, never one the phone made up.
+        inner.plugins.live_action(plugin, url).ok_or("not a picture that is being shown")?;
+        inner.plugins.picture(plugin, url)
+    }
+
+    fn live_again(&self, plugin: &str, url: &str) -> Result<String, String> {
+        engine::live_again(&*self.inner()?, plugin, url).map_err(|e| e.to_string())
+    }
+
+    fn live_on_tv(&self, plugin: &str, url: &str, title: &str) -> Result<(), String> {
+        let inner = self.inner()?;
+        let action = inner.plugins.live_action(plugin, url).ok_or("The picture has no address now. Open it again.")?;
+        let link = if action.is_empty() {
+            lounge_graph::DeepLink::Control(worker::live_control(plugin, title, url))
+        } else {
+            lounge_graph::DeepLink::PluginResolve { plugin: plugin.to_string(), action }
+        };
+        engine::dispatch(&inner, link).map(|_| ()).map_err(|e| failed_to(&inner, "press:", e))
+    }
+
+    fn tv_controls_json(&self) -> Result<String, String> {
+        let controls = self.inner()?.platform.tv_controls().map_err(|e| e.to_string())?;
+        serde_json::to_string(&controls).map_err(|e| e.to_string())
+    }
+
+    fn tv_control(&self, id: &str) -> Result<(), String> {
+        self.inner()?.platform.run_tv_control(id.to_string()).map_err(|e| e.to_string())
     }
 
     fn launch(&self, package: &str) -> Result<(), String> {
@@ -491,6 +601,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn what_a_press_left_reaches_the_phone_as_a_sheet_or_a_live_picture() {
+        let did = |shows: &str| engine::Did { say: Some("Done".into()), shows: Some(shows.into()) };
+        // A sheet's own id may hold colons; the plugin's never does.
+        let sheet = pressed(did("sheet:tv.lounge.homeassistant:room:living_room"));
+        assert_eq!(sheet.sheet, Some(SheetRef { plugin: "tv.lounge.homeassistant".into(), id: "room:living_room".into() }));
+        assert_eq!((sheet.say.as_deref(), sheet.live), (Some("Done"), None));
+        let live = pressed(did("live:tv.lounge.homeassistant\nFront door\nhttp://ha.local:8123/api/camera_proxy/camera.door?token=abc"));
+        assert_eq!(live.live, Some(LiveRef { plugin: "tv.lounge.homeassistant".into(), title: "Front door".into(), url: "http://ha.local:8123/api/camera_proxy/camera.door?token=abc".into() }));
+        // Anything else was opened on the TV, so the phone has only the words.
+        assert_eq!(pressed(did("search:lamps")), Pressed { say: Some("Done".into()), sheet: None, live: None });
+        assert_eq!(pressed(engine::Did::default()), Pressed::default());
+    }
+
+    #[test]
     fn a_link_to_install_from_never_reaches_the_tv_itself() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -520,6 +644,8 @@ mod tests {
         fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
         fn preferences(&self) -> Result<std::collections::HashMap<String, String>, crate::PlatformError> { Ok(Default::default()) }
         fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn tv_controls(&self) -> Result<crate::TvControls, crate::PlatformError> { Ok(crate::TvControls::default()) }
+        fn run_tv_control(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
     }
 
     /// Remembers the keys and controls it is sent, in order.
@@ -546,6 +672,8 @@ mod tests {
         fn type_text(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
         fn preferences(&self) -> Result<std::collections::HashMap<String, String>, crate::PlatformError> { Ok(Default::default()) }
         fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn tv_controls(&self) -> Result<crate::TvControls, crate::PlatformError> { Ok(crate::TvControls::default()) }
+        fn run_tv_control(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
     }
 
     #[test]
@@ -605,6 +733,8 @@ mod tests {
             self.restored.lock().push(preferences);
             Ok(())
         }
+        fn tv_controls(&self) -> Result<crate::TvControls, crate::PlatformError> { Ok(crate::TvControls::default()) }
+        fn run_tv_control(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
     }
 
     #[test]

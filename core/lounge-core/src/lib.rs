@@ -449,6 +449,27 @@ pub struct QrCode {
     pub dark: Vec<bool>,
 }
 
+/// The TV's power and input controls, as the phone lists them.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, uniffi::Record)]
+pub struct TvControls {
+    /// Why power and input are missing, and where to set them up, when they are.
+    pub note: Option<String>,
+    pub controls: Vec<TvControl>,
+}
+
+/// One row of [TvControls].
+#[derive(Clone, Debug, Default, PartialEq, Serialize, uniffi::Record)]
+pub struct TvControl {
+    pub id: String,
+    pub title: String,
+    /// How things stand, at the row's end: "TV is on", "Standby".
+    pub value: Option<String>,
+    /// The label the row sits under, when it has one: "Switch the TV to".
+    pub group: Option<String>,
+    /// tv, power or input.
+    pub glyph: String,
+}
+
 /// What a press did, when it worked.
 #[derive(Clone, Debug, Default, PartialEq, uniffi::Record)]
 pub struct Performed {
@@ -784,6 +805,10 @@ pub trait Platform: Send + Sync {
     fn preferences(&self) -> Result<std::collections::HashMap<String, String>, PlatformError>;
     /// Sets the settings a backup carried. A name or a value the shell does not know is left as it is.
     fn restore_preferences(&self, preferences: std::collections::HashMap<String, String>) -> Result<(), PlatformError>;
+    /// The TV's power and input controls as they stand now, for the phone to list.
+    fn tv_controls(&self) -> Result<TvControls, PlatformError>;
+    /// Runs one of those controls by its id. The error is a sentence saying what to check.
+    fn run_tv_control(&self, id: String) -> Result<(), PlatformError>;
 }
 
 #[uniffi::export(with_foreign)]
@@ -794,6 +819,14 @@ pub trait SnapshotListener: Send + Sync {
 // ---------------------------------------------------------------------------
 // The core object
 // ---------------------------------------------------------------------------
+
+impl Core {
+    /// The calls a paired phone makes, for a test to press as a phone does.
+    #[doc(hidden)]
+    pub fn as_phone(&self) -> Arc<dyn lounge_companion::CompanionActions> {
+        companion::actions(&self.inner)
+    }
+}
 
 pub(crate) struct Inner {
     pub config: CoreConfig,
@@ -1130,17 +1163,11 @@ impl Core {
     /// The sheet a plugin describes under `id`. Blocks while the plugin answers.
     pub fn plugin_sheet(&self, plugin: String, id: String) -> Result<PluginSheet, CoreError> {
         self.count();
-        let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
-        self.inner.plugins.call(plugins::PluginJob::Sheet { plugin: plugin.clone(), id, reply: reply_tx }).map_err(|detail| CoreError::Plugin { detail })?;
-        reply_rx
-            .recv_timeout(std::time::Duration::from_secs(15))
-            .map_err(|_| CoreError::Plugin { detail: format!("{plugin} did not answer in time") })?
-            .map(PluginSheet::from)
-            .map_err(|detail| CoreError::Plugin { detail })
+        self.inner.plugins.read_sheet(&plugin, &id).map(PluginSheet::from).map_err(|detail| CoreError::Plugin { detail })
     }
 
-    /// Hands a sheet row's action to its plugin. Only the TV's own screens call this, so a
-    /// phone cannot send a plugin an action it never put on a tile.
+    /// Hands a sheet row's action to its plugin. Only the TV's own screens call this; a phone
+    /// names a row of a sheet it was given, so it cannot send a plugin an action of its own.
     pub fn plugin_sheet_press(&self, plugin: String, action: String) -> Result<Performed, CoreError> {
         self.count();
         engine::dispatch(&self.inner, lounge_graph::DeepLink::PluginResolve { plugin, action })
@@ -1150,18 +1177,7 @@ impl Core {
     /// picture a tile or a sheet opened can be asked about, with the action that opened it.
     pub fn plugin_live(&self, plugin: String, url: String) -> Result<String, CoreError> {
         self.count();
-        let none = || CoreError::Plugin { detail: "The picture has no address now.".to_string() };
-        let action = self.inner.plugins.live_action(&plugin, &url).ok_or_else(none)?;
-        let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
-        self.inner.plugins.call(plugins::PluginJob::Resolve { plugin: plugin.clone(), action: action.clone(), reply: reply_tx }).map_err(|detail| CoreError::Plugin { detail })?;
-        let fresh = reply_rx
-            .recv_timeout(std::time::Duration::from_secs(15))
-            .map_err(|_| CoreError::Plugin { detail: format!("{plugin} did not answer in time") })?
-            .map_err(|detail| CoreError::Plugin { detail })?
-            .live
-            .ok_or_else(none)?;
-        self.inner.plugins.note_live(&plugin, &fresh, &action);
-        Ok(fresh)
+        engine::live_again(&self.inner, &plugin, &url)
     }
 
     /// Fetches a picture for a plugin's live view, by the rules the plugin itself fetches under.

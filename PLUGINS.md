@@ -438,6 +438,11 @@ often; when a press changes something, update what you kept so the next read sho
 A sheet opens from a tile whose action is `sheet`, from `more`, from a search result, or from
 another sheet.
 
+The phone shows the same sheet on its own screen when a tile is tapped there, and the TV carries
+on with what it was showing. A step row has a minus and a plus button for `down` and `up`, and a
+`live` picture opens full screen on the phone. Nothing in the plugin changes for this: the rows,
+the actions and the answers are the ones the TV uses.
+
 ## Screensavers
 
 A plugin can add abstract screensavers that the TV draws on its own GPU. The plugin never draws:

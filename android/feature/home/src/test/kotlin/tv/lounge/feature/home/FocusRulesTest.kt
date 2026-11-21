@@ -1,5 +1,6 @@
 package tv.lounge.feature.home
 
+import tv.lounge.power.CecDevice
 import androidx.compose.ui.input.key.Key
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
@@ -24,6 +25,38 @@ class FocusRulesTest {
         assertEquals(0, topBarEdge(Key.DirectionRight, first, first, last))
         assertEquals(0, topBarEdge(Key.DirectionLeft, middle, first, last))
         assertEquals(0, topBarEdge(Key.DirectionDown, first, first, last))
+    }
+
+    @Test
+    fun thePhoneListsOnlyTheTvControlsThisDeviceCanRun() {
+        val set = CecDevice(logicalAddress = 0, type = 0, name = "TV", powerStatus = 1, physicalAddress = 0)
+        val lounge = CecDevice(logicalAddress = 4, type = 4, name = "Streamer", powerStatus = 0, physicalAddress = 0x1000)
+        val console = CecDevice(logicalAddress = 8, type = 4, name = "Console", powerStatus = 1, physicalAddress = 0x2000)
+        val cable = listOf(set, lounge, console)
+
+        // Without Power Setup there is nothing to press, and the phone is told where to set it up.
+        val none = phoneTvControls(ready = false, hasCec = true, isTelevision = false, devices = cable)
+        assertEquals(PHONE_NEEDS_POWER_SETUP to emptyList<String>(), none.note to none.controls.map { it.id })
+
+        // A box plugged into a TV: the sheet's power rows, then the inputs under their own label.
+        val box = phoneTvControls(ready = true, hasCec = true, isTelevision = false, devices = cable)
+        assertEquals(null, box.note)
+        assertEquals(listOf("cec_otp", "cec_tv_power", "sleep", "cec_select_4", "cec_select_8"), box.controls.map { it.id })
+        assertEquals(listOf("TV is off", "On or off", "Sleep, TV follows", "On", "Standby"), box.controls.map { it.value })
+        assertEquals(listOf(null, null, null, "Switch the TV to", "Switch the TV to"), box.controls.map { it.group })
+        assertEquals(listOf("Streamer", "Console"), box.controls.drop(3).map { it.title })
+
+        // With nothing else on the cable there is nothing to switch to.
+        val alone = phoneTvControls(ready = true, hasCec = true, isTelevision = false, devices = listOf(lounge))
+        assertEquals(listOf("cec_otp", "cec_tv_power", "sleep"), alone.controls.map { it.id })
+        assertEquals(null, alone.controls.first().value)
+
+        // A television cannot wake or switch itself over the cable, and a box without control
+        // on its cable cannot reach the TV: each can only sleep.
+        val television = phoneTvControls(ready = true, hasCec = true, isTelevision = true, devices = cable)
+        assertEquals(listOf("sleep" to "Turn the TV off"), television.controls.map { it.id to it.title })
+        val deaf = phoneTvControls(ready = true, hasCec = false, isTelevision = false, devices = cable)
+        assertEquals(listOf("sleep" to "Go to sleep"), deaf.controls.map { it.id to it.title })
     }
 
     @Test

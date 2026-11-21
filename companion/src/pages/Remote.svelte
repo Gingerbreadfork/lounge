@@ -3,6 +3,7 @@
   import Icon from '../lib/Icon.svelte';
   import { app, connectionLabel, done, toast } from '../lib/state.svelte';
 
+
   let text = $state('');
   let listening = $state(false);
   let recognition: any = null;
@@ -101,7 +102,10 @@
 <main class="page remote">
   <header class="page-head">
     <div><p class="meta">{app.state?.device.name ?? 'Your TV'}</p><h1>Remote</h1></div>
-    <span class="pill" class:on={app.connected}>{connectionLabel()}</span>
+    <div class="head-end">
+      <span class="pill" class:on={app.connected}>{connectionLabel()}</span>
+      <button class="power" onclick={() => (app.tvControls = true)} aria-label="TV power and input"><Icon name="power" size={24} /></button>
+    </div>
   </header>
 
   <section class="dpad" aria-label="Direction pad">
@@ -148,6 +152,9 @@
 
 <style>
   .remote { gap: 26px; }
+  .head-end { display: flex; align-items: center; gap: 12px; }
+  .power { width: 48px; height: 48px; border-radius: 50%; background: var(--curtain); color: var(--limelight); display: grid; place-items: center; flex: none; box-shadow: inset 0 0 0 1px var(--curtain-edge); transition: transform 90ms ease-out, background 90ms ease-out; }
+  .power:active { transform: scale(0.95); background: var(--curtain-edge); }
   .dpad { display: grid; grid-template-areas: '. up .' 'left ok right' '. down .'; grid-template-columns: 1fr 1fr 1fr; gap: 10px; width: min(78vw, 300px); margin: 4px auto 0; }
   .pad { aspect-ratio: 1; border-radius: 24px; background: var(--curtain); color: var(--limelight); display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--curtain-edge); transition: transform 90ms ease-out, background 90ms ease-out; user-select: none; touch-action: manipulation; }
   .pad:active { transform: scale(0.95); background: var(--curtain-edge); }
