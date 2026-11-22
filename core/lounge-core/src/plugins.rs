@@ -6,8 +6,9 @@ use crate::{now_ms, screensavers, worker, Inner, PluginInfo, PluginSettingInfo};
 use lounge_plugin_api::{valid_plugin_id, Action, Ask, HttpRequest, HttpResponse, Item as ApiItem, ItemKind as ApiItemKind, Kind, Manifest, RefreshContext, Sheet};
 use lounge_plugins::bundle::Bundle;
 use lounge_plugins::host::{kept, kept_results, kept_sheet, Host, Limits, LoadedPlugin, Services, Stop, MAX_ARTWORK_BYTES, SEARCH_LIMIT, WINDOW_HOURS};
-use lounge_plugins::http::{host_permitted, reach, redact, Fetcher, Reach};
+use lounge_plugins::http::{host_permitted, reach, redact, Fetcher, Reach, Refusal};
 use lounge_store::PluginRow;
+use lounge_words::{mark, t, tr};
 use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -59,6 +60,7 @@ pub(crate) enum PluginJob {
 #[derive(Clone, Debug)]
 pub(crate) struct PluginEntry {
     pub id: String,
+    /// The manifest as the language in use says it.
     pub manifest: Manifest,
     pub enabled: bool,
 }
@@ -239,6 +241,9 @@ impl Services for CoreServices {
         if key == lounge_plugin_api::CALLBACK_SETTING {
             return self.callback(plugin);
         }
+        if key == lounge_plugin_api::LOCALE_SETTING {
+            return Some(lounge_words::language());
+        }
         self.with_store(|s| s.plugin_setting(plugin, key).ok().flatten()).flatten()
     }
     fn log(&self, plugin: &str, level: i32, message: &str) {
@@ -250,15 +255,18 @@ impl Services for CoreServices {
         }
     }
     fn fetch(&self, plugin: &str, request: &HttpRequest) -> Result<HttpResponse, String> {
+        self.fetch_worded(plugin, request).map_err(|refusal| refusal.english)
+    }
+    fn fetch_worded(&self, plugin: &str, request: &HttpRequest) -> Result<HttpResponse, Refusal> {
         let manifest = self
             .inner
             .get()
             .and_then(|w| w.upgrade())
             .and_then(|inner| inner.state.lock().plugins.iter().find(|p| p.id == plugin).map(|p| p.manifest.clone()))
-            .ok_or_else(|| "plugin is not installed".to_string())?;
+            .ok_or_else(|| Refusal::plain("plugin is not installed".to_string()))?;
         let setting = |key: &str| self.setting(plugin, key);
         let fetcher = self.fetchers.for_plugin(plugin, &manifest, &setting);
-        fetcher.fetch(request, &|host| host_permitted(&manifest, host, &setting)).map_err(|e| e.to_string())
+        fetcher.fetch_worded(request, &|host| host_permitted(&manifest, host, &setting))
     }
 }
 
@@ -300,7 +308,8 @@ pub(crate) fn store_setting(store: &lounge_store::Store, manifest: &Manifest, id
 }
 
 /// How an update that newly accepts home servers' own certificates is named among the hosts it asks to reach.
-const SELF_SIGNED: &str = "servers with a certificate of their own";
+// Translators: stands in a list of server names, as in "asks to reach example.com and servers with a certificate of their own".
+const SELF_SIGNED: &str = mark!("servers with a certificate of their own");
 
 fn held_key(id: &str) -> String {
     format!("plugin_held:{id}")
@@ -309,6 +318,11 @@ fn held_key(id: &str) -> String {
 /// Where a plugin turned off by its update asks to reach, until the person allows it.
 pub(crate) fn held_back(store: &lounge_store::Store, id: &str) -> Vec<String> {
     store.meta(&held_key(id)).ok().flatten().and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default()
+}
+
+/// What a plugin's update asks to reach, as the screens list it.
+fn reach_in_words(held: &[String]) -> Vec<String> {
+    held.iter().map(|h| if h == SELF_SIGNED { tr(SELF_SIGNED) } else { h.clone() }).collect()
 }
 
 pub(crate) fn set_held_back(store: &lounge_store::Store, id: &str, reach: &[String]) {
@@ -595,7 +609,7 @@ impl PluginManager {
                 // The APK vouches for the plugins it carries, so its copy replaces one an earlier
                 // APK installed even when another machine signed it.
                 if !(built_in && prev.built_in) {
-                    return Err(format!("This copy of {} is signed by a different publisher than the installed one, so Lounge won't replace it. Remove the installed one first if you trust this file.", bundle.manifest.name));
+                    return Err(t!("This copy of {plugin} is signed by a different publisher than the installed one, so Lounge won't replace it. Remove the installed one first if you trust this file.", plugin = bundle.manifest.name));
                 }
                 tracing::info!("built-in plugin {} changed publisher from {} to {}", bundle.manifest.id, prev.publisher, bundle.publisher_hex());
             }
@@ -603,14 +617,15 @@ impl PluginManager {
             if let Some(old) = &installed
                 && older(&bundle.manifest.version, &old.version)
             {
-                return Err(format!("The installed {} {} is newer than this {}, so there is nothing to update.", bundle.manifest.name, old.version, bundle.manifest.version));
+                // Translators: {installed} and {offered} are version numbers, as in "The installed Jellyfin 1.4 is newer than this 1.2".
+                return Err(t!("The installed {plugin} {installed} is newer than this {offered}, so there is nothing to update.", plugin = bundle.manifest.name, installed = old.version, offered = bundle.manifest.version));
             }
         }
         // The module must describe itself the same way the bundle does.
         let probe = self.host.load(&bundle.manifest.id, bundle.manifest.clone(), &bundle.wasm).map_err(|e| e.to_string())?;
         let reported = self.host.manifest_of(&probe).map_err(|e| e.to_string())?;
         if reported.id != bundle.manifest.id || reported.version != bundle.manifest.version {
-            return Err("This plugin's module doesn't match its manifest. Ask its publisher for a corrected one.".into());
+            return Err(t!("This plugin's module doesn't match its manifest. Ask its publisher for a corrected one."));
         }
         let dir = self.plugin_dir(&bundle.manifest.id).ok_or_else(|| format!("invalid plugin id {:?}", bundle.manifest.id))?;
         // A file that will not write is said in the host's words, not the system's.
@@ -675,6 +690,11 @@ impl PluginManager {
                 let _ = std::fs::remove_dir_all(e.path());
             }
         }
+    }
+
+    /// Lets go of every loaded plugin, so each is loaded again under its manifest as it reads now.
+    pub fn forget_loaded(&self) {
+        self.loaded.lock().clear();
     }
 
     fn loaded(&self, id: &str, manifest: &Manifest) -> Result<Arc<LoadedPlugin>, String> {
@@ -916,17 +936,19 @@ fn prune_art_dir(dir: &Path, ready: &[ReadyItem], since: std::time::SystemTime) 
     }
 }
 
-/// Install-time data for the engine: which plugins are enabled and what rows they declare.
+/// Install-time data for the engine: which plugins are enabled and what rows they declare, in
+/// the words of the language in use.
 pub(crate) fn entries_from_rows(rows: &[PluginRow]) -> Vec<PluginEntry> {
     rows.iter()
         .filter_map(|r| {
             let manifest: Manifest = serde_json::from_str(&r.manifest_json).ok()?;
-            Some(PluginEntry { id: r.id.clone(), manifest, enabled: r.enabled })
+            Some(PluginEntry { id: r.id.clone(), manifest: manifest.spoken(), enabled: r.enabled })
         })
         .collect()
 }
 
 pub(crate) fn info_for(row: &PluginRow, manifest: &Manifest, settings: &[(String, String)], items: u32) -> PluginInfo {
+    let manifest = &manifest.spoken();
     let setting_infos: Vec<PluginSettingInfo> = manifest
         .settings
         .iter()
@@ -1124,7 +1146,7 @@ impl Drop for Running<'_> {
 }
 
 /// What a press says when its tile's plugin has been turned off or removed since the tile was drawn.
-pub(crate) const NOT_RUNNING: &str = "Its plugin is turned off or no longer installed. Turn the plugin on, then try again.";
+pub(crate) const NOT_RUNNING: &str = mark!("Its plugin is turned off or no longer installed. Turn the plugin on, then try again.");
 
 fn answer(inner: &Arc<Inner>, job: PluginJob) {
     match job {
@@ -1137,7 +1159,7 @@ fn answer(inner: &Arc<Inner>, job: PluginJob) {
             let entry = inner.state.lock().plugins.iter().find(|p| p.id == plugin && p.enabled).cloned();
             let result = match entry {
                 Some(e) => inner.plugins.resolve(&e, &action),
-                None => Err(NOT_RUNNING.into()),
+                None => Err(tr(NOT_RUNNING)),
             };
             // It did the work itself, so what its tiles say is out of date.
             if result.as_ref().is_ok_and(Action::did_the_work) {
@@ -1149,7 +1171,7 @@ fn answer(inner: &Arc<Inner>, job: PluginJob) {
             let entry = inner.state.lock().plugins.iter().find(|p| p.id == plugin && p.enabled).cloned();
             let result = match entry {
                 Some(e) => inner.plugins.sheet(&e, &id),
-                None => Err(NOT_RUNNING.into()),
+                None => Err(tr(NOT_RUNNING)),
             };
             let _ = reply.send(result);
         }
@@ -1329,7 +1351,7 @@ fn run_refresh(inner: &Arc<Inner>, id: &str) {
     // A panic while running the plugin or fetching its pictures is that refresh's error, so the
     // plugin waits its interval rather than failing again every minute.
     let outcome = crate::guarded("a plugin refresh", || inner.plugins.refresh(&entry, &ctx))
-        .unwrap_or_else(|| Err(Stopped::Failed("the refresh stopped on an error inside Lounge".into())));
+        .unwrap_or_else(|| Err(Stopped::Failed(t!("the refresh stopped on an error inside Lounge"))));
     if !matches!(outcome, Err(Stopped::Asks(_))) {
         inner.plugins.asks.lock().remove(id);
     }
@@ -1489,7 +1511,7 @@ impl Inner {
                 let items = state.graph.count_source(&format!("plugin:{}", row.id)) as u32;
                 let mut info = info_for(row, &manifest, &settings, items);
                 if !row.enabled {
-                    info.update_asks_to_reach = held_back(&state.store, &row.id);
+                    info.update_asks_to_reach = reach_in_words(&held_back(&state.store, &row.id));
                 }
                 // A plugin that waits on the person has a step to show, not a problem.
                 if let Some(pending) = asks.get(&row.id).filter(|_| row.enabled) {
@@ -1526,7 +1548,7 @@ impl Inner {
             let settings = state.store.plugin_settings(&row.id).map_err(|e| e.to_string())?;
             let stored = rows.into_iter().find(|r| r.id == row.id).unwrap_or(row.clone());
             let mut info = info_for(&stored, &manifest, &settings, 0);
-            info.update_asks_to_reach = held;
+            info.update_asks_to_reach = reach_in_words(&held);
             (info, released)
         };
         // Only an update's ask kept it off, and this update asks for nothing the person has not allowed.
@@ -1554,7 +1576,7 @@ impl Inner {
         }
         let built_in = self.state.lock().store.plugins().unwrap_or_default().iter().any(|r| r.id == id && r.built_in);
         if built_in {
-            return Err("A plugin that comes with Lounge can be turned off but not removed".into());
+            return Err(t!("A plugin that comes with Lounge can be turned off but not removed"));
         }
         {
             let mut state = self.state.lock();

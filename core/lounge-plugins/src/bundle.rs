@@ -4,6 +4,7 @@
 //! differs is refused by the installer.
 
 use crate::{api::Manifest, PluginError, Result};
+use lounge_words::t;
 use ed25519_dalek::{Signature, VerifyingKey};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -26,7 +27,8 @@ impl Bundle {
         // Opening a zip builds a record for every file its directory lists, so a small upload
         // listing hundreds of thousands is turned away first.
         if declared_entries(&mut file)? > MAX_ENTRIES {
-            return Err(PluginError::Bundle("it lists too many files".into()));
+            // Translators: fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+            return Err(PluginError::Bundle(t!("it lists too many files")));
         }
         let mut zip = zip::ZipArchive::new(file).map_err(|e| PluginError::Bundle(e.to_string()))?;
         let manifest_json = entry(&mut zip, "manifest.json", 256 * 1024)?;
@@ -83,28 +85,33 @@ impl Bundle {
 }
 
 fn entry(zip: &mut zip::ZipArchive<std::fs::File>, name: &str, max: usize) -> Result<Vec<u8>> {
-    let mut f = zip
-        .by_name(name)
-        .map_err(|_| PluginError::Bundle(format!("{name} is missing")))?;
+    // Translators: {file} names a file inside the plugin. Fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+    let missing = |_| PluginError::Bundle(t!("{file} is missing", file = name));
+    // Translators: {file} names a file inside the plugin. Fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+    let too_large = || PluginError::Bundle(t!("{file} is too large", file = name));
+    let mut f = zip.by_name(name).map_err(missing)?;
     if f.size() as usize > max {
-        return Err(PluginError::Bundle(format!("{name} is too large")));
+        return Err(too_large());
     }
     let mut buf = Vec::with_capacity((f.size() as usize).min(max));
     f.by_ref().take(max as u64 + 1).read_to_end(&mut buf)?;
     if buf.len() > max {
-        return Err(PluginError::Bundle(format!("{name} is too large")));
+        return Err(too_large());
     }
     Ok(buf)
 }
 
 fn key_bytes<const N: usize>(raw: &[u8], what: &str) -> Result<[u8; N]> {
+    // Translators: {file} names a file inside the plugin. Fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+    let malformed = || PluginError::Bundle(t!("{file} is malformed", file = what));
     let bytes: Vec<u8> = if raw.len() == N {
         raw.to_vec()
     } else {
-        let text = std::str::from_utf8(raw).map_err(|_| PluginError::Bundle(format!("{what} is malformed")))?;
-        hex::decode(text.trim()).map_err(|_| PluginError::Bundle(format!("{what} is malformed")))?
+        let text = std::str::from_utf8(raw).map_err(|_| malformed())?;
+        hex::decode(text.trim()).map_err(|_| malformed())?
     };
-    bytes.try_into().map_err(|_| PluginError::Bundle(format!("{what} has the wrong length")))
+    // Translators: {file} names a file inside the plugin. Fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+    bytes.try_into().map_err(|_| PluginError::Bundle(t!("{file} has the wrong length", file = what)))
 }
 
 /// The file count a zip's end record declares. Zip64 archives, which count past 65,534, give
@@ -116,8 +123,10 @@ fn declared_entries(file: &mut std::fs::File) -> Result<u16> {
     let mut buf = vec![0u8; tail as usize];
     file.read_exact(&mut buf)?;
     file.seek(SeekFrom::Start(0))?;
-    let at = buf.windows(4).rposition(|w| w == [0x50, 0x4b, 0x05, 0x06]).ok_or_else(|| PluginError::Bundle("it is not a zip file".into()))?;
-    let count = buf.get(at + 10..at + 12).ok_or_else(|| PluginError::Bundle("it is not a zip file".into()))?;
+    // Translators: fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+    let not_a_zip = || PluginError::Bundle(t!("it is not a zip file"));
+    let at = buf.windows(4).rposition(|w| w == [0x50, 0x4b, 0x05, 0x06]).ok_or_else(not_a_zip)?;
+    let count = buf.get(at + 10..at + 12).ok_or_else(not_a_zip)?;
     Ok(u16::from_le_bytes([count[0], count[1]]))
 }
 

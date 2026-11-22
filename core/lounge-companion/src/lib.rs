@@ -25,6 +25,9 @@ pub struct DeviceInfo {
     pub model: String,
     pub version: String,
     pub tier: String,
+    /// The tag of the language the TV shows Lounge in, which the phone follows.
+    #[serde(default)]
+    pub lang: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -207,11 +210,23 @@ pub trait CompanionActions: Send + Sync {
     fn download(&self, url: &str, into: &Path) -> Result<(), String>;
 }
 
+/// Whether `text` opens as a sentence does: with a capital, after any mark that opens a
+/// question, an exclamation or a quotation in the language it is written in.
+fn opens_with_a_capital(text: &str) -> bool {
+    text.trim_start_matches(|c: char| matches!(c, '¿' | '¡' | '«' | '„' | '“' | '"' | '‹') || c.is_whitespace()).chars().next().is_some_and(char::is_uppercase)
+}
+
 /// Whether `text` is a sentence written for a screen: a capital first, a full stop or question
 /// mark last, and no longer than a few lines. An address or a title with a colon may sit inside it.
 pub fn reads_as_sentence(text: &str) -> bool {
     let t = text.trim();
-    t.chars().next().is_some_and(char::is_uppercase) && t.ends_with(['.', '?']) && t.len() <= 400
+    opens_with_a_capital(t) && t.ends_with(['.', '?']) && t.chars().count() <= 400
+}
+
+/// Whether `text` holds a colon as a developer writes one, "error: detail". French sets a
+/// no-break space before its colon, which is punctuation in a sentence and not that.
+fn has_a_developers_colon(text: &str) -> bool {
+    text.match_indices(": ").any(|(at, _)| !text[..at].ends_with(['\u{a0}', '\u{202f}']))
 }
 
 /// What the phone shows for a failure nobody worded, such as Android's own text: `detail` when it
@@ -223,16 +238,17 @@ pub fn sentence_or(detail: &str, fallback: &str) -> String {
         let w = w.trim_end_matches(['.', ',', '?', '!']);
         w.char_indices().any(|(i, c)| c == '.' && w[..i].ends_with(|p: char| p.is_ascii_alphabetic()) && w[i + 1..].starts_with(|n: char| n.is_ascii_alphabetic()))
     };
-    let written = d.chars().next().is_some_and(char::is_uppercase)
-        && !d.contains(": ")
+    let ends = d.ends_with(['.', '?']);
+    let written = opens_with_a_capital(d)
+        && !has_a_developers_colon(d)
         && !d.contains("Exception")
         && !d.split_whitespace().any(package)
-        && d.len() <= 240;
+        && d.chars().count() <= 240;
     if !written {
         tracing::warn!("companion: {d}");
         return fallback.to_string();
     }
-    if d.ends_with(['.', '?']) { d.to_string() } else { format!("{d}.") }
+    if ends { d.to_string() } else { format!("{d}.") }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -357,9 +373,15 @@ mod tests {
         assert_eq!(sentence_or("No video player can open this stream. Install VLC or another player.", fallback), "No video player can open this stream. Install VLC or another player.");
         // An address with its port is part of a written sentence.
         assert_eq!(sentence_or("Kodi didn't answer at 192.168.0.20:8080. Check that it is on.", fallback), "Kodi didn't answer at 192.168.0.20:8080. Check that it is on.");
-        for raw in ["platform: busy", "No launch intent for com.netflix.ninja", "busy", "Permission Denial: starting Intent", "SecurityException", ""] {
+        for raw in ["platform: busy", "No launch intent for com.netflix.ninja", "busy", "Permission Denial: starting Intent", "Failed to connect: Connection refused.", "SecurityException", ""] {
             assert_eq!(sentence_or(raw, fallback), fallback, "{raw}");
         }
+        // A sentence in another language keeps its own punctuation and may be longer in bytes than in letters.
+        for written in ["Une autre application est au premier plan\u{a0}: appuyez sur Accueil, puis réessayez.", "¿Sigue instalada la aplicación?", "„Kodi“ wurde nicht gefunden."] {
+            assert_eq!(sentence_or(written, fallback), written);
+            assert!(reads_as_sentence(written), "{written}");
+        }
+        assert_eq!(sentence_or(&"Ä".repeat(200), fallback), format!("{}.", "Ä".repeat(200)));
     }
 
     #[test]

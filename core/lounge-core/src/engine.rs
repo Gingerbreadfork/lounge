@@ -5,6 +5,7 @@ use crate::{
     StageSpotlight, State, Tile, TileKind,
 };
 use lounge_graph::{DeepLink, Graph, Item, ItemKind};
+use lounge_words::{mark, t, tc, tn, tr};
 use std::collections::{HashMap, HashSet};
 
 /// Lookups a build needs more than once, computed once per build.
@@ -60,7 +61,7 @@ const NOTICE_TV_LISTINGS: &str = "notice:tv_listings";
 /// The row of plugins suggested for the apps on the TV.
 const NOTICE_PLUGINS: &str = "notice:plugins";
 /// Beside the header of a plugin's row while its last refresh failed (DESIGN.md §8).
-const OFFLINE_NOTE: &str = "Offline, showing what we have";
+const OFFLINE_NOTE: &str = mark!("Offline, showing what we have");
 
 /// The notice that suggests setting a plugin up.
 pub(crate) fn plugin_notice(plugin: &str) -> String {
@@ -70,11 +71,11 @@ pub(crate) fn plugin_notice(plugin: &str) -> String {
 /// The core rows and their titles, in default order. Every app is reachable from the All apps
 /// screen, which Your apps ends with, so there is no row of them all.
 pub(crate) const CORE_ROWS: [(&str, &str); 5] = [
-    ("continue", "Continue watching"),
-    ("apps", "Your apps"),
-    ("games", "Games"),
-    ("live", "Live now"),
-    ("tvcontrols", "TV controls"),
+    ("continue", mark!("Continue watching")),
+    ("apps", mark!("Your apps")),
+    ("games", mark!("Games")),
+    ("live", mark!("Live now")),
+    ("tvcontrols", mark!("TV controls")),
 ];
 
 /// The row order as it will be built: the user's order (or the default), with plugin and
@@ -124,13 +125,15 @@ pub(crate) fn moved(mut order: Vec<String>, id: &str, to: usize) -> Vec<String> 
     order
 }
 
-/// "3 apps", "1 title", or `none` when there are none.
-fn counted(n: usize, one: &str, many: &str, none: &str) -> String {
-    match n {
-        0 => none.to_string(),
-        1 => format!("1 {one}"),
-        n => format!("{n} {many}"),
-    }
+/// "3 apps" or "1 app", and "Nothing yet" when there are none.
+fn apps_counted(n: usize) -> String {
+    if n == 0 { t!("Nothing yet") } else { tn!(n, "{n} app", "{n} apps") }
+}
+
+/// The name of a preview channel that gives none.
+pub(crate) fn channel_named(id: i64) -> String {
+    // Translators: names a channel by its number when nothing more is known about it.
+    t!("Channel {number}", number = id)
 }
 
 /// Every row the home could show, in order, with what each holds, for the row editors on the
@@ -154,17 +157,24 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
                     .or_else(|| plugin.and_then(|p| p.manifest.rows.iter().find(|r| r.id == rid)).map(|r| r.title.clone()))
                     .unwrap_or_else(|| rid.to_string());
                 let n = items.len();
-                (title, n, format!("{name}, {}", counted(n, "title", "titles", "nothing yet")))
+                let detail = if n == 0 {
+                    // Translators: {plugin} is a plugin's name. Its row has nothing in it yet.
+                    t!("{plugin}, nothing yet", plugin = name)
+                } else {
+                    // Translators: {plugin} is a plugin's name, and a title is a film, a show or the like in its row.
+                    tn!(n, "{plugin}, {n} title", "{plugin}, {n} titles", plugin = name)
+                };
+                (title, n, detail)
             } else if let Some(cid) = id.strip_prefix("channel:") {
                 let cid: i64 = cid.parse().unwrap_or(0);
                 let found = previews.iter().find(|(id, _, _)| *id == cid);
                 let (name, n) = found.map(|(_, name, items)| (name.clone(), items.len())).unwrap_or_default();
-                let title = if name.is_empty() { format!("Channel {cid}") } else { name };
-                (title, n, counted(n, "programme", "programmes", "Nothing yet"))
+                let title = if name.is_empty() { channel_named(cid) } else { name };
+                (title, n, if n == 0 { t!("Nothing yet") } else { tn!(n, "{n} programme", "{n} programmes") })
             } else {
                 let title = match id.as_str() {
-                    "tvcontrols" if !config.has_tv_controls => "Inputs".to_string(),
-                    other => CORE_ROWS.iter().find(|(i, _)| *i == other).map(|(_, t)| t.to_string()).unwrap_or_else(|| other.to_string()),
+                    "tvcontrols" if !config.has_tv_controls => t!("Inputs"),
+                    other => CORE_ROWS.iter().find(|(i, _)| *i == other).map(|(_, title)| tr(title)).unwrap_or_else(|| other.to_string()),
                 };
                 let (n, detail) = match id.as_str() {
                     "continue" => {
@@ -173,34 +183,48 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
                         let stage = graph.stage_candidates(STAGE_CAP);
                         let n = all.iter().filter(|it| !stage.iter().any(|s| s.id == it.id)).count();
                         let detail = if n == 0 && !all.is_empty() {
-                            format!("{}, all on the Stage", counted(all.len(), "title", "titles", ""))
+                            // Translators: a title is a film, a show or the like. The Stage is the large area at the top of the home screen.
+                            tn!(all.len(), "{n} title, all on the Stage", "{n} titles, all on the Stage")
+                        } else if n == 0 {
+                            t!("Nothing to continue yet")
                         } else {
-                            counted(n, "title", "titles", "Nothing to continue yet")
+                            // Translators: a title is a film, a show or the like.
+                            tn!(n, "{n} title", "{n} titles")
                         };
                         (n, detail)
                     }
                     "apps" => {
                         let (pinned, recent) = graph.your_apps_counts();
                         let detail = match (pinned, recent) {
-                            (0, 0) => "Only the way to All apps, until you pin one".to_string(),
-                            _ if !state.permissions.usage && recent > 0 => "Allow usage access in Settings to follow what you open".to_string(),
-                            (0, r) => format!("{} recent", counted(r, "app", "apps", "")),
-                            (p, 0) => format!("{}, pinned only", counted(p, "app", "apps", "")),
-                            (p, r) => format!("{p} pinned, {r} recent"),
+                            // Translators: says what the Your apps row holds when no app is pinned: only the tile that opens All apps.
+                            (0, 0) => t!("Only the way to All apps, until you pin one"),
+                            _ if !state.permissions.usage && recent > 0 => t!("Allow usage access in Settings to follow what you open"),
+                            // Translators: the apps in the Your apps row, all there because they were opened lately.
+                            (0, r) => tn!(r, "{n} app recent", "{n} apps recent"),
+                            // Translators: the apps in the Your apps row, all there because they are pinned.
+                            (p, 0) => tn!(p, "{n} app, pinned only", "{n} apps, pinned only"),
+                            (p, r) => {
+                                // Translators: how many apps in the Your apps row are pinned.
+                                let pinned = tn!(p, "{n} pinned", "{n} pinned");
+                                // Translators: how many apps in the Your apps row were opened lately.
+                                let recent = tn!(r, "{n} recent", "{n} recent");
+                                // Translators: {pinned} is "3 pinned" and {recent} "2 recent", in your language.
+                                t!("{pinned}, {recent}", pinned = pinned, recent = recent)
+                            }
                         };
                         (pinned + recent, detail)
                     }
                     "games" => {
                         let n = graph.games().len();
-                        (n, counted(n, "game", "games", "No games installed"))
+                        (n, if n == 0 { t!("No games installed") } else { tn!(n, "{n} game", "{n} games") })
                     }
                     "live" => {
                         let n = graph.live_now().len();
-                        (n, counted(n, "channel", "channels", "No channels yet"))
+                        (n, if n == 0 { t!("No channels yet") } else { tn!(n, "{n} channel", "{n} channels") })
                     }
                     "tvcontrols" => {
                         let n = graph.devices().len();
-                        (n, counted(n, "input", "inputs", "No inputs found"))
+                        (n, if n == 0 { t!("No inputs found") } else { tn!(n, "{n} input", "{n} inputs") })
                     }
                     _ => (0, String::new()),
                 };
@@ -227,8 +251,10 @@ fn gone_ref(graph: &Graph, id: &str) -> ItemRef {
         return named(package.to_string(), None);
     }
     match id.split(':').find_map(|part| graph.get(&format!("app:{part}"))) {
-        Some(app) => named(format!("A title {} no longer lists", app.title), app.artwork.logo.clone()),
-        None => named("A title that is no longer listed".to_string(), None),
+        // Translators: stands in for a film or show whose name is gone. {app} is the app it came from.
+        Some(app) => named(t!("A title {app} no longer lists", app = app.title), app.artwork.logo.clone()),
+        // Translators: stands in for a film or show whose name is gone.
+        None => named(t!("A title that is no longer listed"), None),
     }
 }
 
@@ -319,12 +345,14 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
     if !suggested.is_empty() {
         // Under Continue watching, which is where what they bring would show.
         let at = rows.iter().position(|r| r.id == "continue" || r.id == NOTICE_TV_LISTINGS).map_or(0, |i| i + 1);
-        rows.insert(at, Row { id: NOTICE_PLUGINS.to_string(), title: "Plugins for your apps".to_string(), kind: TileKind::Compact, size: RowSize::L, badge: None, tiles: suggested, note: None });
+        rows.insert(at, Row { id: NOTICE_PLUGINS.to_string(), title: t!("Plugins for your apps"), kind: TileKind::Compact, size: RowSize::L, badge: None, tiles: suggested, note: None });
     }
     if let Some(version) = &state.update {
         let id = format!("notice:update:{version}");
         if !graph.layout.dismissed_notices.contains(&id) {
-            rows.insert(0, notice_row(&id, "Lounge", &format!("Lounge {version} is ready"), "Press to install the update", "control:update"));
+            // Translators: {version} is a version number, as in "Lounge 1.2 is ready".
+            let ready = t!("Lounge {version} is ready", version = version);
+            rows.insert(0, notice_row(&id, "Lounge", &ready, &t!("Press to install the update"), "control:update"));
         }
     }
     HomeSnapshot {
@@ -350,7 +378,7 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
 
 fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: &CoreConfig) -> Option<Row> {
     let graph = &state.graph;
-    let (title, kind, size, badge, items): (&str, TileKind, RowSize, Option<Badge>, Vec<&Item>) = match row_id {
+    let (title, kind, size, badge, items): (String, TileKind, RowSize, Option<Badge>, Vec<&Item>) = match row_id {
         "continue" => {
             let items = graph.continue_watching();
             if items.is_empty() {
@@ -359,9 +387,10 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
                 return if !state.permissions.tv_listings && !graph.layout.dismissed_notices.contains(NOTICE_TV_LISTINGS) {
                     Some(notice_row(
                         NOTICE_TV_LISTINGS,
-                        "Continue watching",
-                        "Turn on TV listings",
-                        "See what you were watching",
+                        &t!("Continue watching"),
+                        // Translators: the title of a tile with room for about 265 pixels, roughly what this English takes; the line under it says why.
+                        &t!("Turn on TV listings"),
+                        &t!("See what you were watching"),
                         "permission:tv_listings",
                     ))
                 } else {
@@ -370,7 +399,7 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
             }
             // The Stage strip already shows the first of them, so the row starts after it.
             let rest = items.into_iter().filter(|it| !index.on_stage(&it.id)).take(ROW_TILES).collect();
-            ("Continue watching", TileKind::Landscape, RowSize::M, None, rest)
+            (t!("Continue watching"), TileKind::Landscape, RowSize::M, None, rest)
         }
         "apps" => {
             // The row ends with the way to every app, and stands even with no pins and no recent
@@ -381,9 +410,9 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
             }
             let mut tiles: Vec<Tile> = graph.your_apps().iter().map(|it| tile_for(graph, it, TileKind::AppBanner)).collect();
             tiles.push(all_apps_tile(total));
-            return Some(Row { id: row_id.to_string(), title: "Your apps".to_string(), kind: TileKind::AppBanner, size: RowSize::M, badge: None, tiles, note: None });
+            return Some(Row { id: row_id.to_string(), title: t!("Your apps"), kind: TileKind::AppBanner, size: RowSize::M, badge: None, tiles, note: None });
         }
-        "games" => ("Games", TileKind::Landscape, RowSize::M, Some(Badge::Controller), graph.games()),
+        "games" => (t!("Games"), TileKind::Landscape, RowSize::M, Some(Badge::Controller), graph.games()),
         "live" => {
             let channels = graph.live_now();
             if channels.is_empty() {
@@ -391,7 +420,7 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
             }
             return Some(Row {
                 id: row_id.to_string(),
-                title: "Live now".to_string(),
+                title: t!("Live now"),
                 kind: TileKind::Landscape,
                 size: RowSize::M,
                 badge: Some(Badge::Live),
@@ -412,7 +441,7 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
             }
             return Some(Row {
                 id: row_id.to_string(),
-                title: if config.has_tv_controls { "TV controls".to_string() } else { "Inputs".to_string() },
+                title: if config.has_tv_controls { t!("TV controls") } else { t!("Inputs") },
                 kind: TileKind::Compact,
                 size: RowSize::M,
                 badge: None,
@@ -427,7 +456,7 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
     }
     Some(Row {
         id: row_id.to_string(),
-        title: title.to_string(),
+        title,
         kind,
         size,
         badge,
@@ -459,7 +488,7 @@ fn plugin_row(state: &State, index: &BuildIndex, key: &str) -> Option<Row> {
         size: RowSize::M,
         badge: None,
         tiles: items.iter().take(ROW_TILES).map(|it| tile_for(graph, it, kind)).collect(),
-        note: index.offline.contains(&p.id).then(|| OFFLINE_NOTE.to_string()),
+        note: index.offline.contains(&p.id).then(|| tr(OFFLINE_NOTE)),
     })
 }
 
@@ -477,7 +506,7 @@ fn channel_row(graph: &Graph, index: &BuildIndex, channel_id: i64) -> Option<Row
     let kind = if portrait { TileKind::Poster } else { TileKind::Landscape };
     Some(Row {
         id: format!("channel:{id}"),
-        title: if name.is_empty() { format!("Channel {id}") } else { name },
+        title: if name.is_empty() { channel_named(id) } else { name },
         kind,
         size: RowSize::M,
         badge: None,
@@ -509,11 +538,12 @@ fn plugin_suggestions(state: &State) -> Vec<Tile> {
                 .find_map(|package| graph.get(&format!("app:{package}")).map(|app| (package.as_str(), app)))
                 .filter(|(_, app)| !graph.is_hidden(&app.id))?;
             let fills = continuing.iter().any(|it| it.provider() == Some(package));
-            let subtitle = if fills { what_it_adds(&p.manifest)? } else { "See what you were watching".to_string() };
+            let subtitle = if fills { what_it_adds(&p.manifest)? } else { t!("See what you were watching") };
             Some(Tile {
                 id,
                 kind: TileKind::Compact,
-                title: format!("Set up {}", p.manifest.name),
+                // Translators: {plugin} is a plugin's name. The tile opens the plugin's page so it can be turned on.
+                title: t!("Set up {plugin}", plugin = p.manifest.name),
                 subtitle: Some(subtitle),
                 artwork_path: None,
                 icon_path: app.artwork.logo.clone(),
@@ -542,27 +572,30 @@ fn plugin_suggestions(state: &State) -> Vec<Tile> {
 /// What a plugin's rows add, as "Adds recently added and favourites"; none when it has no rows.
 fn what_it_adds(manifest: &lounge_plugin_api::Manifest) -> Option<String> {
     let rows: Vec<String> = manifest.rows.iter().map(|r| row_words(&r.title, &manifest.name)).filter(|w| !w.is_empty()).collect();
-    match rows.as_slice() {
-        [] => None,
-        [one] => Some(format!("Adds {one}")),
-        [rest @ .., last] => Some(format!("Adds {} and {last}", rest.join(", "))),
+    if rows.is_empty() {
+        return None;
     }
+    // Translators: says what turning a plugin on brings. {rows} lists the titles of its rows, as in "Adds recently added and favourites".
+    Some(t!("Adds {rows}", rows = lounge_words::list(&rows)))
 }
 
 /// A row's title as words inside a sentence: "Recently added on Jellyfin" from Jellyfin becomes
-/// "recently added". A first word with capitals of its own, such as YouTube, keeps them.
+/// "recently added". English writes the first word small there, unless it has capitals of its
+/// own, such as YouTube; other languages keep the title as written.
 fn row_words(title: &str, plugin: &str) -> String {
     let mut words = title.trim();
-    for joiner in [" on ", " from ", " in "] {
-        let suffix = format!("{joiner}{plugin}");
+    // Translators: how a row's title ends with its plugin's name, as in "Recently added on Jellyfin". That ending is left out where the plugin is already named. Keep {row} first.
+    let endings = [t!("{row} on {plugin}", plugin = plugin), t!("{row} from {plugin}", plugin = plugin), t!("{row} in {plugin}", plugin = plugin)];
+    for ending in &endings {
+        let Some(suffix) = ending.strip_prefix("{row}") else { continue };
         let cut = words.len().saturating_sub(suffix.len());
-        if cut > 0 && words.get(cut..).is_some_and(|tail| tail.eq_ignore_ascii_case(&suffix)) {
+        if cut > 0 && words.get(cut..).is_some_and(|tail| tail.eq_ignore_ascii_case(suffix)) {
             words = &words[..cut];
             break;
         }
     }
     let first = words.split_whitespace().next().unwrap_or("");
-    if first.chars().skip(1).any(char::is_uppercase) {
+    if lounge_words::language() != lounge_words::SOURCE || first.chars().skip(1).any(char::is_uppercase) {
         return words.to_string();
     }
     let mut chars = words.chars();
@@ -636,8 +669,9 @@ fn all_apps_tile(count: usize) -> Tile {
     Tile {
         id: "control:allapps".to_string(),
         kind: TileKind::AppBanner,
-        title: "All apps".to_string(),
-        subtitle: Some(counted(count, "app", "apps", "Nothing yet")),
+        // Translators: the title of a small tile with room for about 140 pixels, about nine letters. Where the screen's usual name is longer, use a shorter word for it here.
+        title: tc!("a small tile", "All apps"),
+        subtitle: Some(apps_counted(count)),
         artwork_path: None,
         icon_path: None,
         light_argb: lounge_graph::color::HOUSELIGHT,
@@ -664,7 +698,8 @@ fn tv_controls_tile(config: &CoreConfig) -> Tile {
     Tile {
         id: "device:tv".to_string(),
         kind: TileKind::Compact,
-        title: "TV controls".to_string(),
+        // Translators: the title of a small tile with room for about 140 pixels, about nine letters. Where the sheet's usual name is longer, use a shorter word for it here.
+        title: tc!("a small tile", "TV controls"),
         subtitle: Some(config.device_name.clone()),
         artwork_path: None,
         icon_path: None,
@@ -751,7 +786,8 @@ fn channel_label(ch: &Item) -> String {
 /// "Channel 2" under the channel's own name, when nothing is known about what is on.
 fn channel_number(ch: &Item) -> Option<String> {
     match &ch.subtitle {
-        Some(number) if !number.is_empty() => Some(format!("Channel {number}")),
+        // Translators: names a channel by its number when nothing more is known about it.
+        Some(number) if !number.is_empty() => Some(t!("Channel {number}", number = number)),
         _ => None,
     }
 }
@@ -795,8 +831,10 @@ pub(crate) fn tile_for(graph: &Graph, it: &Item, kind: TileKind) -> Tile {
         ItemKind::Program if it.flags.watch_next => Some(content_meta(graph, it)),
         // An episode in a row leads with where it falls: "S2 E3, Honeydew".
         ItemKind::Program => match (&it.season, &it.episode, &it.subtitle) {
-            (Some(s), Some(e), Some(sub)) => Some(format!("S{s} E{e}, {sub}")),
-            (Some(s), Some(e), None) => Some(format!("S{s} E{e}")),
+            // Translators: a season and an episode by number, as short as they are written, then the episode's name: "S2 E4, Honeydew".
+            (Some(s), Some(e), Some(sub)) => Some(t!("S{season} E{episode}, {title}", season = s, episode = e, title = sub)),
+            // Translators: a season and an episode by number, as short as they are written: "S2 E4".
+            (Some(s), Some(e), None) => Some(t!("S{season} E{episode}", season = s, episode = e)),
             _ => it.subtitle.clone(),
         },
         _ => it.subtitle.clone(),
@@ -867,20 +905,29 @@ fn app_label(graph: &Graph, it: &Item) -> Option<String> {
 
 fn season_episode_short(it: &Item) -> Option<String> {
     match (&it.season, &it.episode) {
-        (Some(s), Some(e)) => Some(format!("S{s} E{e}")),
-        (None, Some(e)) => Some(format!("Episode {e}")),
-        (Some(s), None) => Some(format!("Season {s}")),
+        // Translators: a season and an episode by number, as short as they are written: "S2 E4".
+        (Some(s), Some(e)) => Some(t!("S{season} E{episode}", season = s, episode = e)),
+        (None, Some(e)) => Some(t!("Episode {episode}", episode = e)),
+        (Some(s), None) => Some(t!("Season {season}", season = s)),
         (None, None) => None,
     }
 }
 
-fn season_episode_long(it: &Item) -> Option<String> {
-    match (&it.season, &it.episode) {
-        (Some(s), Some(e)) => Some(format!("Season {s}, Episode {e}")),
-        (None, Some(e)) => Some(format!("Episode {e}")),
-        (Some(s), None) => Some(format!("Season {s}")),
-        (None, None) => None,
-    }
+/// "Season 2, Episode 4: Honeydew": where an episode falls and what it is called, as far as
+/// each is known.
+fn episode_line(it: &Item) -> Option<String> {
+    Some(match (&it.season, &it.episode, &it.subtitle) {
+        // Translators: {title} is the episode's name.
+        (Some(s), Some(e), Some(sub)) => t!("Season {season}, Episode {episode}: {title}", season = s, episode = e, title = sub),
+        (Some(s), Some(e), None) => t!("Season {season}, Episode {episode}", season = s, episode = e),
+        // Translators: {title} is the episode's name.
+        (None, Some(e), Some(sub)) => t!("Episode {episode}: {title}", episode = e, title = sub),
+        (None, Some(e), None) => t!("Episode {episode}", episode = e),
+        // Translators: {title} is the name of what is on.
+        (Some(s), None, Some(sub)) => t!("Season {season}: {title}", season = s, title = sub),
+        (Some(s), None, None) => t!("Season {season}", season = s),
+        (None, None, sub) => return sub.clone(),
+    })
 }
 
 fn build_stage(state: &State, index: &BuildIndex, now: i64, hour_local: u32, config: &CoreConfig) -> Stage {
@@ -900,15 +947,16 @@ fn build_stage(state: &State, index: &BuildIndex, now: i64, hour_local: u32, con
         spotlights.push(StageSpotlight {
             id: tile.id.clone(),
             kind: crate::SpotlightKind::App,
-            category: "Your apps".to_string(),
-            title: "All apps".to_string(),
-            lines: vec![tile.subtitle.clone().unwrap_or_default(), "Hold OK on an app there to pin it".to_string()],
+            category: t!("Your apps"),
+            title: t!("All apps"),
+            // Translators: "there" is the All apps screen. OK is the remote's centre button.
+            lines: vec![tile.subtitle.clone().unwrap_or_default(), t!("Hold OK on an app there to pin it")],
             progress: None,
             artwork_path: None,
             backdrop_path: None,
             icon_path: None,
             light_argb: lounge_graph::color::HOUSELIGHT,
-            primary: StageAction { label: "Open".to_string(), action: tile.action.clone() },
+            primary: StageAction { label: t!("Open"), action: tile.action.clone() },
             secondary: None,
             explanation: None,
             framed: true,
@@ -924,16 +972,16 @@ fn build_stage(state: &State, index: &BuildIndex, now: i64, hour_local: u32, con
         spotlights.push(StageSpotlight {
             id: "device:tv".to_string(),
             kind: crate::SpotlightKind::Device,
-            category: "Your TV".to_string(),
-            title: "TV controls".to_string(),
-            lines: vec!["Turn the TV on, switch inputs and change the sound".to_string()],
+            category: t!("Your TV"),
+            title: t!("TV controls"),
+            lines: vec![t!("Turn the TV on, switch inputs and change the sound")],
             progress: None,
             artwork_path: None,
             backdrop_path: None,
             icon_path: None,
             light_argb: lounge_graph::color::HOUSELIGHT,
             primary: StageAction {
-                label: "Open TV controls".to_string(),
+                label: t!("Open TV controls"),
                 action: "control:tv:open".to_string(),
             },
             secondary: None,
@@ -952,26 +1000,43 @@ fn build_stage(state: &State, index: &BuildIndex, now: i64, hour_local: u32, con
 
 fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_local: u32) -> StageSpotlight {
     let airing = index.airing(it);
+    // Translators: a button that goes on with what was being watched.
+    let go_on = || t!("Continue");
+    // Translators: a button that starts a programme, a film or a channel.
+    let watch = || t!("Watch");
+    // Translators: a button that starts a game.
+    let play = || tc!("games", "Play");
+    // Translators: a button that opens an app or a picture.
+    let open = || t!("Open");
+    // Translators: a button that switches the TV to an input, such as an HDMI port.
+    let switch = || t!("Switch");
     let (category, primary_label) = match it.kind {
-        ItemKind::Resume | ItemKind::MediaSession => ("Continue watching", "Continue"),
-        ItemKind::Channel => ("Live now", "Watch"),
-        ItemKind::Game => ("Games", "Play"),
-        ItemKind::Wallpaper => ("Pictures", "Open"),
-        ItemKind::Input | ItemKind::Device => ("Inputs", "Switch"),
+        ItemKind::Resume | ItemKind::MediaSession => (t!("Continue watching"), go_on()),
+        ItemKind::Channel => (t!("Live now"), watch()),
+        ItemKind::Game => (t!("Games"), play()),
+        // Translators: stands above a picture on the Stage, saying what kind of thing it is.
+        ItemKind::Wallpaper => (t!("Pictures"), open()),
+        ItemKind::Input | ItemKind::Device => (t!("Inputs"), switch()),
         ItemKind::Program => {
-            if it.flags.watch_next {
-                if it.flags.is_new { ("New for you", "Watch") } else { ("Up next", "Watch") }
+            if !it.flags.watch_next {
+                // Translators: stands above a programme on the Stage, as something to watch this evening.
+                (t!("Tonight"), watch())
+            } else if it.flags.is_new {
+                // Translators: stands above a film or show on the Stage that an app has newly added.
+                (t!("New for you"), watch())
             } else {
-                ("Tonight", "Watch")
+                // Translators: stands above the next episode or film in line, on the Stage.
+                (t!("Up next"), watch())
             }
         }
         ItemKind::App => {
             if it.flags.is_game {
-                ("Games", "Play")
+                (t!("Games"), play())
             } else if it.last_used_ms.is_some() {
-                ("Jump back in", "Open")
+                // Translators: stands above an app on the Stage that was opened lately.
+                (t!("Jump back in"), open())
             } else {
-                ("Your apps", "Open")
+                (t!("Your apps"), open())
             }
         }
     };
@@ -1013,12 +1078,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
             }
         }
         ItemKind::Resume | ItemKind::Program | ItemKind::Wallpaper => {
-            match (season_episode_long(it), &it.subtitle) {
-                (Some(se), Some(sub)) => lines.push(format!("{se}: {sub}")),
-                (Some(se), None) => lines.push(se),
-                (None, Some(sub)) => lines.push(sub.clone()),
-                (None, None) => {}
-            }
+            lines.extend(episode_line(it));
             if let Some(p) = it.progress {
                 if let Some(remaining) = remaining_text(it, p) {
                     lines.push(remaining);
@@ -1053,7 +1113,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
 
     let secondary = match it.kind {
         ItemKind::App | ItemKind::Game => Some(StageAction {
-            label: "App info".to_string(),
+            label: t!("App info"),
             action: format!("info:{}", it.id),
         }),
         _ => None,
@@ -1077,7 +1137,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
     StageSpotlight {
         id: it.id.clone(),
         kind,
-        category: category.to_string(),
+        category,
         title,
         lines,
         progress,
@@ -1086,7 +1146,7 @@ fn spotlight_for(graph: &Graph, index: &BuildIndex, it: &Item, now: i64, hour_lo
         icon_path: artwork.logo.clone(),
         light_argb: lent.map(|app| app.light()).unwrap_or_else(|| it.light()),
         primary: StageAction {
-            label: primary_label.to_string(),
+            label: primary_label,
             action: format!("open:{}", it.id),
         },
         secondary,
@@ -1118,27 +1178,31 @@ fn remaining_text(it: &Item, progress: f32) -> Option<String> {
 fn left_text(left_ms: i64) -> String {
     let minutes = (left_ms as f64 / 60_000.0).round() as i64;
     if minutes <= 0 {
-        return "Almost finished".to_string();
+        return t!("Almost finished");
     }
-    let (h, m) = (minutes / 60, minutes % 60);
-    let hours = counted(h as usize, "hour", "hours", "");
-    let mins = counted(m as usize, "minute", "minutes", "");
-    match (h, m) {
-        (0, _) => format!("{mins} left"),
-        (_, 0) => format!("{hours} left"),
-        _ => format!("{hours} {mins} left"),
+    match (minutes / 60, minutes % 60) {
+        (0, m) => tn!(m, "{n} minute left", "{n} minutes left"),
+        (h, 0) => tn!(h, "{n} hour left", "{n} hours left"),
+        (h, m) => {
+            // Translators: fills {hours} in "{hours} {minutes} left".
+            let hours = tn!(h, "{n} hour", "{n} hours");
+            // Translators: fills {minutes} in "{hours} {minutes} left".
+            let minutes = tn!(m, "{n} minute", "{n} minutes");
+            // Translators: how much of a programme is left. {hours} is "1 hour" and {minutes} "20 minutes", in your language.
+            t!("{hours} {minutes} left", hours = hours, minutes = minutes)
+        }
     }
 }
 
 fn ago_text(ms: i64) -> String {
     let minutes = (ms / 60_000).max(0);
     match minutes {
-        m if m < 2 => "Opened just now".to_string(),
-        m if m < 60 => format!("Opened {m} minutes ago"),
-        m if m < 120 => "Opened an hour ago".to_string(),
-        m if m < 1440 => format!("Opened {} hours ago", m / 60),
-        m if m < 2880 => "Opened yesterday".to_string(),
-        m => format!("Opened {} days ago", m / 1440),
+        m if m < 2 => t!("Opened just now"),
+        m if m < 60 => tn!(m, "Opened {n} minute ago", "Opened {n} minutes ago"),
+        m if m < 120 => t!("Opened an hour ago"),
+        m if m < 1440 => tn!(m / 60, "Opened {n} hour ago", "Opened {n} hours ago"),
+        m if m < 2880 => t!("Opened yesterday"),
+        m => tn!(m / 1440, "Opened {n} day ago", "Opened {n} days ago"),
     }
 }
 
@@ -1236,7 +1300,7 @@ fn phone_shows(control: &str) -> bool {
 /// Asks a plugin for a new address for the live picture it is showing at `url`. Only a picture
 /// a tile or a sheet opened can be asked about, with the action that opened it.
 pub(crate) fn live_again(inner: &Inner, plugin: &str, url: &str) -> Result<String, CoreError> {
-    let none = || CoreError::Plugin { detail: "The picture has no address now.".to_string() };
+    let none = || CoreError::Plugin { detail: t!("The picture has no address now.") };
     let action = inner.plugins.live_action(plugin, url).filter(|action| !action.is_empty()).ok_or_else(none)?;
     let (reply_tx, reply_rx) = crossbeam_channel::bounded(1);
     inner
@@ -1388,6 +1452,7 @@ mod tests {
             pending_art: Default::default(),
             last_previews: Vec::new(),
             clock_24h: false,
+            last_inputs: Vec::new(),
             stored_rows: Default::default(),
         }
     }
@@ -1542,9 +1607,9 @@ mod tests {
 
     #[test]
     fn counts_read_as_sentences() {
-        assert_eq!(counted(0, "app", "apps", "Nothing yet"), "Nothing yet");
-        assert_eq!(counted(1, "app", "apps", "Nothing yet"), "1 app");
-        assert_eq!(counted(14, "app", "apps", "Nothing yet"), "14 apps");
+        assert_eq!(apps_counted(0), "Nothing yet");
+        assert_eq!(apps_counted(1), "1 app");
+        assert_eq!(apps_counted(14), "14 apps");
     }
 
     #[test]
@@ -1584,6 +1649,24 @@ mod tests {
         m.rows.push(row("YouTube picks"));
         assert_eq!(what_it_adds(&m).as_deref(), Some("Adds recently added, favourites and YouTube picks"));
         assert_eq!(row_words("Jellyfin", "Jellyfin"), "jellyfin");
+    }
+
+    #[test]
+    fn another_language_names_a_plugin_s_rows_as_it_writes_them() {
+        const GERMAN: &str = r#"
+msgid "Adds {rows}"
+msgstr "Bringt: {rows}"
+
+msgid "{row} on {plugin}"
+msgstr "{row} auf {plugin}"
+
+msgid "{first} and {last}"
+msgstr "{first} und {last}"
+"#;
+        let row = |title: &str| lounge_plugin_api::RowSpec { id: title.to_lowercase(), title: title.into(), style: lounge_plugin_api::RowStyle::Poster };
+        let m = lounge_plugin_api::Manifest { name: "Jellyfin".into(), rows: vec![row("Zuletzt hinzugefügt auf Jellyfin"), row("Favoriten auf Jellyfin")], ..Default::default() };
+        let said = lounge_words::in_language("de", &[&[("de", GERMAN)]], || what_it_adds(&m));
+        assert_eq!(said.as_deref(), Some("Bringt: Zuletzt hinzugefügt und Favoriten"));
     }
 
     #[test]

@@ -352,7 +352,8 @@ fn replace_code(live: &mut Live, base_url: &str, now_ms: i64) -> Result<PairingI
 /// A phone's name as the list shows it, "Safari on iPhone", also for one saved as "iPhone · Safari".
 fn readable_name(name: &str) -> String {
     match name.split_once(" · ") {
-        Some((device, browser)) => format!("{browser} on {device}"),
+        // Translators: names a paired device by its browser and what it is, as in "Chrome on Pixel 8".
+        Some((device, browser)) => lounge_words::t!("{browser} on {device}", browser = browser, device = device),
         None => name.to_string(),
     }
 }

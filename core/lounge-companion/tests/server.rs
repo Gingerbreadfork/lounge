@@ -11,7 +11,7 @@ struct Fake;
 
 impl CompanionActions for Fake {
     fn device_info(&self) -> DeviceInfo {
-        DeviceInfo { name: "TV".into(), model: "TV".into(), version: "0".into(), tier: "a".into() }
+        DeviceInfo { name: "TV".into(), model: "TV".into(), version: "0".into(), tier: "a".into(), lang: "en".into() }
     }
     fn snapshot_json(&self) -> String {
         "{}".into()

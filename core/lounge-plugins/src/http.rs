@@ -4,6 +4,8 @@
 use crate::api::{base64_encode, is_home_name, is_local_network, HttpRequest, HttpResponse, Manifest};
 pub use crate::api::host_of;
 use crate::{PluginError, Result};
+use lounge_words::mark;
+use std::fmt::Display;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -35,6 +37,61 @@ pub struct Download {
     pub path: PathBuf,
     /// Bytes fetched from the network; 0 when the file was already cached.
     pub fetched: u64,
+}
+
+/// A fetch that gave no answer, in English as the plugin is told it and in the language in use
+/// as people read it. Plugins tell refusals apart by their English, so that never changes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Refusal {
+    pub english: String,
+    pub spoken: String,
+}
+
+impl Refusal {
+    /// `template` with `values` in its places, in English and as the language in use says it.
+    pub(crate) fn new(template: &str, values: &[(&str, &dyn Display)]) -> Refusal {
+        Refusal { english: lounge_words::fill(template, values), spoken: lounge_words::fill(&lounge_words::tr(template), values) }
+    }
+
+    /// A failure that has English words alone.
+    pub fn plain(english: String) -> Refusal {
+        Refusal { spoken: english.clone(), english }
+    }
+
+    /// `text` with this refusal in the language in use wherever a plugin passed its English on.
+    /// The SDK cuts passwords and query strings from an error before a plugin sees it, so the
+    /// English is looked for in that form too.
+    pub fn spoken_in(&self, text: &str) -> String {
+        if self.spoken == self.english {
+            return text.to_string();
+        }
+        if text.contains(&self.english) {
+            return text.replace(&self.english, &self.spoken);
+        }
+        let cut = cut_by_the_sdk(&self.english);
+        if cut != self.english && text.contains(&cut) {
+            return text.replace(&cut, &cut_by_the_sdk(&self.spoken));
+        }
+        text.to_string()
+    }
+}
+
+/// Why a fetch stopped: the plugin may not reach the host, or the request failed.
+enum Stopped {
+    Denied(Refusal),
+    Failed(Refusal),
+}
+
+impl From<Refusal> for Stopped {
+    fn from(refusal: Refusal) -> Stopped {
+        Stopped::Failed(refusal)
+    }
+}
+
+impl From<Refusal> for PluginError {
+    fn from(refusal: Refusal) -> PluginError {
+        PluginError::Fetch(refusal.english)
+    }
 }
 
 impl Fetcher {
@@ -82,6 +139,18 @@ impl Fetcher {
     /// drops them.
     /// The timeout covers the whole fetch, redirects included.
     pub fn fetch(&self, req: &HttpRequest, allowed: &dyn Fn(&str) -> bool) -> Result<HttpResponse> {
+        self.fetch_or_stop(req, allowed).map_err(|stopped| match stopped {
+            Stopped::Denied(refusal) => PluginError::Denied(refusal.english),
+            Stopped::Failed(refusal) => PluginError::Fetch(refusal.english),
+        })
+    }
+
+    /// As [Self::fetch], with a failure worded for people as well as for the plugin.
+    pub fn fetch_worded(&self, req: &HttpRequest, allowed: &dyn Fn(&str) -> bool) -> std::result::Result<HttpResponse, Refusal> {
+        self.fetch_or_stop(req, allowed).map_err(|(Stopped::Denied(refusal) | Stopped::Failed(refusal))| refusal)
+    }
+
+    fn fetch_or_stop(&self, req: &HttpRequest, allowed: &dyn Fn(&str) -> bool) -> std::result::Result<HttpResponse, Stopped> {
         let timeout = if req.timeout_ms == 0 { DEFAULT_TIMEOUT } else { Duration::from_millis(req.timeout_ms as u64).min(DEFAULT_TIMEOUT) };
         let deadline = Instant::now() + timeout;
         let mut url = req.url.clone();
@@ -91,7 +160,7 @@ impl Fetcher {
         for _hop in 0..5 {
             let host = host_of(&url).ok_or_else(|| not_web(&url))?;
             if !allowed(&host) {
-                return Err(PluginError::Denied(not_allowed(&host)));
+                return Err(Stopped::Denied(host_refused(&host)));
             }
             let timeout = time_left(deadline, &url)?;
             let (address, basic) = credentials_of(&url);
@@ -160,14 +229,14 @@ impl Fetcher {
                 .read_to_end(&mut bytes)
                 .map_err(|e| fetch_error(e.into(), &url))?;
             if bytes.len() > self.max_body {
-                return Err(fetch_error(ureq::Error::BodyExceedsLimit(self.max_body as u64), &url));
+                return Err(fetch_error(ureq::Error::BodyExceedsLimit(self.max_body as u64), &url).into());
             }
             return Ok(match String::from_utf8(bytes) {
                 Ok(text) => HttpResponse { status, headers: out_headers, body: text, body_base64: None },
                 Err(e) => HttpResponse { status, headers: out_headers, body: String::new(), body_base64: Some(base64_encode(e.as_bytes())) },
             });
         }
-        Err(too_many_redirects(&url))
+        Err(too_many_redirects(&url).into())
     }
 
     /// The cached download of `url` in `dir`, if there is one.
@@ -227,7 +296,7 @@ impl Fetcher {
                     // The reader's limit counts packed bytes; what lands on disk is held to `max`.
                     total += n as u64;
                     if total > max as u64 {
-                        return Err(fetch_error(ureq::Error::BodyExceedsLimit(max as u64), &url));
+                        return Err(fetch_error(ureq::Error::BodyExceedsLimit(max as u64), &url).into());
                     }
                     std::io::Write::write_all(&mut file, &buf[..n])?;
                 }
@@ -245,7 +314,7 @@ impl Fetcher {
                 }
             };
         }
-        Err(too_many_redirects(&url))
+        Err(too_many_redirects(&url).into())
     }
 }
 
@@ -257,19 +326,21 @@ fn cache_path(url: &str, dir: &Path) -> PathBuf {
 
 /// A failed request as a sentence for the plugin: what happened at which address, without the
 /// address's query string or password.
-fn fetch_error(e: ureq::Error, url: &str) -> PluginError {
+fn fetch_error(e: ureq::Error, url: &str) -> Refusal {
     use std::io::ErrorKind;
     let at = redact(url);
-    let didnt_answer = || format!("Nothing answered at {at}. Check that it is on and reachable, then try again.");
-    let too_slow = || format!("The server at {at} took too long to answer. Check that it is on, then try again.");
-    PluginError::Fetch(match e {
+    // Translators: {address} is a web address.
+    let didnt_answer = || Refusal::new(mark!("Nothing answered at {address}. Check that it is on and reachable, then try again."), &[("address", &at)]);
+    // Translators: {address} is a web address.
+    let too_slow = || Refusal::new(mark!("The server at {address} took too long to answer. Check that it is on, then try again."), &[("address", &at)]);
+    match e {
         ureq::Error::Timeout(_) => too_slow(),
-        ureq::Error::HostNotFound => format!("The server at {at} couldn't be found. Check the address and the TV's internet connection."),
+        // Translators: {address} is a web address.
+        ureq::Error::HostNotFound => Refusal::new(mark!("The server at {address} couldn't be found. Check the address and the TV's internet connection."), &[("address", &at)]),
         ureq::Error::ConnectionFailed => didnt_answer(),
-        ureq::Error::BodyExceedsLimit(max) => too_large(url, max),
-        ureq::Error::TooManyRedirects => format!("The address {at} redirected too many times. Check it, then try again."),
-        // The guarded resolver's refusals say why in words of their own.
-        ureq::Error::Io(io) if io.kind() == ErrorKind::PermissionDenied => format!("Lounge didn't fetch {at}: {io}."),
+        ureq::Error::BodyExceedsLimit(max) => oversized(url, max),
+        ureq::Error::TooManyRedirects => too_many_redirects(url),
+        ureq::Error::Io(io) if io.kind() == ErrorKind::PermissionDenied => turned_away(&at, &io.to_string()),
         ureq::Error::Io(io) if io.kind() == ErrorKind::TimedOut => too_slow(),
         ureq::Error::Io(io)
             if matches!(
@@ -279,33 +350,77 @@ fn fetch_error(e: ureq::Error, url: &str) -> PluginError {
         {
             didnt_answer()
         }
-        tls @ (ureq::Error::Tls(_) | ureq::Error::Rustls(_)) => format!("Lounge couldn't trust the certificate of {at}: {tls}."),
-        other => format!("Nothing answered at {at}: {other}."),
-    })
+        // Translators: {address} is a web address and {reason} what was wrong with its certificate, in English.
+        tls @ (ureq::Error::Tls(_) | ureq::Error::Rustls(_)) => Refusal::new(mark!("Lounge couldn't trust the certificate of {address}: {reason}."), &[("address", &at), ("reason", &tls)]),
+        // Translators: {address} is a web address and {reason} what went wrong, in English.
+        other => Refusal::new(mark!("Nothing answered at {address}: {reason}."), &[("address", &at), ("reason", &other)]),
+    }
+}
+
+/// Why the guarded resolver turns a name away.
+const INTO_THE_HOME: &str = "leads into the home network, where the plugin may reach only the addresses it is given";
+const ONTO_THE_INTERNET: &str = "leads to the public internet, where a certificate is always checked";
+const TO_THIS_DEVICE: &str = "leads to this device itself";
+
+/// The refusal for a name the guarded resolver turned away, which gave `why` as the name and
+/// one of its reasons.
+fn turned_away(at: &str, why: &str) -> Refusal {
+    let sentences = [
+        // Translators: {address} is a web address and {host} the name of the server in it.
+        (INTO_THE_HOME, mark!("Lounge didn't fetch {address}: {host} leads into the home network, where the plugin may reach only the addresses it is given.")),
+        // Translators: {address} is a web address and {host} the name of the server in it.
+        (ONTO_THE_INTERNET, mark!("Lounge didn't fetch {address}: {host} leads to the public internet, where a certificate is always checked.")),
+        // Translators: {address} is a web address and {host} the name of the server in it. "This device" is the TV.
+        (TO_THIS_DEVICE, mark!("Lounge didn't fetch {address}: {host} leads to this device itself.")),
+    ];
+    for (reason, sentence) in sentences {
+        if let Some(host) = why.strip_suffix(reason) {
+            return Refusal::new(sentence, &[("address", &at), ("host", &host.trim_end())]);
+        }
+    }
+    // Translators: {address} is a web address and {reason} why it was refused, in English.
+    Refusal::new(mark!("Lounge didn't fetch {address}: {reason}."), &[("address", &at), ("reason", &why)])
 }
 
 /// The error for an answer larger than `max` bytes. The SDK, and plugins built with older
 /// versions of it, recognise it by "body is larger than".
 pub fn too_large(url: &str, max: u64) -> String {
-    let size = if max >= 1 << 20 { format!("{} MB", max >> 20) } else { format!("{} KB", max.div_ceil(1024)) };
-    format!("The server at {} sent too much: the body is larger than {size}.", redact(url))
+    oversized(url, max).english
+}
+
+fn oversized(url: &str, max: u64) -> Refusal {
+    let at = redact(url);
+    if max >= 1 << 20 {
+        // Translators: {address} is a web address and {megabytes} a whole number.
+        Refusal::new(mark!("The server at {address} sent too much: the body is larger than {megabytes} MB."), &[("address", &at), ("megabytes", &(max >> 20))])
+    } else {
+        // Translators: {address} is a web address and {kilobytes} a whole number.
+        Refusal::new(mark!("The server at {address} sent too much: the body is larger than {kilobytes} KB."), &[("address", &at), ("kilobytes", &max.div_ceil(1024))])
+    }
 }
 
 /// The refusal of a host the plugin did not name. Plugins may look for "allow list" in it.
 pub fn not_allowed(host: &str) -> String {
-    format!("This plugin may not reach {host}, which isn't on its allow list. Check the addresses in its settings.")
+    host_refused(host).english
 }
 
-fn not_web(url: &str) -> PluginError {
-    PluginError::Fetch(format!("Lounge can't fetch {}, which isn't a web address.", redact(url)))
+pub(crate) fn host_refused(host: &str) -> Refusal {
+    // Translators: {host} is the name of a server. The allow list is the plugin's list of the servers it may reach.
+    Refusal::new(mark!("This plugin may not reach {host}, which isn't on its allow list. Check the addresses in its settings."), &[("host", &host)])
 }
 
-fn too_many_redirects(url: &str) -> PluginError {
-    PluginError::Fetch(format!("The address {} redirected too many times. Check it, then try again.", redact(url)))
+fn not_web(url: &str) -> Refusal {
+    // Translators: {address} is what the plugin gave as a web address.
+    Refusal::new(mark!("Lounge can't fetch {address}, which isn't a web address."), &[("address", &redact(url))])
+}
+
+fn too_many_redirects(url: &str) -> Refusal {
+    // Translators: {address} is a web address.
+    Refusal::new(mark!("The address {address} redirected too many times. Check it, then try again."), &[("address", &redact(url))])
 }
 
 /// The time left before `deadline`, or the timeout error once it has passed.
-fn time_left(deadline: Instant, url: &str) -> Result<Duration> {
+fn time_left(deadline: Instant, url: &str) -> std::result::Result<Duration, Refusal> {
     let left = deadline.saturating_duration_since(Instant::now());
     if left.is_zero() { Err(fetch_error(ureq::Error::Timeout(ureq::Timeout::Global), url)) } else { Ok(left) }
 }
@@ -317,6 +432,27 @@ pub fn redact(url: &str) -> String {
     let authority = rest[..authority_end].rsplit('@').next().unwrap_or("");
     let path = rest[authority_end..].split(['?', '#']).next().unwrap_or("");
     format!("{scheme}://{authority}{path}")
+}
+
+/// `text` as the SDK hands an error to a plugin: each web address in it without its password,
+/// and with "?…" where its query string was.
+fn cut_by_the_sdk(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = [rest.find("http://"), rest.find("https://")].into_iter().flatten().min() {
+        out.push_str(&rest[..i]);
+        let tail = &rest[i..];
+        let end = tail.find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '<' | '>' | ')')).unwrap_or(tail.len());
+        let (scheme, address) = tail[..end].split_at(tail.find("://").map_or(0, |at| at + 3));
+        let query = address.find(['?', '#']);
+        let kept = &address[..query.unwrap_or(address.len())];
+        let (authority, path) = kept.split_at(kept.find('/').unwrap_or(kept.len()));
+        let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
+        out.push_str(&format!("{scheme}{host}{path}{}", if query.is_some() { "?…" } else { "" }));
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Where a plugin's fetches may lead besides the public internet.
@@ -386,7 +522,7 @@ impl Resolver for GuardedResolver {
         if self.reach.this_device.contains(&host) {
             // An address the plugin lists itself may be anywhere, so the same rule holds for it.
             if unverified && addrs.iter().any(|a| !is_local_network(a.ip()) && !is_own_address(a.ip())) {
-                return Err(ureq::Error::Io(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{host} leads to the public internet, where a certificate is always checked"))));
+                return Err(ureq::Error::Io(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{host} {ONTO_THE_INTERNET}"))));
             }
             return Ok(addrs);
         }
@@ -411,11 +547,11 @@ impl Resolver for GuardedResolver {
         }
         if out.is_empty() {
             let why = if kept_out_of_home {
-                "leads into the home network, where the plugin may reach only the addresses it is given"
+                INTO_THE_HOME
             } else if kept_off_the_internet {
-                "leads to the public internet, where a certificate is always checked"
+                ONTO_THE_INTERNET
             } else {
-                "leads to this device itself"
+                TO_THIS_DEVICE
             };
             return Err(ureq::Error::Io(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{host} {why}"))));
         }
@@ -646,6 +782,14 @@ mod tests {
         assert_eq!(err.to_string(), "This plugin may not reach evil.example, which isn't on its allow list. Check the addresses in its settings.");
         assert_eq!(too_large("http://me:pw@iptv.example/get.php?password=pw", 8 << 20), "The server at http://iptv.example/get.php sent too much: the body is larger than 8 MB.");
         assert_eq!(too_large("http://a.tv/p.jpg", 1024), "The server at http://a.tv/p.jpg sent too much: the body is larger than 1 KB.");
+    }
+
+    #[test]
+    fn a_refusal_is_found_as_the_sdk_passes_it_on() {
+        let refusal = Refusal { english: "Nothing answered at http://a/x: no route to http://me:pw@b/y?key=1.".into(), spoken: "Keine Antwort von http://a/x: no route to http://me:pw@b/y?key=1.".into() };
+        assert_eq!(refusal.spoken_in("Kodi: Nothing answered at http://a/x: no route to http://me:pw@b/y?key=1."), "Kodi: Keine Antwort von http://a/x: no route to http://me:pw@b/y?key=1.");
+        assert_eq!(refusal.spoken_in("Kodi: Nothing answered at http://a/x: no route to http://b/y?…"), "Kodi: Keine Antwort von http://a/x: no route to http://b/y?…");
+        assert_eq!(refusal.spoken_in("Kodi didn't answer."), "Kodi didn't answer.");
     }
 
     #[test]

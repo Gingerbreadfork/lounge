@@ -161,6 +161,10 @@ pub struct Manifest {
     /// not named is forgotten when any address does.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub sent_to: BTreeMap<String, String>,
+    /// The manifest's own text in other languages: for each language tag, the English text of a
+    /// name, description, row title, label or help, and how that language says it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub locales: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -208,6 +212,46 @@ pub fn valid_plugin_id(id: &str) -> bool {
 }
 
 impl Manifest {
+    /// This manifest with its text as the language in use says it.
+    pub fn spoken(&self) -> Manifest {
+        self.spoken_in(&lounge_words::language())
+    }
+
+    /// This manifest with its text as the language `tag` says it. Text the plugin has no
+    /// translation for stays as written.
+    pub fn spoken_in(&self, tag: &str) -> Manifest {
+        let mut spoken = self.clone();
+        spoken.locales.clear();
+        let Some(said) = lounge_words::best(tag, self.locales.keys().map(String::as_str)).map(|found| &self.locales[found]) else {
+            return spoken;
+        };
+        let say = |text: &mut String| {
+            if let Some(theirs) = said.get(text.as_str()).filter(|theirs| !theirs.trim().is_empty()) {
+                text.clone_from(theirs);
+            }
+        };
+        say(&mut spoken.name);
+        say(&mut spoken.description);
+        spoken.rows.iter_mut().for_each(|row| say(&mut row.title));
+        for setting in &mut spoken.settings {
+            say(&mut setting.label);
+            setting.help.iter_mut().for_each(say);
+        }
+        spoken
+    }
+
+    /// Every text of this manifest that people read, in the order it is declared.
+    pub fn shown_texts(&self) -> Vec<&str> {
+        let mut texts = vec![self.name.as_str(), self.description.as_str()];
+        texts.extend(self.rows.iter().map(|row| row.title.as_str()));
+        for setting in &self.settings {
+            texts.push(&setting.label);
+            texts.extend(setting.help.as_deref());
+        }
+        texts.retain(|text| !text.is_empty());
+        texts
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if !valid_plugin_id(&self.id) {
             return Err(format!("invalid plugin id {:?}", self.id));
@@ -236,6 +280,15 @@ impl Manifest {
             }
             if !self.decides_origin(address) {
                 return Err(format!("sent_to sends {secret:?} to {address:?}, which is not an address setting"));
+            }
+        }
+        let shown = self.shown_texts();
+        for (tag, said) in &self.locales {
+            if tag.is_empty() || !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                return Err(format!("{tag:?} is not a language tag"));
+            }
+            if let Some(stray) = said.keys().find(|text| !shown.contains(&text.as_str())) {
+                return Err(format!("locales translates {stray:?} for {tag:?}, which the manifest does not say"));
             }
         }
         for app in &self.for_apps {
@@ -842,6 +895,10 @@ impl HttpResponse {
 /// while the phone companion is off.
 pub const CALLBACK_SETTING: &str = "$callback";
 
+/// The setting key that returns the tag of the language Lounge is shown in, such as `de` or
+/// `pt-BR`. Nothing on a TV whose Lounge predates translations, which means English.
+pub const LOCALE_SETTING: &str = "$locale";
+
 /// The key the query of that landing page is kept under, for the plugin to read and delete.
 pub const CALLBACK_KEY: &str = "callback";
 
@@ -1206,5 +1263,55 @@ mod control_tests {
         sorted.sort();
         sorted.dedup();
         assert_eq!(sorted, GLYPHS);
+    }
+}
+
+#[cfg(test)]
+mod locale_tests {
+    use super::*;
+
+    fn weather() -> Manifest {
+        let said = |pairs: &[(&str, &str)]| pairs.iter().map(|(english, theirs)| (english.to_string(), theirs.to_string())).collect::<BTreeMap<_, _>>();
+        Manifest {
+            id: "tv.example.weather".into(),
+            name: "Weather".into(),
+            version: "1".into(),
+            description: "Now and the week ahead.".into(),
+            rows: vec![RowSpec { id: "forecast".into(), title: "Weather".into(), style: RowStyle::Compact }],
+            settings: vec![SettingSpec { key: "place".into(), label: "Town or city".into(), kind: SettingKind::Text, required: true, help: Some("As in Portland, Maine.".into()), default: None }],
+            locales: [
+                ("de".to_string(), said(&[("Weather", "Wetter"), ("Town or city", "Ort"), ("As in Portland, Maine.", "Zum Beispiel Portland, Maine."), ("Now and the week ahead.", " ")])),
+                ("pt-PT".to_string(), said(&[("Weather", "Meteorologia")])),
+            ]
+            .into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_manifest_is_spoken_in_the_nearest_language_it_has() {
+        let german = weather().spoken_in("de-AT");
+        assert_eq!((german.name.as_str(), german.rows[0].title.as_str(), german.settings[0].label.as_str()), ("Wetter", "Wetter", "Ort"));
+        assert_eq!(german.settings[0].help.as_deref(), Some("Zum Beispiel Portland, Maine."));
+        // A blank translation is none at all.
+        assert_eq!(german.description, "Now and the week ahead.");
+        assert!(german.locales.is_empty());
+        assert_eq!(weather().spoken_in("pt-AO").name, "Meteorologia");
+        // Another country's Portuguese is closer than English; a language the plugin lacks is English.
+        assert_eq!((weather().spoken_in("pt-BR").name, weather().spoken_in("fr").name, weather().spoken_in("en").name), ("Meteorologia".to_string(), "Weather".to_string(), "Weather".to_string()));
+    }
+
+    #[test]
+    fn translations_must_be_of_the_manifests_own_text() {
+        assert_eq!(weather().validate(), Ok(()));
+        let mut stray = weather();
+        stray.locales.get_mut("de").unwrap().insert("Something else".into(), "Etwas anderes".into());
+        assert!(stray.validate().unwrap_err().contains("Something else"));
+        let mut odd = weather();
+        odd.locales.insert("de DE".into(), Default::default());
+        assert!(odd.validate().is_err());
+        // A manifest from before translations reads as one with none.
+        let old: Manifest = serde_json::from_str(r#"{"id":"tv.example.old","name":"Old","version":"1"}"#).unwrap();
+        assert!(old.locales.is_empty() && !serde_json::to_string(&old).unwrap().contains("locales"));
     }
 }

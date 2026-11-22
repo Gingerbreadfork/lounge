@@ -6,6 +6,7 @@ license.workspace = true
 description = "LAN companion server: REST + WebSocket API, pairing, and the embedded Svelte app"
 
 [dependencies]
+lounge-words.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

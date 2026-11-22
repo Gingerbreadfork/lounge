@@ -10,6 +10,7 @@ use crate::{
 use lounge_plugin_api::ItemKind as PluginItemKind;
 use lounge_artwork::{prepare_many, Prepared, Style};
 use lounge_graph::{Artwork, DeepLink, Item, ItemKind};
+use lounge_words::t;
 use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -1077,20 +1078,31 @@ fn ingest_inputs(inner: &Inner, inputs: Vec<InputRecord>) -> Result<(), lounge_s
         .iter()
         .filter(|i| i.state != InputState::Disconnected)
         .map(|i| {
-            let name = i.custom_label.clone().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| i.label.clone());
+            // An input the TV gave no name is named for what it is, in the language in use.
+            let label = match (i.label.trim().is_empty(), i.kind.as_str()) {
+                (false, _) => i.label.clone(),
+                (true, "hdmi") => "HDMI".to_string(),
+                // Translators: names the TV's own tuner among its inputs.
+                (true, "tuner") => t!("Live TV"),
+                // Translators: one of the TV's inputs, such as an HDMI port, when its kind is not known.
+                (true, _) => t!("Input"),
+            };
+            let name = i.custom_label.clone().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| label.clone());
             let mut it = Item::content(&format!("input:{}", i.id), ItemKind::Input, "inputs", &name, DeepLink::SwitchInput(i.id.clone()));
             it.owner = Some(i.package.clone());
             let kind_label = match i.kind.as_str() {
-                "hdmi" => "HDMI",
-                "tuner" => "Live TV",
-                "av" => "AV",
-                _ => "Input",
+                "hdmi" => "HDMI".to_string(),
+                "tuner" => t!("Live TV"),
+                "av" => "AV".to_string(),
+                _ => t!("Input"),
             };
             let subtitle = match (&i.custom_label, i.state) {
-                (Some(c), InputState::Standby) if c != &i.label => format!("{}, standby", i.label),
-                (Some(c), _) if c != &i.label => i.label.clone(),
-                (_, InputState::Standby) => "Standby".to_string(),
-                _ => kind_label.to_string(),
+                // Translators: {input} is an input's name, such as HDMI 2. Standby says the device plugged into it is asleep.
+                (Some(c), InputState::Standby) if c != &label => t!("{input}, standby", input = label),
+                (Some(c), _) if c != &label => label.clone(),
+                // Translators: says the device plugged into an input is asleep.
+                (_, InputState::Standby) => t!("Standby"),
+                _ => kind_label,
             };
             // "Live TV · Live TV" says nothing twice.
             it.subtitle = Some(subtitle).filter(|s| s != &name);

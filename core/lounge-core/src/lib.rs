@@ -24,6 +24,20 @@ use std::sync::Arc;
 
 uniffi::setup_scaffolding!();
 
+/// Lounge's own text in the languages it ships, one catalog each under `core/locales`.
+pub(crate) const CATALOGS: lounge_words::Catalogs = &[
+    ("de", include_str!("../../locales/de.po")),
+    ("es", include_str!("../../locales/es.po")),
+    ("fr", include_str!("../../locales/fr.po")),
+    ("it", include_str!("../../locales/it.po")),
+    ("nl", include_str!("../../locales/nl.po")),
+    ("pt-BR", include_str!("../../locales/pt-BR.po")),
+    ("pt-PT", include_str!("../../locales/pt-PT.po")),
+];
+
+/// The store's key for the language its rows and plugin items were written in.
+const LANGUAGE_META: &str = "language";
+
 // ---------------------------------------------------------------------------
 // Records and enums that cross the boundary
 // ---------------------------------------------------------------------------
@@ -890,6 +904,9 @@ pub(crate) struct State {
     pub last_previews: Vec<ProgramRecord>,
     /// Whether the TV shows a 24-hour clock, so the Stage writes times as the clock does.
     pub clock_24h: bool,
+    /// The inputs the TV last reported. Their tiles are worded when taken in, so they are
+    /// taken in again when the language changes.
+    pub last_inputs: Vec<InputRecord>,
     /// What each source's stored rows were last replaced with, so the same rows are not written again.
     pub stored_rows: worker::StoredRows,
 }
@@ -907,8 +924,12 @@ impl Core {
     pub fn open(config: CoreConfig, platform: Arc<dyn Platform>) -> Result<Arc<Self>, CoreError> {
         init_logging();
         let db_path = PathBuf::from(&config.data_dir).join(DB_FILE);
-        let Opened { store, layout, persisted, plugins: plugin_rows, habits } =
+        let Opened { store, layout, persisted, plugins: plugin_rows, habits, language } =
             open_store(&db_path).inspect_err(|e| tracing::error!("could not open the database: {e}"))?;
+        // What is stored was written in this language, so it is spoken until the TV says which it shows.
+        if let Some(language) = language {
+            lounge_words::speak(&language, &[CATALOGS]);
+        }
         // Only the persisted snapshot is needed for the first frame; the graph itself is loaded
         // by the worker as its first job, so opening the core costs one small read.
         let graph = Graph::new(layout);
@@ -955,6 +976,7 @@ impl Core {
                 pending_art: Default::default(),
                 last_previews: Vec::new(),
                 clock_24h: false,
+                last_inputs: Vec::new(),
                 stored_rows: Default::default(),
             }),
             snapshot: RwLock::new(snapshot),
@@ -1026,6 +1048,7 @@ impl Core {
     /// Replace the set of TV inputs.
     pub fn ingest_inputs(&self, inputs: Vec<InputRecord>) {
         self.count();
+        self.inner.state.lock().last_inputs.clone_from(&inputs);
         self.enqueue(worker::Job::IngestInputs(inputs));
     }
 
@@ -1133,7 +1156,7 @@ impl Core {
             .into_iter()
             .map(|(id, name, items)| ChannelInfo {
                 id,
-                name: if name.is_empty() { format!("Channel {id}") } else { name },
+                name: if name.is_empty() { engine::channel_named(id) } else { name },
                 package: items.first().and_then(|it| it.owner.clone()).unwrap_or_default(),
                 enabled: state.graph.layout.enabled_channels.contains(&id),
                 programmes: items.len() as u32,
@@ -1216,6 +1239,47 @@ impl Core {
         if changed {
             self.enqueue(worker::Job::Rebuild);
         }
+    }
+
+    /// The language the TV shows Lounge in, as a tag such as `de` or `pt-BR`. What the core
+    /// writes follows it, and every plugin that is on is refreshed so what it brings does too.
+    /// Returns the language now in use, which is English when Lounge has no such translation.
+    pub fn set_locale(&self, tag: String) -> String {
+        self.count();
+        let before = lounge_words::language();
+        let now = lounge_words::speak(&tag, &[CATALOGS]);
+        let on: Vec<String> = {
+            let mut state = self.inner.state.lock();
+            if now == before && state.store.meta(LANGUAGE_META).ok().flatten().is_some_and(|stored| stored == now) {
+                return now;
+            }
+            if let Err(e) = state.store.set_meta(LANGUAGE_META, &now) {
+                tracing::warn!("the language was not stored: {e}");
+            }
+            let rows = state.store.plugins().unwrap_or_default();
+            state.plugins = plugins::entries_from_rows(&rows);
+            state.plugins.iter().filter(|p| p.enabled).map(|p| p.id.clone()).collect()
+        };
+        if now != before {
+            // A loaded plugin carries its name as the old language said it.
+            self.inner.plugins.forget_loaded();
+            for id in &on {
+                self.inner.plugins.refresh_soon(id);
+            }
+            self.inner.plugins.wake_schedule();
+            let inputs = self.inner.state.lock().last_inputs.clone();
+            if !inputs.is_empty() {
+                self.enqueue(worker::Job::IngestInputs(inputs));
+            }
+        }
+        self.enqueue(worker::Job::Rebuild);
+        now
+    }
+
+    /// The tag of the language the core writes in.
+    pub fn language(&self) -> String {
+        self.count();
+        lounge_words::language()
     }
 
     // ----- plugins -----
@@ -1374,6 +1438,8 @@ struct Opened {
     persisted: Option<(u64, String)>,
     plugins: Vec<PluginRow>,
     habits: std::collections::HashMap<String, [u32; 24]>,
+    /// The language everything stored was last written in.
+    language: Option<String>,
 }
 
 fn read_store(path: &Path) -> Result<Opened, StoreError> {
@@ -1382,7 +1448,8 @@ fn read_store(path: &Path) -> Result<Opened, StoreError> {
     let persisted = store.load_snapshot()?;
     let plugins = store.plugins()?;
     let habits = store.load_habits()?;
-    Ok(Opened { store, layout, persisted, plugins, habits })
+    let language = store.meta(LANGUAGE_META)?;
+    Ok(Opened { store, layout, persisted, plugins, habits, language })
 }
 
 /// Opens the store, setting a database SQLite cannot read aside and starting an empty one.

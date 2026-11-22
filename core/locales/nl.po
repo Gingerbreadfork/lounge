@@ -1,0 +1,1011 @@
+# Lounge, core: nl
+#
+msgid ""
+msgstr ""
+"Language: nl\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. names a paired device by its browser and what it is, as in "Chrome on Pixel 8".
+#: lounge-companion/src/auth.rs lounge-companion/src/server.rs
+msgid "{browser} on {device}"
+msgstr "{browser} op {device}"
+
+#: lounge-companion/src/server.rs
+msgid "Pair this phone with the TV first."
+msgstr "Koppel deze telefoon eerst met de tv."
+
+#: lounge-companion/src/server.rs
+msgid "The TV has forgotten this phone. Pair it again to carry on."
+msgstr "De tv is deze telefoon vergeten. Koppel hem opnieuw om verder te gaan."
+
+#: lounge-companion/src/server.rs
+msgid "The TV answers only phones on its own network. Join the TV's Wi-Fi, then try again."
+msgstr "De tv reageert alleen op telefoons in zijn eigen netwerk. Verbind met de wifi van de tv en probeer het dan opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "Open the phone companion at the address the TV shows. In Settings on the TV, open Phone companion to find it."
+msgstr "Open Lounge op je telefoon via het adres dat de tv toont. Je vindt het op de tv in Instellingen, onder Lounge op je telefoon."
+
+#. "New code" is a button on the TV's Phone companion screen.
+#: lounge-companion/src/server.rs
+msgid "That code has been used or has expired. Choose New code on the TV and try again."
+msgstr "Die code is al gebruikt of verlopen. Kies Nieuwe code op de tv en probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "Phone"
+msgstr "Telefoon"
+
+#: lounge-companion/src/server.rs
+msgid "Too many wrong codes. Scan the QR code on the TV instead, or wait a few minutes and try again."
+msgstr "Te veel verkeerde codes. Scan in plaats daarvan de QR-code op de tv, of wacht een paar minuten en probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "Type the six digits the TV shows."
+msgstr "Typ de zes cijfers die de tv toont."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't save this phone, so it isn't paired. Check the TV has free space, then try again."
+msgstr "De tv kon deze telefoon niet opslaan, dus hij is niet gekoppeld. Controleer of de tv ruimte vrij heeft en probeer het dan opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't start a session for this phone. Try again in a moment."
+msgstr "De tv kon geen sessie voor deze telefoon starten. Probeer het zo opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "Android phone"
+msgstr "Android-telefoon"
+
+#: lounge-companion/src/server.rs
+msgid "Windows PC"
+msgstr "Windows-pc"
+
+#. names a paired device whose browser is not known. {device} is what it is, such as "iPhone" or "Phone".
+#: lounge-companion/src/server.rs
+msgid "A browser on {device}"
+msgstr "Een browser op {device}"
+
+#: lounge-companion/src/server.rs
+msgid "Lounge on the TV ran into a problem. Try again in a moment."
+msgstr "Lounge op de tv liep tegen een probleem aan. Probeer het zo opnieuw."
+
+#: lounge-companion/src/server.rs lounge-core/src/companion.rs
+msgid "The TV didn't take that key. Try again."
+msgstr "De tv nam die toets niet aan. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs lounge-core/src/companion.rs
+msgid "The TV didn't take the text. Try again."
+msgstr "De tv nam de tekst niet aan. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't open that. Try it from the TV."
+msgstr "De tv kon dat niet openen. Probeer het op de tv zelf."
+
+#: lounge-companion/src/server.rs lounge-core/src/companion.rs
+msgid "The TV couldn't open that app. Is it still installed?"
+msgstr "De tv kon die app niet openen. Is die nog geïnstalleerd?"
+
+#: lounge-companion/src/server.rs lounge-core/src/companion.rs
+msgid "The TV couldn't start the search. Try again."
+msgstr "De tv kon het zoeken niet starten. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't save that change. Try again."
+msgstr "De tv kon die wijziging niet opslaan. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "That file is too big for the TV."
+msgstr "Dat bestand is te groot voor de tv."
+
+#: lounge-companion/src/server.rs
+msgid "The file didn't arrive in full. Try again."
+msgstr "Het bestand is niet volledig aangekomen. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The file stopped arriving. Check this phone's Wi-Fi, then try again."
+msgstr "Het bestand kwam niet verder binnen. Controleer de wifi van deze telefoon en probeer het dan opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't store the file. Check it has free space, then try again."
+msgstr "De tv kon het bestand niet opslaan. Controleer of er ruimte vrij is en probeer het dan opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "Lounge on the TV is stopping. Try again in a moment."
+msgstr "Lounge op de tv wordt afgesloten. Probeer het zo opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "That file is empty. Choose the plugin's .lgp file."
+msgstr "Dat bestand is leeg. Kies het .lgp-bestand van de plug-in."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't install that plugin. Check it is a Lounge plugin, then try again."
+msgstr "De tv kon die plug-in niet installeren. Controleer of het een plug-in voor Lounge is en probeer het dan opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't install from that link. Check the address, then try again."
+msgstr "De tv kon niet installeren vanaf die link. Controleer het adres en probeer het dan opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't save that setting. Try again."
+msgstr "De tv kon die instelling niet opslaan. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't read that from the plugin. Try again."
+msgstr "De tv kon dat niet uit de plug-in lezen. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't do that. Try again."
+msgstr "De tv kon dat niet doen. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The picture isn't arriving."
+msgstr "Het beeld komt niet binnen."
+
+#: lounge-companion/src/server.rs lounge-core/src/engine.rs
+msgid "The picture has no address now."
+msgstr "Het beeld heeft nu geen adres."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't list its controls. Try again."
+msgstr "De tv kon zijn bediening niet tonen. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV didn't answer. Check that HDMI-CEC is on in the TV's settings, then try again."
+msgstr "De tv reageerde niet. Controleer of HDMI-CEC aanstaat in de instellingen van de tv en probeer het dan opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't do that with the plugin. Try again."
+msgstr "De tv kon dat niet doen met de plug-in. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV had already forgotten that phone."
+msgstr "De tv was die telefoon al vergeten."
+
+#: lounge-companion/src/server.rs
+msgid "Forgotten, but the TV couldn't save that, so a restart could bring it back. Try again."
+msgstr "Vergeten, maar de tv kon dat niet opslaan, dus na een herstart kan de telefoon terugkomen. Probeer het opnieuw."
+
+#. "Download backup" is a button in the phone app.
+#: lounge-companion/src/server.rs lounge-core/src/companion.rs
+msgid "That file isn't a Lounge backup. Choose a file that Download backup saved."
+msgstr "Dat bestand is geen back-up van Lounge. Kies een bestand dat met Back-up downloaden is opgeslagen."
+
+#. the heading and the words of the page a sign-in ends on. {plugin} is the plugin that asked for it, such as Spotify.
+#: lounge-companion/src/server.rs
+msgid "Signed in"
+msgstr "Ingelogd"
+
+#. the heading and the words of the page a sign-in ends on. {plugin} is the plugin that asked for it, such as Spotify.
+#: lounge-companion/src/server.rs
+msgid "{plugin} has what it needs. Look at the TV."
+msgstr "{plugin} heeft wat nodig is. Kijk op de tv."
+
+#. the heading of the page a sign-in ends on when it did not go through.
+#: lounge-companion/src/server.rs
+msgid "Not signed in"
+msgstr "Niet ingelogd"
+
+#: lounge-core/src/companion.rs
+msgid "Lounge on the TV is restarting. Try again in a moment."
+msgstr "Lounge op de tv start opnieuw op. Probeer het zo opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "The TV couldn't save that. Check it has free space, then try again."
+msgstr "De tv kon dat niet opslaan. Controleer of er ruimte vrij is en probeer het dan opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "That isn't on the TV's home screen any more. Choose it again from what the TV shows now."
+msgstr "Dat staat niet meer op het startscherm van de tv. Kies het opnieuw uit wat de tv nu toont."
+
+#: lounge-core/src/companion.rs
+msgid "Couldn't open {title}. Is its app still installed?"
+msgstr "Kon {title} niet openen. Is de bijbehorende app nog geïnstalleerd?"
+
+#: lounge-core/src/companion.rs
+msgid "Couldn't open that. Is its app still installed?"
+msgstr "Kon dat niet openen. Is de bijbehorende app nog geïnstalleerd?"
+
+#: lounge-core/src/companion.rs
+msgid "Nothing on the TV can open that link. Install an app for it, then try again."
+msgstr "Niets op de tv kan die link openen. Installeer er een app voor en probeer het dan opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "The TV couldn't control what is playing. Try it from the TV."
+msgstr "De tv kon niet bedienen wat er speelt. Probeer het op de tv zelf."
+
+#: lounge-core/src/companion.rs
+msgid "The TV couldn't do that. Try it from the TV."
+msgstr "De tv kon dat niet doen. Probeer het op de tv zelf."
+
+#: lounge-core/src/companion.rs
+msgid "That plugin's signature doesn't check out, so the TV won't install it. Get it again from its publisher."
+msgstr "De handtekening van die plug-in klopt niet, dus de tv installeert hem niet. Haal de plug-in opnieuw op bij de uitgever."
+
+#: lounge-core/src/companion.rs
+msgid "That file isn't a Lounge plugin, or it was damaged on the way. Get it again, then install it."
+msgstr "Dat bestand is geen plug-in voor Lounge, of het is onderweg beschadigd. Haal het opnieuw op en installeer het dan."
+
+#: lounge-core/src/companion.rs
+msgid "The phone companion is off. Turn it on, then try again."
+msgstr "Lounge op je telefoon staat uit. Zet het aan en probeer het dan opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "The TV isn't on a network. Connect it to your Wi-Fi, then try again."
+msgstr "De tv zit niet op een netwerk. Verbind hem met je wifi en probeer het dan opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "That has changed since it was shown. Close this and open it again."
+msgstr "Dat is veranderd sinds het werd getoond. Sluit dit en open het opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "The picture has no address now. Open it again."
+msgstr "Het beeld heeft nu geen adres. Open het opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "The search is open in Lounge, but another app is still in front on the TV. Press Home to see it."
+msgstr "Zoeken is open in Lounge, maar op de tv staat nog een andere app op de voorgrond. Druk op Home om het te zien."
+
+#: lounge-core/src/companion.rs
+msgid "That plugin isn't installed any more."
+msgstr "Die plug-in is niet meer geïnstalleerd."
+
+#: lounge-core/src/companion.rs
+msgid "The TV couldn't remove that plugin. Try again."
+msgstr "De tv kon die plug-in niet verwijderen. Probeer het opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "Lounge on the TV doesn't know that command. Update Lounge, then try again."
+msgstr "Lounge op de tv kent dat commando niet. Werk Lounge bij en probeer het dan opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "Nothing on the TV is waiting for this sign-in. Start it again from the plugin's page on the TV."
+msgstr "Niets op de tv wacht op deze inlogpoging. Begin opnieuw vanaf de pagina van de plug-in op de tv."
+
+#: lounge-core/src/companion.rs
+msgid "The TV couldn't keep the sign-in. Free some space on the TV, then start it again."
+msgstr "De tv kon de inloggegevens niet bewaren. Maak ruimte vrij op de tv en begin dan opnieuw."
+
+#: lounge-core/src/companion.rs
+msgid "That backup comes from a newer Lounge. Update Lounge on the TV, then restore it."
+msgstr "Die back-up komt van een nieuwere Lounge. Werk Lounge op de tv bij en zet de back-up dan terug."
+
+#: lounge-core/src/companion.rs
+msgid "The layout is restored, but the TV couldn't save its look and sound settings. Check it has free space, then restore again."
+msgstr "De indeling is teruggezet, maar de tv kon de instellingen voor uiterlijk en geluid niet opslaan. Controleer of er ruimte vrij is en zet de back-up dan opnieuw terug."
+
+#: lounge-core/src/companion.rs
+msgid "That link leads back to the TV itself. Use a link to the plugin on the internet or another device."
+msgstr "Die link leidt terug naar de tv zelf. Gebruik een link naar de plug-in op internet of op een ander apparaat."
+
+#: lounge-core/src/companion.rs
+msgid "The TV couldn't download that link. Check the address, then try again."
+msgstr "De tv kon die link niet downloaden. Controleer het adres en probeer het dan opnieuw."
+
+#: lounge-core/src/engine.rs
+msgid "Offline, showing what we have"
+msgstr "Offline, je ziet wat er al was"
+
+#: lounge-core/src/engine.rs
+msgid "Continue watching"
+msgstr "Verder kijken"
+
+#: lounge-core/src/engine.rs
+msgid "Your apps"
+msgstr "Je apps"
+
+#: lounge-core/src/engine.rs
+msgid "Games"
+msgstr "Games"
+
+#: lounge-core/src/engine.rs
+msgid "Live now"
+msgstr "Nu live"
+
+#: lounge-core/src/engine.rs
+msgid "TV controls"
+msgstr "Tv-bediening"
+
+#: lounge-core/src/engine.rs
+msgid "Nothing yet"
+msgstr "Nog niets"
+
+#: lounge-core/src/engine.rs
+msgid "{n} app"
+msgid_plural "{n} apps"
+msgstr[0] "{n} app"
+msgstr[1] "{n} apps"
+
+#. names a channel by its number when nothing more is known about it.
+#: lounge-core/src/engine.rs
+msgid "Channel {number}"
+msgstr "Zender {number}"
+
+#. {plugin} is a plugin's name. Its row has nothing in it yet.
+#: lounge-core/src/engine.rs
+msgid "{plugin}, nothing yet"
+msgstr "{plugin}, nog niets"
+
+#. {plugin} is a plugin's name, and a title is a film, a show or the like in its row.
+#: lounge-core/src/engine.rs
+msgid "{plugin}, {n} title"
+msgid_plural "{plugin}, {n} titles"
+msgstr[0] "{plugin}, {n} titel"
+msgstr[1] "{plugin}, {n} titels"
+
+#: lounge-core/src/engine.rs
+msgid "{n} programme"
+msgid_plural "{n} programmes"
+msgstr[0] "{n} programma"
+msgstr[1] "{n} programma's"
+
+#: lounge-core/src/engine.rs
+msgid "Inputs"
+msgstr "Ingangen"
+
+#. a title is a film, a show or the like. The Stage is the large area at the top of the home screen.
+#: lounge-core/src/engine.rs
+msgid "{n} title, all on the Stage"
+msgid_plural "{n} titles, all on the Stage"
+msgstr[0] "{n} titel, op het Podium"
+msgstr[1] "{n} titels, allemaal op het Podium"
+
+#: lounge-core/src/engine.rs
+msgid "Nothing to continue yet"
+msgstr "Nog niets om verder te kijken"
+
+#. a title is a film, a show or the like.
+#: lounge-core/src/engine.rs
+msgid "{n} title"
+msgid_plural "{n} titles"
+msgstr[0] "{n} titel"
+msgstr[1] "{n} titels"
+
+#. says what the Your apps row holds when no app is pinned: only the tile that opens All apps.
+#: lounge-core/src/engine.rs
+msgid "Only the way to All apps, until you pin one"
+msgstr "Alleen de weg naar Alle apps, tot je er een vastmaakt"
+
+#: lounge-core/src/engine.rs
+msgid "Allow usage access in Settings to follow what you open"
+msgstr "Sta in Instellingen Gebruikstoegang toe om te volgen wat je opent"
+
+#. the apps in the Your apps row, all there because they were opened lately.
+#: lounge-core/src/engine.rs
+msgid "{n} app recent"
+msgid_plural "{n} apps recent"
+msgstr[0] "{n} recente app"
+msgstr[1] "{n} recente apps"
+
+#. the apps in the Your apps row, all there because they are pinned.
+#: lounge-core/src/engine.rs
+msgid "{n} app, pinned only"
+msgid_plural "{n} apps, pinned only"
+msgstr[0] "{n} app, alleen vastgemaakt"
+msgstr[1] "{n} apps, alleen vastgemaakt"
+
+#. how many apps in the Your apps row are pinned.
+#: lounge-core/src/engine.rs
+msgid "{n} pinned"
+msgid_plural "{n} pinned"
+msgstr[0] "{n} vastgemaakt"
+msgstr[1] "{n} vastgemaakt"
+
+#. how many apps in the Your apps row were opened lately.
+#: lounge-core/src/engine.rs
+msgid "{n} recent"
+msgid_plural "{n} recent"
+msgstr[0] "{n} recent"
+msgstr[1] "{n} recent"
+
+#. {pinned} is "3 pinned" and {recent} "2 recent", in your language.
+#: lounge-core/src/engine.rs
+msgid "{pinned}, {recent}"
+msgstr "{pinned}, {recent}"
+
+#: lounge-core/src/engine.rs
+msgid "No games installed"
+msgstr "Geen games geïnstalleerd"
+
+#: lounge-core/src/engine.rs
+msgid "{n} game"
+msgid_plural "{n} games"
+msgstr[0] "{n} game"
+msgstr[1] "{n} games"
+
+#: lounge-core/src/engine.rs
+msgid "No channels yet"
+msgstr "Nog geen zenders"
+
+#: lounge-core/src/engine.rs
+msgid "{n} channel"
+msgid_plural "{n} channels"
+msgstr[0] "{n} zender"
+msgstr[1] "{n} zenders"
+
+#: lounge-core/src/engine.rs
+msgid "No inputs found"
+msgstr "Geen ingangen gevonden"
+
+#: lounge-core/src/engine.rs
+msgid "{n} input"
+msgid_plural "{n} inputs"
+msgstr[0] "{n} ingang"
+msgstr[1] "{n} ingangen"
+
+#. stands in for a film or show whose name is gone. {app} is the app it came from.
+#: lounge-core/src/engine.rs
+msgid "A title {app} no longer lists"
+msgstr "Een titel die {app} niet meer aanbiedt"
+
+#. stands in for a film or show whose name is gone.
+#: lounge-core/src/engine.rs
+msgid "A title that is no longer listed"
+msgstr "Een titel die niet meer wordt aangeboden"
+
+#: lounge-core/src/engine.rs
+msgid "Plugins for your apps"
+msgstr "Plug-ins voor je apps"
+
+#. {version} is a version number, as in "Lounge 1.2 is ready".
+#: lounge-core/src/engine.rs
+msgid "Lounge {version} is ready"
+msgstr "Lounge {version} staat klaar"
+
+#: lounge-core/src/engine.rs
+msgid "Press to install the update"
+msgstr "Druk om de update te installeren"
+
+#. the title of a tile with room for about 265 pixels, roughly what this English takes; the line under it says why.
+#: lounge-core/src/engine.rs
+msgid "Turn on TV listings"
+msgstr "Tv-gids toestaan"
+
+#: lounge-core/src/engine.rs
+msgid "See what you were watching"
+msgstr "Zo zie je wat je aan het kijken was"
+
+#. {plugin} is a plugin's name. The tile opens the plugin's page so it can be turned on.
+#: lounge-core/src/engine.rs
+msgid "Set up {plugin}"
+msgstr "{plugin} instellen"
+
+#. says what turning a plugin on brings. {rows} lists the titles of its rows, as in "Adds recently added and favourites".
+#: lounge-core/src/engine.rs
+msgid "Adds {rows}"
+msgstr "Voegt toe: {rows}"
+
+#. how a row's title ends with its plugin's name, as in "Recently added on Jellyfin". That ending is left out where the plugin is already named. Keep {row} first.
+#: lounge-core/src/engine.rs
+msgid "{row} on {plugin}"
+msgstr "{row} op {plugin}"
+
+#. how a row's title ends with its plugin's name, as in "Recently added on Jellyfin". That ending is left out where the plugin is already named. Keep {row} first.
+#: lounge-core/src/engine.rs
+msgid "{row} from {plugin}"
+msgstr "{row} van {plugin}"
+
+#. how a row's title ends with its plugin's name, as in "Recently added on Jellyfin". That ending is left out where the plugin is already named. Keep {row} first.
+#: lounge-core/src/engine.rs
+msgid "{row} in {plugin}"
+msgstr "{row} in {plugin}"
+
+#. the title of a small tile with room for about 140 pixels, about nine letters. Where the screen's usual name is longer, use a shorter word for it here.
+#: lounge-core/src/engine.rs
+msgctxt "a small tile"
+msgid "All apps"
+msgstr "Alle apps"
+
+#. the title of a small tile with room for about 140 pixels, about nine letters. Where the sheet's usual name is longer, use a shorter word for it here.
+#: lounge-core/src/engine.rs
+msgctxt "a small tile"
+msgid "TV controls"
+msgstr "Bediening"
+
+#. a season and an episode by number, as short as they are written, then the episode's name: "S2 E4, Honeydew".
+#: lounge-core/src/engine.rs
+msgid "S{season} E{episode}, {title}"
+msgstr "S{season} A{episode}, {title}"
+
+#. a season and an episode by number, as short as they are written: "S2 E4".
+#: lounge-core/src/engine.rs
+msgid "S{season} E{episode}"
+msgstr "S{season} A{episode}"
+
+#: lounge-core/src/engine.rs
+msgid "Episode {episode}"
+msgstr "Aflevering {episode}"
+
+#: lounge-core/src/engine.rs
+msgid "Season {season}"
+msgstr "Seizoen {season}"
+
+#. {title} is the episode's name.
+#: lounge-core/src/engine.rs
+msgid "Season {season}, Episode {episode}: {title}"
+msgstr "Seizoen {season}, aflevering {episode}: {title}"
+
+#: lounge-core/src/engine.rs
+msgid "Season {season}, Episode {episode}"
+msgstr "Seizoen {season}, aflevering {episode}"
+
+#. {title} is the episode's name.
+#: lounge-core/src/engine.rs
+msgid "Episode {episode}: {title}"
+msgstr "Aflevering {episode}: {title}"
+
+#. {title} is the name of what is on.
+#: lounge-core/src/engine.rs
+msgid "Season {season}: {title}"
+msgstr "Seizoen {season}: {title}"
+
+#: lounge-core/src/engine.rs
+msgid "All apps"
+msgstr "Alle apps"
+
+#. "there" is the All apps screen. OK is the remote's centre button.
+#: lounge-core/src/engine.rs
+msgid "Hold OK on an app there to pin it"
+msgstr "Houd daar OK ingedrukt op een app om die vast te maken"
+
+#. a button that opens an app or a picture.
+#: lounge-core/src/engine.rs
+msgid "Open"
+msgstr "Openen"
+
+#: lounge-core/src/engine.rs
+msgid "Your TV"
+msgstr "Je tv"
+
+#: lounge-core/src/engine.rs
+msgid "Turn the TV on, switch inputs and change the sound"
+msgstr "Zet de tv aan, wissel van ingang en pas het geluid aan"
+
+#: lounge-core/src/engine.rs
+msgid "Open TV controls"
+msgstr "Tv-bediening openen"
+
+#. a button that goes on with what was being watched.
+#: lounge-core/src/engine.rs
+msgid "Continue"
+msgstr "Verder kijken"
+
+#. a button that starts a programme, a film or a channel.
+#: lounge-core/src/engine.rs
+msgid "Watch"
+msgstr "Kijken"
+
+#. a button that starts a game.
+#: lounge-core/src/engine.rs
+msgctxt "games"
+msgid "Play"
+msgstr "Spelen"
+
+#. a button that switches the TV to an input, such as an HDMI port.
+#: lounge-core/src/engine.rs
+msgid "Switch"
+msgstr "Schakelen"
+
+#. stands above a picture on the Stage, saying what kind of thing it is.
+#: lounge-core/src/engine.rs
+msgid "Pictures"
+msgstr "Afbeeldingen"
+
+#. stands above a programme on the Stage, as something to watch this evening.
+#: lounge-core/src/engine.rs
+msgid "Tonight"
+msgstr "Vanavond"
+
+#. stands above a film or show on the Stage that an app has newly added.
+#: lounge-core/src/engine.rs
+msgid "New for you"
+msgstr "Nieuw voor jou"
+
+#. stands above the next episode or film in line, on the Stage.
+#: lounge-core/src/engine.rs
+msgid "Up next"
+msgstr "Hierna"
+
+#. stands above an app on the Stage that was opened lately.
+#: lounge-core/src/engine.rs
+msgid "Jump back in"
+msgstr "Duik er weer in"
+
+#: lounge-core/src/engine.rs
+msgid "App info"
+msgstr "App-info"
+
+#: lounge-core/src/engine.rs
+msgid "Almost finished"
+msgstr "Bijna afgelopen"
+
+#: lounge-core/src/engine.rs
+msgid "{n} minute left"
+msgid_plural "{n} minutes left"
+msgstr[0] "Nog {n} minuut"
+msgstr[1] "Nog {n} minuten"
+
+#: lounge-core/src/engine.rs
+msgid "{n} hour left"
+msgid_plural "{n} hours left"
+msgstr[0] "Nog {n} uur"
+msgstr[1] "Nog {n} uur"
+
+#. fills {hours} in "{hours} {minutes} left".
+#: lounge-core/src/engine.rs
+msgid "{n} hour"
+msgid_plural "{n} hours"
+msgstr[0] "{n} uur"
+msgstr[1] "{n} uur"
+
+#. fills {minutes} in "{hours} {minutes} left".
+#: lounge-core/src/engine.rs
+msgid "{n} minute"
+msgid_plural "{n} minutes"
+msgstr[0] "{n} minuut"
+msgstr[1] "{n} minuten"
+
+#. how much of a programme is left. {hours} is "1 hour" and {minutes} "20 minutes", in your language.
+#: lounge-core/src/engine.rs
+msgid "{hours} {minutes} left"
+msgstr "Nog {hours} en {minutes}"
+
+#: lounge-core/src/engine.rs
+msgid "Opened just now"
+msgstr "Zojuist geopend"
+
+#: lounge-core/src/engine.rs
+msgid "Opened {n} minute ago"
+msgid_plural "Opened {n} minutes ago"
+msgstr[0] "{n} minuut geleden geopend"
+msgstr[1] "{n} minuten geleden geopend"
+
+#: lounge-core/src/engine.rs
+msgid "Opened an hour ago"
+msgstr "Een uur geleden geopend"
+
+#: lounge-core/src/engine.rs
+msgid "Opened {n} hour ago"
+msgid_plural "Opened {n} hours ago"
+msgstr[0] "{n} uur geleden geopend"
+msgstr[1] "{n} uur geleden geopend"
+
+#: lounge-core/src/engine.rs
+msgid "Opened yesterday"
+msgstr "Gisteren geopend"
+
+#: lounge-core/src/engine.rs
+msgid "Opened {n} day ago"
+msgid_plural "Opened {n} days ago"
+msgstr[0] "{n} dag geleden geopend"
+msgstr[1] "{n} dagen geleden geopend"
+
+#. stands in a list of server names, as in "asks to reach example.com and servers with a certificate of their own".
+#: lounge-core/src/plugins.rs
+msgid "servers with a certificate of their own"
+msgstr "servers met een eigen certificaat"
+
+#: lounge-core/src/plugins.rs
+msgid "This copy of {plugin} is signed by a different publisher than the installed one, so Lounge won't replace it. Remove the installed one first if you trust this file."
+msgstr "Dit exemplaar van {plugin} is ondertekend door een andere uitgever dan het geïnstalleerde, dus Lounge vervangt het niet. Verwijder eerst het geïnstalleerde als je dit bestand vertrouwt."
+
+#. {installed} and {offered} are version numbers, as in "The installed Jellyfin 1.4 is newer than this 1.2".
+#: lounge-core/src/plugins.rs
+msgid "The installed {plugin} {installed} is newer than this {offered}, so there is nothing to update."
+msgstr "De geïnstalleerde {plugin} {installed} is nieuwer dan deze {offered}, dus er valt niets bij te werken."
+
+#: lounge-core/src/plugins.rs
+msgid "This plugin's module doesn't match its manifest. Ask its publisher for a corrected one."
+msgstr "De module van deze plug-in komt niet overeen met het manifest. Vraag de uitgever om een verbeterde versie."
+
+#: lounge-core/src/plugins.rs
+msgid "Its plugin is turned off or no longer installed. Turn the plugin on, then try again."
+msgstr "De bijbehorende plug-in staat uit of is niet meer geïnstalleerd. Zet de plug-in aan en probeer het dan opnieuw."
+
+#: lounge-core/src/plugins.rs
+msgid "the refresh stopped on an error inside Lounge"
+msgstr "het vernieuwen stopte door een fout in Lounge"
+
+#: lounge-core/src/plugins.rs
+msgid "A plugin that comes with Lounge can be turned off but not removed"
+msgstr "Een plug-in die bij Lounge hoort kun je uitzetten, maar niet verwijderen"
+
+#. names the TV's own tuner among its inputs.
+#: lounge-core/src/worker.rs
+msgid "Live TV"
+msgstr "Live-tv"
+
+#. one of the TV's inputs, such as an HDMI port, when its kind is not known.
+#: lounge-core/src/worker.rs
+msgid "Input"
+msgstr "Ingang"
+
+#. {input} is an input's name, such as HDMI 2. Standby says the device plugged into it is asleep.
+#: lounge-core/src/worker.rs
+msgid "{input}, standby"
+msgstr "{input}, stand-by"
+
+#. says the device plugged into an input is asleep.
+#: lounge-core/src/worker.rs
+msgid "Standby"
+msgstr "Stand-by"
+
+#. {source} is the app or plugin something came from, such as Jellyfin.
+#: lounge-graph/src/rank.rs
+msgid "Added to {source} today"
+msgstr "Vandaag toegevoegd aan {source}"
+
+#: lounge-graph/src/rank.rs
+msgid "You played this just now"
+msgstr "Je hebt dit zojuist gespeeld"
+
+#: lounge-graph/src/rank.rs
+msgid "You played this today"
+msgstr "Je hebt dit vandaag gespeeld"
+
+#: lounge-graph/src/rank.rs
+msgid "You played this yesterday"
+msgstr "Je hebt dit gisteren gespeeld"
+
+#: lounge-graph/src/rank.rs
+msgid "You played this recently"
+msgstr "Je hebt dit onlangs gespeeld"
+
+#. why a game is suggested. {time} is a time of day on a 24-hour clock, such as 21:00.
+#: lounge-graph/src/rank.rs
+msgid "Because you play at {time}"
+msgstr "Omdat je om {time} speelt"
+
+#. why an app is suggested. {time} is a time of day on a 24-hour clock, such as 21:00.
+#: lounge-graph/src/rank.rs
+msgid "Because you watch at {time}"
+msgstr "Omdat je om {time} kijkt"
+
+#. why a game is suggested.
+#: lounge-graph/src/rank.rs
+msgid "Because you play at midnight"
+msgstr "Omdat je om middernacht speelt"
+
+#. why an app is suggested.
+#: lounge-graph/src/rank.rs
+msgid "Because you watch at midnight"
+msgstr "Omdat je om middernacht kijkt"
+
+#. why a game is suggested.
+#: lounge-graph/src/rank.rs
+msgid "Because you play at noon"
+msgstr "Omdat je om 12 uur 's middags speelt"
+
+#. why an app is suggested.
+#: lounge-graph/src/rank.rs
+msgid "Because you watch at noon"
+msgstr "Omdat je om 12 uur 's middags kijkt"
+
+#. why a game is suggested. {hour} is an hour of the morning on a 12-hour clock, 1 to 11.
+#: lounge-graph/src/rank.rs
+msgid "Because you play at {hour} am"
+msgstr "Omdat je om {hour} a.m. speelt"
+
+#. why an app is suggested. {hour} is an hour of the morning on a 12-hour clock, 1 to 11.
+#: lounge-graph/src/rank.rs
+msgid "Because you watch at {hour} am"
+msgstr "Omdat je om {hour} a.m. kijkt"
+
+#. why a game is suggested. {hour} is an hour of the afternoon or evening on a 12-hour clock, 1 to 11.
+#: lounge-graph/src/rank.rs
+msgid "Because you play at {hour} pm"
+msgstr "Omdat je om {hour} p.m. speelt"
+
+#. why an app is suggested. {hour} is an hour of the afternoon or evening on a 12-hour clock, 1 to 11.
+#: lounge-graph/src/rank.rs
+msgid "Because you watch at {hour} pm"
+msgstr "Omdat je om {hour} p.m. kijkt"
+
+#. fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+#: lounge-plugins/src/bundle.rs
+msgid "it lists too many files"
+msgstr "het bevat te veel bestanden"
+
+#. {file} names a file inside the plugin. Fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+#: lounge-plugins/src/bundle.rs
+msgid "{file} is missing"
+msgstr "{file} ontbreekt"
+
+#. {file} names a file inside the plugin. Fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+#: lounge-plugins/src/bundle.rs
+msgid "{file} is too large"
+msgstr "{file} is te groot"
+
+#. {file} names a file inside the plugin. Fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+#: lounge-plugins/src/bundle.rs
+msgid "{file} is malformed"
+msgstr "{file} is ongeldig"
+
+#. {file} names a file inside the plugin. Fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+#: lounge-plugins/src/bundle.rs
+msgid "{file} has the wrong length"
+msgstr "{file} heeft de verkeerde lengte"
+
+#. fills {reason} in "This file isn't a plugin Lounge can install: {reason}."
+#: lounge-plugins/src/bundle.rs
+msgid "it is not a zip file"
+msgstr "het is geen zipbestand"
+
+#: lounge-plugins/src/host.rs
+msgid "{plugin} can't run on this version of Lounge. Ask its publisher for a version that can."
+msgstr "{plugin} werkt niet op deze versie van Lounge. Vraag de uitgever om een versie die dat wel doet."
+
+#: lounge-plugins/src/host.rs
+msgid "The plugin can't run on this version of Lounge. Ask its publisher for a version that can."
+msgstr "De plug-in werkt niet op deze versie van Lounge. Vraag de uitgever om een versie die dat wel doet."
+
+#: lounge-plugins/src/host.rs
+msgid "{plugin} can't open that."
+msgstr "{plugin} kan dat niet openen."
+
+#: lounge-plugins/src/host.rs
+msgid "The plugin can't open that."
+msgstr "De plug-in kan dat niet openen."
+
+#: lounge-plugins/src/host.rs
+msgid "{plugin} has nothing more to show here."
+msgstr "{plugin} heeft hier niets meer te tonen."
+
+#: lounge-plugins/src/host.rs
+msgid "The plugin has nothing more to show here."
+msgstr "De plug-in heeft hier niets meer te tonen."
+
+#: lounge-plugins/src/host.rs
+msgid "{plugin} stopped partway through. It tries again in a few minutes."
+msgstr "{plugin} is halverwege gestopt. Over een paar minuten volgt een nieuwe poging."
+
+#: lounge-plugins/src/host.rs
+msgid "The plugin stopped partway through. It tries again in a few minutes."
+msgstr "De plug-in is halverwege gestopt. Over een paar minuten volgt een nieuwe poging."
+
+#: lounge-plugins/src/host.rs
+msgid "{plugin} stopped before it could open this. Try again in a moment."
+msgstr "{plugin} stopte voordat dit kon worden geopend. Probeer het zo opnieuw."
+
+#: lounge-plugins/src/host.rs
+msgid "The plugin stopped before it could open this. Try again in a moment."
+msgstr "De plug-in stopte voordat dit kon worden geopend. Probeer het zo opnieuw."
+
+#: lounge-plugins/src/host.rs
+msgid "{plugin} stopped before it could show this. Try again in a moment."
+msgstr "{plugin} stopte voordat dit kon worden getoond. Probeer het zo opnieuw."
+
+#: lounge-plugins/src/host.rs
+msgid "The plugin stopped before it could show this. Try again in a moment."
+msgstr "De plug-in stopte voordat dit kon worden getoond. Probeer het zo opnieuw."
+
+#: lounge-plugins/src/host.rs
+msgid "{plugin} stopped while Lounge was installing it. Ask its publisher for a version that works."
+msgstr "{plugin} stopte tijdens het installeren door Lounge. Vraag de uitgever om een versie die werkt."
+
+#: lounge-plugins/src/host.rs
+msgid "The plugin stopped while Lounge was installing it. Ask its publisher for a version that works."
+msgstr "De plug-in stopte tijdens het installeren door Lounge. Vraag de uitgever om een versie die werkt."
+
+#: lounge-plugins/src/host.rs
+msgid "{plugin} stopped partway through."
+msgstr "{plugin} is halverwege gestopt."
+
+#: lounge-plugins/src/host.rs
+msgid "The plugin stopped partway through."
+msgstr "De plug-in is halverwege gestopt."
+
+#. a plugin is told this once it has made every request one call may make. The budget is that limit.
+#: lounge-plugins/src/host.rs
+msgid "fetch budget for this call is used up"
+msgstr "het ophaalbudget voor deze aanroep is op"
+
+#. {address} is a web address.
+#: lounge-plugins/src/http.rs
+msgid "Nothing answered at {address}. Check that it is on and reachable, then try again."
+msgstr "Er kwam geen antwoord van {address}. Controleer of de server aanstaat en bereikbaar is, en probeer het dan opnieuw."
+
+#. {address} is a web address.
+#: lounge-plugins/src/http.rs
+msgid "The server at {address} took too long to answer. Check that it is on, then try again."
+msgstr "De server op {address} deed er te lang over om te reageren. Controleer of die aanstaat en probeer het dan opnieuw."
+
+#. {address} is a web address.
+#: lounge-plugins/src/http.rs
+msgid "The server at {address} couldn't be found. Check the address and the TV's internet connection."
+msgstr "De server op {address} is niet gevonden. Controleer het adres en de internetverbinding van de tv."
+
+#. {address} is a web address and {reason} what was wrong with its certificate, in English.
+#: lounge-plugins/src/http.rs
+msgid "Lounge couldn't trust the certificate of {address}: {reason}."
+msgstr "Lounge kon het certificaat van {address} niet vertrouwen: {reason}."
+
+#. {address} is a web address and {reason} what went wrong, in English.
+#: lounge-plugins/src/http.rs
+msgid "Nothing answered at {address}: {reason}."
+msgstr "Er kwam geen antwoord van {address}: {reason}."
+
+#. {address} is a web address and {host} the name of the server in it.
+#: lounge-plugins/src/http.rs
+msgid "Lounge didn't fetch {address}: {host} leads into the home network, where the plugin may reach only the addresses it is given."
+msgstr "Lounge heeft {address} niet opgehaald: {host} leidt naar het thuisnetwerk, waar de plug-in alleen verbinding mag maken met de adressen die hij heeft gekregen."
+
+#. {address} is a web address and {host} the name of the server in it.
+#: lounge-plugins/src/http.rs
+msgid "Lounge didn't fetch {address}: {host} leads to the public internet, where a certificate is always checked."
+msgstr "Lounge heeft {address} niet opgehaald: {host} leidt naar het openbare internet, waar een certificaat altijd wordt gecontroleerd."
+
+#. {address} is a web address and {host} the name of the server in it. "This device" is the TV.
+#: lounge-plugins/src/http.rs
+msgid "Lounge didn't fetch {address}: {host} leads to this device itself."
+msgstr "Lounge heeft {address} niet opgehaald: {host} leidt naar dit apparaat zelf."
+
+#. {address} is a web address and {reason} why it was refused, in English.
+#: lounge-plugins/src/http.rs
+msgid "Lounge didn't fetch {address}: {reason}."
+msgstr "Lounge heeft {address} niet opgehaald: {reason}."
+
+#. {address} is a web address and {megabytes} a whole number.
+#: lounge-plugins/src/http.rs
+msgid "The server at {address} sent too much: the body is larger than {megabytes} MB."
+msgstr "De server op {address} stuurde te veel: de inhoud is groter dan {megabytes} MB."
+
+#. {address} is a web address and {kilobytes} a whole number.
+#: lounge-plugins/src/http.rs
+msgid "The server at {address} sent too much: the body is larger than {kilobytes} KB."
+msgstr "De server op {address} stuurde te veel: de inhoud is groter dan {kilobytes} kB."
+
+#. {host} is the name of a server. The allow list is the plugin's list of the servers it may reach.
+#: lounge-plugins/src/http.rs
+msgid "This plugin may not reach {host}, which isn't on its allow list. Check the addresses in its settings."
+msgstr "Deze plug-in mag geen verbinding maken met {host}; die server staat niet op zijn lijst met toegestane servers. Controleer de adressen in de instellingen van de plug-in."
+
+#. {address} is what the plugin gave as a web address.
+#: lounge-plugins/src/http.rs
+msgid "Lounge can't fetch {address}, which isn't a web address."
+msgstr "Lounge kan {address} niet ophalen; dat is geen webadres."
+
+#. {address} is a web address.
+#: lounge-plugins/src/http.rs
+msgid "The address {address} redirected too many times. Check it, then try again."
+msgstr "Het adres {address} verwees te vaak door. Controleer het en probeer het dan opnieuw."
+
+#. {reason} is the system's own words for what went wrong, in English.
+#: lounge-plugins/src/lib.rs
+msgid "Lounge couldn't read or write the plugin's files: {reason}. Check that the TV has free space, then try again."
+msgstr "Lounge kon de bestanden van de plug-in niet lezen of schrijven: {reason}. Controleer of de tv ruimte vrij heeft en probeer het dan opnieuw."
+
+#. {reason} says what is wrong with the file, such as "manifest.json is missing".
+#: lounge-plugins/src/lib.rs
+msgid "This file isn't a plugin Lounge can install: {reason}. Check that it is the plugin's .lgp file."
+msgstr "Dit bestand is geen plug-in die Lounge kan installeren: {reason}. Controleer of het het .lgp-bestand van de plug-in is."
+
+#. {reason} is the reader's own words for what went wrong, in English.
+#: lounge-plugins/src/lib.rs
+msgid "Lounge couldn't read this plugin's manifest: {reason}. Ask its publisher for a corrected one."
+msgstr "Lounge kon het manifest van deze plug-in niet lezen: {reason}. Vraag de uitgever om een verbeterde versie."
+
+#: lounge-plugins/src/lib.rs
+msgid "This plugin's signature doesn't match its contents, so it may have been changed. Get it again from its publisher."
+msgstr "De handtekening van deze plug-in komt niet overeen met de inhoud, dus die is mogelijk gewijzigd. Haal de plug-in opnieuw op bij de uitgever."
+
+#. {reason} says what is wrong with the manifest, in English, for its publisher.
+#: lounge-plugins/src/lib.rs
+msgid "This plugin's manifest isn't valid: {reason}. Ask its publisher for a corrected one."
+msgstr "Het manifest van deze plug-in is niet geldig: {reason}. Vraag de uitgever om een verbeterde versie."
+
+#: lounge-plugins/src/lib.rs
+msgid "The plugin was stopped because its answer was no longer needed."
+msgstr "De plug-in is gestopt omdat het antwoord niet meer nodig was."
+
+#: lounge-words/src/lib.rs
+msgid "{first}, {next}"
+msgstr "{first}, {next}"
+
+#: lounge-words/src/lib.rs
+msgid "{first} and {last}"
+msgstr "{first} en {last}"
+
+#: lounge-words/src/lib.rs
+msgctxt "decimal mark"
+msgid "."
+msgstr ","

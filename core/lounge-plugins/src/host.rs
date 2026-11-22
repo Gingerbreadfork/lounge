@@ -3,7 +3,9 @@
 //! functions read and write the plugin's linear memory through its own `lg_alloc`.
 
 use crate::api::{self, exports, imports, Action, HttpRequest, HttpResponse, Item, Manifest, Outcome, RefreshContext, SearchQuery, Sheet, SheetRowKind};
+use crate::http::Refusal;
 use crate::{PluginError, Result};
+use lounge_words::{mark, t};
 use serde::de::{DeserializeOwned, Deserializer, IgnoredAny, SeqAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -22,6 +24,11 @@ pub trait Services: Send + Sync {
     fn log(&self, plugin: &str, level: i32, message: &str);
     /// Already checked against the manifest's allow list by the host.
     fn fetch(&self, plugin: &str, request: &HttpRequest) -> std::result::Result<HttpResponse, String>;
+    /// As [Self::fetch], with a failure worded for people as well as for the plugin. A service
+    /// that words its failures in English alone need not provide it.
+    fn fetch_worded(&self, plugin: &str, request: &HttpRequest) -> std::result::Result<HttpResponse, Refusal> {
+        self.fetch(plugin, request).map_err(Refusal::plain)
+    }
 }
 
 /// Says when a call's answer is no longer wanted. The call then ends at its next host call or
@@ -155,6 +162,9 @@ struct State {
     /// Set while the host waits on the plugin's `lg_alloc`, which may not call back into the host.
     in_alloc: bool,
     stop: Option<Stop>,
+    /// The fetches this call was refused, for saying them in the language in use should the
+    /// plugin pass one on.
+    refused: Vec<Refusal>,
 }
 
 impl State {
@@ -188,7 +198,11 @@ impl Host {
     pub fn load(&self, id: &str, manifest: Manifest, wasm: &[u8]) -> Result<LoadedPlugin> {
         let unrunnable = |cause: String| {
             self.services.log(id, api::LOG_ERROR, &format!("Loading the module failed: {cause}"));
-            PluginError::Wasm { said: format!("{} can't run on this version of Lounge. Ask its publisher for a version that can.", named(&manifest.name)), cause }
+            let said = match named(&manifest.name) {
+                Some(name) => t!("{plugin} can't run on this version of Lounge. Ask its publisher for a version that can.", plugin = name),
+                None => t!("The plugin can't run on this version of Lounge. Ask its publisher for a version that can."),
+            };
+            PluginError::Wasm { said, cause }
         };
         let engine = Engine::new(&self.config);
         let module = Module::new(&engine, wasm).map_err(|e| unrunnable(e.to_string()))?;
@@ -248,7 +262,10 @@ impl Host {
 
     pub fn resolve(&self, plugin: &LoadedPlugin, action: &str) -> Result<Action> {
         if plugin.module.get_export(exports::RESOLVE).is_none() {
-            return Err(PluginError::Failed(format!("{} can't open that.", named(&plugin.manifest.name))));
+            return Err(PluginError::Failed(match named(&plugin.manifest.name) {
+                Some(name) => t!("{plugin} can't open that.", plugin = name),
+                None => t!("The plugin can't open that."),
+            }));
         }
         self.outcome(self.call_json(plugin, exports::RESOLVE, Some(&action.to_string()), self.limits.call_time, self.limits.call_result_bytes)?)
     }
@@ -256,7 +273,10 @@ impl Host {
     /// The sheet the plugin describes under `id`.
     pub fn sheet(&self, plugin: &LoadedPlugin, id: &str) -> Result<Sheet> {
         if plugin.module.get_export(exports::SHEET).is_none() {
-            return Err(PluginError::Failed(format!("{} has nothing more to show here.", named(&plugin.manifest.name))));
+            return Err(PluginError::Failed(match named(&plugin.manifest.name) {
+                Some(name) => t!("{plugin} has nothing more to show here.", plugin = name),
+                None => t!("The plugin has nothing more to show here."),
+            }));
         }
         self.outcome(self.call_json(plugin, exports::SHEET, Some(&id.to_string()), self.limits.call_time, self.limits.call_result_bytes)?)
     }
@@ -326,6 +346,7 @@ impl Host {
             fuel_reserve: self.limits.fuel - first_slice,
             in_alloc: false,
             stop,
+            refused: Vec::new(),
         };
         let mut store = Store::new(&plugin.engine, state);
         store.limiter(|s| &mut s.limits);
@@ -372,7 +393,18 @@ impl Host {
         }
         let used = self.limits.fuel.saturating_sub(store.get_fuel().unwrap_or(0) + store.data().fuel_reserve);
         tracing::debug!("plugin {} {export}: {} fuel", plugin.id, used);
-        serde_json::from_slice(&out).map_err(|e| format!("{export} answered with JSON the host can't read: {e}"))
+        let outcome = serde_json::from_slice(&out).map_err(|e| format!("{export} answered with JSON the host can't read: {e}"))?;
+        Ok(in_words(outcome, &store.data().refused))
+    }
+}
+
+/// A plugin's answer with each refused fetch it passes on said in the language in use.
+fn in_words<O>(outcome: Outcome<O>, refused: &[Refusal]) -> Outcome<O> {
+    let say = |text: String| refused.iter().fold(text, |text, refusal| refusal.spoken_in(&text));
+    match outcome {
+        Outcome::Err(e) => Outcome::Err(say(e)),
+        Outcome::Ask(ask) => Outcome::Ask(api::Ask { say: say(ask.say), ..ask }),
+        ok => ok,
     }
 }
 
@@ -440,22 +472,25 @@ fn encode_answer(response: &Outcome<HttpResponse>, max: usize) -> std::result::R
     }
 }
 
-/// The plugin's name for a sentence, or a stand-in when its manifest gives none.
-fn named(name: &str) -> &str {
-    let name = name.trim();
-    if name.is_empty() { "The plugin" } else { name }
+/// The plugin's name for a sentence, when its manifest gives one.
+fn named(name: &str) -> Option<&str> {
+    Some(name.trim()).filter(|name| !name.is_empty())
 }
 
 /// What the screens say when a call to `export` did not finish. A failed refresh is tried again
 /// within a few minutes.
 fn stopped(name: &str, export: &str) -> String {
-    let name = named(name);
-    match export {
-        exports::REFRESH => format!("{name} stopped partway through. It tries again in a few minutes."),
-        exports::RESOLVE => format!("{name} stopped before it could open this. Try again in a moment."),
-        exports::SHEET => format!("{name} stopped before it could show this. Try again in a moment."),
-        exports::MANIFEST => format!("{name} stopped while Lounge was installing it. Ask its publisher for a version that works."),
-        _ => format!("{name} stopped partway through."),
+    match (named(name), export) {
+        (Some(name), exports::REFRESH) => t!("{plugin} stopped partway through. It tries again in a few minutes.", plugin = name),
+        (None, exports::REFRESH) => t!("The plugin stopped partway through. It tries again in a few minutes."),
+        (Some(name), exports::RESOLVE) => t!("{plugin} stopped before it could open this. Try again in a moment.", plugin = name),
+        (None, exports::RESOLVE) => t!("The plugin stopped before it could open this. Try again in a moment."),
+        (Some(name), exports::SHEET) => t!("{plugin} stopped before it could show this. Try again in a moment.", plugin = name),
+        (None, exports::SHEET) => t!("The plugin stopped before it could show this. Try again in a moment."),
+        (Some(name), exports::MANIFEST) => t!("{plugin} stopped while Lounge was installing it. Ask its publisher for a version that works.", plugin = name),
+        (None, exports::MANIFEST) => t!("The plugin stopped while Lounge was installing it. Ask its publisher for a version that works."),
+        (Some(name), _) => t!("{plugin} stopped partway through.", plugin = name),
+        (None, _) => t!("The plugin stopped partway through."),
     }
 }
 
@@ -735,7 +770,8 @@ fn link_host_functions(linker: &mut Linker<State>) -> std::result::Result<(), wa
                 let st = caller.data_mut();
                 let now = Instant::now();
                 if st.fetches_left == 0 || now > st.fetch_deadline {
-                    Err("fetch budget for this call is used up".to_string())
+                    // Translators: a plugin is told this once it has made every request one call may make. The budget is that limit.
+                    Err(Refusal::new(mark!("fetch budget for this call is used up"), &[]))
                 } else {
                     st.fetches_left -= 1;
                     // A request never outlives the call's own budget.
@@ -744,14 +780,22 @@ fn link_host_functions(linker: &mut Linker<State>) -> std::result::Result<(), wa
                     Ok(())
                 }
             };
-            let response: Outcome<HttpResponse> = if let Err(e) = budget {
-                Outcome::Err(e)
+            let answer = if let Err(refusal) = budget {
+                Err(refusal)
             } else if !caller.data().manifest.allows_host_with(&host, &|key| caller.data().services.setting(&caller.data().plugin, key)) {
-                Outcome::Err(crate::http::not_allowed(&host))
+                Err(crate::http::host_refused(&host))
             } else {
-                match caller.data().services.fetch(&caller.data().plugin, &request) {
-                    Ok(r) => Outcome::Ok(r),
-                    Err(e) => Outcome::Err(e),
+                caller.data().services.fetch_worded(&caller.data().plugin, &request)
+            };
+            // The plugin is told in English, which it may look for; the other wording is kept.
+            let response: Outcome<HttpResponse> = match answer {
+                Ok(r) => Outcome::Ok(r),
+                Err(refusal) => {
+                    let refused = &mut caller.data_mut().refused;
+                    if refusal.spoken != refusal.english && !refused.contains(&refusal) {
+                        refused.push(refusal.clone());
+                    }
+                    Outcome::Err(refusal.english)
                 }
             };
             let bytes = encode_answer(&response, MAX_ANSWER_BYTES).map_err(|e| wasmi::Error::new(e.to_string()))?;
@@ -1041,6 +1085,24 @@ mod tests {
         let err = host.refresh(&plugin, &RefreshContext::default()).unwrap_err();
         assert!(matches!(&err, PluginError::Failed(_)), "{err:?}");
         assert_eq!(err.to_string(), said);
+    }
+
+    #[test]
+    fn a_refused_fetch_a_plugin_passes_on_is_said_in_the_language_in_use() {
+        const GERMAN: &str = r#"
+msgid "This plugin may not reach {host}, which isn't on its allow list. Check the addresses in its settings."
+msgstr "Dieses Plugin darf {host} nicht erreichen. Prüfe die Adressen in seinen Einstellungen."
+"#;
+        let refusal = "This plugin may not reach x.test, which isn't on its allow list. Check the addresses in its settings.";
+        let wasm = wat::parse_str(wat_answering(&format!(r#"{{"err":"Kodi is out of reach. {refusal}"}}"#))).unwrap();
+        let (host, _) = host();
+        // The module fetches from x.test, which this manifest does not list.
+        let manifest = Manifest { id: "tv.lounge.test".into(), name: "Test".into(), version: "1".into(), ..Default::default() };
+        let plugin = host.load("tv.lounge.test", manifest, &wasm).unwrap();
+        let said = || host.refresh(&plugin, &RefreshContext::default()).unwrap_err().to_string();
+        assert_eq!(said(), format!("Kodi is out of reach. {refusal}"));
+        let german = lounge_words::in_language("de", &[&[("de", GERMAN)]], said);
+        assert_eq!(german, "Kodi is out of reach. Dieses Plugin darf x.test nicht erreichen. Prüfe die Adressen in seinen Einstellungen.");
     }
 
     /// Why a call stopped, as the plugin's log gets it.

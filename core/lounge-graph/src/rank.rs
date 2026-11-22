@@ -1,6 +1,7 @@
 //! Deterministic, explainable ordering.
 
 use crate::{DeepLink, Item, ItemKind};
+use lounge_words::t;
 use std::collections::HashMap;
 
 /// Most recently used first; items never used sort after used ones, alphabetically.
@@ -65,7 +66,7 @@ fn normalise(title: &str) -> String {
 /// resume point has no reason beyond its category and its button, so it gets none.
 pub fn explanation(item: &Item, now_ms: i64, hour_local: u32, source_name: &str, habit: Option<&[u32; 24]>, clock_24h: bool) -> Option<String> {
     if item.kind == ItemKind::MediaSession {
-        return item.last_used_ms.map(|used| format!("You played this {}", when_word(now_ms - used)));
+        return item.last_used_ms.map(|used| played(now_ms - used));
     }
     if item.kind == ItemKind::Resume {
         return None;
@@ -73,7 +74,8 @@ pub fn explanation(item: &Item, now_ms: i64, hour_local: u32, source_name: &str,
     if let Some(added) = item.added_ms {
         let age = now_ms - added;
         if (0..86_400_000).contains(&age) && !matches!(item.source.as_str(), "apps" | "tvprovider" | "sessions" | "inputs") {
-            return Some(format!("Added to {source_name} today"));
+            // Translators: {source} is the app or plugin something came from, such as Jellyfin.
+            return Some(t!("Added to {source} today", source = source_name));
         }
     }
     if item.progress.is_some() {
@@ -82,8 +84,7 @@ pub fn explanation(item: &Item, now_ms: i64, hour_local: u32, source_name: &str,
     if let Some(hour) = habit.and_then(usual_hour) {
         let apart = (hour as i32 - hour_local as i32).rem_euclid(24);
         if apart <= 1 || apart >= 23 {
-            let verb = if item.flags.is_game || item.kind == ItemKind::Game { "play" } else { "watch" };
-            return Some(format!("Because you {verb} at {}", clock_word(hour, clock_24h)));
+            return Some(usual_time(item.flags.is_game || item.kind == ItemKind::Game, hour, clock_24h));
         }
     }
     None
@@ -97,25 +98,46 @@ pub fn usual_hour(habit: &[u32; 24]) -> Option<u32> {
     (count >= 3 && count * 5 >= total * 2).then_some(hour as u32)
 }
 
-fn when_word(age_ms: i64) -> &'static str {
+/// "You played this today", for something played `age_ms` ago.
+fn played(age_ms: i64) -> String {
     match age_ms / 60_000 {
-        m if m < 60 => "just now",
-        m if m < 24 * 60 => "today",
-        m if m < 48 * 60 => "yesterday",
-        _ => "recently",
+        m if m < 60 => t!("You played this just now"),
+        m if m < 24 * 60 => t!("You played this today"),
+        m if m < 48 * 60 => t!("You played this yesterday"),
+        _ => t!("You played this recently"),
     }
 }
 
-/// An hour as the TV's clock shows it: "21:00" on a 24-hour clock, else "9 pm", "noon" or "midnight".
-fn clock_word(hour: u32, clock_24h: bool) -> String {
+/// "Because you watch at 9 pm": the hour an app is usually opened, as the TV's clock shows it.
+/// A 24-hour clock says "21:00"; a 12-hour one says "9 pm", "noon" or "midnight".
+fn usual_time(game: bool, hour: u32, clock_24h: bool) -> String {
     if clock_24h {
-        return format!("{hour:02}:00");
+        let time = format!("{hour:02}:00");
+        return if game {
+            // Translators: why a game is suggested. {time} is a time of day on a 24-hour clock, such as 21:00.
+            t!("Because you play at {time}", time = time)
+        } else {
+            // Translators: why an app is suggested. {time} is a time of day on a 24-hour clock, such as 21:00.
+            t!("Because you watch at {time}", time = time)
+        };
     }
-    match hour {
-        0 => "midnight".to_string(),
-        12 => "noon".to_string(),
-        h if h < 12 => format!("{h} am"),
-        h => format!("{} pm", h - 12),
+    match (game, hour) {
+        // Translators: why a game is suggested.
+        (true, 0) => t!("Because you play at midnight"),
+        // Translators: why an app is suggested.
+        (false, 0) => t!("Because you watch at midnight"),
+        // Translators: why a game is suggested.
+        (true, 12) => t!("Because you play at noon"),
+        // Translators: why an app is suggested.
+        (false, 12) => t!("Because you watch at noon"),
+        // Translators: why a game is suggested. {hour} is an hour of the morning on a 12-hour clock, 1 to 11.
+        (true, h) if h < 12 => t!("Because you play at {hour} am", hour = h),
+        // Translators: why an app is suggested. {hour} is an hour of the morning on a 12-hour clock, 1 to 11.
+        (false, h) if h < 12 => t!("Because you watch at {hour} am", hour = h),
+        // Translators: why a game is suggested. {hour} is an hour of the afternoon or evening on a 12-hour clock, 1 to 11.
+        (true, h) => t!("Because you play at {hour} pm", hour = h - 12),
+        // Translators: why an app is suggested. {hour} is an hour of the afternoon or evening on a 12-hour clock, 1 to 11.
+        (false, h) => t!("Because you watch at {hour} pm", hour = h - 12),
     }
 }
 
@@ -229,10 +251,10 @@ mod tests {
 
     #[test]
     fn clock_words() {
-        assert_eq!(clock_word(21, false), "9 pm");
-        assert_eq!(clock_word(9, false), "9 am");
-        assert_eq!(clock_word(12, false), "noon");
-        assert_eq!(clock_word(21, true), "21:00");
-        assert_eq!(clock_word(7, true), "07:00");
+        assert_eq!(usual_time(false, 21, false), "Because you watch at 9 pm");
+        assert_eq!(usual_time(false, 9, false), "Because you watch at 9 am");
+        assert_eq!(usual_time(true, 12, false), "Because you play at noon");
+        assert_eq!(usual_time(false, 21, true), "Because you watch at 21:00");
+        assert_eq!(usual_time(true, 7, true), "Because you play at 07:00");
     }
 }

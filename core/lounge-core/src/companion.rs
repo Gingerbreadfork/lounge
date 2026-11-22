@@ -5,6 +5,7 @@ use crate::{engine, now_ms, plugins, worker, CompanionStatus, CoreError, Inner, 
 use lounge_companion::{reads_as_sentence, sentence_or, AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, LiveRef, NamedRef, Pressed, RowRef, SheetRef, SourceRef};
 use lounge_graph::Layout;
 use lounge_plugins::http::{Fetcher, Reach};
+use lounge_words::{mark, t, tr};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -17,7 +18,7 @@ struct CoreActions {
 
 impl CoreActions {
     fn inner(&self) -> Result<Arc<Inner>, String> {
-        self.inner.upgrade().ok_or_else(|| "Lounge on the TV is restarting. Try again in a moment.".to_string())
+        self.inner.upgrade().ok_or_else(|| t!("Lounge on the TV is restarting. Try again in a moment."))
     }
 }
 
@@ -71,47 +72,48 @@ fn row_action(sheet: &crate::PluginSheet, row: &str, which: &str) -> Option<Stri
     }
 }
 
-const NOT_SAVED: &str = "The TV couldn't save that. Check it has free space, then try again.";
+const NOT_SAVED: &str = mark!("The TV couldn't save that. Check it has free space, then try again.");
 /// How long a search from the phone waits for Lounge to come to the front.
 const FRONT_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
-const NOT_A_BACKUP: &str = "That file isn't a Lounge backup. Choose a file that Download backup saved.";
+// Translators: "Download backup" is a button in the phone app.
+const NOT_A_BACKUP: &str = mark!("That file isn't a Lounge backup. Choose a file that Download backup saved.");
 
 /// What the phone reads when a tile, link or control fails on the TV.
 fn failed_to(inner: &Inner, action: &str, e: CoreError) -> String {
     let (verb, target) = action.split_once(':').unwrap_or((action, ""));
     match e {
-        CoreError::UnknownAction { .. } => "That isn't on the TV's home screen any more. Choose it again from what the TV shows now.".into(),
+        CoreError::UnknownAction { .. } => t!("That isn't on the TV's home screen any more. Choose it again from what the TV shows now."),
         CoreError::Platform { detail } => match verb {
             "open" => {
                 let title = inner.state.lock().graph.get(target).map(|it| it.title.clone());
                 let fallback = match title {
-                    Some(title) => format!("Couldn't open {title}. Is its app still installed?"),
-                    None => "Couldn't open that. Is its app still installed?".to_string(),
+                    Some(title) => t!("Couldn't open {title}. Is its app still installed?", title = title),
+                    None => t!("Couldn't open that. Is its app still installed?"),
                 };
                 sentence_or(&detail, &fallback)
             }
-            "url" => sentence_or(&detail, "Nothing on the TV can open that link. Install an app for it, then try again."),
-            "media" => sentence_or(&detail, "The TV couldn't control what is playing. Try it from the TV."),
-            _ => sentence_or(&detail, "The TV couldn't do that. Try it from the TV."),
+            "url" => sentence_or(&detail, &t!("Nothing on the TV can open that link. Install an app for it, then try again.")),
+            "media" => sentence_or(&detail, &t!("The TV couldn't control what is playing. Try it from the TV.")),
+            _ => sentence_or(&detail, &t!("The TV couldn't do that. Try it from the TV.")),
         },
         // A plugin's error is its own sentence, which may name a server by its address.
         CoreError::Plugin { detail } if reads_as_sentence(&detail) => detail,
-        other => sentence_or(&other.to_string(), "The TV couldn't do that. Try it from the TV."),
+        other => sentence_or(&other.to_string(), &t!("The TV couldn't do that. Try it from the TV.")),
     }
 }
 
 /// A plugin that would not install, in words. The plugin host and the installer word their own
 /// failures, which pass as they are; anything else is for the log.
 fn not_installed(e: String) -> String {
-    if e.contains("signature") {
+    if e.contains("signature") || e == lounge_plugins::PluginError::Signature.to_string() {
         tracing::warn!("companion: plugin install refused ({e})");
-        return "That plugin's signature doesn't check out, so the TV won't install it. Get it again from its publisher.".into();
+        return t!("That plugin's signature doesn't check out, so the TV won't install it. Get it again from its publisher.");
     }
     if reads_as_sentence(&e) {
         return e;
     }
     tracing::warn!("companion: plugin not installed ({e})");
-    "That file isn't a Lounge plugin, or it was damaged on the way. Get it again, then install it.".into()
+    t!("That file isn't a Lounge plugin, or it was damaged on the way. Get it again, then install it.")
 }
 
 /// The calls a paired phone makes, as the server hands them to the core.
@@ -153,8 +155,8 @@ pub(crate) fn status(inner: &Arc<Inner>) -> CompanionStatus {
 
 pub(crate) fn pairing(inner: &Arc<Inner>) -> Result<PairingInfo, String> {
     let slot = inner.companion.lock();
-    let c = slot.as_ref().ok_or_else(|| "The phone companion is off. Turn it on, then try again.".to_string())?;
-    let ip = lounge_companion::local_ip().ok_or_else(|| "The TV isn't on a network. Connect it to your Wi-Fi, then try again.".to_string())?;
+    let c = slot.as_ref().ok_or_else(|| t!("The phone companion is off. Turn it on, then try again."))?;
+    let ip = lounge_companion::local_ip().ok_or_else(|| t!("The TV isn't on a network. Connect it to your Wi-Fi, then try again."))?;
     let base = format!("http://{ip}:{}", c.port);
     let info = c.new_pairing(&base, now_ms())?;
     pictured(inner, info)
@@ -247,7 +249,7 @@ impl CompanionActions for CoreActions {
             Ok(i) => (i.config.device_name.clone(), i.config.device_name.clone(), format!("{:?}", i.config.tier).to_lowercase()),
             Err(_) => ("TV".into(), String::new(), String::new()),
         };
-        DeviceInfo { name, model, version: env!("CARGO_PKG_VERSION").to_string(), tier }
+        DeviceInfo { name, model, version: env!("CARGO_PKG_VERSION").to_string(), tier, lang: lounge_words::language() }
     }
 
     fn snapshot_json(&self) -> String {
@@ -284,7 +286,7 @@ impl CompanionActions for CoreActions {
             Some(shown) => shown,
             None => crate::PluginSheet::from(inner.plugins.read_sheet(plugin, sheet)?),
         };
-        let action = row_action(&shown, row, which).ok_or("That has changed since it was shown. Close this and open it again.")?;
+        let action = row_action(&shown, row, which).ok_or_else(|| t!("That has changed since it was shown. Close this and open it again."))?;
         let link = lounge_graph::DeepLink::PluginResolve { plugin: plugin.to_string(), action };
         engine::dispatch_for(&inner, link, true).map(pressed).map_err(|e| failed_to(&inner, "press:", e))
     }
@@ -302,7 +304,7 @@ impl CompanionActions for CoreActions {
 
     fn live_on_tv(&self, plugin: &str, url: &str, title: &str) -> Result<(), String> {
         let inner = self.inner()?;
-        let action = inner.plugins.live_action(plugin, url).ok_or("The picture has no address now. Open it again.")?;
+        let action = inner.plugins.live_action(plugin, url).ok_or_else(|| t!("The picture has no address now. Open it again."))?;
         let link = if action.is_empty() {
             lounge_graph::DeepLink::Control(worker::live_control(plugin, title, url))
         } else {
@@ -322,15 +324,15 @@ impl CompanionActions for CoreActions {
 
     fn launch(&self, package: &str) -> Result<(), String> {
         let launched = self.inner()?.platform.launch_app(package.to_string(), String::new());
-        launched.map_err(|e| sentence_or(&e.to_string(), "The TV couldn't open that app. Is it still installed?"))
+        launched.map_err(|e| sentence_or(&e.to_string(), &t!("The TV couldn't open that app. Is it still installed?")))
     }
 
     fn send_key(&self, key: &str) -> Result<(), String> {
-        self.inner()?.platform.send_key(key.to_string()).map_err(|e| sentence_or(&e.to_string(), "The TV didn't take that key. Try again."))
+        self.inner()?.platform.send_key(key.to_string()).map_err(|e| sentence_or(&e.to_string(), &t!("The TV didn't take that key. Try again.")))
     }
 
     fn type_text(&self, text: &str) -> Result<(), String> {
-        self.inner()?.platform.type_text(text.to_string()).map_err(|e| sentence_or(&e.to_string(), "The TV didn't take the text. Try again."))
+        self.inner()?.platform.type_text(text.to_string()).map_err(|e| sentence_or(&e.to_string(), &t!("The TV didn't take the text. Try again.")))
     }
 
     fn search(&self, query: &str) -> Result<(), String> {
@@ -348,11 +350,11 @@ impl CompanionActions for CoreActions {
                 in_front = inner.screen_on.load(Ordering::Relaxed);
             }
         }
-        inner.platform.control(format!("search:{query}")).map_err(|e| sentence_or(&e.to_string(), "The TV couldn't start the search. Try again."))?;
+        inner.platform.control(format!("search:{query}")).map_err(|e| sentence_or(&e.to_string(), &t!("The TV couldn't start the search. Try again.")))?;
         if in_front {
             Ok(())
         } else {
-            Err("The search is open in Lounge, but another app is still in front on the TV. Press Home to see it.".into())
+            Err(t!("The search is open in Lounge, but another app is still in front on the TV. Press Home to see it."))
         }
     }
 
@@ -396,7 +398,7 @@ impl CompanionActions for CoreActions {
             layout.normalise();
             state.store.save_layout(&layout).map_err(|e| {
                 tracing::warn!("companion: layout not saved ({e})");
-                NOT_SAVED.to_string()
+                tr(NOT_SAVED)
             })?;
             let new_channels = layout.enabled_channels.difference(&state.graph.layout.enabled_channels).next().is_some();
             state.graph.layout = layout;
@@ -424,14 +426,14 @@ impl CompanionActions for CoreActions {
             "disable" => inner.plugin_switch(id, false),
             "refresh" => {
                 if !inner.state.lock().plugins.iter().any(|p| p.id == id) {
-                    return Err("That plugin isn't installed any more.".into());
+                    return Err(t!("That plugin isn't installed any more."));
                 }
                 inner.plugins.refresh_now(id);
             }
-            "remove" => inner.plugin_remove(id).map_err(|e| sentence_or(&e, "The TV couldn't remove that plugin. Try again."))?,
+            "remove" => inner.plugin_remove(id).map_err(|e| sentence_or(&e, &t!("The TV couldn't remove that plugin. Try again.")))?,
             other => {
                 tracing::warn!("companion: unknown plugin command {other}");
-                return Err("Lounge on the TV doesn't know that command. Update Lounge, then try again.".into());
+                return Err(t!("Lounge on the TV doesn't know that command. Update Lounge, then try again."));
             }
         }
         Ok(())
@@ -449,18 +451,18 @@ impl CompanionActions for CoreActions {
     /// Only a plugin that is asking for a sign-in is handed one, and only at the address it was
     /// given, so the page cannot be used to write into a plugin or to finish a sign-in for it.
     fn signed_in(&self, plugin: &str, key: &str, query: &str) -> Result<String, String> {
-        const NOT_WAITING: &str = "Nothing on the TV is waiting for this sign-in. Start it again from the plugin's page on the TV.";
+        const NOT_WAITING: &str = mark!("Nothing on the TV is waiting for this sign-in. Start it again from the plugin's page on the TV.");
         let inner = self.inner()?;
         let name = inner.state.lock().plugins.iter().find(|p| p.id == plugin && p.enabled).map(|p| p.manifest.name.clone());
-        let Some(name) = name else { return Err(NOT_WAITING.into()) };
+        let Some(name) = name else { return Err(tr(NOT_WAITING)) };
         if query.is_empty() || !inner.plugins.asking(plugin) || !inner.plugins.landing_is(plugin, key) {
-            return Err(NOT_WAITING.into());
+            return Err(tr(NOT_WAITING));
         }
         let kept = crate::plugins::clip_bytes(query, lounge_plugin_api::MAX_CALLBACK_BYTES);
         let stored = inner.state.lock().store.plugin_kv_set(plugin, lounge_plugin_api::CALLBACK_KEY, kept.as_bytes(), lounge_plugins::host::Limits::default().kv_keys);
         if !matches!(stored, Ok(true)) {
             tracing::warn!("companion: the sign-in for {plugin} could not be kept");
-            return Err("The TV couldn't keep the sign-in. Free some space on the TV, then start it again.".into());
+            return Err(t!("The TV couldn't keep the sign-in. Free some space on the TV, then start it again."));
         }
         inner.plugins.forget_landing(plugin);
         inner.plugins.refresh_now(plugin);
@@ -516,10 +518,10 @@ impl CompanionActions for CoreActions {
     fn import_json(&self, json: &str) -> Result<(), String> {
         let backup: Backup = serde_json::from_str(json).map_err(|e| {
             tracing::warn!("companion: not a backup ({e})");
-            NOT_A_BACKUP.to_string()
+            tr(NOT_A_BACKUP)
         })?;
         if backup.version != 1 {
-            return Err("That backup comes from a newer Lounge. Update Lounge on the TV, then restore it.".into());
+            return Err(t!("That backup comes from a newer Lounge. Update Lounge on the TV, then restore it."));
         }
         let inner = self.inner()?;
         let mut layout = backup.layout.clone();
@@ -528,7 +530,7 @@ impl CompanionActions for CoreActions {
             let mut state = inner.state.lock();
             state.store.save_layout(&layout).map_err(|e| {
                 tracing::warn!("companion: restored layout not saved ({e})");
-                NOT_SAVED.to_string()
+                tr(NOT_SAVED)
             })?;
             state.graph.layout = layout;
             // Only settings an installed plugin declares, and never a secret, which no backup
@@ -559,7 +561,7 @@ impl CompanionActions for CoreActions {
         if !preferences.is_empty() {
             inner.platform.restore_preferences(preferences).map_err(|e| {
                 tracing::warn!("companion: restored settings not saved ({e})");
-                "The layout is restored, but the TV couldn't save its look and sound settings. Check it has free space, then restore again.".to_string()
+                t!("The layout is restored, but the TV couldn't save its look and sound settings. Check it has free space, then restore again.")
             })?;
         }
         Ok(())
@@ -584,14 +586,14 @@ impl CompanionActions for CoreActions {
             let e = e.to_string();
             tracing::warn!("companion: plugin download failed ({e})");
             if e.contains("this device") {
-                "That link leads back to the TV itself. Use a link to the plugin on the internet or another device.".to_string()
+                t!("That link leads back to the TV itself. Use a link to the plugin on the internet or another device.")
             } else {
-                "The TV couldn't download that link. Check the address, then try again.".to_string()
+                t!("The TV couldn't download that link. Check the address, then try again.")
             }
         })?;
         std::fs::rename(&fetched.path, into).map_err(|e| {
             tracing::warn!("companion: downloaded plugin not kept ({e})");
-            NOT_SAVED.to_string()
+            tr(NOT_SAVED)
         })
     }
 }

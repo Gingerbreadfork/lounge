@@ -8,3 +8,4 @@ description = "Types and ABI shared by the Lounge plugin host and plugin SDK (lo
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+lounge-words = { path = "../lounge-words" }

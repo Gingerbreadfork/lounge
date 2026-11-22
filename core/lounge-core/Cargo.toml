@@ -9,6 +9,7 @@ name = "lounge_core"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
+lounge-words.workspace = true
 uniffi.workspace = true
 tokio.workspace = true
 serde.workspace = true

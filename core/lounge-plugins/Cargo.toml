@@ -6,6 +6,7 @@ license.workspace = true
 description = "WebAssembly plugin host for Lounge: signed bundles, capability broker, fuel and memory limits"
 
 [dependencies]
+lounge-words.workspace = true
 lounge-plugin-api.workspace = true
 serde.workspace = true
 serde_json.workspace = true
