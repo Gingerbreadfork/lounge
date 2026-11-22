@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rows_sheet_title">Linhas do ecrã principal</string>
+    <string name="rows_sheet_subtitle">OK mostra ou oculta uma linha. Mantenha OK premido para pegar numa linha, Cima e Baixo movem-na, e OK ou Voltar pousa-a.</string>
+    <string name="rows_sheet_loading">A carregar…</string>
+    <string name="rows_sheet_moving">A mover</string>
+    <string name="rows_sheet_shown">Visível</string>
+    <string name="rows_sheet_empty">Sem conteúdo</string>
+    <string name="rows_sheet_reset">Repor a ordem habitual das linhas</string>
+    <string name="rows_sheet_reset_confirm">Sim, repor</string>
+    <string name="rows_sheet_reset_keeps">Mantém o que foi ocultado</string>
+    <string name="rows_sheet_reset_done">Feito. O que foi ocultado continua oculto.</string>
+    <string name="rows_sheet_hidden_group">Oculto em todas as linhas</string>
+    <string name="rows_sheet_hidden_none">Não há nada oculto. Mantenha OK premido em qualquer cartão e escolha Ocultar.</string>
+    <string name="rows_sheet_continue_group">Continuar a ver vem de</string>
+    <string name="rows_sheet_continue_none">Ainda nada para continuar. As apps e os plugins aparecem aqui quando trouxerem algo.</string>
+    <string name="rows_sheet_source_nothing">Nada para continuar agora</string>
+    <plurals name="rows_sheet_source_titles">
+        <item quantity="one">%1$d título</item>
+        <item quantity="many">%1$d títulos</item>
+        <item quantity="other">%1$d títulos</item>
+    </plurals>
+    <string name="rows_sheet_footnote">Uma linha sem conteúdo fica fora do ecrã até ter algo para mostrar.</string>
+</resources>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_platform_not_in_front">Cela s’ouvre sur l’écran de Lounge. Ouvrez Lounge sur la TV, puis réessayez.</string>
+    <string name="android_platform_opened_from_behind">Lounge n’est pas à l’écran de la TV, et il ne peut ouvrir quelque chose derrière une autre appli que s’il est l’écran d’accueil de la TV. Ouvrez Lounge sur la TV, puis réessayez.</string>
+    <string name="android_platform_still_starting">Lounge démarre encore sur la TV. Réessayez dans un instant.</string>
+    <string name="android_platform_unknown_key">Lounge sur la TV ne connaît pas cette touche. Mettez Lounge à jour, puis réessayez.</string>
+    <string name="android_platform_keys_need_power_setup">Une autre appli est au premier plan. Connectez la Configuration avancée sur la TV pour que les touches du téléphone l’atteignent.</string>
+    <string name="android_platform_busy">La TV traite encore les derniers appuis. Réessayez dans un instant.</string>
+    <string name="android_platform_typing_needs_lounge">Une autre appli est au premier plan, et le téléphone n’écrit que dans Lounge. Appuyez sur Accueil, puis réessayez.</string>
+    <string name="android_platform_no_field">Ouvrez d’abord Rechercher ou un champ dans Lounge.</string>
+    <string name="android_platform_settings_not_saved">La TV n’a pas pu enregistrer ses paramètres. Vérifiez qu’elle a de l’espace libre, puis réessayez.</string>
+    <string name="android_platform_link_unknown">Lounge ne sait pas ouvrir ce lien</string>
+    <string name="android_platform_link_refused">Lounge refuse d’ouvrir ce lien</string>
+    <string name="android_platform_needs_notification_access">Lecture en cours nécessite l’accès aux notifications</string>
+    <string name="android_platform_not_playing">Cette appli ne lit rien</string>
+    <string name="android_platform_no_player">Aucun lecteur ne peut ouvrir ce flux. Installez VLC ou un autre lecteur.</string>
+    <string name="android_platform_no_video_player">Aucun lecteur vidéo ne peut ouvrir ce flux. Installez VLC ou un autre lecteur.</string>
+</resources>

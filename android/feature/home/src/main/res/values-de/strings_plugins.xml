@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugins_title">Plugins</string>
+    <string name="plugins_subtitle">Sie bringen Reihen, Sender und Programmdaten von deinen Diensten.</string>
+    <string name="plugins_loading">Wird geladen …</string>
+    <string name="plugins_none">Keine Plugins installiert. Installiert werden sie über Lounge fürs Handy: Öffne auf deinem Handy „Plugins“.</string>
+    <string name="plugins_footnote_reach">Jedes Plugin erreicht nur die Orte, die es nennt, und sieht nur seine eigenen Einstellungen.</string>
+    <string name="plugins_footnote_more">Weitere Plugins installierst du über Lounge fürs Handy.</string>
+    <string name="plugins_status_on">An</string>
+    <string name="plugins_status_off">Aus</string>
+    <string name="plugins_status_sign_in">Anmelden</string>
+    <string name="plugins_status_needs_setup">Einrichtung nötig</string>
+    <string name="plugins_status_problem">Problem</string>
+    <string name="plugins_status_held">Durch sein Update ausgeschaltet</string>
+    <string name="plugins_gone_title">Plugin</string>
+    <string name="plugins_gone_subtitle">Dieses Plugin ist nicht mehr installiert.</string>
+    <string name="plugins_gone_back">Zurück zu Plugins</string>
+    <string name="plugins_version">Version %1$s</string>
+    <string name="plugins_version_by">Version %1$s, von %2$s</string>
+    <string name="plugins_held">Durch sein Update ausgeschaltet, das zusätzlich %1$s erreichen möchte.</string>
+    <string name="plugins_allow">Erlauben und einschalten</string>
+    <string name="plugins_allow_subtitle">Es kann dann auch %1$s erreichen</string>
+    <string name="plugins_settings">Einstellungen</string>
+    <string name="plugins_turn_on">%1$s einschalten</string>
+    <string name="plugins_fill_in_first">Zuerst ausfüllen: %1$s</string>
+    <string name="plugins_refresh">Jetzt aktualisieren</string>
+    <string name="plugins_refreshing">Wird aktualisiert …</string>
+    <string name="plugins_log">Protokoll</string>
+    <string name="plugins_log_empty">Noch nichts protokolliert.</string>
+    <string name="plugins_remove">Entfernen</string>
+    <string name="plugins_remove_confirm">Ja, samt Einstellungen entfernen</string>
+    <string name="plugins_removed">%1$s entfernt</string>
+    <string name="plugins_reach">Es kann %1$s erreichen.</string>
+    <string name="plugins_reach_self_signed">Es kann %1$s erreichen und akzeptiert dabei das eigene Zertifikat eines Heimservers.</string>
+    <string name="plugins_reach_nothing">Es kann nichts erreichen.</string>
+    <string name="plugins_reach_setting">was du unter „%1$s“ einträgst</string>
+    <string name="plugins_reach_anywhere">jede öffentliche Website</string>
+    <string name="plugins_reach_home_network">Geräte in deinem Heimnetz</string>
+    <string name="plugins_reach_this_tv">diesen Fernseher</string>
+    <string name="plugins_list_next">%1$s, %2$s</string>
+    <string name="plugins_list_last">%1$s und %2$s</string>
+    <plurals name="plugins_refreshes_seconds">
+        <item quantity="one">Es aktualisiert sich jede Sekunde, solange Lounge auf dem Bildschirm ist.</item>
+        <item quantity="other">Es aktualisiert sich alle %1$d Sekunden, solange Lounge auf dem Bildschirm ist.</item>
+    </plurals>
+    <plurals name="plugins_refreshes_minutes">
+        <item quantity="one">Es aktualisiert sich jede Minute, solange der Fernseher an ist.</item>
+        <item quantity="other">Es aktualisiert sich alle %1$d Minuten, solange der Fernseher an ist.</item>
+    </plurals>
+    <string name="plugins_publisher_key">Updates werden nur von seinem Herausgeber angenommen, dessen Schlüssel mit %1$s beginnt.</string>
+    <string name="plugins_ask_sign_in_phone">Auf dem Handy anmelden</string>
+    <string name="plugins_ask_sign_in">Anmelden</string>
+    <string name="plugins_ask_open">Scanne das mit der Handykamera oder öffne %1$s</string>
+    <string name="plugins_ask_open_enter">Scanne das mit der Handykamera oder öffne %1$s und gib diesen Code ein</string>
+    <string name="plugins_ask_tap">Scanne das mit der Handykamera oder tippe in Lounge fürs Handy auf den Link</string>
+    <string name="plugins_ask_tap_enter">Scanne das mit der Handykamera oder tippe in Lounge fürs Handy auf den Link und gib diesen Code ein</string>
+    <plurals name="plugins_items_refreshed">
+        <item quantity="one">%1$d Eintrag, aktualisiert %2$s</item>
+        <item quantity="other">%1$d Einträge, aktualisiert %2$s</item>
+    </plurals>
+    <string name="plugins_fetching_first">Erster Abruf läuft …</string>
+    <string name="plugins_fill_in_settings">Fülle die Einstellungen unten aus und schalte es dann ein.</string>
+    <string name="plugins_help_on_phone">%1$s Dein Handy zeigt alle Schritte.</string>
+    <string name="plugins_setting_optional">%1$s (optional)</string>
+    <string name="plugins_setting_secret_saved">•••••••• (gespeichert)</string>
+    <string name="plugins_setting_not_set">Nicht festgelegt</string>
+    <string name="plugins_setting_saved">Gespeichert</string>
+    <string name="plugins_setting_not_set_uses">Nicht festgelegt, verwendet wird %1$s</string>
+</resources>

@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +64,7 @@ import tv.lounge.core.PlaybackStatus
 import tv.lounge.design.Dimens
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -107,6 +110,7 @@ fun TopBar(
     val notices by notifications.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val nudgePx = with(LocalDensity.current) { 6.dp.toPx() }
+    val resources = LocalResources.current
     Row(
         modifier
             .fillMaxWidth()
@@ -132,26 +136,26 @@ fun TopBar(
         Mark()
         // The buttons keep to the right. On a full bar the playing title is what gives way.
         Row(Modifier.weight(1f).padding(start = 28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.End)) {
-            TopBarButton(LoungeIcons.Search, "Search", onSearch, focus, focus.search)
-            if (showGuide) TopBarButton(LoungeIcons.Guide, "TV guide", onGuide, focus, focus.guide)
-            if (showTvControls) TopBarButton(LoungeIcons.Tv, "TV controls", onTvControls, focus, focus.tvControls)
+            TopBarButton(LoungeIcons.Search, stringResource(DesignR.string.common_search), onSearch, focus, focus.search)
+            if (showGuide) TopBarButton(LoungeIcons.Guide, stringResource(DesignR.string.common_tv_guide), onGuide, focus, focus.guide)
+            if (showTvControls) TopBarButton(LoungeIcons.Tv, stringResource(DesignR.string.common_tv_controls), onTvControls, focus, focus.tvControls)
             if (nowPlaying != null) NowPlayingChip(nowPlaying, onNowPlaying, focus, Modifier.weight(1f, fill = false))
             if (notices.list.isNotEmpty()) {
                 TopBarButton(
                     icon = LoungeIcons.Bell,
-                    label = NotificationWords.count(notices.list.size),
+                    label = NotificationWords.count(resources, notices.list.size),
                     onClick = onNotifications,
                     focus = focus,
                     requester = focus.notifications,
                     marked = notices.fresh > 0,
                     counts = true,
-                    description = NotificationWords.spoken(notices.list.size, notices.fresh),
+                    description = NotificationWords.spoken(resources, notices.list.size, notices.fresh),
                     // Read as focus moves, not as composed: once the last notification has gone the
                     // chip is still here for a frame, and the bar must not hand focus back to it.
                     takesFocus = { notifications.value.list.isNotEmpty() },
                 )
             }
-            TopBarButton(LoungeIcons.Settings, "Settings", onSettings, focus, focus.settings)
+            TopBarButton(LoungeIcons.Settings, stringResource(DesignR.string.common_settings), onSettings, focus, focus.settings)
             Spacer(Modifier.width(12.dp))
             Clock()
         }
@@ -283,6 +287,7 @@ private fun NowPlayingChip(np: NowPlaying, onClick: () -> Unit, focus: TopBarFoc
     var focused by remember { mutableStateOf(false) }
     val light = LoungeTheme.colors.light(np.lightArgb)
     val playing = np.status == PlaybackStatus.PLAYING
+    val spoken = stringResource(R.string.top_bar_now_playing, np.title)
     val scale = animateFloatAsState(if (focused) 1.04f else 1f, if (focused) motion.snap() else motion.settle(), label = "chipScale")
     val lift = animateFloatAsState(if (focused) 1f else 0f, if (focused) motion.snap() else motion.settle(), label = "chipLift")
     val glow = animateFloatAsState(if (focused) visuals.glowAlpha else 0f, if (focused) motion.snap() else motion.settle(), label = "chipGlow")
@@ -313,7 +318,7 @@ private fun NowPlayingChip(np: NowPlaying, onClick: () -> Unit, focus: TopBarFoc
             }
             .tilePress(onClick, onClick)
             .focusable()
-            .semantics { role = Role.Button; contentDescription = "Now playing, ${np.title}" }
+            .semantics { role = Role.Button; contentDescription = spoken }
             .height(48.dp)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -358,7 +363,7 @@ private fun Clock() {
             delay(60_000L - (System.currentTimeMillis() % 60_000L) + 20)
         }
     }
-    val text = Words.clock(now, is24Hour, period = false)
+    val text = Words.clock(LocalResources.current, now, is24Hour, period = false)
     Row {
         // Places are keyed from the right, so an hour gaining a digit shifts nothing else.
         text.forEachIndexed { i, ch ->

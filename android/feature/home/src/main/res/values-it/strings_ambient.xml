@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ambient_playing_description">In riproduzione</string>
+    <string name="ambient_tv_own">Quello della TV</string>
+    <string name="ambient_subtitle_ours">Le tue immagini o una lenta scena astratta, con l\'orologio; si sposta e si attenua per proteggere i pannelli OLED.</string>
+    <string name="ambient_subtitle_other">Mostra le tue immagini o una lenta scena astratta con l\'orologio quando la TV è inattiva.</string>
+    <string name="ambient_switching">Cambio in corso…</string>
+    <string name="ambient_ok_puts_back">OK ripristina quello di prima</string>
+    <string name="ambient_power_puts_back">Configurazione avanzata può ripristinare quello di prima</string>
+    <string name="ambient_ok_makes_lounge">OK imposta il salvaschermo di Lounge</string>
+    <string name="ambient_ok_opens_tv_settings">OK apre le impostazioni del salvaschermo della TV: scegli Lounge, poi premi Indietro</string>
+    <string name="ambient_tv_did_not_take">Le impostazioni della TV non hanno impostato Lounge come salvaschermo. OK apre Configurazione avanzata, che può farlo una volta attivato il debug USB</string>
+    <string name="ambient_tv_cannot_choose">Le impostazioni di questa TV non permettono di scegliere un salvaschermo. OK apre Configurazione avanzata, che può farlo una volta attivato il debug USB</string>
+    <string name="ambient_ok_opens_power_setup">OK apre Configurazione avanzata, che può impostare il salvaschermo di Lounge</string>
+    <string name="ambient_not_taken">La TV non ha accettato la modifica. Riprova, oppure nelle impostazioni della TV apri Sistema, poi Salvaschermo.</string>
+    <string name="ambient_style_title">Stile</string>
+    <string name="ambient_style_pictures">Immagini</string>
+    <string name="ambient_style_pictures_about">Le immagini della tua schermata Home</string>
+    <string name="ambient_style_mix">Mix</string>
+    <string name="ambient_style_mix_about">Tutte le scene in ordine casuale, qualche minuto ciascuna</string>
+    <string name="ambient_style_too_heavy">%1$s è troppo pesante per questa TV: al suo posto c\'è Immagini</string>
+    <string name="ambient_style_not_drawn">Questa TV non riesce a disegnare %1$s: al suo posto c\'è Immagini</string>
+    <string name="ambient_preview_title">Guardalo a schermo intero</string>
+    <string name="ambient_preview_subtitle">Premi un tasto qualsiasi per tornare</string>
+    <string name="ambient_footnote_pictures">Le immagini vengono da ciò che è già nella tua schermata Home e le scene astratte sono disegnate dalla TV; non viene scaricato nulla.</string>
+    <string name="ambient_footnote_when">È la TV a decidere quando parte il salvaschermo. Per cambiarlo, nelle impostazioni della TV apri Sistema, poi Salvaschermo.</string>
+</resources>

@@ -4,12 +4,17 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
 /**
  * The ways to give. Money sent to a mistyped address is gone, so each address is held to the
  * checksum its own coin builds into it, and to the scheme wallets read.
  */
+@RunWith(RobolectricTestRunner::class)
 class DonateTest {
+    private val resources get() = RuntimeEnvironment.getApplication().resources
     private val letters = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 
     /** Whether a bech32 address, as Bitcoin and DigiByte write theirs, passes its checksum. */
@@ -67,7 +72,7 @@ class DonateTest {
         for (coin in Gifts.filter { it.name != "PayPal" }) {
             assertEquals(coin.code.substringAfter(':'), coin.shown.filterNot { it.isWhitespace() })
             // Each says which coin alone the address takes.
-            assertEquals("Scan with a wallet.\nSend only ${coin.name} to this address.", coin.note)
+            assertEquals("Scan with a wallet.\nSend only ${coin.name} to this address.", resources.getString(coin.note!!, coin.name))
         }
         assertEquals("https://${gift("PayPal").shown}", gift("PayPal").code)
         assertEquals("abcd efgh\nij", spaced("abcdefghij"))
@@ -77,26 +82,26 @@ class DonateTest {
     @Test
     fun theAskSaysHowLongLoungeHasBeenHereOnlyOnceItHasBeenAWhile() {
         val day = 86_400_000L
-        assertEquals(null, hadFor(null, 0))
-        assertEquals(null, hadFor(0, 6 * day))
-        assertEquals("1 week", hadFor(0, 7 * day))
-        assertEquals("3 weeks", hadFor(0, 24 * day))
-        assertEquals("2 months", hadFor(0, 60 * day))
-        assertEquals("8 months", hadFor(0, 250 * day))
-        assertEquals("over a year", hadFor(0, 400 * day))
-        assertEquals("over 2 years", hadFor(0, 800 * day))
+        assertEquals(null, hadFor(resources, null, 0))
+        assertEquals(null, hadFor(resources, 0, 6 * day))
+        assertEquals("You've had Lounge on this TV for 1 week.", hadFor(resources, 0, 7 * day))
+        assertEquals("You've had Lounge on this TV for 3 weeks.", hadFor(resources, 0, 24 * day))
+        assertEquals("You've had Lounge on this TV for 2 months.", hadFor(resources, 0, 60 * day))
+        assertEquals("You've had Lounge on this TV for 8 months.", hadFor(resources, 0, 250 * day))
+        assertEquals("You've had Lounge on this TV for over a year.", hadFor(resources, 0, 400 * day))
+        assertEquals("You've had Lounge on this TV for over 2 years.", hadFor(resources, 0, 800 * day))
 
-        assertTrue(donateAsk("8 months").startsWith("You've had Lounge on this TV for 8 months. If it has earned its place,"))
+        assertTrue(donateAsk(resources, hadFor(resources, 0, 250 * day)).startsWith("You've had Lounge on this TV for 8 months. If it has earned its place,"))
         // A TV that has only just met Lounge is asked without being told it owes anything.
-        assertTrue(donateAsk(null).startsWith("If it has earned its place,"))
-        assertTrue(donateAsk(null).endsWith("absolutely anything helps."))
+        assertTrue(donateAsk(resources, null).startsWith("If it has earned its place,"))
+        assertTrue(donateAsk(resources, null).endsWith("absolutely anything helps."))
     }
 
     @Test
     fun thePhoneGivesTheSameAddressesAndLinksAsTheTv() {
         val phone = java.io.File("../../../companion/src/lib/giving.ts").readText()
         for (gift in Gifts) assertTrue("the phone has no ${gift.name} as the TV has it", phone.contains("'${gift.code}'"))
-        for (link in AboutLinks) assertTrue("the phone has no ${link.name}", phone.contains("'${link.code}'"))
+        for (link in AboutLinks) assertTrue("the phone has no ${link.shown}", phone.contains("'${link.code}'"))
         // And nothing more: every address the phone holds is one of the TV's.
         val known = (Gifts + AboutLinks).map { it.code }.toSet()
         val held = Regex("href: '([^']+)'").findAll(phone).map { it.groupValues[1] }.toList()

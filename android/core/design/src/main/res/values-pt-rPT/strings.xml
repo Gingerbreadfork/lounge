@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="language_tag">pt-PT</string>
+    <string name="common_on">Sim</string>
+    <string name="common_off">Não</string>
+    <string name="common_open">Abrir</string>
+    <string name="common_show">Mostrar</string>
+    <string name="common_hide">Ocultar</string>
+    <string name="common_hidden">Oculto</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_back">Voltar</string>
+    <string name="common_done">Concluído</string>
+    <string name="common_try_again">Tentar novamente</string>
+    <string name="common_settings">Definições</string>
+    <string name="common_search">Pesquisar</string>
+    <string name="common_all_apps">Todas as apps</string>
+    <string name="common_tv_guide">Guia de TV</string>
+    <string name="common_tv_controls">Controlos da TV</string>
+    <string name="common_notifications">Notificações</string>
+    <string name="common_screensaver">Proteção de ecrã</string>
+    <string name="common_power_setup">Configuração avançada</string>
+    <string name="common_phone_companion">Lounge no telemóvel</string>
+    <string name="words_just_now">agora mesmo</string>
+    <plurals name="words_minutes_ago">
+        <item quantity="one">há %1$d minuto</item>
+        <item quantity="many">há %1$d minutos</item>
+        <item quantity="other">há %1$d minutos</item>
+    </plurals>
+    <plurals name="words_hours_ago">
+        <item quantity="one">há %1$d hora</item>
+        <item quantity="many">há %1$d horas</item>
+        <item quantity="other">há %1$d horas</item>
+    </plurals>
+    <plurals name="words_days_ago">
+        <item quantity="one">há %1$d dia</item>
+        <item quantity="many">há %1$d dias</item>
+        <item quantity="other">há %1$d dias</item>
+    </plurals>
+    <string name="words_clock_am">%1$s a.m.</string>
+    <string name="words_clock_pm">%1$s p.m.</string>
+</resources>

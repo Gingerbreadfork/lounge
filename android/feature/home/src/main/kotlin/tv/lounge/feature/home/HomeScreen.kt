@@ -1,6 +1,8 @@
 package tv.lounge.feature.home
 
 import android.content.Intent
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animate
@@ -39,6 +41,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -80,6 +84,7 @@ import tv.lounge.core.LayoutCommand
 import tv.lounge.core.StageSpotlight
 import tv.lounge.core.Tile
 import tv.lounge.core.reason
+import tv.lounge.platform.R as PlatformR
 import tv.lounge.design.FieldSleep
 import tv.lounge.design.LightField
 import tv.lounge.design.LocalLightState
@@ -178,6 +183,9 @@ fun HomeScreen(
         val is24Hour = android.text.format.DateFormat.is24HourFormat(context)
         scope.launch(Dispatchers.IO) { core.setClock24h(is24Hour) }
     }
+    // The core and the plugins write in the language the screen is shown in.
+    val language = stringResource(tv.lounge.design.R.string.language_tag)
+    LaunchedEffect(language) { withContext(Dispatchers.IO) { core.setLocale(language) } }
     // First run: the persisted snapshot paints first, then the setup steps come up over it. Until
     // they are finished they come back whenever nothing else is open.
     val onboardingDone = rememberUpdatedState(uiPrefs.onboardingDone)
@@ -226,12 +234,14 @@ fun HomeScreen(
 
     fun say(text: String) = toasts.show(text)
 
+    fun say(@StringRes text: Int, vararg places: Any) = toasts.show(context.getString(text, *places))
+
     // The updater's notice tile and the one-time word after an update.
     LaunchedEffect(updates) {
-        val updated = updates.takeJustUpdatedFrom()?.let { "Lounge updated to ${updates.currentVersion}" }
+        val updated = updates.takeJustUpdatedFrom()?.let { context.getString(R.string.home_screen_updated, updates.currentVersion) }
         // Notification access given before it covered notifications does not turn them on: the person is told where to.
-        val offered = NotificationWords.OFFERED.takeIf { prefs.settleNotifications(hasNotificationAccess(context)) }
-        listOfNotNull(updated, offered).takeIf { it.isNotEmpty() }?.let { say(it.joinToString(". ")) }
+        val offered = NotificationWords.OFFERED.takeIf { prefs.settleNotifications(hasNotificationAccess(context)) }?.let { context.getString(it) }
+        if (updated != null && offered != null) say(R.string.home_screen_two_notes, updated, offered) else (updated ?: offered)?.let { say(it) }
         updates.state.collect { s ->
             val waiting = s is tv.lounge.update.UpdateState.NeedsConfirmation ||
                 (s is tv.lounge.update.UpdateState.Ready && s.path == tv.lounge.update.InstallPath.NeedsPermission)
@@ -252,7 +262,7 @@ fun HomeScreen(
                 .onSuccess { done -> done.say?.let { say(it) } }
                 .onFailure { e ->
                     pressed?.let { state.pending.forget(it) }
-                    say(friendlyError(e, title))
+                    say(friendlyError(context.resources, e, title))
                 }
         }
     }
@@ -649,7 +659,7 @@ fun HomeScreen(
                 android.util.Log.w("Lounge", "background: ${liveStyle.id} falls back to the still field: $why")
                 liveFailed = true
                 // A compile error's own text is for the log, not the screen (DESIGN.md §8).
-                say(if ("too heavy" in why) "${liveStyle.name} is too heavy for this TV, so the background is still" else "${liveStyle.name} could not be drawn on this TV, so the background is still")
+                say(if ("too heavy" in why) R.string.home_screen_background_too_heavy else R.string.home_screen_background_not_drawn, liveStyle.nameIn(context.resources))
             })
         } else {
             LightField(light)
@@ -870,7 +880,7 @@ fun HomeScreen(
             GuideSheet(
                 loadGuide = { from -> core.guide(from, 3u) },
                 visibleState = visibleState,
-                onTune = { action -> uiSounds?.open(); perform(action, "that channel") },
+                onTune = { action -> uiSounds?.open(); perform(action, context.getString(R.string.home_screen_that_channel)) },
                 onDismiss = { closeOverlay() },
             )
         }
@@ -880,7 +890,7 @@ fun HomeScreen(
                 np = np,
                 visibleState = visibleState,
                 onCommand = { cmd -> perform("media:${np.`package`}:$cmd", np.title) },
-                onOpenApp = { uiSounds?.open(); runCatching { platform.launchApp(np.`package`, "") }.onFailure { say(friendlyError(it, np.appLabel)) } },
+                onOpenApp = { uiSounds?.open(); runCatching { platform.launchApp(np.`package`, "") }.onFailure { say(friendlyError(context.resources, it, np.appLabel)) } },
                 onDismiss = { closeOverlay() },
             )
         }
@@ -938,18 +948,19 @@ fun HomeScreen(
                     canMoveLeft = indexInRow(ov.rowId, ov.tile.id) > 0,
                     canMoveRight = indexInRow(ov.rowId, ov.tile.id).let { at -> at >= 0 && (homeRow?.tiles?.getOrNull(at + 1)?.pinned == true) },
                     isStagePinned = ov.tile.stagePinned,
-                    onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say("Hidden from every row") },
-                    onShow = { core.command(LayoutCommand.UnhideItem(ov.tile.id)); say("Shown on every row again") },
+                    onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say(R.string.home_screen_hidden) },
+                    onShow = { core.command(LayoutCommand.UnhideItem(ov.tile.id)); say(R.string.home_screen_shown) },
                     onHideAllFrom = {
                         ov.tile.provider?.let { core.command(LayoutCommand.MuteProvider(it)) }
-                        say("Everything from ${ov.tile.providerName} hidden. Settings, Rows brings it back")
+                        say(R.string.home_screen_source_hidden, ov.tile.providerName.orEmpty())
                     },
                     onHideRow = {
                         core.command(LayoutCommand.HideRow(ov.rowId))
-                        say("${homeRow?.title ?: "Row"} hidden. Settings, Rows brings it back")
+                        val hidden = homeRow?.title
+                        if (hidden != null) say(R.string.home_screen_row_hidden, hidden) else say(R.string.home_screen_row_hidden_unnamed)
                     },
-                    onPin = { core.command(LayoutCommand.PinApp(pkg)); say("Pinned to the front of Your apps") },
-                    onUnpin = { core.command(LayoutCommand.UnpinApp(pkg)); say("Unpinned from Your apps") },
+                    onPin = { core.command(LayoutCommand.PinApp(pkg)); say(R.string.home_screen_pinned_app) },
+                    onUnpin = { core.command(LayoutCommand.UnpinApp(pkg)); say(R.string.home_screen_unpinned_app) },
                     // The tile's place in Your apps now, wherever its menu was opened from.
                     onMoveLeft = {
                         val at = indexInRow(ov.rowId, ov.tile.id)
@@ -959,8 +970,8 @@ fun HomeScreen(
                         val at = indexInRow(ov.rowId, ov.tile.id)
                         if (at >= 0) core.command(LayoutCommand.MoveApp(pkg, (at + 1).toUInt()))
                     },
-                    onPinStage = { core.command(LayoutCommand.PinToStage(ov.tile.id)); say("Pinned to the Stage") },
-                    onUnpinStage = { core.command(LayoutCommand.UnpinFromStage(ov.tile.id)); say("Unpinned from the Stage") },
+                    onPinStage = { core.command(LayoutCommand.PinToStage(ov.tile.id)); say(R.string.home_screen_pinned_stage) },
+                    onUnpinStage = { core.command(LayoutCommand.UnpinFromStage(ov.tile.id)); say(R.string.home_screen_unpinned_stage) },
                     onAppInfo = { perform("info:${ov.tile.id}", ov.tile.title) },
                     onUninstall = { requestUninstall(context, pkg) },
                     onPlay = { openPlayListing(context, pkg) },
@@ -996,9 +1007,9 @@ fun HomeScreen(
                 version = updates.currentVersion,
                 facts = {
                     listOf(
-                        AboutFact(core.plugins().size, "plugin", "plugins"),
-                        AboutFact(ShaderStyles.all(context, core).size, "scene", "scenes"),
-                        AboutFact(Prefs.Theme.entries.size, "theme", "themes"),
+                        AboutFact(core.plugins().size, R.plurals.about_fact_plugins),
+                        AboutFact(ShaderStyles.all(context, core).size, R.plurals.about_fact_scenes),
+                        AboutFact(Prefs.Theme.entries.size, R.plurals.about_fact_themes),
                     )
                 },
                 visibleState = visibleState,
@@ -1100,7 +1111,7 @@ private data class TopInsetShape(val top: Float) : androidx.compose.ui.graphics.
 
 private fun Overlay.isSheet(): Boolean = when (this) {
     Overlay.QuickSettings, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels, Overlay.Rows,
-    Overlay.Plugins, is Overlay.PluginDetail, is Overlay.PluginSheet, Overlay.HomeRole, Overlay.Companion, Overlay.Updates,
+    Overlay.Plugins, is Overlay.PluginDetail, is Overlay.PluginSheet, Overlay.HomeRole, Overlay.Language, Overlay.Companion, Overlay.Updates,
     Overlay.Notifications, is Overlay.NotificationDetail, Overlay.NotificationSettings,
     -> true
     else -> false
@@ -1113,47 +1124,50 @@ private fun Overlay.sheetDepth(): Int = when (this) {
     else -> 1
 }
 
-private fun rowTitle(snapshot: HomeSnapshot, rowId: String): String =
-    snapshot.rows.firstOrNull { it.id == rowId }?.title ?: if (rowId == "stage") "the Stage" else "the home screen"
-
 /**
  * A failure to open [title] as a sentence with its cause and its fix (DESIGN.md §7.4, §10). The
  * raw reason goes to the log only; one not known here gets a plain sentence, never its own text.
  */
-internal fun friendlyError(e: Throwable, title: String): String {
+internal fun friendlyError(resources: Resources, e: Throwable, title: String): String {
     val m = e.reason
     android.util.Log.w("Lounge", "couldn't open $title: $m")
-    return friendlyReason(e, m, title)
+    return friendlyReason(resources, e, m, title)
 }
 
 /** The sentence for [reason], the failure's own words, kept apart from the log so it can be tested. */
-internal fun friendlyReason(e: Throwable, reason: String, title: String): String {
+internal fun friendlyReason(resources: Resources, e: Throwable, reason: String, title: String): String {
     val m = reason.lowercase()
-    return when {
-        // A plugin's own sentence, and the host's for one that stopped, show as written.
-        e is tv.lounge.core.CoreException.Plugin && readsAsSentence(reason) -> reason.trim()
-        e is tv.lounge.core.CoreException.DiskFull -> "The TV's storage is full. Free some space in the TV's settings, then try again."
-        e is tv.lounge.core.CoreException.UnknownAction -> "$title isn't on this TV any more. Its app may have removed it."
+    // A plugin's own sentence, and the host's for one that stopped, show as written.
+    if (e is tv.lounge.core.CoreException.Plugin && readsAsSentence(reason)) return reason.trim()
+    // The platform says these in the language in use, so they are known by its own words for them.
+    fun says(@androidx.annotation.StringRes platform: Int) = resources.getString(platform).lowercase() in m
+    val sentence = when {
+        e is tv.lounge.core.CoreException.DiskFull -> R.string.home_screen_error_storage_full
+        e is tv.lounge.core.CoreException.UnknownAction -> R.string.home_screen_error_gone
         "no activity found" in m || "activitynotfound" in m || "no launch intent" in m || "nothing can open" in m ->
-            "Nothing on this TV can open $title. Is its app still installed?"
-        "not installed" in m -> "$title isn't installed on this TV. Install it from the Play Store, then try again."
-        "no video player" in m -> "Nothing on this TV can play $title. Install VLC or another video player, then try again."
-        "no player" in m -> "Nothing on this TV can play $title. Install VLC or another player, then try again."
-        "notification access" in m -> "Lounge can't reach what's playing yet. In Settings, allow Notification access."
-        "not playing" in m -> "That app has stopped playing. Open it to start something again."
-        "did not answer" in m || "didn't answer" in m -> "$title's source didn't answer. Check that it is running, then try again."
-        "busy" in m -> "The TV is busy. Try again in a moment."
-        "won't open that link" in m || "not one lounge can open" in m -> "Lounge can't open $title from here. Open it from its app instead."
-        "permission" in m || "not allowed" in m || "security" in m -> "Android didn't let Lounge open $title. Open it from its app instead."
-        e is tv.lounge.core.CoreException.Plugin -> "$title's plugin stopped partway through. Try again in a moment."
-        else -> "Couldn't open $title. Try again in a moment."
+            R.string.home_screen_error_nothing_opens
+        "not installed" in m -> R.string.home_screen_error_not_installed
+        says(PlatformR.string.android_platform_no_video_player) || "no video player" in m -> R.string.home_screen_error_no_video_player
+        says(PlatformR.string.android_platform_no_player) || "no player" in m -> R.string.home_screen_error_no_player
+        says(PlatformR.string.android_platform_needs_notification_access) || "notification access" in m -> R.string.home_screen_error_notification_access
+        says(PlatformR.string.android_platform_not_playing) || "not playing" in m -> R.string.home_screen_error_not_playing
+        "did not answer" in m || "didn't answer" in m -> R.string.home_screen_error_no_answer
+        "busy" in m -> R.string.home_screen_error_busy
+        says(PlatformR.string.android_platform_link_refused) || says(PlatformR.string.android_platform_link_unknown) || "won't open that link" in m || "not one lounge can open" in m -> R.string.home_screen_error_wrong_link
+        "permission" in m || "not allowed" in m || "security" in m -> R.string.home_screen_error_not_allowed
+        e is tv.lounge.core.CoreException.Plugin -> R.string.home_screen_error_plugin_stopped
+        else -> R.string.home_screen_error_other
     }
+    return resources.getString(sentence, title)
 }
 
-/** Whether [text] is already a sentence for the screen: a capital first, a full stop or question mark last. */
+/**
+ * Whether [text] is already a sentence for the screen: a capital first, a full stop or question mark last.
+ * A mark that opens a question, an exclamation or a quotation may come before the capital.
+ */
 internal fun readsAsSentence(text: String): Boolean {
     val t = text.trim()
-    return t.firstOrNull()?.isUpperCase() == true && (t.endsWith('.') || t.endsWith('?')) && t.length <= 400
+    return t.trimStart('¿', '¡', '«', '„', '“', '"', '‹', ' ', '\u00A0').firstOrNull()?.isUpperCase() == true && (t.endsWith('.') || t.endsWith('?')) && t.length <= 400
 }
 
 internal fun hasTvListings(context: android.content.Context): Boolean =
@@ -1216,13 +1230,8 @@ private fun SheetContent(
             var recentApps by remember { mutableStateOf(-1) }
             // Read again with each snapshot, so a change made on the phone shows here too.
             LaunchedEffect(Unit) { core.snapshots.collect { recentApps = withContext(Dispatchers.IO) { core.recentApps().toInt() } } }
-            val rowsSummary by produceState("") {
-                value = withContext(Dispatchers.IO) {
-                    // Only rows the person hid count.
-                    val hidden = core.homeRows().count { !it.shown && it.chosen }
-                    if (hidden == 0) "All shown" else if (hidden == 1) "1 hidden" else "$hidden hidden"
-                }
-            }
+            // Only rows the person hid count.
+            val rowsHidden by produceState<Int?>(null) { value = withContext(Dispatchers.IO) { core.homeRows().count { !it.shown && it.chosen } } }
             QuickSettingsSheet(
                 prefs = prefs,
                 theme = theme,
@@ -1244,7 +1253,11 @@ private fun SheetContent(
                 say = say,
                 onChannels = { open(Overlay.Channels) },
                 onRows = { open(Overlay.Rows) },
-                rowsSummary = rowsSummary,
+                rowsSummary = when (val hidden = rowsHidden) {
+                    null -> ""
+                    0 -> stringResource(R.string.home_screen_rows_all_shown)
+                    else -> pluralStringResource(R.plurals.home_screen_rows_hidden, hidden, hidden)
+                },
                 recentApps = if (recentApps < 0) 5 else recentApps,
                 onSetRecentApps = { n -> recentApps = n; core.command(LayoutCommand.SetRecentApps(n.toUInt())) },
                 onPlugins = { open(Overlay.Plugins) },
@@ -1257,6 +1270,8 @@ private fun SheetContent(
                 onSetupAgain = { open(Overlay.Onboarding) },
                 onAbout = { open(Overlay.About) },
                 onDonate = { open(Overlay.Donate) },
+                language = uiPrefs.language,
+                onLanguage = { open(Overlay.Language) },
                 screensaver = { screensaverName(power, context) },
                 onUpdates = { open(Overlay.Updates) },
                 updateStatus = updateStatusWord(updateState, updateAuto),
@@ -1285,7 +1300,7 @@ private fun SheetContent(
                 onDismissAll = {
                     val keys = shown.list.filter { it.dismissible }.map { it.key }
                     // With none left the panel closes, so the word that they went is said here.
-                    if (keys.size == shown.list.size) say("Notifications dismissed")
+                    if (keys.size == shown.list.size) say(context.getString(R.string.home_screen_notifications_dismissed))
                     notifications.dismiss(keys)
                 },
                 firstFocus = first,
@@ -1295,15 +1310,15 @@ private fun SheetContent(
             val shown by notices.collectAsStateWithLifecycle()
             NotificationDetailSheet(
                 notification = shown.list.firstOrNull { it.key == overlay.key },
-                onOpen = { n -> if (!notifications.open(n.key)) say(NotificationWords.TAKEN_BACK) },
-                onPress = { n, action -> if (!notifications.press(n.key, action.index)) say(NotificationWords.TAKEN_BACK) },
+                onOpen = { n -> if (!notifications.open(n.key)) say(context.getString(NotificationWords.TAKEN_BACK)) },
+                onPress = { n, action -> if (!notifications.press(n.key, action.index)) say(context.getString(NotificationWords.TAKEN_BACK)) },
                 onDismiss = { n ->
-                    if (shown.list.size == 1) say("Dismissed")
+                    if (shown.list.size == 1) say(context.getString(R.string.home_screen_notification_dismissed))
                     notifications.dismiss(listOf(n.key))
                 },
                 onHideApp = { n ->
                     scope.launch { prefs.setNotificationsHidden(n.packageName, true) }
-                    say("Notifications from ${n.app} hidden. Settings, Notifications brings them back")
+                    say(context.getString(R.string.home_screen_notifications_app_hidden, n.app))
                 },
                 firstFocus = first,
             )
@@ -1449,6 +1464,11 @@ private fun SheetContent(
             say = say,
             firstFocus = first,
         )
+        Overlay.Language -> LanguageSheet(
+            chosen = uiPrefs.language,
+            onChoose = { tag -> scope.launch { prefs.setLanguage(tag) } },
+            firstFocus = first,
+        )
         Overlay.HomeRole -> {
             val takeHome by produceState(emptyList<tv.lounge.power.PowerAction>(), isDefaultHome) { value = withContext(Dispatchers.IO) { power.takeHome() } }
             val homesOff by produceState(emptyList<String>(), isDefaultHome) { value = withContext(Dispatchers.IO) { power.homesOff().map { it.label } } }
@@ -1461,8 +1481,8 @@ private fun SheetContent(
                 onDoItNow = {
                     scope.launch {
                         runCatching { power.runAll(takeHome.ifEmpty { listOf(power.homeRole) }) }
-                            .onSuccess { if (!isDefaultHome(context)) say(HOME_NOT_TAKEN) }
-                            .onFailure { say((it as? tv.lounge.power.PrivilegedException)?.message ?: HOME_NOT_TAKEN) }
+                            .onSuccess { if (!isDefaultHome(context)) say(context.getString(HOME_NOT_TAKEN)) }
+                            .onFailure { say((it as? tv.lounge.power.PrivilegedException)?.message ?: context.getString(HOME_NOT_TAKEN)) }
                         onHomeChanged()
                     }
                 },

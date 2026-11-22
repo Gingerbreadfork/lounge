@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shader_styles_ink_name">Tinta</string>
+    <string name="shader_styles_ink_description">Luz que atraviesa tinta en el agua</string>
+    <string name="shader_styles_current_name">Corriente</string>
+    <string name="shader_styles_current_description">Agua lenta que se pliega sobre sí misma bajo una sola luz</string>
+    <string name="shader_styles_rain_name">Lluvia</string>
+    <string name="shader_styles_rain_description">Una ventana de noche, con gotas que resbalan por el cristal</string>
+    <string name="shader_styles_smoke_name">Humo</string>
+    <string name="shader_styles_smoke_description">Volutas que suben y se deshacen por el camino</string>
+    <string name="shader_styles_embers_name">Brasas</string>
+    <string name="shader_styles_embers_description">Chispas que se alzan de un fuego ya consumido</string>
+    <string name="shader_styles_shallows_name">Agua clara</string>
+    <string name="shader_styles_shallows_description">Luz en el fondo de un estanque</string>
+    <string name="shader_styles_lava_name">Lava</string>
+    <string name="shader_styles_lava_description">Una lámpara de lava, despacio</string>
+    <string name="shader_styles_aurora_name">Aurora</string>
+    <string name="shader_styles_aurora_description">Aurora boreal sobre las colinas</string>
+    <string name="shader_styles_silk_name">Seda</string>
+    <string name="shader_styles_silk_description">Pliegues de satén que giran bajo la lámpara</string>
+    <string name="shader_styles_curtain_name">Telón</string>
+    <string name="shader_styles_curtain_description">El telón antes de la función, iluminado por las candilejas</string>
+    <string name="shader_styles_moonpath_name">Estela de luna</string>
+    <string name="shader_styles_moonpath_description">El mar de noche y el camino que la luna tiende sobre él</string>
+    <string name="shader_styles_city_name">Ciudad</string>
+    <string name="shader_styles_city_description">La ciudad de noche, desenfocada tras el cristal</string>
+    <string name="shader_styles_record_name">Vinilo</string>
+    <string name="shader_styles_record_description">Un disco que gira bajo la lámpara</string>
+    <string name="shader_styles_eclipse_name">Eclipse</string>
+    <string name="shader_styles_eclipse_description">El sol tras la luna, con una perla de luz que arde en el borde</string>
+    <string name="shader_styles_gravity_name">Gravedad</string>
+    <string name="shader_styles_gravity_description">Un agujero negro y la luz que se curva a su alrededor</string>
+    <string name="shader_styles_orbit_name">Órbita</string>
+    <string name="shader_styles_orbit_description">El amanecer visto desde la órbita, sobre las luces del lado nocturno</string>
+    <string name="shader_styles_tide_name">Marea</string>
+    <string name="shader_styles_tide_description">El mar que sube de noche y brilla donde rompe</string>
+    <string name="shader_styles_lanterns_name">Farolillos</string>
+    <string name="shader_styles_lanterns_description">Farolillos de papel soltados sobre el lago</string>
+    <string name="shader_styles_snow_name">Nieve</string>
+    <string name="shader_styles_snow_description">Una calle de faroles bajo la nieve que cae</string>
+    <string name="shader_styles_local_description">De la carpeta screensavers de esta TV</string>
+    <string name="shader_styles_local_origin">Esta TV</string>
+</resources>

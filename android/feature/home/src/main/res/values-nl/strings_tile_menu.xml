@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_menu_pane_title">Opties voor %1$s</string>
+    <string name="tile_menu_dismiss_notice">Dit niet meer tonen</string>
+    <string name="tile_menu_app_info">App-info</string>
+    <string name="tile_menu_play_store">Openen in Play Store</string>
+    <string name="tile_menu_uninstall">Verwijderen</string>
+    <string name="tile_menu_move_left">Naar links verplaatsen</string>
+    <string name="tile_menu_move_right">Naar rechts verplaatsen</string>
+    <string name="tile_menu_adjust">Aanpassen</string>
+    <string name="tile_menu_pin_app">Vooraan in Je apps vastmaken</string>
+    <string name="tile_menu_pin_app_detail">Blijft vooraan staan, vóór recente apps</string>
+    <string name="tile_menu_unpin_app">Losmaken uit Je apps</string>
+    <string name="tile_menu_unpin_app_detail">Volgt weer wat je opent</string>
+    <string name="tile_menu_pin_stage">Op het Podium vastmaken</string>
+    <string name="tile_menu_pin_stage_detail">Blijft bij de grote beelden bovenaan</string>
+    <string name="tile_menu_unpin_stage">Van het Podium losmaken</string>
+    <string name="tile_menu_unpin_stage_detail">Wat je kijkt neemt de plek in</string>
+    <string name="tile_menu_hide_detail">Uit elke rij tot je het weer toont</string>
+    <string name="tile_menu_show_detail">Terug in elke rij waar het thuishoort</string>
+    <string name="tile_menu_hide_all_from">Alles van %1$s verbergen</string>
+    <string name="tile_menu_hide_all_from_detail">Uit Verder kijken tot je het weer toont</string>
+    <string name="tile_menu_hide_row">Deze rij verbergen</string>
+    <string name="tile_menu_hide_row_detail">Terughalen kan via Instellingen, Rijen</string>
+</resources>

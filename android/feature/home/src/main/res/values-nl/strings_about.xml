@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_title">Over Lounge</string>
+    <string name="about_what">Een startscherm voor je tv, ingericht rond wat je kijkt.</string>
+    <string name="about_terms">Gratis en open source onder de MIT-licentie. Geen account, geen reclame, en niets verlaat je huis.</string>
+    <string name="about_version">Versie %1$s</string>
+    <string name="about_version_unknown">Versie onbekend</string>
+    <plurals name="about_fact_plugins">
+        <item quantity="one">plug-in</item>
+        <item quantity="other">plug-ins</item>
+    </plurals>
+    <plurals name="about_fact_scenes">
+        <item quantity="one">scène</item>
+        <item quantity="other">scènes</item>
+    </plurals>
+    <plurals name="about_fact_themes">
+        <item quantity="one">thema</item>
+        <item quantity="other">thema\'s</item>
+    </plurals>
+    <string name="about_made_by">Gemaakt door</string>
+    <string name="about_set_in">Gezet in Bricolage Grotesque en Figtree.</string>
+    <string name="about_scan">Scan dit met de camera van je telefoon</string>
+    <string name="about_leads_to">Brengt je naar</string>
+    <string name="about_link_source">De broncode</string>
+    <string name="about_link_report">Een probleem melden</string>
+    <string name="about_link_whats_new">Wat is er nieuw</string>
+    <string name="about_link_maker_on_x">Gingerbreadfork op X</string>
+    <string name="about_code_description">Een code die %1$s opent</string>
+    <string name="about_support">Lounge steunen</string>
+    <string name="about_support_value">Alle beetjes helpen</string>
+</resources>

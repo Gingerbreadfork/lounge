@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Beside the guide's title: what it is doing, or how many channels it lists and the time now. -->
+    <string name="guide_reading">Reading the guide</string>
+    <string name="guide_no_channels">No channels yet</string>
+    <!-- %2$s is the time now, such as 21:42 or 9:42 pm. -->
+    <plurals name="guide_channels_at">
+        <item quantity="one">%1$d channel, %2$s</item>
+        <item quantity="other">%1$d channels, %2$s</item>
+    </plurals>
+    <string name="guide_no_channels_help">Channels show here once a TV app or a plugin lists what is on.</string>
+    <!-- Fills a channel's row when nothing is known about what it shows. -->
+    <string name="guide_no_programme">No programme information</string>
+    <!-- What a screen reader says OK does on a programme: it tunes to the channel. -->
+    <string name="guide_watch">Watch</string>
+    <!-- A programme as a screen reader says it. %1$s is the channel, %2$s the programme and %3$s its times, such as "21:00 to 21:30". -->
+    <string name="guide_programme_spoken">%1$s, %2$s, %3$s</string>
+    <!-- Under the programme on air. %1$s is the time it ends. -->
+    <string name="guide_on_now_until">On now, until %1$s</string>
+    <!-- Under a programme: the times it starts and ends. -->
+    <string name="guide_from_to">%1$s to %2$s</string>
+</resources>

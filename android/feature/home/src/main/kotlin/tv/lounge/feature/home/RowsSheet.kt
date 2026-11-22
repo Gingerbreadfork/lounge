@@ -28,6 +28,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
@@ -38,6 +40,7 @@ import tv.lounge.core.SourceInfo
 import tv.lounge.design.Hairline
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 import tv.lounge.design.sounds
 
 /**
@@ -76,9 +79,9 @@ fun RowsSheet(
         onDispose { sheetBack.handler = null }
     }
 
-    SheetHeading("Home screen rows", "OK shows or hides a row. Hold OK to pick one up, Up and Down move it, and OK or Back sets it down.")
+    SheetHeading(stringResource(R.string.rows_sheet_title), stringResource(R.string.rows_sheet_subtitle))
     when {
-        rows == null -> Text("Loading…", style = LoungeTheme.typography.meta, color = colors.dust)
+        rows == null -> Text(stringResource(R.string.rows_sheet_loading), style = LoungeTheme.typography.meta, color = colors.dust)
         else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             rows.forEachIndexed { i, row ->
                 key(row.id) {
@@ -89,12 +92,14 @@ fun RowsSheet(
                         icon = rowIcon(row.id),
                         title = row.title,
                         subtitle = row.detail,
-                        value = when {
-                            isMoving -> "Moving"
-                            !row.shown -> "Hidden"
-                            row.count == 0u -> "Empty"
-                            else -> "Shown"
-                        },
+                        value = stringResource(
+                            when {
+                                isMoving -> R.string.rows_sheet_moving
+                                !row.shown -> DesignR.string.common_hidden
+                                row.count == 0u -> R.string.rows_sheet_empty
+                                else -> R.string.rows_sheet_shown
+                            },
+                        ),
                         accent = when {
                             isMoving -> colors.houselight
                             row.shown && row.count > 0u -> colors.signal
@@ -154,9 +159,9 @@ fun RowsSheet(
             // The order cannot be had back, so it asks once more first; moving away takes the question back.
             SheetRow(
                 icon = LoungeIcons.Refresh,
-                title = if (confirmReset) "Yes, put them back" else "Put the rows back in their usual order",
+                title = stringResource(if (confirmReset) R.string.rows_sheet_reset_confirm else R.string.rows_sheet_reset),
                 titleColor = if (confirmReset) colors.ember else colors.limelight,
-                subtitle = if (resetDone) "Done. What you hid stays hidden." else "Keeps what you have hidden",
+                subtitle = stringResource(if (resetDone) R.string.rows_sheet_reset_done else R.string.rows_sheet_reset_keeps),
                 modifier = Modifier.onFocusChanged { if (!it.isFocused) confirmReset = false },
                 onClick = {
                     if (!confirmReset) {
@@ -176,10 +181,10 @@ fun RowsSheet(
 
     Spacer(Modifier.height(24.dp))
     Hairline(Modifier.fillMaxWidth())
-    SheetGroup("Hidden from every row")
+    SheetGroup(stringResource(R.string.rows_sheet_hidden_group))
     when {
         hidden == null -> Unit
-        hidden.isEmpty() -> Text("Nothing is hidden. Hold OK on any tile and choose Hide.", style = LoungeTheme.typography.meta, color = colors.dust)
+        hidden.isEmpty() -> Text(stringResource(R.string.rows_sheet_hidden_none), style = LoungeTheme.typography.meta, color = colors.dust)
         else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             hidden.forEachIndexed { i, item ->
                 key(item.id) {
@@ -189,7 +194,7 @@ fun RowsSheet(
                             { AsyncImage(model = path, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(7.dp))) }
                         },
                         title = item.title,
-                        value = "Show",
+                        value = stringResource(DesignR.string.common_show),
                         onClick = {
                             sounds?.tick()
                             // The row goes at once, so focus moves to its neighbour, or back up to the reset row.
@@ -207,10 +212,10 @@ fun RowsSheet(
         }
     }
     Spacer(Modifier.height(24.dp))
-    SheetGroup("Continue watching comes from")
+    SheetGroup(stringResource(R.string.rows_sheet_continue_group))
     when {
         sources == null -> Unit
-        sources.isEmpty() -> Text("Nothing to continue yet. Apps and plugins are listed here once they bring something.", style = LoungeTheme.typography.meta, color = colors.dust)
+        sources.isEmpty() -> Text(stringResource(R.string.rows_sheet_continue_none), style = LoungeTheme.typography.meta, color = colors.dust)
         else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             sources.forEachIndexed { i, source ->
                 key(source.id) {
@@ -221,11 +226,10 @@ fun RowsSheet(
                         },
                         title = source.title,
                         subtitle = when (source.count) {
-                            0u -> "Nothing to continue now"
-                            1u -> "1 title"
-                            else -> "${source.count} titles"
+                            0u -> stringResource(R.string.rows_sheet_source_nothing)
+                            else -> pluralStringResource(R.plurals.rows_sheet_source_titles, source.count.toInt(), source.count.toInt())
                         },
-                        value = if (source.shown) "Shown" else "Hidden",
+                        value = stringResource(if (source.shown) R.string.rows_sheet_shown else DesignR.string.common_hidden),
                         accent = if (source.shown && source.count > 0u) colors.signal else colors.dust,
                         onClick = {
                             sounds?.tick()
@@ -248,7 +252,7 @@ fun RowsSheet(
             }
         }
     }
-    SheetFootnote("A row with nothing in it stays off the screen until it has something to show.")
+    SheetFootnote(stringResource(R.string.rows_sheet_footnote))
     // The list can arrive after the sheet's own request for focus has given up.
     LaunchedEffect(rows != null) { if (!rows.isNullOrEmpty()) firstFocus.requestWhenReady() }
 }

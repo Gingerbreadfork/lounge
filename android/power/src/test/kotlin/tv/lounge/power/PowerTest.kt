@@ -10,8 +10,14 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
+@RunWith(RobolectricTestRunner::class)
 class PowerTest {
+    private val resources get() = RuntimeEnvironment.getApplication().resources
+
     @Test
     fun androidPublicKeyLayoutMatchesAdb() {
         val gen = KeyPairGenerator.getInstance("RSA")
@@ -77,7 +83,7 @@ class PowerTest {
                 CEC: logical_address: 0x08 device_type: 4 cec_version: 6 vendor_id: 6673 display_name: Living Room TV power_status: 0 physical_address: 0x4000 port_id: 0
                 CEC: logical_address: 0x04 device_type: 4 cec_version: 5 vendor_id: 1 display_name: PlayStation 5 power_status: 1 physical_address: 0x1000 port_id: 1
         """.trimIndent()
-        val devices = PowerSetup.parseCecDevices(dump)
+        val devices = PowerSetup.parseCecDevices(dump, resources)
         assertEquals(listOf(0, 4, 8), devices.map { it.logicalAddress })
         assertTrue(devices[0].isTv)
         assertEquals("PlayStation 5", devices[1].name)
@@ -137,23 +143,23 @@ class PowerTest {
 
     @Test
     fun aFailedConnectKeepsItsReasonUntilSomethingChanges() {
-        val failed = PowerStatus.Failed(AdbBackend.TLS)
+        val failed = PowerStatus.Failed(resources.getString(R.string.backends_tls))
         assertEquals(failed, PowerSetup.keptFailure(PowerStatus.NotPaired, failed))
         assertEquals(PowerStatus.NotPaired, PowerSetup.keptFailure(PowerStatus.NotPaired, null))
         assertEquals(PowerStatus.Ready("adb"), PowerSetup.keptFailure(PowerStatus.Ready("adb"), failed))
-        val off = PowerStatus.Unavailable(PowerSetup.DEBUGGING_OFF)
+        val off = PowerStatus.Unavailable(resources.getString(R.string.power_setup_debugging_off), debuggingOff = true)
         assertEquals(off, PowerSetup.keptFailure(off, failed))
     }
 
     @Test
     fun aFailedCommandIsSaidInASentence() {
         val refused = "Exception occurred while executing 'grant':\njava.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS."
-        assertTrue(PowerSetup.failureSentence(refused).startsWith("This TV doesn't let USB debugging do that."))
-        assertTrue(PowerSetup.failureSentence("cmd: Can't find service: hdmi_control").startsWith("This TV's version of Android has no command for that"))
-        assertEquals("Android protects that app, so it can't be turned off.", PowerSetup.failureSentence("Error: java.lang.IllegalArgumentException: Cannot disable a protected package: com.x"))
+        assertTrue(PowerSetup.failureSentence(resources, refused).startsWith("This TV doesn't let USB debugging do that."))
+        assertTrue(PowerSetup.failureSentence(resources, "cmd: Can't find service: hdmi_control").startsWith("This TV's version of Android has no command for that"))
+        assertEquals("Android protects that app, so it can't be turned off.", PowerSetup.failureSentence(resources, "Error: java.lang.IllegalArgumentException: Cannot disable a protected package: com.x"))
         // Nothing the shell printed is passed on.
         for (raw in listOf("", "Error: unknown failure 0x7f", "Failure [INSTALL_FAILED_VERSION_DOWNGRADE]")) {
-            assertEquals("The TV didn't do that. Try again.", PowerSetup.failureSentence(raw))
+            assertEquals("The TV didn't do that. Try again.", PowerSetup.failureSentence(resources, raw))
         }
     }
 

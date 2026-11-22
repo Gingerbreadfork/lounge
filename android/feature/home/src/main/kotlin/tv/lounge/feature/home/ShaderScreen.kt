@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.viewinterop.AndroidView
 import tv.lounge.design.BlueNoise
 import tv.lounge.design.LoungeTheme
@@ -77,7 +78,7 @@ internal fun ShaderScreensaver(style: ShaderStyle, room: AmbientRoom, onUnusable
         } else {
             LaunchedEffect(Unit) { onUnusable("abstract screensavers need Android 13") }
         }
-        AmbientCaption(room, style.name, style.origin)
+        AmbientCaption(room, style.nameIn(LocalResources.current), style.origin)
     }
 }
 

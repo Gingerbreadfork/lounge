@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guide_reading">Leyendo la guía</string>
+    <string name="guide_no_channels">Todavía no hay canales</string>
+    <plurals name="guide_channels_at">
+        <item quantity="one">%1$d canal, %2$s</item>
+        <item quantity="many">%1$d canales, %2$s</item>
+        <item quantity="other">%1$d canales, %2$s</item>
+    </plurals>
+    <string name="guide_no_channels_help">Los canales aparecen aquí cuando una app de TV o un plugin indica lo que se está emitiendo.</string>
+    <string name="guide_no_programme">Sin información de programas</string>
+    <string name="guide_watch">Ver</string>
+    <string name="guide_programme_spoken">%1$s, %2$s, %3$s</string>
+    <string name="guide_on_now_until">En emisión hasta las %1$s</string>
+    <string name="guide_from_to">De %1$s a %2$s</string>
+</resources>

@@ -1,5 +1,6 @@
 package tv.lounge.feature.home
 
+import android.content.res.Resources
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.layout.layout
@@ -62,6 +63,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
@@ -524,6 +527,8 @@ private fun StageStrip(
     val safeXPx = with(LocalDensity.current) { Dimens.safeX.toPx() }
     val stripState = remember { LazyListState(LazyLayoutCacheWindow(ahead = 540.dp, behind = 270.dp), 0, 0) }
     KeepStart(stripState, strip.firstOrNull()?.id)
+    val resources = LocalResources.current
+    val stageName = stringResource(R.string.stage_row_name)
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec(safeXPx)) {
         LazyRow(
             state = stripState,
@@ -551,8 +556,8 @@ private fun StageStrip(
                     kind = tile.kind,
                     size = DpSize(Dimens.stripTileWidth, Dimens.stripTileHeight),
                     lights = lights,
-                    rowName = "the Stage",
-                    description = spotlight?.let { spotlightDescription(it, pinned = tile.stagePinned) },
+                    rowName = stageName,
+                    description = spotlight?.let { spotlightDescription(resources, it, pinned = tile.stagePinned) },
                     focusRequester = stripRequester(index),
                     onFocused = { focused, _ -> if (focused) onStripFocused(index, tile) },
                     onClick = { onStripClick(tile) },
@@ -568,10 +573,12 @@ private fun StageStrip(
 }
 
 /** What is read out for a strip tile: the playbill's words, "The Bear, Continue watching, Season 2, Episode 4, 23 minutes left". */
-internal fun spotlightDescription(sp: StageSpotlight, pinned: Boolean = false): String =
-    (listOf(sp.title, sp.category) + sp.lines + listOfNotNull(sp.source?.let { "on $it" }, sp.explanation, "pinned to the Stage".takeIf { pinned }))
-        .filter { it.isNotBlank() }
-        .joinToString(", ") { spokenEpisodes(it) }
+internal fun spotlightDescription(resources: Resources, sp: StageSpotlight, pinned: Boolean = false): String {
+    val source = sp.source?.let { resources.getString(R.string.stage_spoken_source, it) }
+    val pin = if (pinned) resources.getString(R.string.tiles_spoken_pinned_stage) else null
+    val parts = (listOf(sp.title, sp.category) + sp.lines + listOfNotNull(source, sp.explanation, pin)).filter { it.isNotBlank() }
+    return spokenList(resources, parts.map { spokenEpisodes(resources, it) })
+}
 
 /**
  * The Stage change (DESIGN.md §6.3): the outgoing artwork slides 12 px and fades while the incoming
@@ -831,18 +838,18 @@ private fun PlaybillPart(spotlight: StageSpotlight, delayMs: Int = 0, content: @
 private fun EmptyPlaybill(indexed: Boolean, onStart: () -> Unit, startFocus: FocusRequester, interactive: Boolean) {
     val colors = LoungeTheme.colors
     Column(Modifier.fillMaxSize().padding(bottom = 6.dp), verticalArrangement = Arrangement.Bottom) {
-        Text("Your home screen", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text(stringResource(R.string.stage_empty_category), style = LoungeTheme.typography.meta, color = colors.dust)
         Spacer(Modifier.height(16.dp))
         if (indexed) {
-            Text("Let's set up your home screen", style = LoungeTheme.typography.displayXl, color = colors.limelight, maxLines = 3)
+            Text(stringResource(R.string.stage_empty_title), style = LoungeTheme.typography.displayXl, color = colors.limelight, maxLines = 3)
             Spacer(Modifier.height(16.dp))
-            Text("A few quick steps, then your apps and shows appear here.", style = LoungeTheme.typography.meta, color = colors.dust)
+            Text(stringResource(R.string.stage_empty_body), style = LoungeTheme.typography.meta, color = colors.dust)
             Spacer(Modifier.height(24.dp))
-            LoungeButton("Start", onClick = onStart, enabled = interactive, focusRequester = startFocus)
+            LoungeButton(stringResource(R.string.stage_empty_start), onClick = onStart, enabled = interactive, focusRequester = startFocus)
         } else {
-            Text("Setting up your home screen", style = LoungeTheme.typography.displayXl, color = colors.limelight, maxLines = 2)
+            Text(stringResource(R.string.stage_indexing_title), style = LoungeTheme.typography.displayXl, color = colors.limelight, maxLines = 2)
             Spacer(Modifier.height(16.dp))
-            Text("Looking at what is on this TV.", style = LoungeTheme.typography.meta, color = colors.dust)
+            Text(stringResource(R.string.stage_indexing_body), style = LoungeTheme.typography.meta, color = colors.dust)
         }
     }
 }

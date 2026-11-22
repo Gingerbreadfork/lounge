@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rows_sheet_title">Fileiras da tela inicial</string>
+    <string name="rows_sheet_subtitle">OK mostra ou oculta uma fileira. Mantenha OK pressionado para pegar uma, mova para cima e para baixo, e solte com OK ou Voltar.</string>
+    <string name="rows_sheet_loading">Carregando…</string>
+    <string name="rows_sheet_moving">Movendo</string>
+    <string name="rows_sheet_shown">Visível</string>
+    <string name="rows_sheet_empty">Vazia</string>
+    <string name="rows_sheet_reset">Restaurar a ordem original das fileiras</string>
+    <string name="rows_sheet_reset_confirm">Sim, restaurar a ordem</string>
+    <string name="rows_sheet_reset_keeps">Mantém o que você ocultou</string>
+    <string name="rows_sheet_reset_done">Pronto. O que você ocultou continua oculto.</string>
+    <string name="rows_sheet_hidden_group">Oculto em todas as fileiras</string>
+    <string name="rows_sheet_hidden_none">Nada está oculto. Mantenha OK pressionado em qualquer cartão e escolha Ocultar.</string>
+    <string name="rows_sheet_continue_group">Continuar assistindo vem de</string>
+    <string name="rows_sheet_continue_none">Nada para continuar ainda. Apps e plugins aparecem aqui assim que trouxerem algo.</string>
+    <string name="rows_sheet_source_nothing">Nada para continuar agora</string>
+    <plurals name="rows_sheet_source_titles">
+        <item quantity="one">%1$d título</item>
+        <item quantity="many">%1$d títulos</item>
+        <item quantity="other">%1$d títulos</item>
+    </plurals>
+    <string name="rows_sheet_footnote">Uma fileira sem nada fica fora da tela até ter algo para mostrar.</string>
+</resources>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_platform_not_in_front">Si apre nella schermata di Lounge. Apri Lounge sulla TV, poi riprova.</string>
+    <string name="android_platform_opened_from_behind">Lounge non è sullo schermo della TV, e può aprire qualcosa da dietro un\'altra app solo quando è la schermata Home della TV. Apri Lounge sulla TV, poi riprova.</string>
+    <string name="android_platform_still_starting">Lounge sulla TV si sta ancora avviando. Riprova tra poco.</string>
+    <string name="android_platform_unknown_key">Lounge sulla TV non conosce quel tasto. Aggiorna Lounge, poi riprova.</string>
+    <string name="android_platform_keys_need_power_setup">C\'è un\'altra app in primo piano. Connetti Configurazione avanzata sulla TV perché i tasti del telefono la raggiungano.</string>
+    <string name="android_platform_busy">La TV è ancora occupata con gli ultimi tasti premuti. Riprova tra poco.</string>
+    <string name="android_platform_typing_needs_lounge">C\'è un\'altra app in primo piano, e il telefono scrive solo in Lounge. Premi Home, poi riprova.</string>
+    <string name="android_platform_no_field">Prima apri Cerca o un campo in Lounge.</string>
+    <string name="android_platform_settings_not_saved">La TV non è riuscita a salvare le impostazioni. Controlla che abbia spazio libero, poi riprova.</string>
+    <string name="android_platform_link_unknown">Lounge non sa aprire quel link</string>
+    <string name="android_platform_link_refused">Lounge non apre quel link</string>
+    <string name="android_platform_needs_notification_access">In riproduzione richiede l\'accesso alle notifiche</string>
+    <string name="android_platform_not_playing">Quell\'app non sta riproducendo niente</string>
+    <string name="android_platform_no_player">Nessun lettore può aprire questo flusso. Installa VLC o un altro lettore.</string>
+    <string name="android_platform_no_video_player">Nessun lettore video può aprire questo flusso. Installa VLC o un altro lettore.</string>
+</resources>

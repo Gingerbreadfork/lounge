@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="now_playing_pane_title">In riproduzione</string>
+    <string name="now_playing_previous">Precedente</string>
+    <string name="now_playing_pause">Pausa</string>
+    <string name="now_playing_play">Riproduci</string>
+    <string name="now_playing_next">Successivo</string>
+</resources>

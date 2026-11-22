@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_menu_pane_title">Optionen für %1$s</string>
+    <string name="tile_menu_dismiss_notice">Nicht mehr anzeigen</string>
+    <string name="tile_menu_app_info">App-Info</string>
+    <string name="tile_menu_play_store">Im Play Store öffnen</string>
+    <string name="tile_menu_uninstall">Deinstallieren</string>
+    <string name="tile_menu_move_left">Nach links verschieben</string>
+    <string name="tile_menu_move_right">Nach rechts verschieben</string>
+    <string name="tile_menu_adjust">Anpassen</string>
+    <string name="tile_menu_pin_app">Vorn in „Deine Apps“ anheften</string>
+    <string name="tile_menu_pin_app_detail">Bleibt vor den zuletzt geöffneten Apps</string>
+    <string name="tile_menu_unpin_app">Von „Deine Apps“ loslösen</string>
+    <string name="tile_menu_unpin_app_detail">Richtet sich wieder nach dem, was du öffnest</string>
+    <string name="tile_menu_pin_stage">An die Bühne anheften</string>
+    <string name="tile_menu_pin_stage_detail">Bleibt oben bei den großen Bildern</string>
+    <string name="tile_menu_unpin_stage">Von der Bühne loslösen</string>
+    <string name="tile_menu_unpin_stage_detail">Was du schaust, nimmt den Platz ein</string>
+    <string name="tile_menu_hide_detail">In keiner Reihe mehr, bis du es einblendest</string>
+    <string name="tile_menu_show_detail">Wieder in allen Reihen, in die es gehört</string>
+    <string name="tile_menu_hide_all_from">Alles von %1$s ausblenden</string>
+    <string name="tile_menu_hide_all_from_detail">Nicht mehr unter „Weiterschauen“, bis du es einblendest</string>
+    <string name="tile_menu_hide_row">Diese Reihe ausblenden</string>
+    <string name="tile_menu_hide_row_detail">Über Einstellungen, Reihen kommt sie zurück</string>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Why Power Setup could not connect or run something, said on the TV or the phone. -->
+    <string name="backends_took_too_long">The TV took too long to answer. Try again.</string>
+    <string name="backends_unreachable">Lounge couldn\'t reach USB debugging. Check that it is still on in Developer options, then try again.</string>
+    <string name="backends_dropped">The connection to USB debugging dropped. Try again.</string>
+    <string name="backends_tls">This TV asks for wireless debugging\'s pairing code, which Power Setup can\'t use. Turn on USB debugging in Developer options instead, then try again.</string>
+    <string name="backends_not_this_tv">Something other than this TV\'s debugging service answered, so Lounge didn\'t connect. Restart the TV, then try again.</string>
+    <!-- "Connect" is the button in Power Setup. -->
+    <string name="backends_key_not_approved">This TV no longer allows Lounge. In Settings, open Power Setup and choose Connect.</string>
+    <string name="backends_shizuku_not_allowed">Shizuku hasn\'t allowed Lounge. Open Shizuku, allow Lounge, then try again.</string>
+    <string name="backends_shizuku_not_running">Shizuku couldn\'t run that. Open Shizuku and check that it is running.</string>
+</resources>

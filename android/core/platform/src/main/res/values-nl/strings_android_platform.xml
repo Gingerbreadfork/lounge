@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_platform_not_in_front">Dat opent op het eigen scherm van Lounge. Open Lounge op de tv en probeer het dan opnieuw.</string>
+    <string name="android_platform_opened_from_behind">Lounge staat niet op het scherm van de tv en kan alleen vanachter een andere app iets openen als Lounge het startscherm van de tv is. Open Lounge op de tv en probeer het dan opnieuw.</string>
+    <string name="android_platform_still_starting">Lounge op de tv is nog aan het starten. Probeer het zo opnieuw.</string>
+    <string name="android_platform_unknown_key">Lounge op de tv kent die toets niet. Werk Lounge bij en probeer het dan opnieuw.</string>
+    <string name="android_platform_keys_need_power_setup">Er staat een andere app op de voorgrond. Verbind Geavanceerde configuratie op de tv, dan komen de toetsen van de telefoon daar aan.</string>
+    <string name="android_platform_busy">De tv is nog bezig met de laatste paar toetsen. Probeer het zo opnieuw.</string>
+    <string name="android_platform_typing_needs_lounge">Er staat een andere app op de voorgrond, en de telefoon typt alleen in Lounge. Druk op Home en probeer het dan opnieuw.</string>
+    <string name="android_platform_no_field">Open eerst Zoeken of een invoerveld in Lounge.</string>
+    <string name="android_platform_settings_not_saved">De tv kon de instellingen niet opslaan. Controleer of er ruimte vrij is en probeer het dan opnieuw.</string>
+    <string name="android_platform_link_unknown">Die link kan Lounge niet openen</string>
+    <string name="android_platform_link_refused">Lounge opent die link niet</string>
+    <string name="android_platform_needs_notification_access">Voor Speelt nu is toegang tot meldingen nodig</string>
+    <string name="android_platform_not_playing">Die app speelt niets af</string>
+    <string name="android_platform_no_player">Geen enkele speler kan deze stream openen. Installeer VLC of een andere speler.</string>
+    <string name="android_platform_no_video_player">Geen enkele videospeler kan deze stream openen. Installeer VLC of een andere speler.</string>
+</resources>

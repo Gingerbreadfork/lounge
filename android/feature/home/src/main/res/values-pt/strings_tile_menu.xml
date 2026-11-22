@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_menu_pane_title">Opções de %1$s</string>
+    <string name="tile_menu_dismiss_notice">Não mostrar de novo</string>
+    <string name="tile_menu_app_info">Informações do app</string>
+    <string name="tile_menu_play_store">Abrir na Play Store</string>
+    <string name="tile_menu_uninstall">Desinstalar</string>
+    <string name="tile_menu_move_left">Mover para a esquerda</string>
+    <string name="tile_menu_move_right">Mover para a direita</string>
+    <string name="tile_menu_adjust">Ajustar</string>
+    <string name="tile_menu_pin_app">Fixar no início de Seus apps</string>
+    <string name="tile_menu_pin_app_detail">Fica no lugar, à frente dos apps recentes</string>
+    <string name="tile_menu_unpin_app">Desafixar de Seus apps</string>
+    <string name="tile_menu_unpin_app_detail">Volta a seguir o que você abre</string>
+    <string name="tile_menu_pin_stage">Fixar no Palco</string>
+    <string name="tile_menu_pin_stage_detail">Fica entre as imagens grandes lá no alto</string>
+    <string name="tile_menu_unpin_stage">Desafixar do Palco</string>
+    <string name="tile_menu_unpin_stage_detail">O que você assiste ocupa o lugar</string>
+    <string name="tile_menu_hide_detail">Fora de todas as fileiras até você mostrar</string>
+    <string name="tile_menu_show_detail">De volta a todas as fileiras a que pertence</string>
+    <string name="tile_menu_hide_all_from">Ocultar tudo de %1$s</string>
+    <string name="tile_menu_hide_all_from_detail">Fora de Continuar assistindo até você mostrar</string>
+    <string name="tile_menu_hide_row">Ocultar esta fileira</string>
+    <string name="tile_menu_hide_row_detail">Traga de volta em Configurações, Fileiras</string>
+</resources>

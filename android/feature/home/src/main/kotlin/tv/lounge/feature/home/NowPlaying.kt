@@ -43,6 +43,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -61,6 +62,7 @@ import tv.lounge.design.LoungeButton
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.ProgressBar
+import tv.lounge.design.R as DesignR
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import tv.lounge.design.argb
@@ -85,6 +87,7 @@ fun NowPlayingCard(
     val firstFocus = remember { FocusRequester() }
     val leaving = !visibleState.targetState
     val playing = np.status == PlaybackStatus.PLAYING
+    val pane = stringResource(R.string.now_playing_pane_title)
 
     // Position advances locally while playing; the core only hears about state changes. Only the
     // bar's drawing reads the clock, so the card does not recompose as it ticks.
@@ -119,7 +122,7 @@ fun NowPlayingCard(
                     .lightGlow(light, 0.22f, radius = 60.dp, cornerRadius = 20.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(colors.curtain)
-                    .semantics { paneTitle = "Now playing" }
+                    .semantics { paneTitle = pane }
                     .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
                     .focusProperties { canFocus = !leaving }
                     .trapFocus(leaving)
@@ -142,18 +145,18 @@ fun NowPlayingCard(
                     }
                     Spacer(Modifier.weight(1f))
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TransportButton(LoungeIcons.SkipPrevious, "Previous", np.canSkipPrevious, light) { onCommand("previous") }
+                        TransportButton(LoungeIcons.SkipPrevious, stringResource(R.string.now_playing_previous), np.canSkipPrevious, light) { onCommand("previous") }
                         TransportButton(
                             if (playing) LoungeIcons.Pause else LoungeIcons.Play,
-                            if (playing) "Pause" else "Play",
+                            stringResource(if (playing) R.string.now_playing_pause else R.string.now_playing_play),
                             if (playing) np.canPause else np.canPlay,
                             light,
                             primary = true,
                             focusRequester = firstFocus,
                         ) { onCommand("play-pause") }
-                        TransportButton(LoungeIcons.SkipNext, "Next", np.canSkipNext, light) { onCommand("next") }
+                        TransportButton(LoungeIcons.SkipNext, stringResource(R.string.now_playing_next), np.canSkipNext, light) { onCommand("next") }
                         Spacer(Modifier.weight(1f))
-                        LoungeButton("Open", onClick = onOpenApp, kind = ButtonKind.Secondary)
+                        LoungeButton(stringResource(DesignR.string.common_open), onClick = onOpenApp, kind = ButtonKind.Secondary)
                     }
                     if (progress != null) {
                         Spacer(Modifier.height(14.dp))

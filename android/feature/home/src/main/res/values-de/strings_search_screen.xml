@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_screen_field">Fernseher durchsuchen</string>
+    <string name="search_screen_hint_empty">Tippe mit der Fernbedienung. Die Ergebnisse ändern sich beim Tippen.</string>
+    <string name="search_screen_no_match">Noch passt nichts zu „%1$s“.</string>
+    <string name="search_screen_hint_results">Die Suchtaste der Tastatur oder die Taste nach unten bringt dich zu den Ergebnissen.</string>
+    <string name="search_screen_row_apps">Apps</string>
+    <string name="search_screen_row_continue">Weiterschauen</string>
+    <string name="search_screen_row_your_apps">Deine Apps</string>
+</resources>

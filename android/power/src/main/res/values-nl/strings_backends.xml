@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="backends_took_too_long">De tv deed er te lang over om te reageren. Probeer het opnieuw.</string>
+    <string name="backends_unreachable">Lounge kon USB-foutopsporing niet bereiken. Controleer of het nog aanstaat in Ontwikkelaarsopties en probeer het dan opnieuw.</string>
+    <string name="backends_dropped">De verbinding met USB-foutopsporing viel weg. Probeer het opnieuw.</string>
+    <string name="backends_tls">Deze tv vraagt om de koppelingscode van draadloze foutopsporing, en die kan Geavanceerde configuratie niet gebruiken. Zet in plaats daarvan USB-foutopsporing aan in Ontwikkelaarsopties en probeer het dan opnieuw.</string>
+    <string name="backends_not_this_tv">Iets anders dan de foutopsporingsdienst van deze tv gaf antwoord, dus Lounge heeft geen verbinding gemaakt. Herstart de tv en probeer het dan opnieuw.</string>
+    <string name="backends_key_not_approved">Deze tv staat Lounge niet meer toe. Open in Instellingen Geavanceerde configuratie en kies Verbinden.</string>
+    <string name="backends_shizuku_not_allowed">Shizuku heeft Lounge nog geen toestemming gegeven. Open Shizuku, sta Lounge toe en probeer het dan opnieuw.</string>
+    <string name="backends_shizuku_not_running">Shizuku kon dat niet uitvoeren. Open Shizuku en controleer of het actief is.</string>
+</resources>

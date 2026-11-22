@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stage_row_name">la Scène</string>
+    <string name="stage_spoken_source">sur %1$s</string>
+    <string name="stage_empty_category">Votre écran d’accueil</string>
+    <string name="stage_empty_title">Configurons votre écran d’accueil</string>
+    <string name="stage_empty_body">Quelques étapes rapides, puis vos applis et vos séries apparaissent ici.</string>
+    <string name="stage_empty_start">Commencer</string>
+    <string name="stage_indexing_title">Préparation de votre écran d’accueil</string>
+    <string name="stage_indexing_body">Lounge regarde ce qu’il y a sur cette TV.</string>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="now_playing_pane_title">Läuft gerade</string>
+    <string name="now_playing_previous">Vorheriger Titel</string>
+    <string name="now_playing_pause">Pausieren</string>
+    <string name="now_playing_play">Abspielen</string>
+    <string name="now_playing_next">Nächster Titel</string>
+</resources>

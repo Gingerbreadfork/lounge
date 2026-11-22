@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recovery_title">Lounge kon niet starten</string>
+    <string name="recovery_storage_full">De opslag van de tv is vol, dus Lounge kan zijn opgeslagen indeling en instellingen niet openen. Maak ruimte vrij in Instellingen en probeer het dan opnieuw.</string>
+    <string name="recovery_storage">De opgeslagen indeling en instellingen konden niet worden geopend. Probeer het eerst opnieuw. Blijft het gebeuren, begin dan opnieuw: ze worden apart gezet, Lounge begint met een schone lei, en je apps, zenders en ingangen komen vanzelf terug.</string>
+    <string name="recovery_other">De kern van Lounge is niet geladen. Probeer het eerst opnieuw. Blijft het gebeuren, begin dan opnieuw of installeer Lounge opnieuw.</string>
+    <string name="recovery_opening">Openen…</string>
+    <string name="recovery_start_fresh">Opnieuw beginnen</string>
+    <string name="recovery_start_fresh_confirm">Ja, opnieuw beginnen</string>
+    <string name="recovery_settings">Instellingen</string>
+    <string name="recovery_settings_stuck">De instellingen van deze tv gingen niet open. Open ze vanaf het eigen startscherm van de tv.</string>
+    <string name="recovery_open_home">%1$s openen</string>
+    <string name="recovery_turn_home_on">%1$s weer aanzetten</string>
+    <string name="recovery_home_stuck">%1$s ging niet open. Open in de instellingen van de tv Apps om het te vinden.</string>
+    <string name="recovery_still_wont_open">Het gaat nog steeds niet open.</string>
+</resources>

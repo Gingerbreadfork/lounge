@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="notifications_count">
+        <item quantity="one">%1$d Benachrichtigung</item>
+        <item quantity="other">%1$d Benachrichtigungen</item>
+    </plurals>
+    <plurals name="notifications_count_spoken">
+        <item quantity="one">%1$d Benachrichtigung, %2$s</item>
+        <item quantity="other">%1$d Benachrichtigungen, %2$s</item>
+    </plurals>
+    <plurals name="notifications_new">
+        <item quantity="one">%1$d neu</item>
+        <item quantity="other">%1$d neu</item>
+    </plurals>
+    <string name="notifications_byline">%1$s, %2$s</string>
+    <string name="notifications_when_just_now">Gerade eben</string>
+    <plurals name="notifications_when_minutes_ago">
+        <item quantity="one">Vor %1$d Minute</item>
+        <item quantity="other">Vor %1$d Minuten</item>
+    </plurals>
+    <plurals name="notifications_when_hours_ago">
+        <item quantity="one">Vor %1$d Stunde</item>
+        <item quantity="other">Vor %1$d Stunden</item>
+    </plurals>
+    <plurals name="notifications_when_days_ago">
+        <item quantity="one">Vor %1$d Tag</item>
+        <item quantity="other">Vor %1$d Tagen</item>
+    </plurals>
+    <string name="notifications_dismiss_all">Alle verwerfen</string>
+    <plurals name="notifications_staying">
+        <item quantity="one">%1$d bleibt, bis die App sie zurücknimmt</item>
+        <item quantity="other">%1$d bleiben, bis die Apps sie zurücknehmen</item>
+    </plurals>
+    <string name="notifications_taken_back">Die App hat das zurückgenommen, es gibt also nichts zu öffnen.</string>
+    <string name="notifications_offered">Die Benachrichtigungen deiner Apps können jetzt in der oberen Leiste erscheinen. Unter Einstellungen, Benachrichtigungen schaltest du sie ein</string>
+    <string name="notifications_stays">Diese bleibt, bis die App sie zurücknimmt.</string>
+    <string name="notifications_sent">Gesendet</string>
+    <string name="notifications_dismiss">Verwerfen</string>
+    <string name="notifications_hide_app">Alles von %1$s ausblenden</string>
+    <string name="notifications_hide_app_subtitle">Lounge zeigt die Benachrichtigungen dieser App nicht mehr</string>
+    <string name="notifications_settings_subtitle">Was dir die Apps auf diesem Fernseher mitteilen wollen, einen Tastendruck entfernt in der oberen Leiste.</string>
+    <string name="notifications_needs_access">Braucht Benachrichtigungszugriff. OK fragt danach.</string>
+    <string name="notifications_not_allowed">Nicht erlaubt</string>
+    <string name="notifications_hidden_apps">Ausgeblendete Apps</string>
+    <string name="notifications_footnote_privacy">Lounge liest Benachrichtigungen nur, um sie hier zu zeigen, und gar nicht, solange das aus ist. Lounge speichert keine davon, und keine verlässt diesen Fernseher.</string>
+    <string name="notifications_footnote_left_out">Laufende Vorgänge wie ein Download bleiben außen vor, ebenso das, was gerade läuft.</string>
+</resources>

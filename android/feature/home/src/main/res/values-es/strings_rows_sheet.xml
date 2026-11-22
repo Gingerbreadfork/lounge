@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rows_sheet_title">Filas de la pantalla de inicio</string>
+    <string name="rows_sheet_subtitle">OK muestra u oculta una fila. Mantén pulsado OK para levantarla, Arriba y Abajo la mueven, y OK o Atrás la sueltan.</string>
+    <string name="rows_sheet_loading">Cargando…</string>
+    <string name="rows_sheet_moving">Moviendo</string>
+    <string name="rows_sheet_shown">Visible</string>
+    <string name="rows_sheet_empty">Sin contenido</string>
+    <string name="rows_sheet_reset">Devolver las filas a su orden habitual</string>
+    <string name="rows_sheet_reset_confirm">Sí, devolverlas</string>
+    <string name="rows_sheet_reset_keeps">Conserva lo que ocultaste</string>
+    <string name="rows_sheet_reset_done">Listo. Lo que ocultaste sigue oculto.</string>
+    <string name="rows_sheet_hidden_group">Oculto en todas las filas</string>
+    <string name="rows_sheet_hidden_none">No hay nada oculto. Mantén pulsado OK en cualquier tarjeta y elige Ocultar.</string>
+    <string name="rows_sheet_continue_group">Fuentes de Seguir viendo</string>
+    <string name="rows_sheet_continue_none">Todavía no hay nada que seguir viendo. Las apps y los plugins aparecen aquí cuando traen algo.</string>
+    <string name="rows_sheet_source_nothing">Nada que seguir viendo ahora</string>
+    <plurals name="rows_sheet_source_titles">
+        <item quantity="one">%1$d título</item>
+        <item quantity="many">%1$d títulos</item>
+        <item quantity="other">%1$d títulos</item>
+    </plurals>
+    <string name="rows_sheet_footnote">Una fila sin nada dentro no aparece en pantalla hasta que tenga algo que mostrar.</string>
+</resources>

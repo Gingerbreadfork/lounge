@@ -1,5 +1,7 @@
 package tv.lounge.feature.home
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +35,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -47,6 +51,7 @@ import tv.lounge.design.Hairline
 import tv.lounge.design.LocalSwapSlotActive
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 import tv.lounge.design.Words
 import tv.lounge.design.sounds
 import tv.lounge.platform.AppNotification
@@ -68,18 +73,33 @@ internal object NotificationWords {
     private val runs = Regex("\\s+")
 
     /** The chip's label: "1 notification", "3 notifications". */
-    fun count(n: Int): String = Words.counted(n, "notification", "notifications")
+    fun count(resources: Resources, n: Int): String = resources.getQuantityString(R.plurals.notifications_count, n, n)
 
     /** The chip as a screen reader says it, with how many are new. */
-    fun spoken(n: Int, fresh: Int): String = if (fresh > 0) "${count(n)}, $fresh new" else count(n)
+    fun spoken(resources: Resources, n: Int, fresh: Int): String {
+        if (fresh <= 0) return count(resources, n)
+        return resources.getQuantityString(R.plurals.notifications_count_spoken, n, n, resources.getQuantityString(R.plurals.notifications_new, fresh, fresh))
+    }
 
     /** A notification's text run together, for the two lines the list shows of it. */
     fun preview(text: String): String = text.trim().replace(runs, " ")
 
     /** Who says it and when: "Play Store, 5 minutes ago". The app is left out where the title is already its name. */
-    fun byline(n: AppNotification, now: Long): String {
-        val ago = Words.ago(now - n.postedAt)
-        return if (n.title == n.app) ago.replaceFirstChar { it.uppercase() } else "${n.app}, $ago"
+    fun byline(resources: Resources, n: AppNotification, now: Long): String {
+        val age = now - n.postedAt
+        return if (n.title == n.app) agoAlone(resources, age) else resources.getString(R.string.notifications_byline, n.app, Words.ago(resources, age))
+    }
+
+    /** How long ago something [ms] old came, worded to start a line: "Just now", "5 minutes ago". */
+    private fun agoAlone(resources: Resources, ms: Long): String {
+        val minutes = (ms / 60_000).coerceAtLeast(0)
+        fun counted(plural: Int, n: Long) = resources.getQuantityString(plural, n.toInt(), n.toInt())
+        return when {
+            minutes < 1 -> resources.getString(R.string.notifications_when_just_now)
+            minutes < 60 -> counted(R.plurals.notifications_when_minutes_ago, minutes)
+            minutes < 24 * 60 -> counted(R.plurals.notifications_when_hours_ago, minutes / 60)
+            else -> counted(R.plurals.notifications_when_days_ago, minutes / (24 * 60))
+        }
     }
 
     /** Words that are capitals by right, and stay so in a label that is otherwise lowered. */
@@ -102,19 +122,15 @@ internal object NotificationWords {
     }
 
     /** What Dismiss all says of those that cannot be dismissed. */
-    fun staying(n: Int): String? = when (n) {
-        0 -> null
-        1 -> "1 stays until its app takes it back"
-        else -> "$n stay until their apps take them back"
-    }
+    fun staying(resources: Resources, n: Int): String? = if (n == 0) null else resources.getQuantityString(R.plurals.notifications_staying, n, n)
 
-    const val TAKEN_BACK = "Its app has taken that back, so there is nothing to open."
+    @StringRes val TAKEN_BACK = R.string.notifications_taken_back
 
     /** Said once on a TV whose notification access was given before it covered notifications. */
-    const val OFFERED = "Your apps' notifications can show in the top bar now. Settings, Notifications turns them on"
+    @StringRes val OFFERED = R.string.notifications_offered
 
     /** Why a notification has no Dismiss. */
-    const val STAYS = "This one stays until its app takes it back."
+    @StringRes val STAYS = R.string.notifications_stays
 }
 
 /** The time now, read again every half minute while on screen, so "3 minutes ago" keeps up. */
@@ -175,6 +191,7 @@ fun NotificationsSheet(
 ) {
     val colors = LoungeTheme.colors
     val sounds = LoungeTheme.sounds
+    val resources = LocalResources.current
     val now = rememberNow()
     val list = shown.list
     val focusAt = when {
@@ -191,7 +208,7 @@ fun NotificationsSheet(
         val (key, at) = focused ?: return@LaunchedEffect
         if (key !in keys && keys.isNotEmpty()) rowFocus[keys[at.coerceIn(0, keys.lastIndex)]]?.requestWhenReady()
     }
-    SheetHeading("Notifications")
+    SheetHeading(stringResource(DesignR.string.common_notifications))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         list.forEachIndexed { i, n ->
             key(n.key) {
@@ -205,7 +222,7 @@ fun NotificationsSheet(
                     title = n.title,
                     lines = {
                         if (text.isNotEmpty()) Text(text, style = LoungeTheme.typography.meta, color = colors.dust, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(NotificationWords.byline(n, now), style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.padding(top = 4.dp))
+                        Text(NotificationWords.byline(resources, n, now), style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.padding(top = 4.dp))
                     },
                     onClick = { onRead(i, n) },
                     focusRequester = firstFocus.takeIf { i == focusAt },
@@ -220,8 +237,8 @@ fun NotificationsSheet(
             Spacer(Modifier.height(8.dp))
             SheetRow(
                 icon = SettingsGlyphs.Dismiss,
-                title = "Dismiss all",
-                subtitle = NotificationWords.staying(list.size - dismissible),
+                title = stringResource(R.string.notifications_dismiss_all),
+                subtitle = NotificationWords.staying(resources, list.size - dismissible),
                 onClick = {
                     sounds?.tick()
                     onDismissAll()
@@ -266,20 +283,20 @@ fun NotificationDetailSheet(
     LaunchedEffect(n.key) { if (live.value) firstFocus.requestWhenReady() }
     val firstAction = n.actions.firstOrNull()?.takeIf { !n.opens }
 
-    SheetHeading(n.title, NotificationWords.byline(n, now))
+    SheetHeading(n.title, NotificationWords.byline(LocalResources.current, n, now))
     if (n.text.isNotEmpty()) {
         Text(n.text, style = LoungeTheme.typography.body, color = colors.limelight, maxLines = 14, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(28.dp))
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (n.opens) {
-            SheetRow(icon = SettingsGlyphs.Open, title = "Open", onClick = { sounds?.open(); onOpen(n) }, focusRequester = firstFocus)
+            SheetRow(icon = SettingsGlyphs.Open, title = stringResource(DesignR.string.common_open), onClick = { sounds?.open(); onOpen(n) }, focusRequester = firstFocus)
         }
         n.actions.forEach { action ->
             SheetRow(
                 icon = SettingsGlyphs.Act,
                 title = NotificationWords.button(action.label),
-                value = if (sent == action.index) "Sent" else null,
+                value = if (sent == action.index) stringResource(R.string.notifications_sent) else null,
                 onClick = {
                     sounds?.tick()
                     sent = action.index
@@ -291,7 +308,7 @@ fun NotificationDetailSheet(
         if (n.dismissible) {
             SheetRow(
                 icon = SettingsGlyphs.Dismiss,
-                title = "Dismiss",
+                title = stringResource(R.string.notifications_dismiss),
                 onClick = { sounds?.tick(); onDismiss(n) },
                 focusRequester = firstFocus.takeIf { !n.opens && n.actions.isEmpty() },
             )
@@ -301,13 +318,13 @@ fun NotificationDetailSheet(
         Spacer(Modifier.height(8.dp))
         SheetRow(
             icon = LoungeIcons.Hide,
-            title = "Hide everything from ${n.app}",
-            subtitle = "Lounge stops showing its notifications",
+            title = stringResource(R.string.notifications_hide_app, n.app),
+            subtitle = stringResource(R.string.notifications_hide_app_subtitle),
             onClick = { sounds?.tick(); onHideApp(n) },
             focusRequester = firstFocus.takeIf { !n.opens && n.actions.isEmpty() && !n.dismissible },
         )
     }
-    if (!n.dismissible) SheetFootnote(NotificationWords.STAYS)
+    if (!n.dismissible) SheetFootnote(stringResource(NotificationWords.STAYS))
 }
 
 /** An app whose notifications are left out, as Settings lists it. */
@@ -333,16 +350,16 @@ fun NotificationSettingsSheet(
     val sounds = LoungeTheme.sounds
     val scope = rememberCoroutineScope()
     val rowFocus = remember { HashMap<String, FocusRequester>() }
-    SheetHeading("Notifications", "What apps on this TV want to tell you, a press away in the top bar.")
+    SheetHeading(stringResource(DesignR.string.common_notifications), stringResource(R.string.notifications_settings_subtitle))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // One row for both states, so it keeps focus when the access is given while it has it.
         val flip = { sounds?.tick(); onSet(!on) }
         SheetRow(
             icon = LoungeIcons.Bell,
-            title = "Notifications",
-            subtitle = if (allowed) null else "Needs notification access. OK asks for it.",
+            title = stringResource(DesignR.string.common_notifications),
+            subtitle = if (allowed) null else stringResource(R.string.notifications_needs_access),
             subtitleLines = WHOLE,
-            value = if (!allowed) "Not allowed" else if (on) "On" else "Off",
+            value = stringResource(if (!allowed) R.string.notifications_not_allowed else if (on) DesignR.string.common_on else DesignR.string.common_off),
             accent = if (allowed && on) colors.signal else colors.dust,
             onClick = if (allowed) flip else onAllow,
             onCycle = if (allowed) { _ -> flip() } else null,
@@ -351,14 +368,14 @@ fun NotificationSettingsSheet(
         if (hidden.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
             Hairline(Modifier.fillMaxWidth())
-            SheetGroup("Hidden apps")
+            SheetGroup(stringResource(R.string.notifications_hidden_apps))
             hidden.forEachIndexed { i, app ->
                 key(app.packageName) {
                     SheetRow(
                         icon = null,
                         leading = { AppIcon(app.packageName, iconPath(app.packageName)) },
                         title = app.name,
-                        value = "Show",
+                        value = stringResource(DesignR.string.common_show),
                         focusRequester = rowFocus.getOrPut(app.packageName) { FocusRequester() },
                         onClick = {
                             sounds?.tick()
@@ -376,7 +393,7 @@ fun NotificationSettingsSheet(
         }
     }
     SheetFootnote(
-        "Lounge reads notifications only to show them here, and not at all while this is off. It keeps none of them and none leave this TV.",
-        "Things still going on, such as a download, are left out, and so is what is playing.",
+        stringResource(R.string.notifications_footnote_privacy),
+        stringResource(R.string.notifications_footnote_left_out),
     )
 }

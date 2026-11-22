@@ -1,5 +1,6 @@
 package tv.lounge.feature.home
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
@@ -35,6 +36,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
@@ -45,13 +47,18 @@ import coil3.compose.AsyncImage
 import tv.lounge.core.Tile
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 
-/** One menu entry; [detail] is a second line that says what the action does, for the ones that need it. */
+/**
+ * One menu entry; [detail] is a second line that says what the action does, for the ones that need it.
+ * [named] fills the place in a label that has one.
+ */
 data class MenuItem(
-    val label: String,
+    @StringRes val label: Int,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val destructive: Boolean = false,
-    val detail: String? = null,
+    @StringRes val detail: Int? = null,
+    val named: String? = null,
     val onSelect: () -> Unit,
 )
 
@@ -74,6 +81,7 @@ fun TileMenuPopover(
     val leaving = !visibleState.targetState
     val density = androidx.compose.ui.platform.LocalDensity.current
     val screenWidth = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width
+    val pane = stringResource(R.string.tile_menu_pane_title, tile.title)
 
     Box(Modifier.fillMaxSize()) {
         Layout(
@@ -93,7 +101,7 @@ fun TileMenuPopover(
                             .width(MenuWidth)
                             .clip(RoundedCornerShape(16.dp))
                             .background(colors.curtain)
-                            .semantics { paneTitle = "Options for ${tile.title}" }
+                            .semantics { paneTitle = pane }
                             .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
                             .focusProperties { canFocus = !leaving }
                             .trapFocus(leaving)
@@ -124,8 +132,8 @@ fun TileMenuPopover(
                         items.forEachIndexed { i, item ->
                             SheetRow(
                                 icon = item.icon,
-                                title = item.label,
-                                subtitle = item.detail,
+                                title = if (item.named != null) stringResource(item.label, item.named) else stringResource(item.label),
+                                subtitle = item.detail?.let { stringResource(it) },
                                 subtitleLines = 2,
                                 accent = if (item.destructive) colors.ember else colors.dust,
                                 onClick = { item.onSelect(); onDismiss() },
@@ -160,20 +168,20 @@ fun hasMenu(tile: Tile): Boolean = !tile.id.startsWith("control:") && !tile.id.s
 
 /** What each pin does, in the menu and on the phone, so the word "pin" never stands alone. */
 object PinWords {
-    const val PIN_APP = "Pin to the front of Your apps"
-    const val PIN_APP_DETAIL = "Stays put ahead of recent apps"
-    const val UNPIN_APP = "Unpin from Your apps"
-    const val UNPIN_APP_DETAIL = "Follows what you open again"
-    const val PIN_STAGE = "Pin to the Stage"
-    const val PIN_STAGE_DETAIL = "Stays in the big pictures up top"
-    const val UNPIN_STAGE = "Unpin from the Stage"
-    const val UNPIN_STAGE_DETAIL = "What you watch takes its place"
-    const val HIDE_DETAIL = "Off every row until you show it"
-    const val SHOW = "Show"
-    const val SHOW_DETAIL = "Back on every row it belongs in"
-    const val HIDE_ALL_FROM_DETAIL = "Off Continue watching until you show it"
-    const val HIDE_ROW = "Hide this row"
-    const val HIDE_ROW_DETAIL = "Settings, Rows brings it back"
+    @StringRes val PIN_APP = R.string.tile_menu_pin_app
+    @StringRes val PIN_APP_DETAIL = R.string.tile_menu_pin_app_detail
+    @StringRes val UNPIN_APP = R.string.tile_menu_unpin_app
+    @StringRes val UNPIN_APP_DETAIL = R.string.tile_menu_unpin_app_detail
+    @StringRes val PIN_STAGE = R.string.tile_menu_pin_stage
+    @StringRes val PIN_STAGE_DETAIL = R.string.tile_menu_pin_stage_detail
+    @StringRes val UNPIN_STAGE = R.string.tile_menu_unpin_stage
+    @StringRes val UNPIN_STAGE_DETAIL = R.string.tile_menu_unpin_stage_detail
+    @StringRes val HIDE_DETAIL = R.string.tile_menu_hide_detail
+    @StringRes val SHOW = DesignR.string.common_show
+    @StringRes val SHOW_DETAIL = R.string.tile_menu_show_detail
+    @StringRes val HIDE_ALL_FROM_DETAIL = R.string.tile_menu_hide_all_from_detail
+    @StringRes val HIDE_ROW = R.string.tile_menu_hide_row
+    @StringRes val HIDE_ROW_DETAIL = R.string.tile_menu_hide_row_detail
 }
 
 /**
@@ -209,22 +217,22 @@ fun menuItemsFor(
     val isApp = tile.id.startsWith("app:")
     val items = mutableListOf<MenuItem>()
     if (tile.id.startsWith("notice:")) {
-        items += MenuItem("Don't show this again", LoungeIcons.Hide, onSelect = onDismissNotice)
+        items += MenuItem(R.string.tile_menu_dismiss_notice, LoungeIcons.Hide, onSelect = onDismissNotice)
         return items
     }
     if (tile.hidden) {
         items += MenuItem(PinWords.SHOW, LoungeIcons.Show, detail = PinWords.SHOW_DETAIL, onSelect = onShow)
         if (isApp) {
-            items += MenuItem("App info", LoungeIcons.Info, onSelect = onAppInfo)
-            items += MenuItem("Open in Play Store", LoungeIcons.Play, onSelect = onPlay)
-            items += MenuItem("Uninstall", LoungeIcons.Trash, destructive = true, onSelect = onUninstall)
+            items += MenuItem(R.string.tile_menu_app_info, LoungeIcons.Info, onSelect = onAppInfo)
+            items += MenuItem(R.string.tile_menu_play_store, LoungeIcons.Play, onSelect = onPlay)
+            items += MenuItem(R.string.tile_menu_uninstall, LoungeIcons.Trash, destructive = true, onSelect = onUninstall)
         }
         return items
     }
     if (isApp && rowId == "apps") {
         if (isPinned) {
-            if (canMoveLeft) items += MenuItem("Move left", LoungeIcons.Move, onSelect = onMoveLeft)
-            if (canMoveRight) items += MenuItem("Move right", LoungeIcons.Move, onSelect = onMoveRight)
+            if (canMoveLeft) items += MenuItem(R.string.tile_menu_move_left, LoungeIcons.Move, onSelect = onMoveLeft)
+            if (canMoveRight) items += MenuItem(R.string.tile_menu_move_right, LoungeIcons.Move, onSelect = onMoveRight)
             items += MenuItem(PinWords.UNPIN_APP, LoungeIcons.Pin, detail = PinWords.UNPIN_APP_DETAIL, onSelect = onUnpin)
         } else {
             items += MenuItem(PinWords.PIN_APP, LoungeIcons.Pin, detail = PinWords.PIN_APP_DETAIL, onSelect = onPin)
@@ -237,24 +245,24 @@ fun menuItemsFor(
         }
     }
     // What a control's one press does not reach is a sheet away, and comes first.
-    if (tile.more != null) items += MenuItem("Adjust", LoungeIcons.Settings, onSelect = onAdjust)
-    if (tile.id.startsWith("chan:")) items += MenuItem("TV guide", LoungeIcons.Guide, onSelect = onGuide)
+    if (tile.more != null) items += MenuItem(R.string.tile_menu_adjust, LoungeIcons.Settings, onSelect = onAdjust)
+    if (tile.id.startsWith("chan:")) items += MenuItem(DesignR.string.common_tv_guide, LoungeIcons.Guide, onSelect = onGuide)
     if (isStagePinned) {
         items += MenuItem(PinWords.UNPIN_STAGE, LoungeIcons.Pin, detail = PinWords.UNPIN_STAGE_DETAIL, onSelect = onUnpinStage)
     } else if (tile.action.isNotEmpty() && tile.glyph == null) {
         // The Stage is for what can be opened, which a tile to read and a control cannot.
         items += MenuItem(PinWords.PIN_STAGE, LoungeIcons.Pin, detail = PinWords.PIN_STAGE_DETAIL, onSelect = onPinStage)
     }
-    items += MenuItem("Hide", LoungeIcons.Hide, detail = PinWords.HIDE_DETAIL, onSelect = onHide)
+    items += MenuItem(DesignR.string.common_hide, LoungeIcons.Hide, detail = PinWords.HIDE_DETAIL, onSelect = onHide)
     // Only something to continue says where it comes from.
     tile.providerName?.let { name ->
-        items += MenuItem("Hide everything from $name", LoungeIcons.Hide, detail = PinWords.HIDE_ALL_FROM_DETAIL, onSelect = onHideAllFrom)
+        items += MenuItem(R.string.tile_menu_hide_all_from, LoungeIcons.Hide, detail = PinWords.HIDE_ALL_FROM_DETAIL, named = name, onSelect = onHideAllFrom)
     }
     if (rowTitle != null) items += MenuItem(PinWords.HIDE_ROW, LoungeIcons.Rows, detail = PinWords.HIDE_ROW_DETAIL, onSelect = onHideRow)
     if (isApp) {
-        items += MenuItem("App info", LoungeIcons.Info, onSelect = onAppInfo)
-        items += MenuItem("Open in Play Store", LoungeIcons.Play, onSelect = onPlay)
-        items += MenuItem("Uninstall", LoungeIcons.Trash, destructive = true, onSelect = onUninstall)
+        items += MenuItem(R.string.tile_menu_app_info, LoungeIcons.Info, onSelect = onAppInfo)
+        items += MenuItem(R.string.tile_menu_play_store, LoungeIcons.Play, onSelect = onPlay)
+        items += MenuItem(R.string.tile_menu_uninstall, LoungeIcons.Trash, destructive = true, onSelect = onUninstall)
     }
     return items
 }

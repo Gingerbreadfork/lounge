@@ -5,11 +5,17 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import tv.lounge.core.PluginSheetRow
 import tv.lounge.core.PluginSheetRowKind
 
 /** The rules a plugin's sheet follows: where focus goes, and how a row that asks first is armed. */
+@RunWith(RobolectricTestRunner::class)
 class PluginSheetsTest {
+    private val resources get() = RuntimeEnvironment.getApplication().resources
+
     private fun row(id: String, kind: PluginSheetRowKind) =
         PluginSheetRow(id = id, glyph = null, title = id, subtitle = null, value = null, on = null, kind = kind)
 
@@ -100,12 +106,12 @@ class PluginSheetsTest {
         assertEquals(2, liveSampleSize(3840))
         assertEquals(4, liveSampleSize(4000))
 
-        assertEquals("One moment", liveNote(hasPicture = false, resting = false, misses = 0))
+        assertEquals("One moment", liveNote(hasPicture = false, resting = false, misses = 0)?.let(resources::getString))
         assertNull(liveNote(hasPicture = true, resting = false, misses = 0))
         // One late picture is not worth a word.
         assertNull(liveNote(hasPicture = true, resting = false, misses = 2))
-        assertEquals("The picture has stopped arriving. Still trying.", liveNote(hasPicture = true, resting = false, misses = 3))
-        assertEquals("The picture isn't arriving. Still trying.", liveNote(hasPicture = false, resting = false, misses = 5))
-        assertEquals("Resting. Press OK to carry on.", liveNote(hasPicture = true, resting = true, misses = 0))
+        assertEquals("The picture has stopped arriving. Still trying.", liveNote(hasPicture = true, resting = false, misses = 3)?.let(resources::getString))
+        assertEquals("The picture isn't arriving. Still trying.", liveNote(hasPicture = false, resting = false, misses = 5)?.let(resources::getString))
+        assertEquals("Resting. Press OK to carry on.", liveNote(hasPicture = true, resting = true, misses = 0)?.let(resources::getString))
     }
 }

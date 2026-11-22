@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Under the title of a live picture, such as a camera, shown full screen. -->
+    <!-- The picture is no longer fetched after a while without a key. -->
+    <string name="live_picture_resting">Resting. Press OK to carry on.</string>
+    <string name="live_picture_stopped">The picture has stopped arriving. Still trying.</string>
+    <string name="live_picture_not_arriving">The picture isn\'t arriving. Still trying.</string>
+    <!-- While the first picture is fetched. -->
+    <string name="live_picture_waiting">One moment</string>
+</resources>

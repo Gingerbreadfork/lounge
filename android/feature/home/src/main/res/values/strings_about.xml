@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The About page. Its name, read aloud as the page opens. -->
+    <string name="about_title">About Lounge</string>
+    <string name="about_what">A home screen for your TV, laid out around what you\'re watching.</string>
+    <!-- MIT is the name of the licence. "Nothing leaves the house" means no data is sent anywhere. -->
+    <string name="about_terms">Free and open source under the MIT licence. No account, no adverts, and nothing leaves the house.</string>
+    <!-- %1$s is a version such as 0.9.0. -->
+    <string name="about_version">Version %1$s</string>
+    <string name="about_version_unknown">Version unknown</string>
+    <!-- The word under a large number saying how many of them this build holds. The number is drawn above it. -->
+    <plurals name="about_fact_plugins">
+        <item quantity="one">plugin</item>
+        <item quantity="other">plugins</item>
+    </plurals>
+    <!-- Scenes are the moving pictures for the screensaver and the background. -->
+    <plurals name="about_fact_scenes">
+        <item quantity="one">scene</item>
+        <item quantity="other">scenes</item>
+    </plurals>
+    <plurals name="about_fact_themes">
+        <item quantity="one">theme</item>
+        <item quantity="other">themes</item>
+    </plurals>
+    <!-- Over the maker's name, Gingerbreadfork. -->
+    <string name="about_made_by">Made by</string>
+    <!-- Bricolage Grotesque and Figtree are the names of the typefaces. -->
+    <string name="about_set_in">Set in Bricolage Grotesque and Figtree.</string>
+    <!-- Over the QR code. -->
+    <string name="about_scan">Scan this with your phone\'s camera</string>
+    <!-- The row under the QR code; its value is one of the four places below. -->
+    <string name="about_leads_to">It leads to</string>
+    <string name="about_link_source">The source code</string>
+    <string name="about_link_report">Report a problem</string>
+    <string name="about_link_whats_new">What\'s new</string>
+    <!-- Gingerbreadfork is the maker's name and X is the social network. -->
+    <string name="about_link_maker_on_x">Gingerbreadfork on X</string>
+    <!-- Read aloud for the QR code. %1$s is a web address. -->
+    <string name="about_code_description">A code that opens %1$s</string>
+    <!-- The row that opens the page for giving, and its value. -->
+    <string name="about_support">Support Lounge</string>
+    <string name="about_support_value">Anything helps</string>
+</resources>

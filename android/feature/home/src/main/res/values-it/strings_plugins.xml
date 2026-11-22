@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugins_title">Plugin</string>
+    <string name="plugins_subtitle">Aggiungono righe, canali e dati della guida dai tuoi servizi.</string>
+    <string name="plugins_loading">Caricamento…</string>
+    <string name="plugins_none">Nessun plugin installato. Si installano da Lounge sul telefono: sul telefono, apri Plugin.</string>
+    <string name="plugins_footnote_reach">Ogni plugin può raggiungere solo le destinazioni che dichiara e vede solo le proprie impostazioni.</string>
+    <string name="plugins_footnote_more">Altri plugin si installano da Lounge sul telefono.</string>
+    <string name="plugins_status_on">Attivo</string>
+    <string name="plugins_status_off">Non attivo</string>
+    <string name="plugins_status_sign_in">Accedi</string>
+    <string name="plugins_status_needs_setup">Da configurare</string>
+    <string name="plugins_status_problem">Problema</string>
+    <string name="plugins_status_held">Disattivato dall\'aggiornamento</string>
+    <string name="plugins_gone_title">Plugin</string>
+    <string name="plugins_gone_subtitle">Questo plugin non è più installato.</string>
+    <string name="plugins_gone_back">Torna a Plugin</string>
+    <string name="plugins_version">Versione %1$s</string>
+    <string name="plugins_version_by">Versione %1$s, di %2$s</string>
+    <string name="plugins_held">Disattivato dall\'aggiornamento, che chiede di raggiungere anche %1$s.</string>
+    <string name="plugins_allow">Consenti e attiva</string>
+    <string name="plugins_allow_subtitle">Potrà raggiungere anche %1$s</string>
+    <string name="plugins_settings">Impostazioni</string>
+    <string name="plugins_turn_on">Attiva %1$s</string>
+    <string name="plugins_fill_in_first">Prima compila: %1$s</string>
+    <string name="plugins_refresh">Aggiorna ora</string>
+    <string name="plugins_refreshing">Aggiornamento…</string>
+    <string name="plugins_log">Registro</string>
+    <string name="plugins_log_empty">Ancora niente nel registro.</string>
+    <string name="plugins_remove">Rimuovi</string>
+    <string name="plugins_remove_confirm">Sì, rimuovilo con le sue impostazioni</string>
+    <string name="plugins_removed">%1$s rimosso</string>
+    <string name="plugins_reach">Può raggiungere %1$s.</string>
+    <string name="plugins_reach_self_signed">Può raggiungere %1$s, accettando il certificato autofirmato di un server di casa.</string>
+    <string name="plugins_reach_nothing">Non può raggiungere niente.</string>
+    <string name="plugins_reach_setting">ciò che inserisci in \"%1$s\"</string>
+    <string name="plugins_reach_anywhere">qualsiasi sito pubblico</string>
+    <string name="plugins_reach_home_network">i dispositivi della tua rete di casa</string>
+    <string name="plugins_reach_this_tv">questa TV</string>
+    <string name="plugins_list_next">%1$s, %2$s</string>
+    <string name="plugins_list_last">%1$s e %2$s</string>
+    <plurals name="plugins_refreshes_seconds">
+        <item quantity="one">Si aggiorna ogni secondo mentre Lounge è sullo schermo.</item>
+        <item quantity="many">Si aggiorna ogni %1$d secondi mentre Lounge è sullo schermo.</item>
+        <item quantity="other">Si aggiorna ogni %1$d secondi mentre Lounge è sullo schermo.</item>
+    </plurals>
+    <plurals name="plugins_refreshes_minutes">
+        <item quantity="one">Si aggiorna ogni minuto mentre la TV è accesa.</item>
+        <item quantity="many">Si aggiorna ogni %1$d minuti mentre la TV è accesa.</item>
+        <item quantity="other">Si aggiorna ogni %1$d minuti mentre la TV è accesa.</item>
+    </plurals>
+    <string name="plugins_publisher_key">Gli aggiornamenti vengono accettati solo dal suo autore, la cui chiave inizia per %1$s.</string>
+    <string name="plugins_ask_sign_in_phone">Accedi dal telefono</string>
+    <string name="plugins_ask_sign_in">Accedi</string>
+    <string name="plugins_ask_open">Inquadralo con la fotocamera, oppure apri %1$s</string>
+    <string name="plugins_ask_open_enter">Inquadralo con la fotocamera, oppure apri %1$s e inserisci</string>
+    <string name="plugins_ask_tap">Inquadralo con la fotocamera, oppure tocca il link in Lounge sul telefono</string>
+    <string name="plugins_ask_tap_enter">Inquadralo con la fotocamera, oppure tocca il link in Lounge sul telefono e inserisci</string>
+    <plurals name="plugins_items_refreshed">
+        <item quantity="one">%1$d elemento, aggiornato %2$s</item>
+        <item quantity="many">%1$d elementi, aggiornati %2$s</item>
+        <item quantity="other">%1$d elementi, aggiornati %2$s</item>
+    </plurals>
+    <string name="plugins_fetching_first">Primo caricamento…</string>
+    <string name="plugins_fill_in_settings">Compila le impostazioni qui sotto, poi attivalo.</string>
+    <string name="plugins_help_on_phone">%1$s Sul telefono trovi tutti i passaggi.</string>
+    <string name="plugins_setting_optional">%1$s (facoltativo)</string>
+    <string name="plugins_setting_secret_saved">•••••••• (salvato)</string>
+    <string name="plugins_setting_not_set">Non impostato</string>
+    <string name="plugins_setting_saved">Salvato</string>
+    <string name="plugins_setting_not_set_uses">Non impostato, usa %1$s</string>
+</resources>

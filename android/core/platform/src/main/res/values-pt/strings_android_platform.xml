@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_platform_not_in_front">Isso abre na tela do próprio Lounge. Abra o Lounge na TV e tente novamente.</string>
+    <string name="android_platform_opened_from_behind">O Lounge não está na tela da TV, e ele só consegue abrir coisas por trás de outro app quando é a tela inicial da TV. Abra o Lounge na TV e tente novamente.</string>
+    <string name="android_platform_still_starting">O Lounge na TV ainda está iniciando. Tente novamente em instantes.</string>
+    <string name="android_platform_unknown_key">O Lounge na TV não conhece essa tecla. Atualize o Lounge e tente novamente.</string>
+    <string name="android_platform_keys_need_power_setup">Outro app está na frente. Conecte a Configuração avançada na TV para que as teclas do celular cheguem a ele.</string>
+    <string name="android_platform_busy">A TV está ocupada com os últimos toques. Tente novamente em instantes.</string>
+    <string name="android_platform_typing_needs_lounge">Outro app está na frente, e o celular só digita no Lounge. Pressione Início e tente novamente.</string>
+    <string name="android_platform_no_field">Primeiro abra Pesquisar ou um campo no Lounge.</string>
+    <string name="android_platform_settings_not_saved">A TV não conseguiu salvar as configurações. Verifique se ela tem espaço livre e tente novamente.</string>
+    <string name="android_platform_link_unknown">O Lounge não consegue abrir esse link</string>
+    <string name="android_platform_link_refused">O Lounge não abre esse link</string>
+    <string name="android_platform_needs_notification_access">Reproduzindo agora precisa do acesso a notificações</string>
+    <string name="android_platform_not_playing">Esse app não está reproduzindo nada</string>
+    <string name="android_platform_no_player">Nenhum player consegue abrir esta transmissão. Instale o VLC ou outro player.</string>
+    <string name="android_platform_no_video_player">Nenhum player de vídeo consegue abrir esta transmissão. Instale o VLC ou outro player.</string>
+</resources>

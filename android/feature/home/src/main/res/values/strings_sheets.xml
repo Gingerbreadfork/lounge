@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Settings sheet. Each row has a title, often a second line under it, and a value at its end. -->
+    <string name="sheets_group_home">Home screen</string>
+    <string name="sheets_rows_title">Rows</string>
+    <string name="sheets_rows_subtitle">Show, hide and move rows</string>
+    <!-- Your apps is the row of apps on the home screen. -->
+    <string name="sheets_your_apps_title">Your apps</string>
+    <string name="sheets_your_apps_subtitle">Pinned apps, then recent ones</string>
+    <string name="sheets_your_apps_pinned_only">Pinned only</string>
+    <!-- How many recently opened apps follow the pinned ones: 5, 10 or 15. -->
+    <plurals name="sheets_your_apps_recent">
+        <item quantity="one">%1$d recent</item>
+        <item quantity="other">%1$d recent</item>
+    </plurals>
+    <!-- All apps is the screen that lists every app. -->
+    <string name="sheets_phone_apps_title">Phone apps in All apps</string>
+    <string name="sheets_phone_apps_subtitle">Apps made for phones, which may not work well with a remote</string>
+    <!-- Channels are rows that other apps on the TV publish. -->
+    <string name="sheets_channels_title">Channels from apps</string>
+    <string name="sheets_channels_subtitle">Rows that apps on this TV publish</string>
+    <string name="sheets_channels_none">None</string>
+    <!-- How many channels are switched on. -->
+    <plurals name="sheets_channels_on">
+        <item quantity="one">%1$d on</item>
+        <item quantity="other">%1$d on</item>
+    </plurals>
+    <string name="sheets_plugins_title">Plugins</string>
+    <string name="sheets_plugins_subtitle">Rows, channels and guide data from your services</string>
+    <string name="sheets_plugins_none_on">None on</string>
+    <!-- How many plugins are switched on. -->
+    <plurals name="sheets_plugins_on">
+        <item quantity="one">%1$d on</item>
+        <item quantity="other">%1$d on</item>
+    </plurals>
+    <string name="sheets_notifications_subtitle">What apps want to tell you</string>
+    <!-- A row's value when Android has not given Lounge the access it needs. -->
+    <string name="sheets_not_allowed">Not allowed</string>
+
+    <string name="sheets_group_look">Look and sound</string>
+    <string name="sheets_theme_title">Theme</string>
+    <!-- The picture behind the home screen: a moving scene, or Still for none. -->
+    <string name="sheets_background_title">Background</string>
+    <string name="sheets_background_still">Still</string>
+    <string name="sheets_background_still_about">The room\'s own light</string>
+    <!-- Lite mode and Reduce motion are settings in this sheet. -->
+    <string name="sheets_background_still_for_now">Still while Lite mode or Reduce motion is on</string>
+    <string name="sheets_sounds_title">Sounds</string>
+    <string name="sheets_lite_title">Lite mode</string>
+    <!-- Under Lite mode while its value is Automatic: what Lounge chose for this TV. -->
+    <string name="sheets_lite_auto_on">On for this TV now: no moving light or live backgrounds</string>
+    <string name="sheets_lite_auto_off">Off for this TV now; on, it stops the moving light and live backgrounds</string>
+    <string name="sheets_lite_on">No moving light or live backgrounds, so the TV stays quick</string>
+    <string name="sheets_lite_off">The moving light and live backgrounds stay on</string>
+    <string name="sheets_automatic">Automatic</string>
+    <string name="sheets_reduce_motion_title">Reduce motion</string>
+    <!-- Reduce motion does what the TV's own accessibility setting says. -->
+    <string name="sheets_follow_system">Follow system</string>
+
+    <!-- The group of rows for what Android lets Lounge read. -->
+    <string name="sheets_group_access">Access</string>
+    <string name="sheets_access_tv_listings">TV listings</string>
+    <string name="sheets_access_tv_listings_what">Continue watching, channels and the TV guide</string>
+    <string name="sheets_access_notifications">Notification access</string>
+    <string name="sheets_access_notifications_what">What is playing, and what apps want to tell you</string>
+    <string name="sheets_access_usage">Usage access</string>
+    <string name="sheets_access_usage_what">Lets Your apps follow what you open</string>
+    <!-- Under an access when OK cannot ask for it on this TV. -->
+    <string name="sheets_access_wont_ask">Android won\'t ask again. OK opens Lounge\'s page in Android\'s settings.</string>
+    <string name="sheets_access_no_screen">This TV has no screen for this. OK opens Power Setup, which can allow it.</string>
+    <!-- Said just before Android's own screen opens, so the person knows what to do there. Permissions is a place on that screen. -->
+    <string name="sheets_access_hint_find">Find Lounge in the list and turn it on, then press Back.</string>
+    <string name="sheets_access_tv_listings_allow">Open Permissions and allow TV listings, then press Back.</string>
+    <string name="sheets_access_notifications_allow">Open Permissions and allow Notification access, then press Back.</string>
+    <string name="sheets_access_usage_allow">Open Permissions and allow Usage access, then press Back.</string>
+    <!-- Said when Android has no screen to open, as Power Setup opens instead. -->
+    <string name="sheets_access_tv_listings_no_screen">This TV has no screen to allow TV listings. Power Setup can allow it.</string>
+    <string name="sheets_access_notifications_no_screen">This TV has no screen to allow Notification access. Power Setup can allow it.</string>
+    <string name="sheets_access_usage_no_screen">This TV has no screen to allow Usage access. Power Setup can allow it.</string>
+
+    <string name="sheets_group_this_tv">This TV</string>
+    <string name="sheets_default_home_title">Default home screen</string>
+    <string name="sheets_default_home_subtitle">What the Home button opens</string>
+    <!-- The value while another home screen is the default: OK shows how to make it Lounge. -->
+    <string name="sheets_default_home_set_up">Set up</string>
+    <string name="sheets_power_subtitle">Lets Lounge do what an app can\'t on its own</string>
+    <!-- Whether Power Setup is connected to the TV. -->
+    <string name="sheets_power_connected">Connected</string>
+    <string name="sheets_power_waiting">Waiting for you</string>
+    <string name="sheets_power_not_connected">Not connected</string>
+    <string name="sheets_updates_title">Updates</string>
+    <string name="sheets_diagnostics_title">Diagnostics</string>
+    <string name="sheets_diagnostics_subtitle">Numbers to include when you report a problem</string>
+    <!-- The lines of numbers under Diagnostics. -->
+    <string name="sheets_diagnostics_items">Things Lounge knows about</string>
+    <string name="sheets_diagnostics_revision">Home screen version</string>
+    <string name="sheets_diagnostics_requests">Requests answered</string>
+    <string name="sheets_diagnostics_rebuild">Last rebuild took</string>
+    <!-- A length of time in milliseconds. -->
+    <string name="sheets_diagnostics_ms">%1$s ms</string>
+    <string name="sheets_diagnostics_saved">Saved data</string>
+    <!-- A size in kilobytes. -->
+    <string name="sheets_diagnostics_kb">%1$s KB</string>
+    <string name="sheets_diagnostics_waiting">Work waiting</string>
+    <string name="sheets_setup_again">Run the setup steps again</string>
+    <string name="sheets_about_title">About Lounge</string>
+    <string name="sheets_about_subtitle">What it is, where its code lives and who made it</string>
+    <string name="sheets_support_title">Support Lounge</string>
+    <string name="sheets_support_subtitle">Ways to give. Anything helps</string>
+    <string name="sheets_footnote">Left and Right change a value. Back closes.</string>
+
+    <!-- The Phone companion sheet: the phone opens a page the TV serves, after pairing with a code. -->
+    <string name="sheets_companion_subtitle">Your phone becomes a remote, a keyboard and the place to arrange this screen.</string>
+    <string name="sheets_companion_turn_on">Turn it on to pair a phone</string>
+    <!-- Read aloud for the QR code. -->
+    <string name="sheets_companion_code_description">Pairing code</string>
+    <!-- Over the six digits, under the QR code. -->
+    <string name="sheets_companion_or_type">Or type this code</string>
+    <!-- Under the six digits. %1$s is the address to open on the phone. -->
+    <string name="sheets_companion_at">at %1$s</string>
+    <string name="sheets_companion_new_code">New code</string>
+    <string name="sheets_companion_starting">Starting…</string>
+    <!-- The row that counts paired phones. OK on it, then OK again, forgets them all. -->
+    <string name="sheets_companion_paired">Paired phones</string>
+    <string name="sheets_companion_paired_none">None</string>
+    <string name="sheets_companion_forget_hint">OK forgets every paired phone</string>
+    <string name="sheets_companion_forget_confirm">Yes, forget every phone</string>
+    <string name="sheets_companion_forget_warning">Each phone needs a new code to pair again</string>
+    <string name="sheets_companion_forgotten">Forgotten. Each phone needs a new code to pair again.</string>
+    <string name="sheets_companion_forget_failed">Lounge couldn\'t save that. Try again.</string>
+    <string name="sheets_companion_footnote_network">Everything stays on your home network.</string>
+    <string name="sheets_companion_footnote_home_screen">Add the page to your phone\'s home screen to open it quickly.</string>
+    <!-- %1$s is a port number. -->
+    <string name="sheets_companion_port_in_use">Another app on this TV is using port %1$s, so the phone companion can\'t start. Restart the TV, then turn it on again.</string>
+    <string name="sheets_companion_cant_start">The phone companion couldn\'t start. Turn it off and on again, or restart the TV.</string>
+    <string name="sheets_companion_no_code">Lounge couldn\'t make a pairing code. Turn the phone companion off and on again.</string>
+
+    <!-- The Channels from apps sheet. -->
+    <string name="sheets_channels_heading_subtitle">Turn on the ones you want as rows on your home screen.</string>
+    <string name="sheets_loading">Loading…</string>
+    <string name="sheets_channels_empty">No app has published a channel yet.</string>
+    <!-- How many programmes a channel holds. -->
+    <plurals name="sheets_channels_programmes">
+        <item quantity="one">%1$d programme</item>
+        <item quantity="other">%1$d programmes</item>
+    </plurals>
+    <string name="sheets_channels_footnote">Apps decide what goes in their channels; Lounge only chooses which to show.</string>
+
+    <!-- The Default home screen sheet: ways to make Lounge what the Home button opens. -->
+    <string name="sheets_home_not_taken">Android didn\'t make Lounge the home screen. Try one of the other ways below.</string>
+    <string name="sheets_home_is_lounge">Lounge is your home screen</string>
+    <string name="sheets_home_is_lounge_subtitle">Pressing Home brings you here.</string>
+    <string name="sheets_home_make_lounge">Make Lounge your home screen</string>
+    <string name="sheets_home_make_subtitle">Google TV has no setting for this. One of these works.</string>
+    <!-- The first row, with Power Setup connected and without. -->
+    <string name="sheets_home_do_it_now">Do it now</string>
+    <string name="sheets_home_let_lounge">Let Lounge do it</string>
+    <string name="sheets_home_through_power_setup">Through Power Setup</string>
+    <!-- About the home screens the TV came with, counted by how many there are. The number is not shown. -->
+    <plurals name="sheets_home_own_first_title">
+        <item quantity="one">This TV\'s own home comes first</item>
+        <item quantity="other">This TV\'s own homes come first</item>
+    </plurals>
+    <plurals name="sheets_home_own_first_body">
+        <item quantity="one">Android opens it before any chosen home, so this also turns it off. Nothing is uninstalled; turn it back on in Power Setup, and do that before you uninstall Lounge.</item>
+        <item quantity="other">Android opens them before any chosen home, so this also turns them off. Nothing is uninstalled; turn them back on in Power Setup, and do that before you uninstall Lounge.</item>
+    </plurals>
+    <string name="sheets_home_from_computer_title">Or from a computer, once</string>
+    <!-- adb is a developer tool; a command follows this line. -->
+    <string name="sheets_home_from_computer_body">Turn on USB debugging on this TV, connect to it with adb from a computer, then run:</string>
+    <string name="sheets_home_let_android_title">Or let Android ask</string>
+    <!-- Always is a choice in Android's own chooser. -->
+    <string name="sheets_home_let_android_body">Some TVs show a chooser the next time you press Home. Pick Lounge and choose Always.</string>
+    <string name="sheets_home_check_again">Check again</string>
+    <string name="sheets_home_open_developer_options">Open Developer options</string>
+    <!-- Turns the TV's own home screens back on, counted by how many are off. The number is not shown. -->
+    <plurals name="sheets_home_turn_back_on">
+        <item quantity="one">Turn it back on</item>
+        <item quantity="other">Turn them back on</item>
+    </plurals>
+    <!-- Joins the names of two home screens. With more than two it is used again for each further name. -->
+    <string name="sheets_home_names_and">%1$s and %2$s</string>
+    <!-- %1$s is the names of the home screens that are turned off, counted by how many there are. -->
+    <plurals name="sheets_home_footnote_off">
+        <item quantity="one">%1$s is turned off. Turn it back on before you uninstall Lounge, or the TV has no home screen to fall back on.</item>
+        <item quantity="other">%1$s are turned off. Turn them back on before you uninstall Lounge, or the TV has no home screen to fall back on.</item>
+    </plurals>
+    <!-- About the TV's own home screens that Do it now turns off, counted by how many there are. The number is not shown. -->
+    <plurals name="sheets_home_footnote_missing">
+        <item quantity="one">What it provides may be missing while it is off.</item>
+        <item quantity="other">What they provide may be missing while they are off.</item>
+    </plurals>
+    <string name="sheets_home_footnote_stays">The TV\'s own home screen stays installed, so casting, the gear button and the TV guide keep working.</string>
+    <!-- The Language row in Settings and the sheet it opens. Each language is listed under its own name, which is not translated. -->
+    <string name="sheets_language_title">Language</string>
+    <string name="sheets_language_subtitle">Lounge, its plugins and the phone use it</string>
+    <!-- The first choice: use whatever language the TV itself is set to. Also the row\'s value in Settings while that is chosen. -->
+    <string name="sheets_language_same_as_tv">Same as the TV</string>
+    <!-- Under "Same as the TV" when Lounge has no translation for the TV\'s language. %1$s is that language\'s own name. -->
+    <string name="sheets_language_tv_not_shipped">%1$s, which Lounge isn\'t written in yet, so it shows English</string>
+    <!-- The value beside the language Lounge is shown in now. -->
+    <string name="sheets_language_in_use">In use</string>
+    <string name="sheets_language_footnote">Titles and descriptions come from your apps and services in the language they have them in.</string>
+</resources>

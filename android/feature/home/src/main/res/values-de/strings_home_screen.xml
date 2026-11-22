@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_screen_updated">Lounge auf %1$s aktualisiert</string>
+    <string name="home_screen_two_notes">%1$s. %2$s</string>
+    <string name="home_screen_background_too_heavy">%1$s ist für diesen Fernseher zu aufwendig, daher bleibt der Hintergrund unbewegt</string>
+    <string name="home_screen_background_not_drawn">%1$s ließ sich auf diesem Fernseher nicht darstellen, daher bleibt der Hintergrund unbewegt</string>
+    <string name="home_screen_hidden">In allen Reihen ausgeblendet</string>
+    <string name="home_screen_shown">Wieder in allen Reihen eingeblendet</string>
+    <string name="home_screen_source_hidden">Alles von %1$s ausgeblendet. Über Einstellungen, Reihen kommt es zurück</string>
+    <string name="home_screen_row_hidden">„%1$s“ ausgeblendet. Über Einstellungen, Reihen kommt sie zurück</string>
+    <string name="home_screen_row_hidden_unnamed">Reihe ausgeblendet. Über Einstellungen, Reihen kommt sie zurück</string>
+    <string name="home_screen_pinned_app">Vorn in „Deine Apps“ angeheftet</string>
+    <string name="home_screen_unpinned_app">Von „Deine Apps“ losgelöst</string>
+    <string name="home_screen_pinned_stage">An die Bühne angeheftet</string>
+    <string name="home_screen_unpinned_stage">Von der Bühne losgelöst</string>
+    <string name="home_screen_that_channel">Dieser Sender</string>
+    <string name="home_screen_error_storage_full">Der Speicher des Fernsehers ist voll. Gib in den Einstellungen des Fernsehers Speicherplatz frei und versuche es dann erneut.</string>
+    <string name="home_screen_error_gone">%1$s ist nicht mehr auf diesem Fernseher. Vielleicht hat die zugehörige App es entfernt.</string>
+    <string name="home_screen_error_nothing_opens">%1$s lässt sich mit nichts auf diesem Fernseher öffnen. Ist die zugehörige App noch installiert?</string>
+    <string name="home_screen_error_not_installed">%1$s ist auf diesem Fernseher nicht installiert. Installiere die App aus dem Play Store und versuche es dann erneut.</string>
+    <string name="home_screen_error_no_video_player">%1$s lässt sich mit nichts auf diesem Fernseher abspielen. Installiere VLC oder einen anderen Videoplayer und versuche es dann erneut.</string>
+    <string name="home_screen_error_no_player">%1$s lässt sich mit nichts auf diesem Fernseher abspielen. Installiere VLC oder einen anderen Player und versuche es dann erneut.</string>
+    <string name="home_screen_error_notification_access">Lounge kommt noch nicht an das heran, was gerade läuft. Erlaube in den Einstellungen den Benachrichtigungszugriff.</string>
+    <string name="home_screen_error_not_playing">Diese App spielt nichts mehr ab. Öffne sie, um wieder etwas zu starten.</string>
+    <string name="home_screen_error_no_answer">%1$s: Die Quelle hat nicht geantwortet. Prüfe, ob sie läuft, und versuche es dann erneut.</string>
+    <string name="home_screen_error_busy">Der Fernseher ist beschäftigt. Versuche es gleich erneut.</string>
+    <string name="home_screen_error_wrong_link">%1$s lässt sich von hier aus nicht öffnen. Öffne es stattdessen in der zugehörigen App.</string>
+    <string name="home_screen_error_not_allowed">%1$s: Android hat Lounge das Öffnen nicht erlaubt. Öffne es stattdessen in der zugehörigen App.</string>
+    <string name="home_screen_error_plugin_stopped">%1$s: Das Plugin hat mittendrin aufgehört. Versuche es gleich erneut.</string>
+    <string name="home_screen_error_other">%1$s ließ sich nicht öffnen. Versuche es gleich erneut.</string>
+    <string name="home_screen_rows_all_shown">Alle eingeblendet</string>
+    <plurals name="home_screen_rows_hidden">
+        <item quantity="one">%1$d ausgeblendet</item>
+        <item quantity="other">%1$d ausgeblendet</item>
+    </plurals>
+    <string name="home_screen_notifications_dismissed">Benachrichtigungen verworfen</string>
+    <string name="home_screen_notification_dismissed">Verworfen</string>
+    <string name="home_screen_notifications_app_hidden">Benachrichtigungen von %1$s ausgeblendet. Über Einstellungen, Benachrichtigungen kommen sie zurück</string>
+</resources>

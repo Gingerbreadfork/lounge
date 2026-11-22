@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guide_reading">TV-Programm wird geladen</string>
+    <string name="guide_no_channels">Noch keine Sender</string>
+    <plurals name="guide_channels_at">
+        <item quantity="one">%1$d Sender, %2$s</item>
+        <item quantity="other">%1$d Sender, %2$s</item>
+    </plurals>
+    <string name="guide_no_channels_help">Sender erscheinen hier, sobald eine TV-App oder ein Plugin meldet, was läuft.</string>
+    <string name="guide_no_programme">Keine Sendungsinfos</string>
+    <string name="guide_watch">Ansehen</string>
+    <string name="guide_programme_spoken">%1$s, %2$s, %3$s</string>
+    <string name="guide_on_now_until">Läuft jetzt, bis %1$s</string>
+    <string name="guide_from_to">%1$s bis %2$s</string>
+</resources>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="donate_title">Lounge steunen</string>
+    <string name="donate_headline">Geen reclame. Geen tracking. Geen prijskaartje.</string>
+    <string name="donate_one_thing">Dit is het enige wat Lounge vraagt.</string>
+    <plurals name="donate_had_weeks">
+        <item quantity="one">Lounge staat nu %1$d week op deze tv.</item>
+        <item quantity="other">Lounge staat nu %1$d weken op deze tv.</item>
+    </plurals>
+    <plurals name="donate_had_months">
+        <item quantity="one">Lounge staat nu %1$d maand op deze tv.</item>
+        <item quantity="other">Lounge staat nu %1$d maanden op deze tv.</item>
+    </plurals>
+    <string name="donate_had_over_a_year">Lounge staat nu ruim een jaar op deze tv.</string>
+    <plurals name="donate_had_over_years">
+        <item quantity="one">Lounge staat nu ruim %1$d jaar op deze tv.</item>
+        <item quantity="other">Lounge staat nu ruim %1$d jaar op deze tv.</item>
+    </plurals>
+    <string name="donate_ask">Als het zijn plek heeft verdiend, geef dan wat het je waard is geweest. Zelfs de prijs van een kop koffie houdt het draaiend, en echt alle beetjes helpen.</string>
+    <string name="donate_how">Het kost ongeveer een minuut op je telefoon, en alles gaat rechtstreeks naar de maker. Lounge blijft precies hetzelfde, of je nu geeft of niet.</string>
+    <string name="donate_thank_you">Dank je wel, van</string>
+    <string name="donate_point_camera">Richt de camera van je telefoon hierop</string>
+    <string name="donate_give_with">Geven met</string>
+    <string name="donate_note_paypal">Scan met de camera van je telefoon.\nJij kiest het bedrag.</string>
+    <string name="donate_note_coin">Scan met een wallet.\nStuur alleen %1$s naar dit adres.</string>
+    <string name="donate_code_description">Een code om met %1$s te geven, aan %2$s</string>
+</resources>

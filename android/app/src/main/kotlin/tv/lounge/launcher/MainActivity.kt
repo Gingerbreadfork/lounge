@@ -83,6 +83,10 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var platform: AndroidPlatform
     @Inject lateinit var prefs: Prefs
     private var uiSounds: UiSounds? = null
+    private val spoken = tv.lounge.design.SpokenResources(this)
+
+    /** In the chosen language; [tv.lounge.design.InLanguage] has the screen read them again when it changes. */
+    override fun getResources(): android.content.res.Resources = spoken.over(super.getResources())
     private val soundsState = mutableStateOf<UiSounds?>(null)
 
     private val tvListingsRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) { pushPermissions() }
@@ -130,13 +134,15 @@ class MainActivity : ComponentActivity() {
             val uiPrefs by prefs.all.collectAsState(initial = startPrefs)
             val reduced = uiPrefs.reducedMotion ?: systemReducedMotion()
             val visuals = visualsFor(tier, uiPrefs.liteMode)
-            LoungeTheme(
-                variant = LoungeThemeVariant.valueOf(uiPrefs.theme.name),
-                reducedMotion = reduced,
-                visuals = visuals,
-            ) {
-                CompositionLocalProvider(LocalUiSounds provides soundsState.value) {
-                    HomeScreen(core = core, platform = platform, prefs = prefs, uiPrefs = uiPrefs, power = power, updates = updates, notifications = NotificationFeed)
+            tv.lounge.design.InLanguage(uiPrefs.language) {
+                LoungeTheme(
+                    variant = LoungeThemeVariant.valueOf(uiPrefs.theme.name),
+                    reducedMotion = reduced,
+                    visuals = visuals,
+                ) {
+                    CompositionLocalProvider(LocalUiSounds provides soundsState.value) {
+                        HomeScreen(core = core, platform = platform, prefs = prefs, uiPrefs = uiPrefs, power = power, updates = updates, notifications = NotificationFeed)
+                    }
                 }
             }
         }
@@ -207,7 +213,7 @@ class MainActivity : ComponentActivity() {
         platform.onScreen = { started }
         platform.keysForOtherApps = { power.status.value is tv.lounge.power.PowerStatus.Ready }
         // The phone's TV controls are the TV controls sheet's own rows.
-        val phoneTv = tv.lounge.feature.home.PhoneTvControls(power)
+        val phoneTv = tv.lounge.feature.home.PhoneTvControls(power, applicationContext)
         platform.listTvControls = { kotlinx.coroutines.runBlocking { phoneTv.list() } }
         platform.pressTvControl = { id -> kotlinx.coroutines.runBlocking { phoneTv.run(id) } }
         lifecycleScope.launch {
@@ -342,26 +348,28 @@ class MainActivity : ComponentActivity() {
         val problem = mutableStateOf(app.coreError)
         val otherHomes = otherHomes()
         setContent {
-            LoungeTheme(
-                variant = LoungeThemeVariant.valueOf(startPrefs.theme.name),
-                reducedMotion = startPrefs.reducedMotion ?: systemReducedMotion(),
-                visuals = LoungeVisuals.Lite,
-            ) {
-                val error = problem.value
-                RecoveryScreen(
-                    reason = when {
-                        filesDir.usableSpace < LOW_STORAGE_BYTES || error is CoreException.DiskFull -> RecoveryReason.StorageFull
-                        error is CoreException.Storage -> RecoveryReason.Storage
-                        else -> RecoveryReason.Other
-                    },
-                    otherHomes = otherHomes,
-                    onTryAgain = { fresh ->
-                        val failed = withContext(Dispatchers.IO) { app.reopenCore(fresh) }
-                        if (failed == null) recreate() else problem.value = failed
-                    },
-                    onOpenSettings = { openSettings(android.provider.Settings.ACTION_SETTINGS) },
-                    onOtherHome = ::openOtherHome,
-                )
+            tv.lounge.design.InLanguage(startPrefs.language) {
+                LoungeTheme(
+                    variant = LoungeThemeVariant.valueOf(startPrefs.theme.name),
+                    reducedMotion = startPrefs.reducedMotion ?: systemReducedMotion(),
+                    visuals = LoungeVisuals.Lite,
+                ) {
+                    val error = problem.value
+                    RecoveryScreen(
+                        reason = when {
+                            filesDir.usableSpace < LOW_STORAGE_BYTES || error is CoreException.DiskFull -> RecoveryReason.StorageFull
+                            error is CoreException.Storage -> RecoveryReason.Storage
+                            else -> RecoveryReason.Other
+                        },
+                        otherHomes = otherHomes,
+                        onTryAgain = { fresh ->
+                            val failed = withContext(Dispatchers.IO) { app.reopenCore(fresh) }
+                            if (failed == null) recreate() else problem.value = failed
+                        },
+                        onOpenSettings = { openSettings(android.provider.Settings.ACTION_SETTINGS) },
+                        onOtherHome = ::openOtherHome,
+                    )
+                }
             }
         }
     }

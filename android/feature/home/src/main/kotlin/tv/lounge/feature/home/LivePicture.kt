@@ -1,5 +1,6 @@
 package tv.lounge.feature.home
 
+import androidx.annotation.StringRes
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
@@ -37,6 +38,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
@@ -69,11 +71,12 @@ internal fun liveSampleSize(width: Int, max: Int = LIVE_MAX_WIDTH): Int {
 }
 
 /** What the screen says under the title, if anything. */
-internal fun liveNote(hasPicture: Boolean, resting: Boolean, misses: Int): String? = when {
-    resting -> "Resting. Press OK to carry on."
-    misses >= 3 && hasPicture -> "The picture has stopped arriving. Still trying."
-    misses >= 3 -> "The picture isn't arriving. Still trying."
-    !hasPicture -> "One moment"
+@StringRes
+internal fun liveNote(hasPicture: Boolean, resting: Boolean, misses: Int): Int? = when {
+    resting -> R.string.live_picture_resting
+    misses >= 3 && hasPicture -> R.string.live_picture_stopped
+    misses >= 3 -> R.string.live_picture_not_arriving
+    !hasPicture -> R.string.live_picture_waiting
     else -> null
 }
 
@@ -183,7 +186,7 @@ fun LivePictureScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(title, style = LoungeTheme.typography.headline, color = colors.limelight, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (note != null) Text(note, style = LoungeTheme.typography.meta, color = colors.dust, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                if (note != null) Text(stringResource(note), style = LoungeTheme.typography.meta, color = colors.dust, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             }
         }
     }

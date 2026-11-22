@@ -42,6 +42,10 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
     /** The preferences as they were at process start, once read; the first frame is drawn in that theme. */
     @Volatile var startPrefs: Prefs.UiPrefs? = null
         private set
+    private val spoken = tv.lounge.design.SpokenResources(this)
+
+    /** In the chosen language, so text read through the application follows the choice too. */
+    override fun getResources(): android.content.res.Resources = spoken.over(super.getResources())
 
     override fun onCreate() {
         startedAt = android.os.SystemClock.uptimeMillis()
@@ -64,6 +68,7 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
             startPrefs = runCatching { kotlinx.coroutines.runBlocking { prefs.all.first() } }
                 .onFailure { android.util.Log.w("Lounge", "startup: preferences unreadable", it) }
                 .getOrNull()
+                ?.also { tv.lounge.design.Language.choose(it.language) }
         }, "lounge-prefs").start()
         Thread({
             runCatching {
@@ -89,6 +94,8 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
                 }
             }
         }
+        // Text read outside the screen follows a change of language as well.
+        appScope.launch { prefs.all.collect { tv.lounge.design.Language.choose(it.language) } }
         updates.start(appScope)
         android.util.Log.i("Lounge", "startup: application onCreate took ${android.os.SystemClock.uptimeMillis() - startedAt} ms")
     }

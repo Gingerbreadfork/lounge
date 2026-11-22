@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stage_row_name">Palco</string>
+    <string name="stage_spoken_source">su %1$s</string>
+    <string name="stage_empty_category">La tua schermata Home</string>
+    <string name="stage_empty_title">Configuriamo la tua schermata Home</string>
+    <string name="stage_empty_body">Pochi passi veloci, poi qui compaiono le tue app e quello che guardi.</string>
+    <string name="stage_empty_start">Inizia</string>
+    <string name="stage_indexing_title">Preparazione della tua schermata Home</string>
+    <string name="stage_indexing_body">Lounge sta guardando cosa c\'è su questa TV.</string>
+</resources>

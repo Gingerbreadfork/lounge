@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A toast after Lounge has updated itself. %1$s is the new version, such as 0.9.1. -->
+    <string name="home_screen_updated">Lounge updated to %1$s</string>
+    <!-- Two things said in one toast, the first and then the second. Neither ends in a full stop. -->
+    <string name="home_screen_two_notes">%1$s. %2$s</string>
+
+    <!-- Toasts when the chosen live background cannot be used. %1$s is the scene's name. -->
+    <string name="home_screen_background_too_heavy">%1$s is too heavy for this TV, so the background is still</string>
+    <string name="home_screen_background_not_drawn">%1$s could not be drawn on this TV, so the background is still</string>
+
+    <!-- Toasts after a choice in a tile's menu. -->
+    <string name="home_screen_hidden">Hidden from every row</string>
+    <string name="home_screen_shown">Shown on every row again</string>
+    <!-- %1$s is an app or service, such as Netflix. "Settings, Rows" is the way to the setting. -->
+    <string name="home_screen_source_hidden">Everything from %1$s hidden. Settings, Rows brings it back</string>
+    <!-- %1$s is the row's title, such as Continue watching. -->
+    <string name="home_screen_row_hidden">%1$s hidden. Settings, Rows brings it back</string>
+    <string name="home_screen_row_hidden_unnamed">Row hidden. Settings, Rows brings it back</string>
+    <string name="home_screen_pinned_app">Pinned to the front of Your apps</string>
+    <string name="home_screen_unpinned_app">Unpinned from Your apps</string>
+    <string name="home_screen_pinned_stage">Pinned to the Stage</string>
+    <string name="home_screen_unpinned_stage">Unpinned from the Stage</string>
+
+    <!-- Stands where a title would in the sentences below when a channel from the TV guide would not open: "Couldn't open that channel." -->
+    <string name="home_screen_that_channel">that channel</string>
+
+    <!-- Toasts when something would not open or play. Each states the cause and the fix. %1$s is the title of what was pressed, such as Netflix or The Bear. -->
+    <string name="home_screen_error_storage_full">The TV\'s storage is full. Free some space in the TV\'s settings, then try again.</string>
+    <string name="home_screen_error_gone">%1$s isn\'t on this TV any more. Its app may have removed it.</string>
+    <string name="home_screen_error_nothing_opens">Nothing on this TV can open %1$s. Is its app still installed?</string>
+    <string name="home_screen_error_not_installed">%1$s isn\'t installed on this TV. Install it from the Play Store, then try again.</string>
+    <string name="home_screen_error_no_video_player">Nothing on this TV can play %1$s. Install VLC or another video player, then try again.</string>
+    <string name="home_screen_error_no_player">Nothing on this TV can play %1$s. Install VLC or another player, then try again.</string>
+    <string name="home_screen_error_notification_access">Lounge can\'t reach what\'s playing yet. In Settings, allow Notification access.</string>
+    <string name="home_screen_error_not_playing">That app has stopped playing. Open it to start something again.</string>
+    <!-- The source is the app, server or service the title comes from. -->
+    <string name="home_screen_error_no_answer">%1$s\'s source didn\'t answer. Check that it is running, then try again.</string>
+    <string name="home_screen_error_busy">The TV is busy. Try again in a moment.</string>
+    <string name="home_screen_error_wrong_link">Lounge can\'t open %1$s from here. Open it from its app instead.</string>
+    <string name="home_screen_error_not_allowed">Android didn\'t let Lounge open %1$s. Open it from its app instead.</string>
+    <string name="home_screen_error_plugin_stopped">%1$s\'s plugin stopped partway through. Try again in a moment.</string>
+    <string name="home_screen_error_other">Couldn\'t open %1$s. Try again in a moment.</string>
+
+    <!-- The value beside Rows in Settings: whether any row is hidden, and how many. -->
+    <string name="home_screen_rows_all_shown">All shown</string>
+    <plurals name="home_screen_rows_hidden">
+        <item quantity="one">%1$d hidden</item>
+        <item quantity="other">%1$d hidden</item>
+    </plurals>
+
+    <!-- Toasts from the notifications panel: after Dismiss all, after dismissing the last one, and after hiding an app's notifications. %1$s is the app's name. -->
+    <string name="home_screen_notifications_dismissed">Notifications dismissed</string>
+    <string name="home_screen_notification_dismissed">Dismissed</string>
+    <string name="home_screen_notifications_app_hidden">Notifications from %1$s hidden. Settings, Notifications brings them back</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_screen_field">Pesquisar na TV</string>
+    <string name="search_screen_hint_empty">Escreva com o comando. Os resultados atualizam-se à medida que escreve.</string>
+    <string name="search_screen_no_match">Ainda nada corresponde a «%1$s».</string>
+    <string name="search_screen_hint_results">A tecla de pesquisa do teclado, ou Baixo, leva aos resultados.</string>
+    <string name="search_screen_row_apps">Apps</string>
+    <string name="search_screen_row_continue">Continuar a ver</string>
+    <string name="search_screen_row_your_apps">As suas apps</string>
+</resources>

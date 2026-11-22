@@ -4,37 +4,35 @@ import java.time.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
+@RunWith(RobolectricTestRunner::class)
 class WordsTest {
     private val minute = 60_000L
+    private val resources get() = RuntimeEnvironment.getApplication().resources
 
     @Test
     fun clocksFollowTheTwentyFourHourSetting() {
-        assertEquals("21:42", Words.clock(LocalTime.of(21, 42), is24Hour = true))
-        assertEquals("07:05", Words.clock(LocalTime.of(7, 5), is24Hour = true))
-        assertEquals("9:42 pm", Words.clock(LocalTime.of(21, 42), is24Hour = false))
-        assertEquals("12:00 pm", Words.clock(LocalTime.NOON, is24Hour = false))
-        assertEquals("12:30 am", Words.clock(LocalTime.of(0, 30), is24Hour = false))
-        assertEquals("9:42", Words.clock(LocalTime.of(21, 42), is24Hour = false, period = false))
+        assertEquals("21:42", Words.clock(resources, LocalTime.of(21, 42), is24Hour = true))
+        assertEquals("07:05", Words.clock(resources, LocalTime.of(7, 5), is24Hour = true))
+        assertEquals("9:42 pm", Words.clock(resources, LocalTime.of(21, 42), is24Hour = false))
+        assertEquals("12:00 pm", Words.clock(resources, LocalTime.NOON, is24Hour = false))
+        assertEquals("12:30 am", Words.clock(resources, LocalTime.of(0, 30), is24Hour = false))
+        assertEquals("9:42", Words.clock(resources, LocalTime.of(21, 42), is24Hour = false, period = false))
     }
 
     @Test
     fun agoReadsAsItDoesOnThePhone() {
-        assertEquals("just now", Words.ago(30_000))
-        assertEquals("just now", Words.ago(-5 * minute))
-        assertEquals("1 minute ago", Words.ago(minute))
-        assertEquals("3 minutes ago", Words.ago(3 * minute))
-        assertEquals("1 hour ago", Words.ago(61 * minute))
-        assertEquals("5 hours ago", Words.ago(5 * 60 * minute))
-        assertEquals("1 day ago", Words.ago(30 * 60 * minute))
-        assertEquals("3 days ago", Words.ago(3 * 24 * 60 * minute))
-    }
-
-    @Test
-    fun countsAgreeWithTheirNumber() {
-        assertEquals("1 channel", Words.counted(1, "channel", "channels"))
-        assertEquals("0 channels", Words.counted(0, "channel", "channels"))
-        assertEquals("12 channels", Words.counted(12, "channel", "channels"))
+        assertEquals("just now", Words.ago(resources, 30_000))
+        assertEquals("just now", Words.ago(resources, -5 * minute))
+        assertEquals("1 minute ago", Words.ago(resources, minute))
+        assertEquals("3 minutes ago", Words.ago(resources, 3 * minute))
+        assertEquals("1 hour ago", Words.ago(resources, 61 * minute))
+        assertEquals("5 hours ago", Words.ago(resources, 5 * 60 * minute))
+        assertEquals("1 day ago", Words.ago(resources, 30 * 60 * minute))
+        assertEquals("3 days ago", Words.ago(resources, 3 * 24 * 60 * minute))
     }
 
     @Test

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_screen_updated">Lounge is bijgewerkt naar %1$s</string>
+    <string name="home_screen_two_notes">%1$s. %2$s</string>
+    <string name="home_screen_background_too_heavy">%1$s is te zwaar voor deze tv, dus de achtergrond staat stil</string>
+    <string name="home_screen_background_not_drawn">%1$s kon op deze tv niet worden getekend, dus de achtergrond staat stil</string>
+    <string name="home_screen_hidden">Verborgen in elke rij</string>
+    <string name="home_screen_shown">Weer getoond in elke rij</string>
+    <string name="home_screen_source_hidden">Alles van %1$s verborgen. Terughalen kan via Instellingen, Rijen</string>
+    <string name="home_screen_row_hidden">%1$s verborgen. Terughalen kan via Instellingen, Rijen</string>
+    <string name="home_screen_row_hidden_unnamed">Rij verborgen. Terughalen kan via Instellingen, Rijen</string>
+    <string name="home_screen_pinned_app">Vooraan in Je apps vastgemaakt</string>
+    <string name="home_screen_unpinned_app">Losgemaakt uit Je apps</string>
+    <string name="home_screen_pinned_stage">Op het Podium vastgemaakt</string>
+    <string name="home_screen_unpinned_stage">Van het Podium losgemaakt</string>
+    <string name="home_screen_that_channel">die zender</string>
+    <string name="home_screen_error_storage_full">De opslag van de tv is vol. Maak ruimte vrij in de instellingen van de tv en probeer het dan opnieuw.</string>
+    <string name="home_screen_error_gone">Op deze tv staat %1$s niet meer. Mogelijk heeft de app het verwijderd.</string>
+    <string name="home_screen_error_nothing_opens">Niets op deze tv kan %1$s openen. Is de bijbehorende app nog geïnstalleerd?</string>
+    <string name="home_screen_error_not_installed">Op deze tv is %1$s niet geïnstalleerd. Installeer de app via de Play Store en probeer het dan opnieuw.</string>
+    <string name="home_screen_error_no_video_player">Niets op deze tv kan %1$s afspelen. Installeer VLC of een andere videospeler en probeer het dan opnieuw.</string>
+    <string name="home_screen_error_no_player">Niets op deze tv kan %1$s afspelen. Installeer VLC of een andere speler en probeer het dan opnieuw.</string>
+    <string name="home_screen_error_notification_access">Lounge kan nog niet bij wat er speelt. Sta in Instellingen Toegang tot meldingen toe.</string>
+    <string name="home_screen_error_not_playing">Die app speelt niets meer af. Open de app om weer iets te starten.</string>
+    <string name="home_screen_error_no_answer">De bron van %1$s reageerde niet. Controleer of die actief is en probeer het dan opnieuw.</string>
+    <string name="home_screen_error_busy">De tv is bezig. Probeer het zo opnieuw.</string>
+    <string name="home_screen_error_wrong_link">Lounge kan %1$s hiervandaan niet openen. Open het vanuit de eigen app.</string>
+    <string name="home_screen_error_not_allowed">Android liet Lounge %1$s niet openen. Open het vanuit de eigen app.</string>
+    <string name="home_screen_error_plugin_stopped">De plug-in van %1$s is halverwege gestopt. Probeer het zo opnieuw.</string>
+    <string name="home_screen_error_other">Kon %1$s niet openen. Probeer het zo opnieuw.</string>
+    <string name="home_screen_rows_all_shown">Alle zichtbaar</string>
+    <plurals name="home_screen_rows_hidden">
+        <item quantity="one">%1$d verborgen</item>
+        <item quantity="other">%1$d verborgen</item>
+    </plurals>
+    <string name="home_screen_notifications_dismissed">Meldingen gewist</string>
+    <string name="home_screen_notification_dismissed">Gewist</string>
+    <string name="home_screen_notifications_app_hidden">Meldingen van %1$s verborgen. Terughalen kan via Instellingen, Meldingen</string>
+</resources>

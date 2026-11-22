@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_manager_next_later">Lounge riprova più tardi.</string>
+    <string name="update_manager_next_when_asked">Riprova quando vuoi.</string>
+    <string name="update_manager_next_release">Lounge aspetta la prossima versione.</string>
+    <string name="update_manager_install_unfinished">L\'installazione non è terminata.</string>
+    <string name="update_manager_install_not_started">Android non è riuscito ad avviare l\'installazione.</string>
+    <string name="update_manager_install_failed">Android non è riuscito a installare l\'aggiornamento.</string>
+    <string name="update_manager_rate_limited">GitHub sta limitando i controlli da questa rete.</string>
+    <string name="update_manager_unexpected_answer">GitHub non ha risposto come previsto.</string>
+    <string name="update_manager_not_sent">GitHub non ha inviato l\'aggiornamento.</string>
+    <string name="update_manager_too_large">Il download era più grande di quanto dichiarato dalla versione, quindi Lounge l\'ha interrotto.</string>
+    <string name="update_manager_checksum_mismatch">Il download non corrispondeva al suo checksum, quindi Lounge l\'ha scartato.</string>
+    <string name="update_manager_changed">L\'aggiornamento è cambiato dopo il controllo, quindi Lounge l\'ha scartato.</string>
+    <string name="update_manager_not_stored">Lounge non è riuscito a salvare l\'aggiornamento nella memoria della TV. Libera spazio sulla TV.</string>
+    <string name="update_manager_not_staged">Configurazione avanzata non è riuscita a raggiungere l\'aggiornamento nella memoria della TV.</string>
+    <string name="update_manager_unreachable">Lounge non è riuscito a raggiungere GitHub. Controlla la connessione a Internet della TV.</string>
+    <string name="update_manager_timed_out">GitHub ha impiegato troppo a rispondere.</string>
+    <string name="update_manager_not_secure">Lounge non è riuscito a connettersi a GitHub in modo sicuro. Controlla che data e ora della TV siano giuste.</string>
+    <string name="update_manager_dropped">La connessione a GitHub è caduta.</string>
+    <string name="update_manager_did_not_go_through">L\'aggiornamento non è andato a buon fine.</string>
+    <string name="update_manager_power_setup_failed">Configurazione avanzata non è riuscita a installare l\'aggiornamento. Riprova, oppure consenti a Lounge di installare app.</string>
+    <string name="update_manager_no_checksum">Questa versione non ha un checksum con cui verificare il download, quindi Lounge non la installa.</string>
+    <string name="update_manager_unreadable">L\'aggiornamento non è un\'app che Android sa leggere. Lounge aspetta la prossima versione.</string>
+    <string name="update_manager_not_lounge">L\'aggiornamento non è Lounge. Lounge aspetta la prossima versione.</string>
+    <string name="update_manager_other_signer">L\'aggiornamento non è firmato come questa copia di Lounge. Lounge aspetta la prossima versione.</string>
+    <string name="update_manager_gave_up">Lounge %1$s non si è installato su questa TV, quindi aspetta la prossima versione.</string>
+    <string name="update_manager_install_cancelled">L\'installazione è stata annullata. Scegli Riprova per installarlo.</string>
+    <string name="update_manager_install_blocked">Android ha bloccato l\'installazione. Riprova, oppure connetti Configurazione avanzata per installarlo.</string>
+    <string name="update_manager_install_no_space">Non c\'è abbastanza spazio per l\'aggiornamento. Libera spazio sulla TV, poi riprova.</string>
+    <string name="update_manager_install_incompatible">Questo aggiornamento non funziona su questa TV. Lounge aspetta la prossima versione.</string>
+    <string name="update_manager_install_refused">Android non installa questo aggiornamento su questa TV. Lounge aspetta la prossima versione.</string>
+    <string name="update_manager_install_hint">Trova Lounge nell\'elenco di Android e attivalo, poi premi Indietro.</string>
+    <string name="update_manager_no_install_screen">Questa TV non ha una schermata per questo. Nelle sue impostazioni apri App, poi Accesso speciale per le app, poi Installa app sconosciute, oppure connetti Configurazione avanzata.</string>
+</resources>

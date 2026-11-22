@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="all_apps_screen_letter">Apps, die mit %1$s beginnen</string>
+    <string name="all_apps_screen_letter_other">Apps, die mit einer Ziffer oder einem Symbol beginnen</string>
+    <string name="all_apps_screen_empty">Apps erscheinen hier, sobald sie installiert sind.</string>
+    <string name="all_apps_screen_empty_search">Keine App heißt „%1$s“. Zurück leert die Suche.</string>
+    <string name="all_apps_screen_nothing">Noch nichts hier.</string>
+    <string name="all_apps_screen_no_match">Nichts passt zu „%1$s“.</string>
+    <plurals name="all_apps_screen_matching">
+        <item quantity="one">%1$d von %2$d passt zu „%3$s“.</item>
+        <item quantity="other">%1$d von %2$d passen zu „%3$s“.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_az">
+        <item quantity="one">%1$d App, A bis Z.</item>
+        <item quantity="other">%1$d Apps, A bis Z.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_opened">
+        <item quantity="one">%1$d App, zuletzt geöffnete zuerst.</item>
+        <item quantity="other">%1$d Apps, zuletzt geöffnete zuerst.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_installed">
+        <item quantity="one">%1$d App, neueste zuerst.</item>
+        <item quantity="other">%1$d Apps, neueste zuerst.</item>
+    </plurals>
+    <string name="all_apps_screen_hint">Halte OK auf einer App gedrückt, um sie an „Deine Apps“ anzuheften. Nach oben zum Suchen oder Sortieren.</string>
+    <string name="all_apps_screen_hint_alphabet">Halte OK auf einer App gedrückt, um sie an „Deine Apps“ anzuheften. Nach oben zum Suchen oder Sortieren, nach links zum Alphabet.</string>
+    <string name="all_apps_screen_sort_az">A bis Z</string>
+    <string name="all_apps_screen_sort_opened">Zuletzt geöffnet</string>
+    <string name="all_apps_screen_sort_installed">Zuletzt installiert</string>
+    <string name="all_apps_screen_sorted_az">Sortiert von A bis Z. OK ändert die Reihenfolge</string>
+    <string name="all_apps_screen_sorted_opened">Sortiert nach zuletzt geöffnet. OK ändert die Reihenfolge</string>
+    <string name="all_apps_screen_sorted_installed">Sortiert nach zuletzt installiert. OK ändert die Reihenfolge</string>
+    <string name="all_apps_screen_change_order">Reihenfolge ändern</string>
+    <string name="all_apps_screen_find">App suchen</string>
+</resources>

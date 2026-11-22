@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A TV channel that has neither a name nor a number of its own. %1$d is the number the TV keeps it under. -->
+    <string name="tv_provider_collector_channel">Channel %1$d</string>
+</resources>

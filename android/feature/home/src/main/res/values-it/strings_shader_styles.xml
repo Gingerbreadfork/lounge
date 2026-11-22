@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shader_styles_ink_name">Inchiostro</string>
+    <string name="shader_styles_ink_description">Luce che attraversa l\'inchiostro nell\'acqua</string>
+    <string name="shader_styles_current_name">Corrente</string>
+    <string name="shader_styles_current_description">Acqua lenta che si ripiega su sé stessa sotto un\'unica luce</string>
+    <string name="shader_styles_rain_name">Pioggia</string>
+    <string name="shader_styles_rain_description">Una finestra di notte, le gocce che scendono sul vetro</string>
+    <string name="shader_styles_smoke_name">Fumo</string>
+    <string name="shader_styles_smoke_description">Fili che salgono e si diradano</string>
+    <string name="shader_styles_embers_name">Braci</string>
+    <string name="shader_styles_embers_description">Scintille che si alzano da un fuoco ormai basso</string>
+    <string name="shader_styles_shallows_name">Fondale</string>
+    <string name="shader_styles_shallows_description">Luce sul fondo di una piscina</string>
+    <string name="shader_styles_lava_name">Lava</string>
+    <string name="shader_styles_lava_description">Una lampada lava, lentamente</string>
+    <string name="shader_styles_aurora_name">Aurora</string>
+    <string name="shader_styles_aurora_description">L\'aurora boreale sopra le colline</string>
+    <string name="shader_styles_silk_name">Seta</string>
+    <string name="shader_styles_silk_description">Pieghe di raso che girano sotto la lampada</string>
+    <string name="shader_styles_curtain_name">Sipario</string>
+    <string name="shader_styles_curtain_description">Il sipario prima dello spettacolo, illuminato dalle luci della ribalta</string>
+    <string name="shader_styles_moonpath_name">Scia di luna</string>
+    <string name="shader_styles_moonpath_description">Il mare di notte, e la strada che la luna vi stende sopra</string>
+    <string name="shader_styles_city_name">Città</string>
+    <string name="shader_styles_city_description">La città di notte, sfocata oltre il vetro</string>
+    <string name="shader_styles_record_name">Vinile</string>
+    <string name="shader_styles_record_description">Un disco che gira sotto la lampada</string>
+    <string name="shader_styles_eclipse_name">Eclissi</string>
+    <string name="shader_styles_eclipse_description">Il sole dietro la luna, e una sua perla che sfolgora sul bordo</string>
+    <string name="shader_styles_gravity_name">Gravità</string>
+    <string name="shader_styles_gravity_description">Un buco nero, e la luce che gli si piega attorno</string>
+    <string name="shader_styles_orbit_name">Orbita</string>
+    <string name="shader_styles_orbit_description">L\'alba vista dall\'orbita, sopra le luci del lato notturno</string>
+    <string name="shader_styles_tide_name">Marea</string>
+    <string name="shader_styles_tide_description">Il mare che sale di notte, luminoso dove si frange</string>
+    <string name="shader_styles_lanterns_name">Lanterne</string>
+    <string name="shader_styles_lanterns_description">Lanterne di carta lasciate andare sul lago</string>
+    <string name="shader_styles_snow_name">Neve</string>
+    <string name="shader_styles_snow_description">Un viale di lampioni sotto la neve che cade</string>
+    <string name="shader_styles_local_description">Dalla cartella screensavers di questa TV</string>
+    <string name="shader_styles_local_origin">Questa TV</string>
+</resources>

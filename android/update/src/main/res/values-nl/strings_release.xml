@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="release_no_newer">De update is niet nieuwer dan deze versie van Lounge. Lounge wacht op de volgende release.</string>
+    <string name="release_other_version">De release noemt %1$s, maar de app erin noemt %2$s. Lounge wacht op de volgende release.</string>
+    <string name="release_no_version">De release noemt %1$s, maar de app erin noemt geen versie. Lounge wacht op de volgende release.</string>
+</resources>

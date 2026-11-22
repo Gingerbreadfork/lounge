@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_sheets_one_moment">Een ogenblik</string>
+    <string name="plugin_sheets_not_answering">Reageert niet</string>
+    <string name="plugin_sheets_no_answer">De plug-in reageerde niet. Probeer het zo opnieuw.</string>
+    <string name="plugin_sheets_didnt_work">Niet gelukt</string>
+    <string name="plugin_sheets_stale">Reageert nu even niet. Dit is wat de plug-in het laatst meldde.</string>
+</resources>

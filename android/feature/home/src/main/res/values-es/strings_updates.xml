@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="updates_word_checking">Buscando…</string>
+    <string name="updates_word_available">%1$s disponible</string>
+    <string name="updates_word_downloading">Descargando…</string>
+    <string name="updates_word_ready">%1$s lista</string>
+    <string name="updates_word_installing">Instalando…</string>
+    <string name="updates_word_problem">Problema</string>
+    <string name="updates_word_up_to_date">Al día</string>
+    <string name="updates_word_manual">Manual</string>
+    <string name="updates_title">Actualizaciones</string>
+    <string name="updates_not_checked">Todavía sin buscar</string>
+    <string name="updates_checked_ago">Última búsqueda: %1$s</string>
+    <string name="updates_checked_never">Última búsqueda: nunca</string>
+    <string name="updates_press_to_check">Pulsa para buscar ahora</string>
+    <string name="updates_check_twice">Buscar dos veces al día</string>
+    <string name="updates_get">Obtener Lounge %1$s</string>
+    <string name="updates_download">Descargar</string>
+    <string name="updates_downloading">Descargando Lounge %1$s</string>
+    <string name="updates_percent">%1$d %%</string>
+    <string name="updates_install">Instalar Lounge %1$s</string>
+    <string name="updates_confirm">Confirmar</string>
+    <string name="updates_now">Ahora</string>
+    <string name="updates_installing">Instalando Lounge %1$s…</string>
+    <string name="updates_allow_install">Permitir que Lounge instale actualizaciones</string>
+    <string name="updates_install_hint">OK abre la lista de Android: activa Lounge ahí y pulsa Atrás</string>
+    <string name="updates_whats_new">Novedades de la versión %1$s</string>
+    <string name="updates_how_silent">Lounge consulta sus versiones en GitHub dos veces al día. Las actualizaciones se instalan solas mientras estás en otra app, y Lounge vuelve tal como estaba.</string>
+    <string name="updates_how_power_setup">Lounge consulta sus versiones en GitHub dos veces al día. La Configuración avanzada instala las actualizaciones sin preguntar, mientras estás en otra app.</string>
+    <string name="updates_how_confirm">Lounge consulta sus versiones en GitHub dos veces al día. Android te pide confirmar esta actualización, y Play Protect puede añadir que no conoce a este desarrollador: elige Más detalles y luego Instalar de todos modos. Después de esta, las actualizaciones se instalan solas.</string>
+    <string name="updates_how_needs_permission">Lounge consulta sus versiones en GitHub dos veces al día. Android todavía no deja que Lounge instale apps. Para permitirlo, en los ajustes de la TV abre Aplicaciones, luego Acceso especial de aplicaciones y luego Instalar aplicaciones desconocidas; o conecta la Configuración avanzada.</string>
+</resources>

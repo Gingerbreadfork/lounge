@@ -1,7 +1,9 @@
 package tv.lounge.feature.home
 
 import android.content.Context
+import android.content.res.Resources
 import android.os.Build
+import androidx.annotation.StringRes
 import org.json.JSONArray
 import org.json.JSONObject
 import tv.lounge.core.CoreClient
@@ -20,6 +22,38 @@ data class ShaderStyle(
     /** Fine detail that blurs at half size, so it may climb to full size on a TV that holds it there. */
     val fine: Boolean = false,
 )
+
+/** The texts that name one of Lounge's own scenes and say what it shows. */
+private class SceneWords(@StringRes val name: Int, @StringRes val description: Int)
+
+/** Lounge's own scenes by id. One without an entry keeps the words of its index file. */
+private val bundledWords = mapOf(
+    "lounge:ink" to SceneWords(R.string.shader_styles_ink_name, R.string.shader_styles_ink_description),
+    "lounge:current" to SceneWords(R.string.shader_styles_current_name, R.string.shader_styles_current_description),
+    "lounge:rain" to SceneWords(R.string.shader_styles_rain_name, R.string.shader_styles_rain_description),
+    "lounge:smoke" to SceneWords(R.string.shader_styles_smoke_name, R.string.shader_styles_smoke_description),
+    "lounge:embers" to SceneWords(R.string.shader_styles_embers_name, R.string.shader_styles_embers_description),
+    "lounge:shallows" to SceneWords(R.string.shader_styles_shallows_name, R.string.shader_styles_shallows_description),
+    "lounge:lava" to SceneWords(R.string.shader_styles_lava_name, R.string.shader_styles_lava_description),
+    "lounge:aurora" to SceneWords(R.string.shader_styles_aurora_name, R.string.shader_styles_aurora_description),
+    "lounge:silk" to SceneWords(R.string.shader_styles_silk_name, R.string.shader_styles_silk_description),
+    "lounge:curtain" to SceneWords(R.string.shader_styles_curtain_name, R.string.shader_styles_curtain_description),
+    "lounge:moonpath" to SceneWords(R.string.shader_styles_moonpath_name, R.string.shader_styles_moonpath_description),
+    "lounge:city" to SceneWords(R.string.shader_styles_city_name, R.string.shader_styles_city_description),
+    "lounge:record" to SceneWords(R.string.shader_styles_record_name, R.string.shader_styles_record_description),
+    "lounge:eclipse" to SceneWords(R.string.shader_styles_eclipse_name, R.string.shader_styles_eclipse_description),
+    "lounge:gravity" to SceneWords(R.string.shader_styles_gravity_name, R.string.shader_styles_gravity_description),
+    "lounge:orbit" to SceneWords(R.string.shader_styles_orbit_name, R.string.shader_styles_orbit_description),
+    "lounge:tide" to SceneWords(R.string.shader_styles_tide_name, R.string.shader_styles_tide_description),
+    "lounge:lanterns" to SceneWords(R.string.shader_styles_lanterns_name, R.string.shader_styles_lanterns_description),
+    "lounge:snow" to SceneWords(R.string.shader_styles_snow_name, R.string.shader_styles_snow_description),
+)
+
+/** The scene's name in the language of [resources]. Only Lounge's own are translated; the rest arrive worded. */
+fun ShaderStyle.nameIn(resources: Resources): String = bundledWords[id]?.let { resources.getString(it.name) } ?: name
+
+/** The line about the scene in the language of [resources]: what it shows, or where it came from. */
+fun ShaderStyle.aboutIn(resources: Resources): String = bundledWords[id]?.let { resources.getString(it.description) } ?: description ?: origin
 
 /** One `uniform` a program declares. */
 data class UniformDecl(val name: String, val type: String, val components: Int, val color: Boolean, val count: Int = 1) {
@@ -149,10 +183,12 @@ object ShaderStyles {
             val o = index.getJSONObject(i)
             val source = runCatching { context.assets.open("screensavers/" + o.getString("file")).bufferedReader().use { it.readText() } }.getOrNull()
                 ?: return@mapNotNull null
+            val id = "lounge:" + o.getString("id")
+            val words = bundledWords[id]
             ShaderStyle(
-                id = "lounge:" + o.getString("id"),
-                name = o.getString("name"),
-                description = o.optString("description").ifEmpty { null },
+                id = id,
+                name = words?.let { context.getString(it.name) } ?: o.getString("name"),
+                description = words?.let { context.getString(it.description) } ?: o.optString("description").ifEmpty { null },
                 source = source,
                 values = ShaderSource.parseValues(o.optJSONObject("uniforms")),
                 origin = "Lounge",
@@ -180,10 +216,10 @@ object ShaderStyles {
             ShaderStyle(
                 id = "local:" + f.name,
                 name = f.nameWithoutExtension.replace('_', ' ').replace('-', ' ').replaceFirstChar { it.uppercase() },
-                description = "From this TV's screensavers folder",
+                description = context.getString(R.string.shader_styles_local_description),
                 source = source,
                 values = emptyList(),
-                origin = "This TV",
+                origin = context.getString(R.string.shader_styles_local_origin),
             )
         }
     }

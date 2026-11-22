@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_screen_field">Cerca nella tua TV</string>
+    <string name="search_screen_hint_empty">Scrivi con il telecomando. I risultati si aggiornano mentre scrivi.</string>
+    <string name="search_screen_no_match">Ancora nessun risultato per “%1$s”.</string>
+    <string name="search_screen_hint_results">Il tasto di ricerca della tastiera, o Giù, ti porta ai risultati.</string>
+    <string name="search_screen_row_apps">App</string>
+    <string name="search_screen_row_continue">Continua a guardare</string>
+    <string name="search_screen_row_your_apps">Le tue app</string>
+</resources>

@@ -1,5 +1,7 @@
 package tv.lounge.feature.home
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +45,10 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -76,6 +81,7 @@ import tv.lounge.design.Hairline
 import tv.lounge.design.LocalSwapSlotActive
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 import tv.lounge.design.Words
 import tv.lounge.design.focusRim
 import tv.lounge.design.lightGlow
@@ -101,11 +107,11 @@ fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRe
     val list = plugins
     // Back from a plugin's page puts focus on that plugin, if it is still there.
     val returnTo = (cameFrom as? Overlay.PluginDetail)?.id?.takeIf { id -> list.orEmpty().any { it.id == id } }
-    SheetHeading("Plugins", "They add rows, channels and guide data from your services.")
+    SheetHeading(stringResource(R.string.plugins_title), stringResource(R.string.plugins_subtitle))
     if (list == null) {
-        Text("Loading…", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text(stringResource(R.string.plugins_loading), style = LoungeTheme.typography.meta, color = colors.dust)
     } else if (list.isEmpty()) {
-        Text("No plugins installed. They install from the phone companion: on your phone, open Plugins.", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text(stringResource(R.string.plugins_none), style = LoungeTheme.typography.meta, color = colors.dust)
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             list.forEachIndexed { i, p ->
@@ -116,7 +122,7 @@ fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRe
                         { AsyncImage(model = path, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(7.dp))) }
                     },
                     title = p.name,
-                    value = statusWord(p),
+                    value = stringResource(statusWord(p)),
                     accent = statusColour(p),
                     onClick = { onOpen(p.id) },
                     focusRequester = if (p.id == returnTo || (returnTo == null && i == 0)) firstFocus else null,
@@ -124,7 +130,7 @@ fun PluginsSheet(core: CoreClient, onOpen: (String) -> Unit, firstFocus: FocusRe
             }
         }
     }
-    SheetFootnote("Each plugin can reach only the places it names, and sees only its own settings.", "More plugins install from the phone companion.")
+    SheetFootnote(stringResource(R.string.plugins_footnote_reach), stringResource(R.string.plugins_footnote_more))
 }
 
 /** A glyph for what a plugin brings, for one with no app of its own on the TV. */
@@ -136,14 +142,15 @@ private fun pluginGlyph(p: PluginInfo): ImageVector = when {
     else -> SettingsGlyphs.Plugin
 }
 
-private fun statusWord(p: PluginInfo): String = when {
+@StringRes
+private fun statusWord(p: PluginInfo): Int = when {
     // A plugin waiting on the person is not a problem: a sign-in when there is a page or a code.
-    p.enabled && p.ask != null -> if (p.ask?.link != null || p.ask?.code != null) "Sign in" else "Needs setup"
-    p.lastError != null && p.enabled -> "Problem"
-    p.enabled -> "On"
-    p.updateAsksToReach.isNotEmpty() -> "Turned off by its update"
-    !p.configured -> "Needs setup"
-    else -> "Off"
+    p.enabled && p.ask != null -> if (p.ask?.link != null || p.ask?.code != null) R.string.plugins_status_sign_in else R.string.plugins_status_needs_setup
+    p.lastError != null && p.enabled -> R.string.plugins_status_problem
+    p.enabled -> R.string.plugins_status_on
+    p.updateAsksToReach.isNotEmpty() -> R.string.plugins_status_held
+    !p.configured -> R.string.plugins_status_needs_setup
+    else -> R.string.plugins_status_off
 }
 
 @Composable
@@ -165,6 +172,7 @@ private fun statusColour(p: PluginInfo) = with(LoungeTheme.colors) {
 @Composable
 fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit, say: (String) -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
+    val resources = LocalResources.current
     var info by remember { mutableStateOf<PluginInfo?>(null) }
     var loaded by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
@@ -186,12 +194,12 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
     val live = LocalSwapSlotActive.current
     LaunchedEffect(loaded) { if (loaded && live.value) firstFocus.requestWhenReady() }
     if (!loaded) {
-        Text("Loading…", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text(stringResource(R.string.plugins_loading), style = LoungeTheme.typography.meta, color = colors.dust)
         return
     }
     val p = info ?: run {
-        SheetHeading("Plugin", "This plugin is no longer installed.")
-        SheetRow(icon = SettingsGlyphs.Plugin, title = "Back to Plugins", onClick = onRemoved, focusRequester = firstFocus)
+        SheetHeading(stringResource(R.string.plugins_gone_title), stringResource(R.string.plugins_gone_subtitle))
+        SheetRow(icon = SettingsGlyphs.Plugin, title = stringResource(R.string.plugins_gone_back), onClick = onRemoved, focusRequester = firstFocus)
         return
     }
 
@@ -213,14 +221,17 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
         }
     }
 
-    SheetHeading(p.name, "Version ${p.version}" + if (p.publisherName.isNotEmpty()) ", by ${p.publisherName}" else "")
+    SheetHeading(
+        p.name,
+        if (p.publisherName.isNotEmpty()) stringResource(R.string.plugins_version_by, p.version, p.publisherName) else stringResource(R.string.plugins_version, p.version),
+    )
     if (p.description.isNotEmpty()) {
         Text(p.description, style = LoungeTheme.typography.meta, color = colors.dust)
         Spacer(Modifier.height(20.dp))
     }
     val ask = p.ask?.takeIf { p.enabled }
     when {
-        held -> Text("Turned off by its update, which also asks to reach ${joined(p.updateAsksToReach)}.", style = LoungeTheme.typography.meta, color = colors.houselight)
+        held -> Text(stringResource(R.string.plugins_held, joined(p.updateAsksToReach)), style = LoungeTheme.typography.meta, color = colors.houselight)
         ask != null -> AskCard(ask)
         else -> StatusLine(p)
     }
@@ -230,8 +241,8 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
         if (held) {
             SheetRow(
                 icon = LoungeIcons.Power,
-                title = "Allow and turn on",
-                subtitle = "It can then reach ${joined(p.updateAsksToReach)} as well",
+                title = stringResource(R.string.plugins_allow),
+                subtitle = stringResource(R.string.plugins_allow_subtitle, joined(p.updateAsksToReach)),
                 subtitleLines = WHOLE,
                 accent = colors.houselight,
                 onClick = { switch(true) },
@@ -241,7 +252,7 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             SheetRow(
                 icon = LoungeIcons.Power,
                 title = p.name,
-                value = if (p.enabled) "On" else "Off",
+                value = stringResource(if (p.enabled) DesignR.string.common_on else DesignR.string.common_off),
                 accent = if (p.enabled) colors.signal else colors.dust,
                 onClick = { switch(!p.enabled) },
                 focusRequester = if (startAtField) null else firstFocus,
@@ -249,7 +260,7 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
         }
         if (p.settings.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text("Settings", style = LoungeTheme.typography.meta, color = colors.dust)
+            Text(stringResource(R.string.plugins_settings), style = LoungeTheme.typography.meta, color = colors.dust)
             p.settings.forEach { s ->
                 SettingField(
                     setting = s,
@@ -263,8 +274,8 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             if (!p.enabled && !held) {
                 SheetRow(
                     icon = LoungeIcons.Power,
-                    title = "Turn on ${p.name}",
-                    subtitle = missing?.let { "Fill in ${it.label} first" },
+                    title = stringResource(R.string.plugins_turn_on, p.name),
+                    subtitle = missing?.let { stringResource(R.string.plugins_fill_in_first, it.label) },
                     accent = colors.houselight,
                     onClick = { switch(true) },
                 )
@@ -275,16 +286,16 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             val refreshing = refreshAsked?.let { asked -> (p.lastRefreshMs ?: 0L) < asked && System.currentTimeMillis() - asked < 120_000 } == true
             SheetRow(
                 icon = LoungeIcons.Refresh,
-                title = "Refresh now",
-                value = if (refreshing) "Refreshing…" else null,
+                title = stringResource(R.string.plugins_refresh),
+                value = if (refreshing) stringResource(R.string.plugins_refreshing) else null,
                 accent = if (refreshing) colors.houselight else colors.dust,
                 onClick = { refreshAsked = System.currentTimeMillis(); core.refreshPlugin(p.id) },
             )
         }
         SheetRow(
             icon = LoungeIcons.Info,
-            title = "Log",
-            value = if (showLog) "Hide" else "Show",
+            title = stringResource(R.string.plugins_log),
+            value = stringResource(if (showLog) DesignR.string.common_hide else DesignR.string.common_show),
             onClick = {
                 showLog = !showLog
                 if (showLog) scope.launch { log = withContext(Dispatchers.IO) { core.pluginLog(pluginId) } }
@@ -294,8 +305,8 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             Column(Modifier.padding(start = 20.dp, top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 val lines = log
                 when {
-                    lines == null -> Text("Loading…", style = LoungeTheme.typography.caption, color = colors.dust)
-                    lines.isEmpty() -> Text("Nothing logged yet.", style = LoungeTheme.typography.caption, color = colors.dust)
+                    lines == null -> Text(stringResource(R.string.plugins_loading), style = LoungeTheme.typography.caption, color = colors.dust)
+                    lines.isEmpty() -> Text(stringResource(R.string.plugins_log_empty), style = LoungeTheme.typography.caption, color = colors.dust)
                     else -> lines.takeLast(12).forEach { line ->
                         Text(line.substringAfter(' '), style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
@@ -311,7 +322,7 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
             var confirming by remember(p.id) { mutableStateOf(false) }
             SheetRow(
                 icon = LoungeIcons.Trash,
-                title = if (confirming) "Yes, remove it and its settings" else "Remove",
+                title = stringResource(if (confirming) R.string.plugins_remove_confirm else R.string.plugins_remove),
                 titleColor = if (confirming) colors.ember else colors.limelight,
                 accent = colors.ember,
                 modifier = Modifier.onFocusChanged { if (!it.isFocused) confirming = false },
@@ -321,7 +332,7 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
                     } else {
                         scope.launch {
                             withContext(Dispatchers.IO) { core.removePlugin(p.id) }
-                            say("${p.name} removed")
+                            say(resources.getString(R.string.plugins_removed, p.name))
                             onRemoved()
                         }
                     }
@@ -330,34 +341,34 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
         }
     }
     SheetFootnote(
-        "It can reach ${reachText(p)}.",
+        reachText(p),
         refreshWords(p.refreshMinutes, p.refreshSeconds),
-        "Updates are taken only from its publisher, whose key starts ${p.publisher.take(8).chunked(4).joinToString(" ")}.",
+        stringResource(R.string.plugins_publisher_key, p.publisher.take(8).chunked(4).joinToString(" ")),
     )
 }
 
 /** Items in a sentence: "a", "a and b", "a, b and c". */
-private fun joined(parts: List<String>): String = when (parts.size) {
-    0 -> "nothing"
-    1 -> parts[0]
-    else -> parts.dropLast(1).joinToString(", ") + " and " + parts.last()
+@Composable
+private fun joined(parts: List<String>): String {
+    if (parts.size < 2) return parts.firstOrNull().orEmpty()
+    val before = parts.dropLast(1).reduce { said, next -> stringResource(R.string.plugins_list_next, said, next) }
+    return stringResource(R.string.plugins_list_last, before, parts.last())
 }
 
-/** Where a plugin may connect, in words; a host it names is shown as it is. */
+/** Where a plugin may connect, as a sentence; a host it names is shown as it is. */
+@Composable
 private fun reachText(p: PluginInfo): String {
-    val parts = LinkedHashSet<String>()
-    for (h in p.fetchHosts) {
-        parts += when {
-            h.startsWith("$") -> p.settings.firstOrNull { it.key == h.drop(1) }?.let { "what you enter in ${it.label}" } ?: continue
-            h == "*" -> "any public site"
-            h == "local-network" -> "devices on your home network"
-            h == "localhost" || h == "127.0.0.1" || h == "::1" -> "this TV"
+    val places = p.fetchHosts.mapNotNull { h ->
+        when {
+            h.startsWith("$") -> p.settings.firstOrNull { it.key == h.drop(1) }?.let { stringResource(R.string.plugins_reach_setting, it.label) }
+            h == "*" -> stringResource(R.string.plugins_reach_anywhere)
+            h == "local-network" -> stringResource(R.string.plugins_reach_home_network)
+            h == "localhost" || h == "127.0.0.1" || h == "::1" -> stringResource(R.string.plugins_reach_this_tv)
             else -> h
         }
-    }
-    val list = parts.toList()
-    val reach = joined(list)
-    return if (p.selfSignedServers && list.isNotEmpty()) "$reach, accepting a home server's own certificate" else reach
+    }.distinct()
+    if (places.isEmpty()) return stringResource(R.string.plugins_reach_nothing)
+    return stringResource(if (p.selfSignedServers) R.string.plugins_reach_self_signed else R.string.plugins_reach, joined(places))
 }
 
 /**
@@ -378,12 +389,12 @@ private fun AskCard(ask: PluginAsk) {
             AsyncImage(model = path, contentDescription = null, modifier = Modifier.size(200.dp).clip(RoundedCornerShape(12.dp)))
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (link != null) "Sign in on your phone" else "Sign in", style = LoungeTheme.typography.title, color = colors.houselight)
+            Text(stringResource(if (link != null) R.string.plugins_ask_sign_in_phone else R.string.plugins_ask_sign_in), style = LoungeTheme.typography.title, color = colors.houselight)
             // With a page to open, the code follows it; without one, the plugin says where the code goes.
             val where = when {
                 link == null -> ask.after
-                ask.linkText != null -> "Scan this with its camera, or open ${ask.linkText}" + if (ask.code != null) " and enter" else ""
-                else -> "Scan this with its camera, or tap the link in the phone companion" + if (ask.code != null) " and enter" else ""
+                ask.linkText != null -> stringResource(if (ask.code != null) R.string.plugins_ask_open_enter else R.string.plugins_ask_open, ask.linkText!!)
+                else -> stringResource(if (ask.code != null) R.string.plugins_ask_tap_enter else R.string.plugins_ask_tap)
             }
             where?.let { Text(it, style = LoungeTheme.typography.meta, color = colors.dust) }
             ask.code?.let { Text(it, style = LoungeTheme.typography.displayL, color = colors.limelight, maxLines = 1) }
@@ -397,9 +408,10 @@ private fun StatusLine(p: PluginInfo) {
     val colors = LoungeTheme.colors
     val (text, color) = when {
         p.enabled && p.lastError != null -> p.lastError!! to colors.ember
-        p.enabled && p.lastRefreshMs != null -> "${if (p.items == 1u) "1 item" else "${p.items} items"}, refreshed ${Words.ago(System.currentTimeMillis() - p.lastRefreshMs!!)}" to colors.signal
-        p.enabled -> "Fetching for the first time…" to colors.dust
-        !p.configured -> "Fill in the settings below, then turn it on." to colors.houselight
+        p.enabled && p.lastRefreshMs != null ->
+            pluralStringResource(R.plurals.plugins_items_refreshed, p.items.toInt(), p.items.toInt(), Words.ago(LocalResources.current, System.currentTimeMillis() - p.lastRefreshMs!!)) to colors.signal
+        p.enabled -> stringResource(R.string.plugins_fetching_first) to colors.dust
+        !p.configured -> stringResource(R.string.plugins_fill_in_settings) to colors.houselight
         // Off and ready: the switch row below says so.
         else -> return
     }
@@ -413,11 +425,11 @@ private const val KEYBOARD_BACK_MS = 300L
 private const val SHORT_HELP = 160
 
 /** A setting's help as the TV shows it: whole when short, else its first sentence and a pointer to the phone. */
-internal fun shortHelp(text: String): String {
+internal fun shortHelp(resources: Resources, text: String): String {
     val trimmed = text.trim()
     if (trimmed.length <= SHORT_HELP) return trimmed
     val end = Regex("""[.!?](?=\s+["“‘(]?[A-Z0-9])""").find(trimmed)?.range?.last ?: return trimmed
-    return trimmed.substring(0, end + 1) + " Your phone shows the full steps."
+    return resources.getString(R.string.plugins_help_on_phone, trimmed.substring(0, end + 1))
 }
 
 /**
@@ -431,15 +443,16 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
     val colors = LoungeTheme.colors
     val visuals = LoungeTheme.visuals
     val also = if (alsoFocus != null) Modifier.focusRequester(alsoFocus) else Modifier
-    val label = setting.label + if (setting.required) "" else " (optional)"
+    val resources = LocalResources.current
+    val label = if (setting.required) setting.label else stringResource(R.string.plugins_setting_optional, setting.label)
     if (setting.kind == "toggle") {
         val on = (setting.value ?: setting.defaultValue) == "true"
         SheetRow(
             icon = null,
             title = setting.label,
-            subtitle = setting.help?.let { shortHelp(it) },
+            subtitle = setting.help?.let { shortHelp(resources, it) },
             subtitleLines = WHOLE,
-            value = if (on) "On" else "Off",
+            value = stringResource(if (on) DesignR.string.common_on else DesignR.string.common_off),
             accent = if (on) colors.signal else colors.dust,
             onClick = { onToggle(!on) },
             focusRequester = focusRequester,
@@ -511,16 +524,16 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
         onDispose { if (sheetBack.handler === handler) sheetBack.handler = null }
     }
     val placeholder = when {
-        secret && setting.hasValue -> "•••••••• (saved)"
+        secret && setting.hasValue -> stringResource(R.string.plugins_setting_secret_saved)
         setting.defaultValue != null -> setting.defaultValue!!
-        else -> "Not set"
+        else -> stringResource(R.string.plugins_setting_not_set)
     }
     // What TalkBack says after the label while the field is empty.
     val state = when {
         field.text.isNotEmpty() -> null
-        secret && setting.hasValue -> "Saved"
-        setting.defaultValue != null -> "Not set, uses ${setting.defaultValue}"
-        else -> "Not set"
+        secret && setting.hasValue -> stringResource(R.string.plugins_setting_saved)
+        setting.defaultValue != null -> stringResource(R.string.plugins_setting_not_set_uses, setting.defaultValue!!)
+        else -> stringResource(R.string.plugins_setting_not_set)
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = LoungeTheme.typography.caption, color = colors.dust)
@@ -598,14 +611,15 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
                     .semantics { contentDescription = label },
             )
         }
-        setting.help?.let { Text(shortHelp(it), style = LoungeTheme.typography.caption, color = colors.dust) }
+        setting.help?.let { Text(shortHelp(resources, it), style = LoungeTheme.typography.caption, color = colors.dust) }
     }
 }
 
 /** How often a plugin refreshes: by the second for one that follows things at home, else by the minute. */
+@Composable
 internal fun refreshWords(minutes: UInt, seconds: UInt): String =
     if (seconds > 0u) {
-        "It refreshes every ${Words.counted(seconds.toLong(), "second", "seconds")} while Lounge is on the screen."
+        pluralStringResource(R.plurals.plugins_refreshes_seconds, seconds.toInt(), seconds.toInt())
     } else {
-        "It refreshes every ${Words.counted(minutes.toLong(), "minute", "minutes")} while the TV is on."
+        pluralStringResource(R.plurals.plugins_refreshes_minutes, minutes.toInt(), minutes.toInt())
     }

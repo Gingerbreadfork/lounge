@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_next">Seguinte</string>
+    <string name="onboarding_start">Começar</string>
+    <string name="onboarding_skip">Ignorar</string>
+    <string name="onboarding_look_title">Boas-vindas ao Lounge</string>
+    <string name="onboarding_look_body">A sua TV, organizada em torno do que realmente vê. Para começar, que aspeto deve ter? Pode mudar isto em qualquer altura.</string>
+    <string name="onboarding_look_controller">Num comando de jogos, A escolhe, B volta atrás, Y abre as opções de um cartão, Start pesquisa e Select abre as Definições.</string>
+    <string name="onboarding_access_title">O que pode o Lounge ver?</string>
+    <string name="onboarding_access_body">Cada acesso acrescenta uma parte do ecrã principal. Nada sai desta TV; pode recusar qualquer um.</string>
+    <string name="onboarding_access_power">A Configuração avançada, o passo seguinte, também pode permitir qualquer um destes.</string>
+    <string name="onboarding_power_title">Faça dele o seu ecrã principal</string>
+    <string name="onboarding_power_body_done">Feito: premir Início abre o Lounge. A Configuração avançada também pode permitir os acessos do passo anterior, ligar a TV e mudar de entrada.</string>
+    <string name="onboarding_power_body">O Google TV não tem uma definição para isto. A Configuração avançada consegue fazê-lo através da depuração USB da TV, e a TV pergunta uma vez: assinale «Permitir sempre» e escolha Permitir.</string>
+    <string name="onboarding_power_connect">Ligar a Configuração avançada</string>
+    <string name="onboarding_power_connected">Ligada</string>
+    <string name="onboarding_power_waiting">À espera da sua autorização…</string>
+    <string name="onboarding_power_debugging_first">Ative primeiro a depuração USB</string>
+    <string name="onboarding_power_by_usb_debugging">Depuração USB</string>
+    <string name="onboarding_power_look_at_prompt">Veja o pedido</string>
+    <string name="onboarding_power_open_developer_options">Abrir Opções de programador</string>
+    <string name="onboarding_power_connecting">A ligar…</string>
+    <string name="onboarding_power_asks_once">A TV pergunta uma vez</string>
+    <string name="onboarding_home_title">Tornar o Lounge o ecrã principal</string>
+    <string name="onboarding_home_done">Concluído</string>
+    <string name="onboarding_home_working">A trabalhar…</string>
+    <string name="onboarding_home_failed">Não funcionou</string>
+    <string name="onboarding_home_do">Fazer</string>
+    <string name="onboarding_home_connect_first">Ligue primeiro</string>
+    <string name="onboarding_home_not_taken">O Android não tornou o Lounge o ecrã principal. Tente novamente ou, em Definições, abra Ecrã principal predefinido para ver outras formas.</string>
+    <plurals name="onboarding_power_homes_off">
+        <item quantity="one">O ecrã principal da própria TV abre antes de qualquer outro escolhido, por isso o Lounge desativa também %1$s. Nada é desinstalado; para o reativar, em Definições abra Configuração avançada, e faça-o antes de desinstalar o Lounge.</item>
+        <item quantity="many">O ecrã principal da própria TV abre antes de qualquer outro escolhido, por isso o Lounge desativa também %1$s. Nada é desinstalado; para os reativar, em Definições abra Configuração avançada, e faça-o antes de desinstalar o Lounge.</item>
+        <item quantity="other">O ecrã principal da própria TV abre antes de qualquer outro escolhido, por isso o Lounge desativa também %1$s. Nada é desinstalado; para os reativar, em Definições abra Configuração avançada, e faça-o antes de desinstalar o Lounge.</item>
+    </plurals>
+    <string name="onboarding_power_homes_and">%1$s e %2$s</string>
+    <string name="onboarding_power_home_stays">O ecrã principal da própria TV continua instalado, por isso a transmissão por Cast, o botão da roda dentada e o guia de TV continuam a funcionar. Para desfazer isto, em Definições abra Configuração avançada.</string>
+    <string name="onboarding_phone_title">Adicione o seu telemóvel</string>
+    <string name="onboarding_phone_body_on">Leia o código com a câmara do telemóvel. O telemóvel passa a ser comando e teclado, e o sítio para organizar linhas e instalar plugins.</string>
+    <string name="onboarding_phone_body_off">Ative o Lounge no telemóvel para mostrar um código que o telemóvel possa ler. O telemóvel passa a ser comando e teclado, e o sítio para organizar linhas e instalar plugins.</string>
+    <string name="onboarding_phone_footnote">Tudo fica na sua rede doméstica. Para esquecer um telemóvel mais tarde, em Definições abra Lounge no telemóvel.</string>
+    <string name="onboarding_phone_qr">Código de emparelhamento</string>
+    <string name="onboarding_phone_type_code">Ou escreva este código</string>
+    <string name="onboarding_phone_at">em %1$s</string>
+    <string name="onboarding_done_title">É esta a casa</string>
+    <string name="onboarding_done_body">Prima Início em qualquer altura para voltar ao Palco. Mantenha OK premido num cartão para abrir o menu, as Definições têm o essencial e o resto está no telemóvel.</string>
+    <string name="onboarding_done_reach">A partir do Palco, Cima leva a Pesquisar e Definições.</string>
+    <string name="onboarding_done_reach_controls">A partir do Palco, Cima leva a Pesquisar, Controlos da TV e Definições.</string>
+    <string name="onboarding_done_reach_guide">A partir do Palco, Cima leva a Pesquisar, Guia de TV e Definições.</string>
+    <string name="onboarding_done_reach_guide_controls">A partir do Palco, Cima leva a Pesquisar, Guia de TV, Controlos da TV e Definições.</string>
+    <string name="onboarding_done_back">Voltar sobe sempre um nível; a partir das linhas, regressa ao Palco.</string>
+    <string name="onboarding_done_plugins">Os plugins trazem o seu servidor multimédia, a TV em direto e as luzes de casa. Em Definições, abra Plugins.</string>
+</resources>

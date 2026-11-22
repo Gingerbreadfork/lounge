@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Lounge's name in Android's list of apps allowed to read notifications. -->
     <string name="now_playing_listener_label">Lounge now playing and notifications</string>
 </resources>

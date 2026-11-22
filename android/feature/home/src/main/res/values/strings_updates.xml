@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Where the updater stands, in a word or two: the value of the Updates row in Settings and of the first row here. %1$s is a version such as 0.9.2. -->
+    <string name="updates_word_checking">Checking…</string>
+    <string name="updates_word_available">%1$s available</string>
+    <string name="updates_word_downloading">Downloading…</string>
+    <string name="updates_word_ready">%1$s ready</string>
+    <string name="updates_word_installing">Installing…</string>
+    <string name="updates_word_problem">Problem</string>
+    <string name="updates_word_up_to_date">Up to date</string>
+    <!-- Lounge checks for updates only when asked. -->
+    <string name="updates_word_manual">Manual</string>
+
+    <!-- The Updates sheet. -->
+    <string name="updates_title">Updates</string>
+    <string name="updates_not_checked">Not checked yet</string>
+    <!-- When Lounge last looked for an update. %1$s is how long ago, such as "just now" or "3 minutes ago". -->
+    <string name="updates_checked_ago">Checked %1$s</string>
+    <string name="updates_checked_never">Checked never</string>
+    <string name="updates_press_to_check">Press to check now</string>
+    <string name="updates_check_twice">Check twice a day</string>
+    <!-- A row for the new version and the value saying what OK does. %1$s is a version such as 0.9.2. -->
+    <string name="updates_get">Get Lounge %1$s</string>
+    <string name="updates_download">Download</string>
+    <string name="updates_downloading">Downloading Lounge %1$s</string>
+    <!-- How much has been downloaded, as a percentage. -->
+    <string name="updates_percent">%1$d %%</string>
+    <string name="updates_install">Install Lounge %1$s</string>
+    <string name="updates_confirm">Confirm</string>
+    <!-- Installs the update at once. -->
+    <string name="updates_now">Now</string>
+    <string name="updates_installing">Installing Lounge %1$s…</string>
+    <string name="updates_allow_install">Allow Lounge to install updates</string>
+    <!-- Android's list is its screen of apps allowed to install other apps. -->
+    <string name="updates_install_hint">OK opens Android\'s list: turn on Lounge there, then press Back</string>
+    <!-- The heading over a release's notes. %1$s is a version such as 0.9.2. -->
+    <string name="updates_whats_new">What\'s new in %1$s</string>
+    <!-- How updates reach this TV, by what Android allows. -->
+    <string name="updates_how_silent">Lounge looks at its releases on GitHub twice a day. Updates install by themselves while you are in another app, and Lounge comes back as it was.</string>
+    <string name="updates_how_power_setup">Lounge looks at its releases on GitHub twice a day. Power Setup installs updates without asking, while you are in another app.</string>
+    <!-- More details and Install anyway are what Play Protect's own dialog says. -->
+    <string name="updates_how_confirm">Lounge looks at its releases on GitHub twice a day. Android asks you to confirm this update, and Play Protect may add that it has not seen this developer: choose More details, then Install anyway. After this one, updates install by themselves.</string>
+    <!-- Apps, Special app access and Install unknown apps are places in the TV's own settings. -->
+    <string name="updates_how_needs_permission">Lounge looks at its releases on GitHub twice a day. Android doesn\'t let Lounge install apps yet. To allow it, in the TV\'s settings open Apps, then Special app access, then Install unknown apps; or connect Power Setup.</string>
+</resources>

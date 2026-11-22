@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="themes_dusk_title">Dämmerung</string>
+    <string name="themes_dusk_tagline">Indigonacht, korallrote Lampe</string>
+    <string name="themes_house_title">Saal</string>
+    <string name="themes_house_tagline">Warmes Pflaumenviolett, Glühlampenlicht</string>
+    <string name="themes_hearth_title">Kamin</string>
+    <string name="themes_hearth_tagline">Umbrabraune Wände, Feuerschein</string>
+    <string name="themes_opera_title">Oper</string>
+    <string name="themes_opera_tagline">Roter Samt und Blattgold</string>
+    <string name="themes_marquee_title">Lichtspielhaus</string>
+    <string name="themes_marquee_tagline">Marineblau, Glühbirnen am Vordach</string>
+    <string name="themes_green_room_title">Grüner Salon</string>
+    <string name="themes_green_room_tagline">Tiefes Grün, Messinglampe</string>
+    <string name="themes_moonlight_title">Mondlicht</string>
+    <string name="themes_moonlight_tagline">Kühler Schiefer, Mondschein</string>
+    <string name="themes_graphite_title">Graphit</string>
+    <string name="themes_graphite_tagline">Keine Farbe, warmes Weiß</string>
+    <string name="themes_cabaret_title">Cabaret</string>
+    <string name="themes_cabaret_tagline">Schwarzviolett, pinkes Neon</string>
+    <string name="themes_aquarium_title">Aquarium</string>
+    <string name="themes_aquarium_tagline">Tiefes Petrol, der Schein eines Fischbeckens</string>
+    <string name="themes_absinthe_title">Absinth</string>
+    <string name="themes_absinthe_tagline">Dunkles Oliv, grüngoldener Schimmer</string>
+    <string name="themes_ultraviolet_title">Ultraviolett</string>
+    <string name="themes_ultraviolet_tagline">Fast schwarz, Schwarzlicht</string>
+    <string name="themes_blackout_title">Blackout</string>
+    <string name="themes_blackout_tagline">Echtes Schwarz für OLED-Displays</string>
+    <string name="themes_high_contrast_title">Hoher Kontrast</string>
+    <string name="themes_high_contrast_tagline">Kräftigere Schrift und Kanten</string>
+</resources>

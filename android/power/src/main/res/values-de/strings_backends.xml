@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="backends_took_too_long">Der Fernseher hat zu lange für die Antwort gebraucht. Versuche es erneut.</string>
+    <string name="backends_unreachable">Lounge konnte USB-Debugging nicht erreichen. Prüfe in den Entwickleroptionen, ob es noch an ist, und versuche es dann erneut.</string>
+    <string name="backends_dropped">Die Verbindung zum USB-Debugging ist abgebrochen. Versuche es erneut.</string>
+    <string name="backends_tls">Dieser Fernseher verlangt den Kopplungscode des Debuggings über WLAN, den die Erweiterte Einrichtung nicht nutzen kann. Schalte stattdessen in den Entwickleroptionen USB-Debugging ein und versuche es dann erneut.</string>
+    <string name="backends_not_this_tv">Etwas anderes als der Debugging-Dienst dieses Fernsehers hat geantwortet, deshalb hat Lounge sich nicht verbunden. Starte den Fernseher neu und versuche es dann erneut.</string>
+    <string name="backends_key_not_approved">Dieser Fernseher erlaubt Lounge nicht mehr. Öffne in den Einstellungen „Erweiterte Einrichtung“ und wähle „Verbinden“.</string>
+    <string name="backends_shizuku_not_allowed">Shizuku hat Lounge nicht erlaubt. Öffne Shizuku, erlaube Lounge und versuche es dann erneut.</string>
+    <string name="backends_shizuku_not_running">Shizuku konnte das nicht ausführen. Öffne Shizuku und prüfe, ob es läuft.</string>
+</resources>

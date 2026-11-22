@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_menu_pane_title">Opções de %1$s</string>
+    <string name="tile_menu_dismiss_notice">Não mostrar novamente</string>
+    <string name="tile_menu_app_info">Informações da app</string>
+    <string name="tile_menu_play_store">Abrir na Play Store</string>
+    <string name="tile_menu_uninstall">Desinstalar</string>
+    <string name="tile_menu_move_left">Mover para a esquerda</string>
+    <string name="tile_menu_move_right">Mover para a direita</string>
+    <string name="tile_menu_adjust">Ajustar</string>
+    <string name="tile_menu_pin_app">Fixar no início de As suas apps</string>
+    <string name="tile_menu_pin_app_detail">Fica à frente das apps recentes</string>
+    <string name="tile_menu_unpin_app">Desafixar de As suas apps</string>
+    <string name="tile_menu_unpin_app_detail">Volta a seguir o que abre</string>
+    <string name="tile_menu_pin_stage">Fixar no Palco</string>
+    <string name="tile_menu_pin_stage_detail">Fica nas imagens grandes do topo</string>
+    <string name="tile_menu_unpin_stage">Desafixar do Palco</string>
+    <string name="tile_menu_unpin_stage_detail">Dá o lugar ao que estiver a ver</string>
+    <string name="tile_menu_hide_detail">Fora de todas as linhas até voltar a mostrar</string>
+    <string name="tile_menu_show_detail">De volta a todas as linhas a que pertence</string>
+    <string name="tile_menu_hide_all_from">Ocultar tudo de %1$s</string>
+    <string name="tile_menu_hide_all_from_detail">Fora de Continuar a ver até voltar a mostrar</string>
+    <string name="tile_menu_hide_row">Ocultar esta linha</string>
+    <string name="tile_menu_hide_row_detail">Para repor: Definições, Linhas</string>
+</resources>

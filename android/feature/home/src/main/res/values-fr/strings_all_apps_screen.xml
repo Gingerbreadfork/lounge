@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="all_apps_screen_letter">Applis commençant par %1$s</string>
+    <string name="all_apps_screen_letter_other">Applis commençant par un chiffre ou un symbole</string>
+    <string name="all_apps_screen_empty">Les applis apparaissent ici une fois installées.</string>
+    <string name="all_apps_screen_empty_search">Aucune appli ne s’appelle « %1$s ». Retour efface la recherche.</string>
+    <string name="all_apps_screen_nothing">Rien ici pour l’instant.</string>
+    <string name="all_apps_screen_no_match">Rien ne correspond à « %1$s ».</string>
+    <plurals name="all_apps_screen_matching">
+        <item quantity="one">%1$d sur %2$d correspond à « %3$s ».</item>
+        <item quantity="many">%1$d sur %2$d correspondent à « %3$s ».</item>
+        <item quantity="other">%1$d sur %2$d correspondent à « %3$s ».</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_az">
+        <item quantity="one">%1$d appli, de A à Z.</item>
+        <item quantity="many">%1$d applis, de A à Z.</item>
+        <item quantity="other">%1$d applis, de A à Z.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_opened">
+        <item quantity="one">%1$d appli, les dernières ouvertes d’abord.</item>
+        <item quantity="many">%1$d applis, les dernières ouvertes d’abord.</item>
+        <item quantity="other">%1$d applis, les dernières ouvertes d’abord.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_installed">
+        <item quantity="one">%1$d appli, les plus récentes d’abord.</item>
+        <item quantity="many">%1$d applis, les plus récentes d’abord.</item>
+        <item quantity="other">%1$d applis, les plus récentes d’abord.</item>
+    </plurals>
+    <string name="all_apps_screen_hint">Maintenez OK sur une appli pour l’épingler dans Vos applis. Haut pour rechercher ou trier.</string>
+    <string name="all_apps_screen_hint_alphabet">Maintenez OK sur une appli pour l’épingler dans Vos applis. Haut pour rechercher ou trier, Gauche pour l’alphabet.</string>
+    <string name="all_apps_screen_sort_az">De A à Z</string>
+    <string name="all_apps_screen_sort_opened">Ouvertes récemment</string>
+    <string name="all_apps_screen_sort_installed">Installées récemment</string>
+    <string name="all_apps_screen_sorted_az">Tri : de A à Z. OK change l’ordre</string>
+    <string name="all_apps_screen_sorted_opened">Tri : ouvertes récemment. OK change l’ordre</string>
+    <string name="all_apps_screen_sorted_installed">Tri : installées récemment. OK change l’ordre</string>
+    <string name="all_apps_screen_change_order">Changer l’ordre</string>
+    <string name="all_apps_screen_find">Trouver une appli</string>
+</resources>

@@ -9,12 +9,14 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.content.pm.Signature
+import android.content.res.Resources
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import androidx.annotation.StringRes
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -70,19 +72,25 @@ sealed interface UpdateState {
     data class NeedsConfirmation(override val release: Release, val file: File, val confirm: Intent) : UpdateState {
         override val label: String get() = "NeedsConfirmation"
     }
-    /** [cause] says what went wrong, and [next] what follows, when the cause does not say so itself. */
-    data class Failed(val cause: String, val next: Next?, override val release: Release?, val atMs: Long) : UpdateState {
+    /**
+     * [cause] says what went wrong, and [next] what follows, when the cause does not say so itself.
+     * [message] is both as the screen says them, from [failureMessage].
+     */
+    data class Failed(val cause: String, val next: Next?, override val release: Release?, val atMs: Long, val message: String) : UpdateState {
         override val label: String get() = "Failed"
-        val message: String get() = if (next == null) cause else "$cause ${next.said}"
     }
 }
 
-/** What follows a failed check, download or install, as the end of its sentence. */
-enum class Next(val said: String) {
-    Later("Lounge tries again later."),
-    WhenAsked("Try again when you are ready."),
-    NextRelease("Lounge waits for the next release."),
+/** What follows a failed check, download or install, as a sentence said after its cause. */
+enum class Next(@StringRes val said: Int) {
+    Later(R.string.update_manager_next_later),
+    WhenAsked(R.string.update_manager_next_when_asked),
+    NextRelease(R.string.update_manager_next_release),
 }
+
+/** A failure's whole text: [cause], then what [next] says follows. */
+internal fun failureMessage(resources: Resources, cause: String, next: Next?): String =
+    if (next == null) cause else "$cause ${resources.getString(next.said)}"
 
 /** What follows a failure that could go better another time: [auto] is the twice-a-day check, [gaveUp] that this release has failed too often. */
 internal fun nextAfter(auto: Boolean, gaveUp: Boolean): Next = when {
@@ -138,7 +146,7 @@ class UpdateManager(
         return when {
             checked == 0L -> UpdateState.Idle(0L)
             release == null || installed == null || release.version <= installed -> UpdateState.UpToDate(checked)
-            failures.gaveUpOn(release.tag) -> UpdateState.Failed(gaveUpMessage(release), null, release, checked)
+            failures.gaveUpOn(release.tag) -> failed(gaveUpMessage(release), null, release, checked)
             else -> readyIfDownloaded(release) ?: UpdateState.Available(release)
         }
     }
@@ -156,7 +164,7 @@ class UpdateManager(
         _autoCheck.value = on
         // A failure on show says what happens next, which this has just changed.
         val failed = _state.value as? UpdateState.Failed ?: return
-        if (failed.next == Next.Later || failed.next == Next.WhenAsked) _state.compareAndSet(failed, failed.copy(next = whatNext(failed.release)))
+        if (failed.next == Next.Later || failed.next == Next.WhenAsked) _state.compareAndSet(failed, failed(failed.cause, whatNext(failed.release), failed.release, failed.atMs))
     }
 
     /** What follows a failure with [release], after it has been counted. */
@@ -164,9 +172,12 @@ class UpdateManager(
 
     /** A failure as the state to show, worded by [failureCause]. */
     private fun failed(e: Throwable, release: Release?): UpdateState.Failed {
-        val (cause, settled) = failureCause(e)
-        return UpdateState.Failed(cause, if (settled) null else whatNext(release), release, System.currentTimeMillis())
+        val (cause, settled) = failureCause(context.resources, e)
+        return failed(cause, if (settled) null else whatNext(release), release, System.currentTimeMillis())
     }
+
+    private fun failed(cause: String, next: Next?, release: Release?, atMs: Long): UpdateState.Failed =
+        UpdateState.Failed(cause, next, release, atMs, failureMessage(context.resources, cause, next))
 
     /**
      * Whether there is a network Android lets Lounge use now. A sleeping TV has none, and a check
@@ -277,7 +288,7 @@ class UpdateManager(
                     if (now - installingSince > INSTALL_TIMEOUT_MS) {
                         Log.w(TAG, "updates: the install of ${s.release.tag} never finished")
                         noteFailure(s.release, final = false)
-                        _state.value = UpdateState.Failed("The install didn't finish.", whatNext(s.release), s.release, now)
+                        _state.value = failed(context.getString(R.string.update_manager_install_unfinished), whatNext(s.release), s.release, now)
                     }
                     return
                 }
@@ -335,7 +346,7 @@ class UpdateManager(
                 when {
                     release == null -> UpdateState.UpToDate(now)
                     installed != null && release.version <= installed -> UpdateState.UpToDate(now)
-                    failures.gaveUpOn(release.tag) -> UpdateState.Failed(gaveUpMessage(release), null, release, now)
+                    failures.gaveUpOn(release.tag) -> failed(gaveUpMessage(release), null, release, now)
                     before.isWaiting() && before.release?.version == release.version -> before
                     else -> readyIfDownloaded(release) ?: UpdateState.Available(release)
                 }
@@ -426,12 +437,12 @@ class UpdateManager(
                 return _state.value
             }
             Log.w(TAG, "updates: Power Setup install failed: ${r.exceptionOrNull()?.message ?: r.getOrNull()?.output}")
-            if (!canRequestInstalls()) return fail(UpdateProblem("Power Setup couldn't install the update. Try again, or allow Lounge to install apps.", settled = true), false)
+            if (!canRequestInstalls()) return fail(UpdateProblem(context.getString(R.string.update_manager_power_setup_failed), settled = true), false)
         }
         runCatching { commitSession(ready.release, ready.file, ready.sha256, silent = path == InstallPath.Silent, profile = profile) }
             .onFailure {
                 Log.w(TAG, "updates: the session failed: $it")
-                fail(it as? UpdateProblem ?: UpdateProblem("Android couldn't start the install."), false)
+                fail(it as? UpdateProblem ?: UpdateProblem(context.getString(R.string.update_manager_install_not_started)), false)
             }
         return _state.value
     }
@@ -467,11 +478,11 @@ class UpdateManager(
     fun askForInstallPermission(activity: Activity, scope: CoroutineScope) {
         if (leavingForPermission) return
         leavingForPermission = true
-        _hints.tryEmit(INSTALL_HINT)
+        _hints.tryEmit(context.getString(R.string.update_manager_install_hint))
         scope.launch {
             try {
                 delay(HINT_MS)
-                if (!openInstallPermission(activity)) _hints.tryEmit(NO_INSTALL_SCREEN)
+                if (!openInstallPermission(activity)) _hints.tryEmit(context.getString(R.string.update_manager_no_install_screen))
             } finally {
                 leavingForPermission = false
             }
@@ -564,23 +575,23 @@ class UpdateManager(
      * newer than it and the version [release] names.
      */
     private fun verify(file: File, sha256: String, release: Release) {
-        if (onStorage { sha256(file) } != sha256) throw UpdateProblem("The update changed after it was checked, so Lounge threw it away.")
+        if (onStorage(context.resources) { sha256(file) } != sha256) throw UpdateProblem(context.getString(R.string.update_manager_changed))
         checkPackage(file, release)
     }
 
     /** The file matches what was published, so anything wrong with it stays wrong for this release. */
     private fun checkPackage(file: File, release: Release) {
         val pm = context.packageManager
-        val archive = archiveInfo(file) ?: throw NotInstallable("The update is not an app Android can read")
-        if (archive.packageName != context.packageName) throw NotInstallable("The update is not Lounge")
+        val archive = archiveInfo(file) ?: throw NotInstallable(context.getString(R.string.update_manager_unreadable))
+        if (archive.packageName != context.packageName) throw NotInstallable(context.getString(R.string.update_manager_not_lounge))
         @Suppress("DEPRECATION")
         val installedInfo = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES)
-        if (!signedLike(signers(installedInfo, withHistory = false), signers(archive, withHistory = true))) throw NotInstallable("The update is not signed like this copy of Lounge")
-        versionProblem(release.version, archive.versionName, archive.longVersionCode, installedInfo.longVersionCode)?.let { throw NotInstallable(it) }
+        if (!signedLike(signers(installedInfo, withHistory = false), signers(archive, withHistory = true))) throw NotInstallable(context.getString(R.string.update_manager_other_signer))
+        versionProblem(context.resources, release.version, archive.versionName, archive.longVersionCode, installedInfo.longVersionCode)?.let { throw NotInstallable(it) }
     }
 
-    /** A release that can never install here, whatever is tried again. */
-    private class NotInstallable(what: String) : UpdateProblem("$what. Lounge waits for the next release.", settled = true)
+    /** A release that can never install here, whatever is tried again. Its message says that Lounge waits for the next one. */
+    private class NotInstallable(message: String) : UpdateProblem(message, settled = true)
 
     private var failures: Failures
         get() = Failures(prefs.getString(KEY_FAILED_TAG, null), prefs.getInt(KEY_FAILED_TRIES, 0))
@@ -592,7 +603,7 @@ class UpdateManager(
         if (release != null) failures = failures.after(release.tag, final)
     }
 
-    private fun gaveUpMessage(release: Release): String = "Lounge ${release.version} didn't install on this TV, so it waits for the next release."
+    private fun gaveUpMessage(release: Release): String = context.getString(R.string.update_manager_gave_up, release.version.toString())
 
     private fun archiveInfo(file: File): PackageInfo? {
         // Signatures too: some versions only read an archive's certificates when asked for them.
@@ -625,7 +636,7 @@ class UpdateManager(
 
     /** Copies the APK where `pm` can read it and checks the copy, right before it is installed. */
     private fun stage(file: File, sha256: String, release: Release): File {
-        val dir = stagingDir()?.apply { mkdirs() } ?: throw UpdateProblem("Power Setup couldn't reach the update on the TV's storage.")
+        val dir = stagingDir()?.apply { mkdirs() } ?: throw UpdateProblem(context.getString(R.string.update_manager_not_staged))
         val staged = File(dir, file.name)
         file.copyTo(staged, overwrite = true)
         try {
@@ -677,8 +688,8 @@ class UpdateManager(
             when (conn.responseCode) {
                 200 -> conn.inputStream.bufferedReader().readText().let { Release.parse(it) to it }
                 404 -> null to null
-                403, 429 -> throw UpdateProblem("GitHub is limiting checks from this network.")
-                else -> throw UpdateProblem("GitHub didn't answer as expected.").also { Log.w(TAG, "updates: GitHub answered HTTP ${conn.responseCode}") }
+                403, 429 -> throw UpdateProblem(context.getString(R.string.update_manager_rate_limited))
+                else -> throw UpdateProblem(context.getString(R.string.update_manager_unexpected_answer)).also { Log.w(TAG, "updates: GitHub answered HTTP ${conn.responseCode}") }
             }
         } finally {
             conn.disconnect()
@@ -688,7 +699,7 @@ class UpdateManager(
     /** The APK and the hash it was checked against. */
     private suspend fun fetchApk(release: Release): Pair<File, String> = withContext(Dispatchers.IO) {
         val expected = release.sha256 ?: listedHash(release, release.apkName)
-            ?: throw UpdateProblem("This release has no checksum to check the download against, so Lounge won't install it.", settled = true)
+            ?: throw UpdateProblem(context.getString(R.string.update_manager_no_checksum), settled = true)
         val target = fileFor(release)
         var lastReported = 0f
         // A body that never ends must not fill the storage.
@@ -729,26 +740,26 @@ class UpdateManager(
         val partial = File(target.path + ".part")
         val conn = open(url)
         try {
-            if (conn.responseCode != 200) throw UpdateProblem("GitHub didn't send the update.").also { Log.w(TAG, "updates: the download answered HTTP ${conn.responseCode}") }
+            if (conn.responseCode != 200) throw UpdateProblem(context.getString(R.string.update_manager_not_sent)).also { Log.w(TAG, "updates: the download answered HTTP ${conn.responseCode}") }
             val length = conn.contentLengthLong
             val digest = MessageDigest.getInstance("SHA-256")
             conn.inputStream.use { input ->
-                onStorage { partial.outputStream() }.use { out ->
+                onStorage(context.resources) { partial.outputStream() }.use { out ->
                     val buf = ByteArray(64 * 1024)
                     var done = 0L
                     while (true) {
                         val n = input.read(buf)
                         if (n < 0) break
-                        if (done + n > limit) throw UpdateProblem("The download was larger than its release says, so Lounge stopped it.")
-                        onStorage { out.write(buf, 0, n) }
+                        if (done + n > limit) throw UpdateProblem(context.getString(R.string.update_manager_too_large))
+                        onStorage(context.resources) { out.write(buf, 0, n) }
                         digest.update(buf, 0, n)
                         done += n
                         progress(done, length)
                     }
                 }
             }
-            if (digest.digest().toHex() != expected) throw UpdateProblem("The download didn't match its checksum, so Lounge threw it away.")
-            if (!partial.renameTo(target)) throw UpdateProblem(NOT_STORED)
+            if (digest.digest().toHex() != expected) throw UpdateProblem(context.getString(R.string.update_manager_checksum_mismatch))
+            if (!partial.renameTo(target)) throw UpdateProblem(context.getString(R.string.update_manager_not_stored))
         } finally {
             partial.delete()
             conn.disconnect()
@@ -908,7 +919,7 @@ class UpdateManager(
                 if (pendingSilent && status == PackageInstaller.STATUS_FAILURE_BLOCKED) prefs.edit().putString(KEY_SILENT_BLOCKED_AT, currentVersion).apply()
                 // Cancelled or refused: a later quiet update must not pull Lounge to the front.
                 prefs.edit().remove(KEY_RETURN).apply()
-                _state.value = failed(installProblem(status), release)
+                _state.value = failed(installProblem(context.resources, status), release)
             }
         }
         pendingInteractive = false
@@ -962,8 +973,6 @@ class UpdateManager(
         private const val INSTALL_TIMEOUT_MS = 10 * 60_000L
         /** How long the words stay up before Android's screen covers them. */
         private const val HINT_MS = 1_500L
-        const val INSTALL_HINT = "Find Lounge in Android's list and turn it on, then press Back."
-        const val NO_INSTALL_SCREEN = "This TV has no screen for that here. In its settings open Apps, then Special app access, then Install unknown apps, or connect Power Setup."
         /** How long after one quiet install Android lets the next go in unasked, with some to spare. */
         private const val SILENT_AGAIN_MS = 40_000L
 
@@ -1020,24 +1029,22 @@ class UpdateManager(
 /** A failure whose message is a sentence for the screen. [settled] when it also says what happens next. */
 internal open class UpdateProblem(message: String, val settled: Boolean = false) : IllegalStateException(message)
 
-internal const val NOT_STORED = "Lounge couldn't save the update on the TV's storage. Free some space on the TV."
-
 /** Runs a read or write of the TV's own storage, so a failure there is not blamed on the network. */
-internal inline fun <T> onStorage(block: () -> T): T = try {
+internal inline fun <T> onStorage(resources: Resources, block: () -> T): T = try {
     block()
 } catch (e: java.io.IOException) {
-    throw UpdateProblem(NOT_STORED).apply { initCause(e) }
+    throw UpdateProblem(resources.getString(R.string.update_manager_not_stored)).apply { initCause(e) }
 }
 
 /** What went wrong, as a sentence, and whether it already says what happens next. The raw reason goes to the log. */
-internal fun failureCause(e: Throwable): Pair<String, Boolean> = when (e) {
+internal fun failureCause(resources: Resources, e: Throwable): Pair<String, Boolean> = when (e) {
     is UpdateProblem -> e.message.orEmpty() to e.settled
     is java.net.UnknownHostException, is java.net.ConnectException, is java.net.NoRouteToHostException ->
-        "Lounge couldn't reach GitHub. Check the TV's internet connection." to false
-    is java.net.SocketTimeoutException -> "GitHub took too long to answer." to false
-    is javax.net.ssl.SSLException -> "Lounge couldn't connect to GitHub safely. Check that the TV's date and time are right." to false
-    is java.io.IOException -> "The connection to GitHub dropped." to false
-    else -> "The update didn't go through." to false
+        resources.getString(R.string.update_manager_unreachable) to false
+    is java.net.SocketTimeoutException -> resources.getString(R.string.update_manager_timed_out) to false
+    is javax.net.ssl.SSLException -> resources.getString(R.string.update_manager_not_secure) to false
+    is java.io.IOException -> resources.getString(R.string.update_manager_dropped) to false
+    else -> resources.getString(R.string.update_manager_did_not_go_through) to false
 }
 
 /** Whether Android's answer to an install means this release can never install here. */
@@ -1045,13 +1052,13 @@ internal fun installNeverWorks(status: Int): Boolean =
     status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE || status == PackageInstaller.STATUS_FAILURE_CONFLICT || status == PackageInstaller.STATUS_FAILURE_INVALID
 
 /** Android's refusal of an install, in words; only a refusal that could go better is followed by what happens next. */
-internal fun installProblem(status: Int): UpdateProblem = when {
-    status == PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateProblem("The install was cancelled. Choose Try again to install it.", settled = true)
-    status == PackageInstaller.STATUS_FAILURE_BLOCKED -> UpdateProblem("Android blocked the install. Try again, or connect Power Setup to install it.", settled = true)
-    status == PackageInstaller.STATUS_FAILURE_STORAGE -> UpdateProblem("There isn't enough storage for the update. Free some space on the TV, then try again.", settled = true)
-    status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> UpdateProblem("This update doesn't work on this TV. Lounge waits for the next release.", settled = true)
-    installNeverWorks(status) -> UpdateProblem("Android won't install this update on this TV. Lounge waits for the next release.", settled = true)
-    else -> UpdateProblem("Android couldn't install the update.")
+internal fun installProblem(resources: Resources, status: Int): UpdateProblem = when {
+    status == PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateProblem(resources.getString(R.string.update_manager_install_cancelled), settled = true)
+    status == PackageInstaller.STATUS_FAILURE_BLOCKED -> UpdateProblem(resources.getString(R.string.update_manager_install_blocked), settled = true)
+    status == PackageInstaller.STATUS_FAILURE_STORAGE -> UpdateProblem(resources.getString(R.string.update_manager_install_no_space), settled = true)
+    status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> UpdateProblem(resources.getString(R.string.update_manager_install_incompatible), settled = true)
+    installNeverWorks(status) -> UpdateProblem(resources.getString(R.string.update_manager_install_refused), settled = true)
+    else -> UpdateProblem(resources.getString(R.string.update_manager_install_failed))
 }
 
 /** Android's answer to an install session. */

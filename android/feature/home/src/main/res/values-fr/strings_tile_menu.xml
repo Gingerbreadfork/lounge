@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_menu_pane_title">Options pour %1$s</string>
+    <string name="tile_menu_dismiss_notice">Ne plus afficher</string>
+    <string name="tile_menu_app_info">Infos sur l’appli</string>
+    <string name="tile_menu_play_store">Ouvrir dans le Play Store</string>
+    <string name="tile_menu_uninstall">Désinstaller</string>
+    <string name="tile_menu_move_left">Déplacer à gauche</string>
+    <string name="tile_menu_move_right">Déplacer à droite</string>
+    <string name="tile_menu_adjust">Régler</string>
+    <string name="tile_menu_pin_app">Épingler en tête de Vos applis</string>
+    <string name="tile_menu_pin_app_detail">Reste en place, devant les applis récentes</string>
+    <string name="tile_menu_unpin_app">Désépingler de Vos applis</string>
+    <string name="tile_menu_unpin_app_detail">Suit de nouveau ce que vous ouvrez</string>
+    <string name="tile_menu_pin_stage">Épingler sur la Scène</string>
+    <string name="tile_menu_pin_stage_detail">Reste parmi les grandes images du haut</string>
+    <string name="tile_menu_unpin_stage">Désépingler de la Scène</string>
+    <string name="tile_menu_unpin_stage_detail">Ce que vous regardez prend sa place</string>
+    <string name="tile_menu_hide_detail">Hors des rangées tant que vous ne l’affichez pas</string>
+    <string name="tile_menu_show_detail">Revient dans toutes ses rangées</string>
+    <string name="tile_menu_hide_all_from">Masquer tout ce qui vient de %1$s</string>
+    <string name="tile_menu_hide_all_from_detail">Hors de Reprendre la lecture tant que vous ne l’affichez pas</string>
+    <string name="tile_menu_hide_row">Masquer cette rangée</string>
+    <string name="tile_menu_hide_row_detail">Pour la réafficher : Paramètres, Rangées</string>
+</resources>

@@ -265,28 +265,21 @@ internal class SceneMemory(context: Context) {
         if (stale.isNotEmpty()) prefs.edit().apply { stale.forEach { remove(it) } }.apply()
     }
 
-    /** Why the screensaver cannot show [style], in words for the person, or null when it can. */
+    /** Why the screensaver cannot show [style], as [SceneRecord.HEAVY] or [SceneRecord.BROKEN], or null when it can. */
     fun problem(style: ShaderStyle): String? {
         seen[style.id]?.let { return it }
         val prefix = prefix("saver", style)
-        val kept = runCatching { prefs.all }.getOrNull().orEmpty().entries.firstNotNullOfOrNull { (k, v) ->
+        return runCatching { prefs.all }.getOrNull().orEmpty().entries.firstNotNullOfOrNull { (k, v) ->
             if (k.startsWith(prefix)) SceneRecord.decode(v as? String)?.problem else null
         }
-        return words(kept, style.name)
     }
 
     companion object {
         const val FILE = "screensavers"
         @Volatile private var pruned = false
 
-        /** Problems met since the app started, by style id, as [words] gives them. */
+        /** Problems met since the app started, by style id: [SceneRecord.HEAVY] or [SceneRecord.BROKEN]. */
         val seen = mutableStateMapOf<String, String>()
-
-        fun words(problem: String?, name: String): String? = when (problem) {
-            SceneRecord.HEAVY -> "$name is too heavy for this TV"
-            SceneRecord.BROKEN -> "$name could not be drawn on this TV"
-            else -> null
-        }
     }
 }
 

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The top bar's entry for what is playing, as a screen reader says it. %1$s is the title playing. -->
+    <string name="top_bar_now_playing">Now playing, %1$s</string>
+</resources>

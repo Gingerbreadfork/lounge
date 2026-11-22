@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recovery_title">O Lounge não conseguiu iniciar</string>
+    <string name="recovery_storage_full">O armazenamento da TV está cheio, então o Lounge não consegue abrir o layout e as configurações que salvou. Libere espaço em Configurações e tente novamente.</string>
+    <string name="recovery_storage">Não foi possível abrir o layout e as configurações que ele salvou. Primeiro, tente novamente. Se continuar acontecendo, comece do zero: eles são guardados à parte, o Lounge recomeça, e seus apps, canais e entradas voltam sozinhos.</string>
+    <string name="recovery_other">O núcleo do Lounge não carregou. Primeiro, tente novamente. Se continuar acontecendo, comece do zero ou reinstale o Lounge.</string>
+    <string name="recovery_opening">Abrindo…</string>
+    <string name="recovery_start_fresh">Começar do zero</string>
+    <string name="recovery_start_fresh_confirm">Sim, começar do zero</string>
+    <string name="recovery_settings">Configurações</string>
+    <string name="recovery_settings_stuck">As configurações desta TV não abriram. Abra pela tela inicial da própria TV.</string>
+    <string name="recovery_open_home">Abrir %1$s</string>
+    <string name="recovery_turn_home_on">Reativar %1$s</string>
+    <string name="recovery_home_stuck">%1$s não abriu. Nas configurações da TV, abra Apps para encontrar.</string>
+    <string name="recovery_still_wont_open">Ainda não abre.</string>
+</resources>

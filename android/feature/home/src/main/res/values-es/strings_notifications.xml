@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="notifications_count">
+        <item quantity="one">%1$d notificación</item>
+        <item quantity="many">%1$d notificaciones</item>
+        <item quantity="other">%1$d notificaciones</item>
+    </plurals>
+    <plurals name="notifications_count_spoken">
+        <item quantity="one">%1$d notificación, %2$s</item>
+        <item quantity="many">%1$d notificaciones, %2$s</item>
+        <item quantity="other">%1$d notificaciones, %2$s</item>
+    </plurals>
+    <plurals name="notifications_new">
+        <item quantity="one">%1$d nueva</item>
+        <item quantity="many">%1$d nuevas</item>
+        <item quantity="other">%1$d nuevas</item>
+    </plurals>
+    <string name="notifications_byline">%1$s, %2$s</string>
+    <string name="notifications_when_just_now">Hace un momento</string>
+    <plurals name="notifications_when_minutes_ago">
+        <item quantity="one">Hace %1$d minuto</item>
+        <item quantity="many">Hace %1$d minutos</item>
+        <item quantity="other">Hace %1$d minutos</item>
+    </plurals>
+    <plurals name="notifications_when_hours_ago">
+        <item quantity="one">Hace %1$d hora</item>
+        <item quantity="many">Hace %1$d horas</item>
+        <item quantity="other">Hace %1$d horas</item>
+    </plurals>
+    <plurals name="notifications_when_days_ago">
+        <item quantity="one">Hace %1$d día</item>
+        <item quantity="many">Hace %1$d días</item>
+        <item quantity="other">Hace %1$d días</item>
+    </plurals>
+    <string name="notifications_dismiss_all">Descartar todas</string>
+    <plurals name="notifications_staying">
+        <item quantity="one">%1$d se queda hasta que su app la retire</item>
+        <item quantity="many">%1$d se quedan hasta que sus apps las retiren</item>
+        <item quantity="other">%1$d se quedan hasta que sus apps las retiren</item>
+    </plurals>
+    <string name="notifications_taken_back">Su app ya la retiró, así que no hay nada que abrir.</string>
+    <string name="notifications_offered">Las notificaciones de tus apps ya pueden verse en la barra superior. Se activan en Ajustes, Notificaciones</string>
+    <string name="notifications_stays">Esta se queda hasta que su app la retire.</string>
+    <string name="notifications_sent">Enviado</string>
+    <string name="notifications_dismiss">Descartar</string>
+    <string name="notifications_hide_app">Ocultar todo lo de %1$s</string>
+    <string name="notifications_hide_app_subtitle">Lounge deja de mostrar sus notificaciones</string>
+    <string name="notifications_settings_subtitle">Lo que las apps de esta TV quieren decirte, a una pulsación en la barra superior.</string>
+    <string name="notifications_needs_access">Necesita acceso a notificaciones. OK lo pide.</string>
+    <string name="notifications_not_allowed">Sin permiso</string>
+    <string name="notifications_hidden_apps">Apps ocultas</string>
+    <string name="notifications_footnote_privacy">Lounge lee las notificaciones solo para mostrarlas aquí, y no las lee mientras esto esté desactivado. No guarda ninguna y ninguna sale de esta TV.</string>
+    <string name="notifications_footnote_left_out">Lo que sigue en curso, como una descarga, queda fuera, igual que lo que se está reproduciendo.</string>
+</resources>

@@ -1,5 +1,6 @@
 package tv.lounge.feature.home
 
+import android.content.res.Resources
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -56,6 +57,8 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -85,6 +88,7 @@ import tv.lounge.design.LoungeGlyphs
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.ProgressBar
+import tv.lounge.design.R as DesignR
 import tv.lounge.design.argb
 import tv.lounge.design.focusRim
 import tv.lounge.design.lightGlow
@@ -179,7 +183,7 @@ fun TileView(
         { seen().let { house.brightness(state(it), light, motion, it) } }
     }
 
-    val spoken = description ?: tileDescription(tile, rowName)
+    val resources = LocalResources.current
     // A compact tile grows with large text rather than cutting its two lines (DESIGN.md §4.1).
     val type = LoungeTheme.typography
     val compactHeight = with(LocalDensity.current) { type.title.lineHeight.toDp() + type.caption.lineHeight.toDp() } + 12.dp
@@ -202,9 +206,16 @@ fun TileView(
                 onFocused(it.isFocused, bounds())
             }
             // Held on a tile with no menu, OK is a press like any other.
-            .tilePress(onClick, { if (menu) onLongPress(bounds()) else onClick() }, clickLabel = if (tile.glyph != null) "Press" else "Open", longPressLabel = if (menu) "Options" else null, opens = tile.action.isNotEmpty())
+            .tilePress(
+                onClick,
+                { if (menu) onLongPress(bounds()) else onClick() },
+                clickLabel = stringResource(if (tile.glyph != null) R.string.tiles_press else DesignR.string.common_open),
+                longPressLabel = if (menu) stringResource(R.string.tiles_options) else null,
+                opens = tile.action.isNotEmpty(),
+            )
             .focusable()
-            .semantics { contentDescription = spoken }
+            // Worded when it is asked for, not each time the tile is composed.
+            .semantics { contentDescription = description ?: tileDescription(resources, tile, rowName) }
             // Two layers on purpose: the glow redraws every frame of a focus change, and inside the
             // tile's own layer it re-records only this tile. The clip is the inner layer.
             .graphicsLayer {
@@ -240,21 +251,27 @@ fun TileView(
 }
 
 /** What is read out for a tile: "<title>, <row name>, <state>" (DESIGN.md §11). */
-internal fun tileDescription(tile: Tile, rowName: String): String = buildString {
-    append(tile.title)
-    append(", ").append(rowName)
-    tile.subtitle?.let { append(", ").append(spokenEpisodes(it)) }
-    tile.timeLeft?.takeIf { it != tile.subtitle }?.let { append(", ").append(it) }
-    when (tile.badge) {
-        Badge.LIVE -> append(", live")
-        Badge.NEW -> append(", new")
-        Badge.CONNECTED -> append(", connected")
-        else -> Unit
+internal fun tileDescription(resources: Resources, tile: Tile, rowName: String): String {
+    val state = buildList {
+        tile.subtitle?.let { add(spokenEpisodes(resources, it)) }
+        tile.timeLeft?.takeIf { it != tile.subtitle }?.let { add(it) }
+        when (tile.badge) {
+            Badge.LIVE -> add(resources.getString(R.string.tiles_spoken_live))
+            Badge.NEW -> add(resources.getString(R.string.tiles_spoken_new))
+            Badge.CONNECTED -> add(resources.getString(R.string.tiles_spoken_connected))
+            else -> Unit
+        }
+        if (tile.stagePinned) add(resources.getString(R.string.tiles_spoken_pinned_stage))
+        if (tile.pinned) add(resources.getString(R.string.tiles_spoken_pinned))
+        if (tile.hidden) add(resources.getString(R.string.tiles_spoken_hidden))
     }
-    if (tile.stagePinned) append(", pinned to the Stage")
-    if (tile.pinned) append(", pinned")
-    if (tile.hidden) append(", hidden from every row")
+    if (state.isEmpty()) return resources.getString(R.string.tiles_description, tile.title, rowName)
+    return resources.getString(R.string.tiles_description_state, tile.title, rowName, spokenList(resources, state))
 }
+
+/** [parts] said one after the other, set apart as the language sets apart the things in a list. */
+internal fun spokenList(resources: Resources, parts: List<String>): String =
+    parts.reduceOrNull { said, next -> resources.getString(R.string.tiles_spoken_join, said, next) }.orEmpty()
 
 /** How lit a control's glyph is drawn: resting, half lit while a press is on its way, and lit. */
 internal fun glyphLevel(on: Boolean?, pending: Boolean): Float = when {
@@ -297,11 +314,11 @@ private fun ControlGlyph(tile: Tile, glyph: ImageVector, light: Color, brightnes
     )
 }
 
-private val episodeCode = Regex("\\bS(\\d+) E(\\d+)\\b")
+private val episodeCode = Regex("(?<![\\p{L}\\d])[ST](\\d+) [EFÉA](\\d+)\\b")
 
 /** "S2 E4" as "Season 2, Episode 4", so a screen reader does not spell it out. */
-internal fun spokenEpisodes(text: String): String =
-    text.replace(episodeCode) { "Season ${it.groupValues[1]}, Episode ${it.groupValues[2]}" }
+internal fun spokenEpisodes(resources: Resources, text: String): String =
+    text.replace(episodeCode) { resources.getString(R.string.tiles_spoken_episode, it.groupValues[1], it.groupValues[2]) }
 
 /** A small pin on a `velvet` disc, the same on every tile style (DESIGN.md §7.3). */
 @Composable
@@ -552,7 +569,7 @@ private fun AppBannerContent(tile: Tile, filter: () -> androidx.compose.ui.graph
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(tile.title, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 // Two tiles have a line under the name: All apps says how many it opens onto, a hidden app that it is hidden.
-                (tile.subtitle ?: "Hidden".takeIf { tile.hidden })?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1) }
+                (tile.subtitle ?: if (tile.hidden) stringResource(DesignR.string.common_hidden) else null)?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1) }
             }
         }
     }
@@ -613,8 +630,8 @@ private fun TileBadge(badge: Badge?, modifier: Modifier) {
     Box(modifier.background(colors.velvet.copy(alpha = 0.85f), RoundedCornerShape(14.dp)).padding(horizontal = 10.dp, vertical = 2.dp)) {
         when (badge) {
             // Reads idle here, so only the badge recomposes for it.
-            Badge.LIVE -> BadgeView("Live", dot = colors.ember, idle = LoungeTheme.lightState.idle)
-            else -> BadgeView("New", textColor = colors.houselight)
+            Badge.LIVE -> BadgeView(stringResource(R.string.tiles_badge_live), dot = colors.ember, idle = LoungeTheme.lightState.idle)
+            else -> BadgeView(stringResource(R.string.tiles_badge_new), textColor = colors.houselight)
         }
     }
 }

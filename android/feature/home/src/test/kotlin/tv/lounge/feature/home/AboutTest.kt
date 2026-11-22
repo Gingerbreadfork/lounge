@@ -4,16 +4,22 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
 /** The About page's words, where its code leads and how the code is laid out. */
+@RunWith(RobolectricTestRunner::class)
 class AboutTest {
+    private val resources get() = RuntimeEnvironment.getApplication().resources
+
     @Test
     fun theCodeLeadsToTheRepositoryFirstAndRoundToItAgain() {
         assertEquals("https://github.com/Gingerbreadfork/lounge", AboutLinks.first().code)
         // What is read under the code is the address without its scheme, and the address really leads there.
         for (link in AboutLinks) assertEquals(link.code, "https://${link.shown}")
-        assertEquals(AboutLinks.size, AboutLinks.map { it.name }.toSet().size)
-        assertEquals("https://x.com/gingerbreadfork", AboutLinks.single { it.name == "Gingerbreadfork on X" }.code)
+        assertEquals(AboutLinks.size, AboutLinks.map { resources.getString(it.named!!) }.toSet().size)
+        assertEquals("https://x.com/gingerbreadfork", AboutLinks.single { resources.getString(it.named!!) == "Gingerbreadfork on X" }.code)
 
         assertEquals(1, choiceAfter(0, 1, 4))
         assertEquals(0, choiceAfter(3, 1, 4))
@@ -23,10 +29,10 @@ class AboutTest {
 
     @Test
     fun theVersionIsSaidPlainlyAndAnUnknownOneOwnedUpTo() {
-        assertEquals("Version 0.9.0", aboutVersion("0.9.0"))
-        assertEquals("Version unknown", aboutVersion(" "))
-        assertEquals("plugin", AboutFact(1, "plugin", "plugins").label)
-        assertEquals("plugins", AboutFact(27, "plugin", "plugins").label)
+        assertEquals("Version 0.9.0", aboutVersion(resources, "0.9.0"))
+        assertEquals("Version unknown", aboutVersion(resources, " "))
+        assertEquals("plugin", resources.getQuantityString(AboutFact(1, R.plurals.about_fact_plugins).label, 1))
+        assertEquals("plugins", resources.getQuantityString(AboutFact(27, R.plurals.about_fact_plugins).label, 27))
     }
 
     @Test

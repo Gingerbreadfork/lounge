@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_screen_updated">Lounge est passé à la version %1$s</string>
+    <string name="home_screen_two_notes">%1$s. %2$s</string>
+    <string name="home_screen_background_too_heavy">Le décor « %1$s » est trop lourd pour cette TV : l’arrière-plan reste fixe</string>
+    <string name="home_screen_background_not_drawn">Cette TV n’a pas pu afficher le décor « %1$s » : l’arrière-plan reste fixe</string>
+    <string name="home_screen_hidden">Masqué dans toutes les rangées</string>
+    <string name="home_screen_shown">Réaffiché dans toutes les rangées</string>
+    <string name="home_screen_source_hidden">Source masquée : %1$s. Pour la réafficher : Paramètres, Rangées</string>
+    <string name="home_screen_row_hidden">Rangée masquée : %1$s. Pour la réafficher : Paramètres, Rangées</string>
+    <string name="home_screen_row_hidden_unnamed">Rangée masquée. Pour la réafficher : Paramètres, Rangées</string>
+    <string name="home_screen_pinned_app">Épinglé en tête de Vos applis</string>
+    <string name="home_screen_unpinned_app">Désépinglé de Vos applis</string>
+    <string name="home_screen_pinned_stage">Épinglé sur la Scène</string>
+    <string name="home_screen_unpinned_stage">Désépinglé de la Scène</string>
+    <string name="home_screen_that_channel">cette chaîne</string>
+    <string name="home_screen_error_storage_full">Le stockage de la TV est plein. Libérez de l’espace dans les paramètres de la TV, puis réessayez.</string>
+    <string name="home_screen_error_gone">%1$s n’est plus sur cette TV. La suppression vient peut-être de son appli.</string>
+    <string name="home_screen_error_nothing_opens">Rien sur cette TV ne peut ouvrir %1$s. Son appli est-elle toujours installée ?</string>
+    <string name="home_screen_error_not_installed">%1$s n’est pas sur cette TV. Installez l’appli depuis le Play Store, puis réessayez.</string>
+    <string name="home_screen_error_no_video_player">Rien sur cette TV ne peut lire %1$s. Installez VLC ou un autre lecteur vidéo, puis réessayez.</string>
+    <string name="home_screen_error_no_player">Rien sur cette TV ne peut lire %1$s. Installez VLC ou un autre lecteur, puis réessayez.</string>
+    <string name="home_screen_error_notification_access">Lounge n’a pas encore accès à ce qui est en lecture. Dans Paramètres, autorisez l’accès aux notifications.</string>
+    <string name="home_screen_error_not_playing">Cette appli ne lit plus rien. Ouvrez-la pour relancer une lecture.</string>
+    <string name="home_screen_error_no_answer">%1$s : la source n’a pas répondu. Vérifiez qu’elle fonctionne, puis réessayez.</string>
+    <string name="home_screen_error_busy">La TV est occupée. Réessayez dans un instant.</string>
+    <string name="home_screen_error_wrong_link">Lounge ne peut pas ouvrir %1$s d’ici. Passez plutôt par son appli.</string>
+    <string name="home_screen_error_not_allowed">Android n’a pas laissé Lounge ouvrir %1$s. Passez plutôt par son appli.</string>
+    <string name="home_screen_error_plugin_stopped">%1$s : le plugin s’est arrêté en cours de route. Réessayez dans un instant.</string>
+    <string name="home_screen_error_other">Impossible d’ouvrir %1$s. Réessayez dans un instant.</string>
+    <string name="home_screen_rows_all_shown">Toutes affichées</string>
+    <plurals name="home_screen_rows_hidden">
+        <item quantity="one">%1$d masquée</item>
+        <item quantity="many">%1$d masquées</item>
+        <item quantity="other">%1$d masquées</item>
+    </plurals>
+    <string name="home_screen_notifications_dismissed">Notifications effacées</string>
+    <string name="home_screen_notification_dismissed">Effacée</string>
+    <string name="home_screen_notifications_app_hidden">Notifications masquées : %1$s. Pour les réafficher : Paramètres, Notifications</string>
+</resources>

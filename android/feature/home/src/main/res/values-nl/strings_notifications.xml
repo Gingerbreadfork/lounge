@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="notifications_count">
+        <item quantity="one">%1$d melding</item>
+        <item quantity="other">%1$d meldingen</item>
+    </plurals>
+    <plurals name="notifications_count_spoken">
+        <item quantity="one">%1$d melding, %2$s</item>
+        <item quantity="other">%1$d meldingen, %2$s</item>
+    </plurals>
+    <plurals name="notifications_new">
+        <item quantity="one">%1$d nieuw</item>
+        <item quantity="other">%1$d nieuw</item>
+    </plurals>
+    <string name="notifications_byline">%1$s, %2$s</string>
+    <string name="notifications_when_just_now">Zojuist</string>
+    <plurals name="notifications_when_minutes_ago">
+        <item quantity="one">%1$d minuut geleden</item>
+        <item quantity="other">%1$d minuten geleden</item>
+    </plurals>
+    <plurals name="notifications_when_hours_ago">
+        <item quantity="one">%1$d uur geleden</item>
+        <item quantity="other">%1$d uur geleden</item>
+    </plurals>
+    <plurals name="notifications_when_days_ago">
+        <item quantity="one">%1$d dag geleden</item>
+        <item quantity="other">%1$d dagen geleden</item>
+    </plurals>
+    <string name="notifications_dismiss_all">Alles wissen</string>
+    <plurals name="notifications_staying">
+        <item quantity="one">%1$d blijft staan tot de app de melding zelf weghaalt</item>
+        <item quantity="other">%1$d blijven staan tot hun apps ze zelf weghalen</item>
+    </plurals>
+    <string name="notifications_taken_back">De app heeft die melding al weggehaald, dus er valt niets te openen.</string>
+    <string name="notifications_offered">Meldingen van je apps kunnen nu in de bovenbalk staan. Aanzetten kan via Instellingen, Meldingen</string>
+    <string name="notifications_stays">Deze blijft staan tot de app de melding zelf weghaalt.</string>
+    <string name="notifications_sent">Verzonden</string>
+    <string name="notifications_dismiss">Wissen</string>
+    <string name="notifications_hide_app">Alles van %1$s verbergen</string>
+    <string name="notifications_hide_app_subtitle">Lounge toont de meldingen van deze app niet meer</string>
+    <string name="notifications_settings_subtitle">Wat apps op deze tv je willen laten weten, met één druk op de knop in de bovenbalk.</string>
+    <string name="notifications_needs_access">Toegang tot meldingen is nodig. OK vraagt erom.</string>
+    <string name="notifications_not_allowed">Niet toegestaan</string>
+    <string name="notifications_hidden_apps">Verborgen apps</string>
+    <string name="notifications_footnote_privacy">Lounge leest meldingen alleen om ze hier te tonen, en helemaal niet zolang dit uit staat. Lounge bewaart er geen en geen enkele verlaat deze tv.</string>
+    <string name="notifications_footnote_left_out">Wat nog bezig is, zoals een download, wordt weggelaten, net als wat er speelt.</string>
+</resources>

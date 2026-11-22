@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rows_sheet_title">Righe della schermata Home</string>
+    <string name="rows_sheet_subtitle">OK mostra o nasconde una riga. Tieni premuto OK per prenderne una, Su e Giù la spostano, OK o Indietro la posano.</string>
+    <string name="rows_sheet_loading">Caricamento…</string>
+    <string name="rows_sheet_moving">In spostamento</string>
+    <string name="rows_sheet_shown">Visibile</string>
+    <string name="rows_sheet_empty">Vuoto</string>
+    <string name="rows_sheet_reset">Rimetti le righe nell\'ordine abituale</string>
+    <string name="rows_sheet_reset_confirm">Sì, rimettile a posto</string>
+    <string name="rows_sheet_reset_keeps">Mantiene ciò che hai nascosto</string>
+    <string name="rows_sheet_reset_done">Fatto. Ciò che hai nascosto resta nascosto.</string>
+    <string name="rows_sheet_hidden_group">Nascosti da tutte le righe</string>
+    <string name="rows_sheet_hidden_none">Non c\'è niente di nascosto. Tieni premuto OK su un riquadro qualsiasi e scegli Nascondi.</string>
+    <string name="rows_sheet_continue_group">Le sorgenti di Continua a guardare</string>
+    <string name="rows_sheet_continue_none">Ancora niente da continuare. App e plugin compaiono qui quando portano qualcosa.</string>
+    <string name="rows_sheet_source_nothing">Niente da continuare ora</string>
+    <plurals name="rows_sheet_source_titles">
+        <item quantity="one">%1$d titolo</item>
+        <item quantity="many">%1$d titoli</item>
+        <item quantity="other">%1$d titoli</item>
+    </plurals>
+    <string name="rows_sheet_footnote">Una riga vuota resta fuori dallo schermo finché non ha qualcosa da mostrare.</string>
+</resources>

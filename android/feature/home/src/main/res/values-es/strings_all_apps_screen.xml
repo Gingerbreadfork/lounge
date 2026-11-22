@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="all_apps_screen_letter">Apps que empiezan por %1$s</string>
+    <string name="all_apps_screen_letter_other">Apps que empiezan por un número o un símbolo</string>
+    <string name="all_apps_screen_empty">Las apps aparecen aquí cuando se instalan.</string>
+    <string name="all_apps_screen_empty_search">Ninguna app se llama «%1$s». Atrás borra la búsqueda.</string>
+    <string name="all_apps_screen_nothing">Aquí todavía no hay nada.</string>
+    <string name="all_apps_screen_no_match">Nada coincide con «%1$s».</string>
+    <plurals name="all_apps_screen_matching">
+        <item quantity="one">%1$d de %2$d coincide con «%3$s».</item>
+        <item quantity="many">%1$d de %2$d coinciden con «%3$s».</item>
+        <item quantity="other">%1$d de %2$d coinciden con «%3$s».</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_az">
+        <item quantity="one">%1$d app, de la A a la Z.</item>
+        <item quantity="many">%1$d apps, de la A a la Z.</item>
+        <item quantity="other">%1$d apps, de la A a la Z.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_opened">
+        <item quantity="one">%1$d app, primero las últimas abiertas.</item>
+        <item quantity="many">%1$d apps, primero las últimas abiertas.</item>
+        <item quantity="other">%1$d apps, primero las últimas abiertas.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_installed">
+        <item quantity="one">%1$d app, primero las más nuevas.</item>
+        <item quantity="many">%1$d apps, primero las más nuevas.</item>
+        <item quantity="other">%1$d apps, primero las más nuevas.</item>
+    </plurals>
+    <string name="all_apps_screen_hint">Mantén pulsado OK en una app para fijarla en Tus apps. Arriba para buscar u ordenar.</string>
+    <string name="all_apps_screen_hint_alphabet">Mantén pulsado OK en una app para fijarla en Tus apps. Arriba para buscar u ordenar, Izquierda para el alfabeto.</string>
+    <string name="all_apps_screen_sort_az">De la A a la Z</string>
+    <string name="all_apps_screen_sort_opened">Abiertas recientemente</string>
+    <string name="all_apps_screen_sort_installed">Instaladas recientemente</string>
+    <string name="all_apps_screen_sorted_az">Orden: de la A a la Z. OK cambia el orden</string>
+    <string name="all_apps_screen_sorted_opened">Orden: abiertas recientemente. OK cambia el orden</string>
+    <string name="all_apps_screen_sorted_installed">Orden: instaladas recientemente. OK cambia el orden</string>
+    <string name="all_apps_screen_change_order">Cambiar el orden</string>
+    <string name="all_apps_screen_find">Buscar una app</string>
+</resources>

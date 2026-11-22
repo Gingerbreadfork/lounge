@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_picture_resting">Descansando. Pressione OK para continuar.</string>
+    <string name="live_picture_stopped">A imagem parou de chegar. Ainda tentando.</string>
+    <string name="live_picture_not_arriving">A imagem não está chegando. Ainda tentando.</string>
+    <string name="live_picture_waiting">Um momento</string>
+</resources>

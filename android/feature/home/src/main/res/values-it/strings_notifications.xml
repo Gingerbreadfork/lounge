@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="notifications_count">
+        <item quantity="one">%1$d notifica</item>
+        <item quantity="many">%1$d notifiche</item>
+        <item quantity="other">%1$d notifiche</item>
+    </plurals>
+    <plurals name="notifications_count_spoken">
+        <item quantity="one">%1$d notifica, %2$s</item>
+        <item quantity="many">%1$d notifiche, %2$s</item>
+        <item quantity="other">%1$d notifiche, %2$s</item>
+    </plurals>
+    <plurals name="notifications_new">
+        <item quantity="one">%1$d nuova</item>
+        <item quantity="many">%1$d nuove</item>
+        <item quantity="other">%1$d nuove</item>
+    </plurals>
+    <string name="notifications_byline">%1$s, %2$s</string>
+    <string name="notifications_when_just_now">Adesso</string>
+    <plurals name="notifications_when_minutes_ago">
+        <item quantity="one">%1$d minuto fa</item>
+        <item quantity="many">%1$d minuti fa</item>
+        <item quantity="other">%1$d minuti fa</item>
+    </plurals>
+    <plurals name="notifications_when_hours_ago">
+        <item quantity="one">%1$d ora fa</item>
+        <item quantity="many">%1$d ore fa</item>
+        <item quantity="other">%1$d ore fa</item>
+    </plurals>
+    <plurals name="notifications_when_days_ago">
+        <item quantity="one">%1$d giorno fa</item>
+        <item quantity="many">%1$d giorni fa</item>
+        <item quantity="other">%1$d giorni fa</item>
+    </plurals>
+    <string name="notifications_dismiss_all">Rimuovi tutte</string>
+    <plurals name="notifications_staying">
+        <item quantity="one">%1$d resta finché la sua app non la ritira</item>
+        <item quantity="many">%1$d restano finché le loro app non le ritirano</item>
+        <item quantity="other">%1$d restano finché le loro app non le ritirano</item>
+    </plurals>
+    <string name="notifications_taken_back">La sua app l\'ha ritirata, quindi non c\'è niente da aprire.</string>
+    <string name="notifications_offered">Ora le notifiche delle tue app possono comparire nella barra in alto. Per attivarle: Impostazioni, Notifiche</string>
+    <string name="notifications_stays">Questa resta finché la sua app non la ritira.</string>
+    <string name="notifications_sent">Inviato</string>
+    <string name="notifications_dismiss">Rimuovi</string>
+    <string name="notifications_hide_app">Nascondi tutto di %1$s</string>
+    <string name="notifications_hide_app_subtitle">Lounge smette di mostrarne le notifiche</string>
+    <string name="notifications_settings_subtitle">Quello che le app di questa TV vogliono dirti, a un tasto di distanza nella barra in alto.</string>
+    <string name="notifications_needs_access">Serve l\'accesso alle notifiche. OK lo richiede.</string>
+    <string name="notifications_not_allowed">Non consentito</string>
+    <string name="notifications_hidden_apps">App nascoste</string>
+    <string name="notifications_footnote_privacy">Lounge legge le notifiche solo per mostrarle qui, e non le legge affatto quando questa opzione è disattivata. Non ne conserva nessuna e nessuna lascia questa TV.</string>
+    <string name="notifications_footnote_left_out">Le attività ancora in corso, come un download, restano escluse, così come ciò che è in riproduzione.</string>
+</resources>

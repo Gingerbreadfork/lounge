@@ -1,5 +1,8 @@
 package tv.lounge.feature.home
 
+import android.content.res.Resources
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
@@ -52,8 +55,11 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
@@ -77,22 +83,26 @@ import kotlin.math.roundToInt
 
 /**
  * One thing a code on these pages can hold: the row's word for it, what the code itself says,
- * what is written under it, and a line of care where a mistake would cost something.
+ * what is written under it, and a line of care where a mistake would cost something. The word
+ * is a product's own [name], or the text [named] where it has none. The [note] may have a place
+ * for the name.
  */
-internal data class CodeChoice(val name: String, val code: String, val shown: String, val note: String? = null)
+internal data class CodeChoice(val name: String?, val code: String, val shown: String, @StringRes val note: Int? = null, @StringRes val named: Int? = null)
+
+/** The row's word for the choice. */
+@Composable
+private fun CodeChoice.label(): String = named?.let { stringResource(it) } ?: name.orEmpty()
 
 /** Where Lounge lives, the two pages of it people ask for most, and where its maker posts. */
 internal val AboutLinks = listOf(
-    CodeChoice("The source code", "https://github.com/Gingerbreadfork/lounge", "github.com/Gingerbreadfork/lounge"),
-    CodeChoice("Report a problem", "https://github.com/Gingerbreadfork/lounge/issues", "github.com/Gingerbreadfork/lounge/issues"),
-    CodeChoice("What's new", "https://github.com/Gingerbreadfork/lounge/releases", "github.com/Gingerbreadfork/lounge/releases"),
-    CodeChoice("Gingerbreadfork on X", "https://x.com/gingerbreadfork", "x.com/gingerbreadfork"),
+    CodeChoice(null, "https://github.com/Gingerbreadfork/lounge", "github.com/Gingerbreadfork/lounge", named = R.string.about_link_source),
+    CodeChoice(null, "https://github.com/Gingerbreadfork/lounge/issues", "github.com/Gingerbreadfork/lounge/issues", named = R.string.about_link_report),
+    CodeChoice(null, "https://github.com/Gingerbreadfork/lounge/releases", "github.com/Gingerbreadfork/lounge/releases", named = R.string.about_link_whats_new),
+    CodeChoice(null, "https://x.com/gingerbreadfork", "x.com/gingerbreadfork", named = R.string.about_link_maker_on_x),
 )
 
-/** Something to count on the About page: how many, and what they are called for one and for more. */
-internal data class AboutFact(val count: Int, val one: String, val many: String) {
-    val label: String get() = if (count == 1) one else many
-}
+/** Something to count on the About page: how many, and the plural that says what they are called. */
+internal data class AboutFact(val count: Int, @PluralsRes val label: Int)
 
 /** The choice [by] places on from the one at [index] of [count], round the end and back. */
 internal fun choiceAfter(index: Int, by: Int, count: Int): Int = ((index + by) % count + count) % count
@@ -149,36 +159,37 @@ internal fun AboutScreen(
     LaunchedEffect(Unit) { up = true }
     val lamp = animateFloatAsState(if (up) 1f else 0f, motion.lamp(), label = "aboutLamp")
 
-    CodePage("About Lounge", visibleState, onClose) {
+    val resources = LocalResources.current
+    CodePage(stringResource(R.string.about_title), visibleState, onClose) {
         Column(Modifier.width(940.dp).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
             Column {
                 Spacer(Modifier.height(150.dp))
                 Lockup(lamp)
                 Spacer(Modifier.height(56.dp))
                 Column(Modifier.width(760.dp).arrives(arriving(up, 1)), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("A home screen for your TV, laid out around what you're watching.", style = type.headline, color = colors.limelight)
+                    Text(stringResource(R.string.about_what), style = type.headline, color = colors.limelight)
                     Text(
-                        "Free and open source under the MIT licence. No account, no adverts, and nothing leaves the house.",
+                        stringResource(R.string.about_terms),
                         style = type.body,
                         color = colors.dust,
                     )
-                    Text(aboutVersion(version), style = type.meta, color = colors.dust)
+                    Text(aboutVersion(resources, version), style = type.meta, color = colors.dust)
                 }
                 Spacer(Modifier.height(56.dp))
                 Row(Modifier.arrives(arriving(up, 2)), horizontalArrangement = Arrangement.spacedBy(64.dp)) {
                     counted.forEach { fact ->
                         Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(fact.count.toString(), style = type.displayL, color = colors.limelight)
-                            Text(fact.label, style = type.caption, color = colors.dust)
+                            Text(pluralStringResource(fact.label, fact.count), style = type.caption, color = colors.dust)
                         }
                     }
                 }
             }
-            MakerLockup("Made by", Modifier.arrives(arriving(up, 4)))
+            MakerLockup(stringResource(R.string.about_made_by), Modifier.arrives(arriving(up, 4)))
         }
         Box(Modifier.fillMaxSize()) {
             Text(
-                "Set in Bricolage Grotesque and Figtree.",
+                stringResource(R.string.about_set_in),
                 style = type.caption,
                 color = colors.dust,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 6.dp).arrives(arriving(up, 4)),
@@ -186,9 +197,9 @@ internal fun AboutScreen(
             CodeColumn(
                 qr = qr,
                 choices = AboutLinks,
-                above = "Scan this with your phone's camera",
-                rowTitle = "It leads to",
-                describe = { "A code that opens ${it.shown}" },
+                above = stringResource(R.string.about_scan),
+                rowTitle = stringResource(R.string.about_leads_to),
+                describe = { stringResource(R.string.about_code_description, it.shown) },
                 glow = { glowAlpha * 0.6f * lamp.value },
                 focus = codeFocus,
                 modifier = Modifier.align(Alignment.Center).arrives(arriving(up, 3)),
@@ -196,8 +207,8 @@ internal fun AboutScreen(
                 Spacer(Modifier.height(14.dp))
                 SheetRow(
                     icon = SettingsGlyphs.Heart,
-                    title = "Support Lounge",
-                    value = "Anything helps",
+                    title = stringResource(R.string.about_support),
+                    value = stringResource(R.string.about_support_value),
                     focusRequester = giveFocus,
                     modifier = Modifier.requiredWidth(CodeRowWidth),
                     onClick = onDonate,
@@ -294,7 +305,8 @@ internal fun CodeColumn(
     choices: List<CodeChoice>,
     above: String,
     rowTitle: String,
-    describe: (CodeChoice) -> String,
+    /** What a screen reader says for the code. */
+    describe: @Composable (CodeChoice) -> String,
     glow: () -> Float,
     focus: FocusRequester,
     modifier: Modifier = Modifier,
@@ -304,6 +316,7 @@ internal fun CodeColumn(
     val type = LoungeTheme.typography
     var chosen by remember { mutableIntStateOf(0) }
     val choice = choices[chosen]
+    val description = describe(choice)
     // Worked out off the main thread once, since each is a few thousand modules.
     val codes by produceState(emptyMap<String, QrCode>()) {
         value = withContext(Dispatchers.IO) { choices.mapNotNull { c -> qr(c.code)?.let { c.code to it } }.toMap() }
@@ -317,7 +330,7 @@ internal fun CodeColumn(
                 .lightGlow(colors.houselight, glow, cornerRadius = 28.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .background(QrLight)
-                .semantics { contentDescription = describe(choice) },
+                .semantics { contentDescription = description },
             contentAlignment = Alignment.Center,
         ) {
             Swap(choice.code, rise = 0.dp, durationMs = 180) { code ->
@@ -328,7 +341,7 @@ internal fun CodeColumn(
         SheetRow(
             icon = null,
             title = rowTitle,
-            value = choice.name,
+            value = choice.label(),
             focusRequester = focus,
             modifier = Modifier.requiredWidth(CodeRowWidth),
             onCycle = { by -> chosen = choiceAfter(chosen, by, choices.size) },
@@ -338,7 +351,7 @@ internal fun CodeColumn(
         Swap(choice, rise = 0.dp, durationMs = 180) { shown ->
             Column(Modifier.requiredWidth(CodeRowWidth), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(shown.shown, style = type.meta, color = colors.limelight, textAlign = TextAlign.Center, maxLines = 2)
-                shown.note?.let { Text(it, style = type.caption, color = colors.houselight, textAlign = TextAlign.Center) }
+                shown.note?.let { Text(stringResource(it, shown.name.orEmpty()), style = type.caption, color = colors.houselight, textAlign = TextAlign.Center) }
             }
         }
         below()
@@ -346,7 +359,8 @@ internal fun CodeColumn(
 }
 
 /** "Version 0.9.0", or a line that owns up to not knowing. */
-internal fun aboutVersion(version: String): String = if (version.isBlank()) "Version unknown" else "Version $version"
+internal fun aboutVersion(resources: Resources, version: String): String =
+    if (version.isBlank()) resources.getString(R.string.about_version_unknown) else resources.getString(R.string.about_version, version)
 
 /** The side of one module in whole pixels, so no seam shows between neighbours, and where the code starts so it sits centred. */
 internal fun qrLayout(sidePx: Float, modules: Int): Pair<Float, Float> {

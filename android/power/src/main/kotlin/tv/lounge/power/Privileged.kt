@@ -2,8 +2,8 @@ package tv.lounge.power
 
 /** Where the shell-level helper stands right now. */
 sealed interface PowerStatus {
-    /** Neither the device's ADB daemon nor Shizuku can be reached. */
-    data class Unavailable(val reason: String) : PowerStatus
+    /** Neither the device's ADB daemon nor Shizuku can be reached; [debuggingOff] when USB debugging being off is why. */
+    data class Unavailable(val reason: String, val debuggingOff: Boolean = false) : PowerStatus
     /** ADB is listening but has not accepted this launcher's key yet. */
     data object NotPaired : PowerStatus
     /** The device is showing its "Allow debugging?" prompt for our key. */
@@ -20,7 +20,7 @@ data class ShellResult(val exitCode: Int, val output: String) {
 open class PrivilegedException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /** The daemon answered but does not know Lounge's key: the one failure that means pairing again. */
-class KeyNotApprovedException : PrivilegedException("This TV no longer allows Lounge. In Settings, open Power Setup and choose Connect.")
+class KeyNotApprovedException(message: String) : PrivilegedException(message)
 
 /**
  * How an action last went: [output] is what the shell printed, and [said] is a failure as a sentence for

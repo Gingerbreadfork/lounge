@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="themes_dusk_title">Crépuscule</string>
+    <string name="themes_dusk_tagline">Nuit indigo, lampe corail</string>
+    <string name="themes_house_title">Salle</string>
+    <string name="themes_house_tagline">Prune chaleureux, lumière tungstène</string>
+    <string name="themes_hearth_title">Âtre</string>
+    <string name="themes_hearth_tagline">Murs terre d’ombre, lueur du feu</string>
+    <string name="themes_opera_title">Opéra</string>
+    <string name="themes_opera_tagline">Velours rouge et dorures</string>
+    <string name="themes_marquee_title">Marquise</string>
+    <string name="themes_marquee_tagline">Bleu marine, ampoules de fronton</string>
+    <string name="themes_green_room_title">Loge</string>
+    <string name="themes_green_room_tagline">Vert profond, lampe en laiton</string>
+    <string name="themes_moonlight_title">Clair de lune</string>
+    <string name="themes_moonlight_tagline">Ardoise froide, lueur lunaire</string>
+    <string name="themes_graphite_title">Graphite</string>
+    <string name="themes_graphite_tagline">Sans couleur, blanc chaud</string>
+    <string name="themes_cabaret_title">Cabaret</string>
+    <string name="themes_cabaret_tagline">Violet noir, néon rose</string>
+    <string name="themes_aquarium_title">Aquarium</string>
+    <string name="themes_aquarium_tagline">Bleu canard profond, lueur d’aquarium</string>
+    <string name="themes_absinthe_title">Absinthe</string>
+    <string name="themes_absinthe_tagline">Olive sombre, lueur vert doré</string>
+    <string name="themes_ultraviolet_title">Ultraviolet</string>
+    <string name="themes_ultraviolet_tagline">Presque noir, lumière noire</string>
+    <string name="themes_blackout_title">Noir total</string>
+    <string name="themes_blackout_tagline">Noir pur pour les dalles OLED</string>
+    <string name="themes_high_contrast_title">Contraste élevé</string>
+    <string name="themes_high_contrast_tagline">Texte et contours plus marqués</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tiles_press">Pulsar</string>
+    <string name="tiles_options">Opciones</string>
+    <string name="tiles_description">%1$s, %2$s</string>
+    <string name="tiles_description_state">%1$s, %2$s, %3$s</string>
+    <string name="tiles_spoken_join">%1$s, %2$s</string>
+    <string name="tiles_spoken_live">en directo</string>
+    <string name="tiles_spoken_new">nuevo</string>
+    <string name="tiles_spoken_connected">conectado</string>
+    <string name="tiles_spoken_pinned_stage">fijado en el Escenario</string>
+    <string name="tiles_spoken_pinned">fijada</string>
+    <string name="tiles_spoken_hidden">oculto en todas las filas</string>
+    <string name="tiles_spoken_episode">Temporada %1$s, episodio %2$s</string>
+    <string name="tiles_badge_live">Directo</string>
+    <string name="tiles_badge_new">Nuevo</string>
+</resources>

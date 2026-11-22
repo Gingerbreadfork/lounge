@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_title">Acerca de Lounge</string>
+    <string name="about_what">Una pantalla de inicio para tu TV, organizada en torno a lo que estás viendo.</string>
+    <string name="about_terms">Gratis y de código abierto, con licencia MIT. Sin cuenta, sin anuncios y nada sale de casa.</string>
+    <string name="about_version">Versión %1$s</string>
+    <string name="about_version_unknown">Versión desconocida</string>
+    <plurals name="about_fact_plugins">
+        <item quantity="one">plugin</item>
+        <item quantity="many">plugins</item>
+        <item quantity="other">plugins</item>
+    </plurals>
+    <plurals name="about_fact_scenes">
+        <item quantity="one">escena</item>
+        <item quantity="many">escenas</item>
+        <item quantity="other">escenas</item>
+    </plurals>
+    <plurals name="about_fact_themes">
+        <item quantity="one">tema</item>
+        <item quantity="many">temas</item>
+        <item quantity="other">temas</item>
+    </plurals>
+    <string name="about_made_by">Creado por</string>
+    <string name="about_set_in">Tipografías: Bricolage Grotesque y Figtree.</string>
+    <string name="about_scan">Escanéalo con la cámara de tu teléfono</string>
+    <string name="about_leads_to">Lleva a</string>
+    <string name="about_link_source">El código fuente</string>
+    <string name="about_link_report">Informar de un problema</string>
+    <string name="about_link_whats_new">Novedades</string>
+    <string name="about_link_maker_on_x">Gingerbreadfork en X</string>
+    <string name="about_code_description">Un código que abre %1$s</string>
+    <string name="about_support">Apoyar a Lounge</string>
+    <string name="about_support_value">Todo ayuda</string>
+</resources>

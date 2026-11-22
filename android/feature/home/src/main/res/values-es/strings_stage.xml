@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stage_row_name">el Escenario</string>
+    <string name="stage_spoken_source">en %1$s</string>
+    <string name="stage_empty_category">Tu pantalla de inicio</string>
+    <string name="stage_empty_title">Configuremos tu pantalla de inicio</string>
+    <string name="stage_empty_body">Unos pasos rápidos y aquí aparecerán tus apps y tus series.</string>
+    <string name="stage_empty_start">Empezar</string>
+    <string name="stage_indexing_title">Preparando tu pantalla de inicio</string>
+    <string name="stage_indexing_body">Mirando qué hay en esta TV.</string>
+</resources>

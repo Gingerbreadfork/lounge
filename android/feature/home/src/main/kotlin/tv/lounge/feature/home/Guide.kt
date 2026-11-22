@@ -1,5 +1,6 @@
 package tv.lounge.feature.home
 
+import android.content.res.Resources
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
@@ -51,6 +52,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -72,6 +76,7 @@ import tv.lounge.core.GuideChannel
 import tv.lounge.core.GuideProgramme
 import tv.lounge.design.Dimens
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 import tv.lounge.design.Words
 import tv.lounge.design.argb
 import tv.lounge.design.focusRim
@@ -112,6 +117,7 @@ fun GuideSheet(loadGuide: (Long) -> Guide, visibleState: MutableTransitionState<
     // The heading lets go of focus only once a programme has it, so focus is never dropped between them.
     var landed by remember { mutableStateOf(false) }
 
+    val title = stringResource(DesignR.string.common_tv_guide)
     Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(visibleState, enter = fadeIn(motion.timed(200)), exit = fadeOut(motion.timed(180))) {
             Box(Modifier.fillMaxSize().background(colors.scrim))
@@ -127,7 +133,7 @@ fun GuideSheet(loadGuide: (Long) -> Guide, visibleState: MutableTransitionState<
                     .fillMaxWidth()
                     .height(680.dp)
                     .background(colors.curtain)
-                    .semantics { paneTitle = "TV guide" }
+                    .semantics { paneTitle = title }
                     .onPreviewKeyEvent { e -> if (e.isBack() && e.type == KeyEventType.KeyUp) { onDismiss(); true } else false }
                     .focusProperties { canFocus = !leaving }
                     .trapFocus(leaving)
@@ -156,9 +162,9 @@ private fun GuideHeader(g: Guide?, focus: FocusRequester, holdsFocus: Boolean) {
     val colors = LoungeTheme.colors
     val is24Hour = is24HourClock()
     val status = when {
-        g == null -> "Reading the guide"
-        g.channels.isEmpty() -> "No channels yet"
-        else -> "${Words.counted(g.channels.size, "channel", "channels")}, ${Words.clock(g.nowMs, is24Hour)}"
+        g == null -> stringResource(R.string.guide_reading)
+        g.channels.isEmpty() -> stringResource(R.string.guide_no_channels)
+        else -> pluralStringResource(R.plurals.guide_channels_at, g.channels.size, g.channels.size, Words.clock(LocalResources.current, g.nowMs, is24Hour))
     }
     Column(
         Modifier
@@ -168,12 +174,12 @@ private fun GuideHeader(g: Guide?, focus: FocusRequester, holdsFocus: Boolean) {
             .padding(start = Dimens.safeX, end = Dimens.safeX, top = 24.dp, bottom = 12.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("TV guide", style = LoungeTheme.typography.headline, color = colors.limelight, modifier = Modifier.semantics { heading() })
+            Text(stringResource(DesignR.string.common_tv_guide), style = LoungeTheme.typography.headline, color = colors.limelight, modifier = Modifier.semantics { heading() })
             Text(status, style = LoungeTheme.typography.meta, color = colors.dust, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
         if (g != null && g.channels.isEmpty()) {
             Spacer(Modifier.height(16.dp))
-            Text("Channels show here once a TV app or a plugin lists what is on.", style = LoungeTheme.typography.body, color = colors.dust)
+            Text(stringResource(R.string.guide_no_channels_help), style = LoungeTheme.typography.body, color = colors.dust)
         }
     }
 }
@@ -182,6 +188,7 @@ private fun GuideHeader(g: Guide?, focus: FocusRequester, holdsFocus: Boolean) {
 private fun TimeRuler(g: Guide) {
     val colors = LoungeTheme.colors
     val is24Hour = is24HourClock()
+    val resources = LocalResources.current
     val gridWidth = 1920.dp - Dimens.safeX * 2 - ChannelColumn
     // As tall as a caption line, so large text is not cut.
     val height = maxOf(28.dp, with(LocalDensity.current) { LoungeTheme.typography.caption.lineHeight.toDp() } + 2.dp)
@@ -191,7 +198,7 @@ private fun TimeRuler(g: Guide) {
             var t = g.fromMs
             while (t < g.fromMs + WINDOW_MS) {
                 val x = gridWidth * ((t - g.fromMs).toFloat() / WINDOW_MS)
-                Text(Words.clock(t, is24Hour), style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.offset(x = x))
+                Text(Words.clock(resources, t, is24Hour), style = LoungeTheme.typography.caption, color = colors.dust, modifier = Modifier.offset(x = x))
                 t += HALF_HOUR_MS
             }
         }
@@ -244,7 +251,7 @@ private fun ChannelRow(ch: GuideChannel, g: Guide, gridWidth: Dp, rowHeight: Dp,
             val visible = ch.programmes.filter { it.endMs > g.fromMs && it.startMs < g.fromMs + WINDOW_MS }
             if (visible.isEmpty()) {
                 ProgrammeCell(
-                    GuideProgramme(id = "${ch.id}:none", title = "No programme information", subtitle = null, startMs = g.fromMs, endMs = g.fromMs + WINDOW_MS, isNow = false),
+                    GuideProgramme(id = "${ch.id}:none", title = stringResource(R.string.guide_no_programme), subtitle = null, startMs = g.fromMs, endMs = g.fromMs + WINDOW_MS, isNow = false),
                     ch, g, gridWidth, firstFocus,
                 ) { onTune(ch.action) }
             } else {
@@ -275,7 +282,9 @@ private fun ProgrammeCell(p: GuideProgramme, ch: GuideChannel, g: Guide, gridWid
     var focused by remember { mutableStateOf(false) }
     val glow = animateFloatAsState(if (focused) visuals.glowAlpha * 0.8f else 0f, if (focused) motion.snap() else motion.settle(), label = "cellGlow")
     val rim = animateFloatAsState(if (focused) 1f else 0f, if (focused) motion.snap() else motion.settle(), label = "cellRim")
-    val times = programmeTimes(p, is24Hour)
+    val times = programmeTimes(LocalResources.current, p, is24Hour)
+    val spoken = stringResource(R.string.guide_programme_spoken, ch.name, p.title, times)
+    val watch = stringResource(R.string.guide_watch)
     Column(
         Modifier
             .offset(x = x)
@@ -290,9 +299,9 @@ private fun ProgrammeCell(p: GuideProgramme, ch: GuideChannel, g: Guide, gridWid
             }
             .focusRim(colors, { rim.value }, 10.dp)
             .onFocusChanged { focused = it.isFocused }
-            .tilePress(onClick, onClick, clickLabel = "Watch")
+            .tilePress(onClick, onClick, clickLabel = watch)
             .focusable()
-            .semantics { role = Role.Button; contentDescription = "${ch.name}, ${p.title}, $times" }
+            .semantics { role = Role.Button; contentDescription = spoken }
             .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.Center,
     ) {
@@ -302,6 +311,6 @@ private fun ProgrammeCell(p: GuideProgramme, ch: GuideChannel, g: Guide, gridWid
 }
 
 /** "On now, until 21:30" for what is on air, else "21:00 to 21:30". */
-internal fun programmeTimes(p: GuideProgramme, is24Hour: Boolean): String =
-    if (p.isNow) "On now, until ${Words.clock(p.endMs, is24Hour)}"
-    else "${Words.clock(p.startMs, is24Hour)} to ${Words.clock(p.endMs, is24Hour)}"
+internal fun programmeTimes(resources: Resources, p: GuideProgramme, is24Hour: Boolean): String =
+    if (p.isNow) resources.getString(R.string.guide_on_now_until, Words.clock(resources, p.endMs, is24Hour))
+    else resources.getString(R.string.guide_from_to, Words.clock(resources, p.startMs, is24Hour), Words.clock(resources, p.endMs, is24Hour))

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shader_styles_ink_name">Nanquim</string>
+    <string name="shader_styles_ink_description">Luz atravessando nanquim na água</string>
+    <string name="shader_styles_current_name">Correnteza</string>
+    <string name="shader_styles_current_description">Água lenta dobrando-se sobre si mesma sob uma única luz</string>
+    <string name="shader_styles_rain_name">Chuva</string>
+    <string name="shader_styles_rain_description">Uma janela à noite, gotas escorrendo pelo vidro</string>
+    <string name="shader_styles_smoke_name">Fumaça</string>
+    <string name="shader_styles_smoke_description">Fios que sobem e se desfazem pelo caminho</string>
+    <string name="shader_styles_embers_name">Brasas</string>
+    <string name="shader_styles_embers_description">Faíscas subindo de um fogo quase apagado</string>
+    <string name="shader_styles_shallows_name">Águas rasas</string>
+    <string name="shader_styles_shallows_description">Luz no fundo de uma piscina</string>
+    <string name="shader_styles_lava_name">Lava</string>
+    <string name="shader_styles_lava_description">Uma luminária de lava, sem pressa</string>
+    <string name="shader_styles_aurora_name">Aurora</string>
+    <string name="shader_styles_aurora_description">Aurora boreal sobre as colinas</string>
+    <string name="shader_styles_silk_name">Seda</string>
+    <string name="shader_styles_silk_description">Dobras de cetim girando sob o abajur</string>
+    <string name="shader_styles_curtain_name">Cortina</string>
+    <string name="shader_styles_curtain_description">A cortina do teatro antes do espetáculo, iluminada pela ribalta</string>
+    <string name="shader_styles_moonpath_name">Caminho da lua</string>
+    <string name="shader_styles_moonpath_description">O mar à noite e a estrada que a lua estende sobre ele</string>
+    <string name="shader_styles_city_name">Cidade</string>
+    <string name="shader_styles_city_description">A cidade à noite, desfocada do outro lado do vidro</string>
+    <string name="shader_styles_record_name">Vinil</string>
+    <string name="shader_styles_record_description">Um disco girando sob o abajur</string>
+    <string name="shader_styles_eclipse_name">Eclipse</string>
+    <string name="shader_styles_eclipse_description">O sol atrás da lua, com um ponto dele ardendo na borda</string>
+    <string name="shader_styles_gravity_name">Gravidade</string>
+    <string name="shader_styles_gravity_description">Um buraco negro e a luz que se curva em volta dele</string>
+    <string name="shader_styles_orbit_name">Órbita</string>
+    <string name="shader_styles_orbit_description">O amanhecer visto da órbita, sobre as luzes do lado noturno</string>
+    <string name="shader_styles_tide_name">Maré</string>
+    <string name="shader_styles_tide_description">O mar subindo à noite, brilhando onde quebra</string>
+    <string name="shader_styles_lanterns_name">Lanternas</string>
+    <string name="shader_styles_lanterns_description">Lanternas de papel soltas sobre o lago</string>
+    <string name="shader_styles_snow_name">Neve</string>
+    <string name="shader_styles_snow_description">Uma rua de postes de luz sob a neve que cai</string>
+    <string name="shader_styles_local_description">Da pasta “screensavers” desta TV</string>
+    <string name="shader_styles_local_origin">Esta TV</string>
+</resources>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_platform_not_in_front">Eso se abre en la pantalla propia de Lounge. Abre Lounge en la TV y vuelve a intentarlo.</string>
+    <string name="android_platform_opened_from_behind">Lounge no está en la pantalla de la TV, y solo puede abrir cosas desde detrás de otra app cuando es la pantalla de inicio de la TV. Abre Lounge en la TV y vuelve a intentarlo.</string>
+    <string name="android_platform_still_starting">Lounge todavía se está iniciando en la TV. Vuelve a intentarlo en un momento.</string>
+    <string name="android_platform_unknown_key">Lounge en la TV no conoce esa tecla. Actualiza Lounge y vuelve a intentarlo.</string>
+    <string name="android_platform_keys_need_power_setup">Hay otra app delante. Conecta la Configuración avanzada en la TV para que le lleguen las teclas del teléfono.</string>
+    <string name="android_platform_busy">La TV está ocupada con las últimas pulsaciones. Vuelve a intentarlo en un momento.</string>
+    <string name="android_platform_typing_needs_lounge">Hay otra app delante, y el teléfono solo escribe en Lounge. Pulsa Inicio y vuelve a intentarlo.</string>
+    <string name="android_platform_no_field">Abre primero Buscar o un campo en Lounge.</string>
+    <string name="android_platform_settings_not_saved">La TV no pudo guardar sus ajustes. Comprueba que tenga espacio libre y vuelve a intentarlo.</string>
+    <string name="android_platform_link_unknown">Lounge no puede abrir ese tipo de enlace</string>
+    <string name="android_platform_link_refused">Lounge no abre ese enlace</string>
+    <string name="android_platform_needs_notification_access">En reproducción necesita acceso a notificaciones</string>
+    <string name="android_platform_not_playing">Esa app no está reproduciendo nada</string>
+    <string name="android_platform_no_player">Ningún reproductor puede abrir esta transmisión. Instala VLC u otro reproductor.</string>
+    <string name="android_platform_no_video_player">Ningún reproductor de video puede abrir esta transmisión. Instala VLC u otro reproductor.</string>
+</resources>

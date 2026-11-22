@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shader_styles_ink_name">Tinte</string>
+    <string name="shader_styles_ink_description">Licht, das durch Tinte im Wasser zieht</string>
+    <string name="shader_styles_current_name">Strömung</string>
+    <string name="shader_styles_current_description">Träges Wasser, das sich unter einem einzigen Licht über sich selbst faltet</string>
+    <string name="shader_styles_rain_name">Regen</string>
+    <string name="shader_styles_rain_description">Ein Fenster bei Nacht, Tropfen laufen die Scheibe hinab</string>
+    <string name="shader_styles_smoke_name">Rauch</string>
+    <string name="shader_styles_smoke_description">Schwaden, die aufsteigen und sich dabei verlieren</string>
+    <string name="shader_styles_embers_name">Glut</string>
+    <string name="shader_styles_embers_description">Funken, die von einem heruntergebrannten Feuer aufsteigen</string>
+    <string name="shader_styles_shallows_name">Flachwasser</string>
+    <string name="shader_styles_shallows_description">Licht auf dem Grund eines Beckens</string>
+    <string name="shader_styles_lava_name">Lava</string>
+    <string name="shader_styles_lava_description">Eine Lavalampe, ganz langsam</string>
+    <string name="shader_styles_aurora_name">Polarlicht</string>
+    <string name="shader_styles_aurora_description">Nordlichter über den Hügeln</string>
+    <string name="shader_styles_silk_name">Seide</string>
+    <string name="shader_styles_silk_description">Satinfalten, die sich im Lampenlicht drehen</string>
+    <string name="shader_styles_curtain_name">Vorhang</string>
+    <string name="shader_styles_curtain_description">Der Hauptvorhang vor der Vorstellung, vom Rampenlicht beleuchtet</string>
+    <string name="shader_styles_moonpath_name">Mondstraße</string>
+    <string name="shader_styles_moonpath_description">Das Meer bei Nacht und die Straße, die der Mond darüberlegt</string>
+    <string name="shader_styles_city_name">Stadt</string>
+    <string name="shader_styles_city_description">Die Stadt bei Nacht, unscharf hinter der Scheibe</string>
+    <string name="shader_styles_record_name">Schallplatte</string>
+    <string name="shader_styles_record_description">Eine Schallplatte, die sich im Lampenlicht dreht</string>
+    <string name="shader_styles_eclipse_name">Finsternis</string>
+    <string name="shader_styles_eclipse_description">Die Sonne hinter dem Mond, und am Rand gleißt eine Perle von ihr</string>
+    <string name="shader_styles_gravity_name">Schwerkraft</string>
+    <string name="shader_styles_gravity_description">Ein schwarzes Loch und das Licht, das sich darum krümmt</string>
+    <string name="shader_styles_orbit_name">Orbit</string>
+    <string name="shader_styles_orbit_description">Tagesanbruch aus dem Orbit, über den Lichtern der Nachtseite</string>
+    <string name="shader_styles_tide_name">Flut</string>
+    <string name="shader_styles_tide_description">Das Meer läuft nachts auf und leuchtet, wo es bricht</string>
+    <string name="shader_styles_lanterns_name">Laternen</string>
+    <string name="shader_styles_lanterns_description">Papierlaternen, die über dem See aufsteigen</string>
+    <string name="shader_styles_snow_name">Schnee</string>
+    <string name="shader_styles_snow_description">Eine Gasse mit Straßenlaternen im Schneetreiben</string>
+    <string name="shader_styles_local_description">Aus dem Ordner „screensavers“ auf diesem Fernseher</string>
+    <string name="shader_styles_local_origin">Dieser Fernseher</string>
+</resources>

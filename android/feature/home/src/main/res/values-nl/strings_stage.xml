@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stage_row_name">het Podium</string>
+    <string name="stage_spoken_source">op %1$s</string>
+    <string name="stage_empty_category">Je startscherm</string>
+    <string name="stage_empty_title">Laten we je startscherm instellen</string>
+    <string name="stage_empty_body">Een paar snelle stappen, daarna verschijnen je apps en programma\'s hier.</string>
+    <string name="stage_empty_start">Starten</string>
+    <string name="stage_indexing_title">Je startscherm wordt ingesteld</string>
+    <string name="stage_indexing_body">Lounge bekijkt wat er op deze tv staat.</string>
+</resources>

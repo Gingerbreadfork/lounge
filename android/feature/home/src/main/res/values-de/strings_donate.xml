@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="donate_title">Lounge unterstützen</string>
+    <string name="donate_headline">Keine Werbung. Kein Tracking. Kein Preis.</string>
+    <string name="donate_one_thing">Das ist das Einzige, worum Lounge bittet.</string>
+    <plurals name="donate_had_weeks">
+        <item quantity="one">Lounge ist seit %1$d Woche auf diesem Fernseher.</item>
+        <item quantity="other">Lounge ist seit %1$d Wochen auf diesem Fernseher.</item>
+    </plurals>
+    <plurals name="donate_had_months">
+        <item quantity="one">Lounge ist seit %1$d Monat auf diesem Fernseher.</item>
+        <item quantity="other">Lounge ist seit %1$d Monaten auf diesem Fernseher.</item>
+    </plurals>
+    <string name="donate_had_over_a_year">Lounge ist seit über einem Jahr auf diesem Fernseher.</string>
+    <plurals name="donate_had_over_years">
+        <item quantity="one">Lounge ist seit über %1$d Jahr auf diesem Fernseher.</item>
+        <item quantity="other">Lounge ist seit über %1$d Jahren auf diesem Fernseher.</item>
+    </plurals>
+    <string name="donate_ask">Wenn Lounge sich den Platz verdient hat, gib, was es dir wert ist. Schon der Preis eines Kaffees hält Lounge am Laufen, und wirklich jeder Beitrag hilft.</string>
+    <string name="donate_how">Am Handy dauert das etwa eine Minute, und alles kommt direkt bei dem Menschen an, der Lounge entwickelt. Lounge bleibt genau gleich, ob du etwas gibst oder nicht.</string>
+    <string name="donate_thank_you">Danke sagt</string>
+    <string name="donate_point_camera">Richte deine Handykamera hierauf</string>
+    <string name="donate_give_with">Unterstützen mit</string>
+    <string name="donate_note_paypal">Scanne mit deiner Handykamera.\nDen Betrag wählst du.</string>
+    <string name="donate_note_coin">Scanne mit einer Wallet.\nSende nur %1$s an diese Adresse.</string>
+    <string name="donate_code_description">Ein Code zum Unterstützen mit %1$s, an %2$s</string>
+</resources>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ambient_playing_description">En lecture</string>
+    <string name="ambient_tv_own">Celui de la TV</string>
+    <string name="ambient_subtitle_ours">Vos illustrations ou un lent décor abstrait, avec une horloge ; l’ensemble dérive et s’atténue pour ménager les dalles OLED.</string>
+    <string name="ambient_subtitle_other">Affichez vos illustrations ou un lent décor abstrait, avec une horloge, quand la TV est au repos.</string>
+    <string name="ambient_switching">Changement…</string>
+    <string name="ambient_ok_puts_back">OK remet le précédent</string>
+    <string name="ambient_power_puts_back">La Configuration avancée peut remettre le précédent</string>
+    <string name="ambient_ok_makes_lounge">OK choisit l’économiseur d’écran de Lounge</string>
+    <string name="ambient_ok_opens_tv_settings">OK ouvre les paramètres d’économiseur d’écran de la TV : choisissez-y Lounge, puis appuyez sur Retour</string>
+    <string name="ambient_tv_did_not_take">Les paramètres de la TV n’ont pas retenu l’économiseur d’écran de Lounge. OK ouvre la Configuration avancée, qui le peut une fois le débogage USB activé</string>
+    <string name="ambient_tv_cannot_choose">Les paramètres de cette TV ne permettent pas de choisir un économiseur d’écran. OK ouvre la Configuration avancée, qui le peut une fois le débogage USB activé</string>
+    <string name="ambient_ok_opens_power_setup">OK ouvre la Configuration avancée, qui peut choisir l’économiseur d’écran de Lounge</string>
+    <string name="ambient_not_taken">La TV n’a pas pris en compte le changement. Réessayez, ou dans les paramètres de la TV, ouvrez Système, puis Économiseur d’écran.</string>
+    <string name="ambient_style_title">Style</string>
+    <string name="ambient_style_pictures">Images</string>
+    <string name="ambient_style_pictures_about">Les illustrations de votre écran d’accueil</string>
+    <string name="ambient_style_mix">Mélange</string>
+    <string name="ambient_style_mix_about">Tous les décors dans un ordre aléatoire, quelques minutes chacun</string>
+    <string name="ambient_style_too_heavy">Le décor « %1$s » est trop lourd pour cette TV : Images le remplace</string>
+    <string name="ambient_style_not_drawn">Cette TV n’a pas pu afficher le décor « %1$s » : Images le remplace</string>
+    <string name="ambient_preview_title">Voir en plein écran</string>
+    <string name="ambient_preview_subtitle">N’importe quelle touche vous ramène ici</string>
+    <string name="ambient_footnote_pictures">Les images viennent de ce qui est déjà sur votre écran d’accueil et les décors abstraits sont dessinés par la TV ; rien n’est téléchargé pour cela.</string>
+    <string name="ambient_footnote_when">C’est la TV qui décide quand l’économiseur d’écran démarre. Pour changer ce délai, dans les paramètres de la TV, ouvrez Système, puis Économiseur d’écran.</string>
+</resources>

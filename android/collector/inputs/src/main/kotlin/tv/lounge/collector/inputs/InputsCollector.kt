@@ -24,7 +24,8 @@ class InputsCollector(private val context: Context) {
             .filter { it.isPassthroughInput || (it.type == TvInputInfo.TYPE_TUNER && it.id.contains("/HW")) }
             .map { info ->
                 val state = runCatching { tim.getInputState(info.id) }.getOrDefault(TvInputManager.INPUT_STATE_DISCONNECTED)
-                val label = info.loadLabel(context)?.toString()?.ifBlank { null } ?: fallbackLabel(info)
+                // An input the TV names nothing goes without a label, and the core names it for what it is.
+                val label = info.loadLabel(context)?.toString()?.ifBlank { null }.orEmpty()
                 InputRecord(
                     id = info.id,
                     label = label,
@@ -64,12 +65,6 @@ class InputsCollector(private val context: Context) {
         }
         tim.registerCallback(callback, Handler(Looper.getMainLooper()))
         awaitClose { runCatching { tim.unregisterCallback(callback) } }
-    }
-
-    private fun fallbackLabel(info: TvInputInfo): String = when (info.type) {
-        TvInputInfo.TYPE_HDMI -> "HDMI"
-        TvInputInfo.TYPE_TUNER -> "Live TV"
-        else -> "Input"
     }
 
     /** The port number as the TV labels it ("HDMI 2"); the framework's port field is not public. */

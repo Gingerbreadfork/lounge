@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="notifications_count">
+        <item quantity="one">%1$d notification</item>
+        <item quantity="many">%1$d notifications</item>
+        <item quantity="other">%1$d notifications</item>
+    </plurals>
+    <plurals name="notifications_count_spoken">
+        <item quantity="one">%1$d notification, %2$s</item>
+        <item quantity="many">%1$d notifications, %2$s</item>
+        <item quantity="other">%1$d notifications, %2$s</item>
+    </plurals>
+    <plurals name="notifications_new">
+        <item quantity="one">%1$d nouvelle</item>
+        <item quantity="many">%1$d nouvelles</item>
+        <item quantity="other">%1$d nouvelles</item>
+    </plurals>
+    <string name="notifications_byline">%1$s, %2$s</string>
+    <string name="notifications_when_just_now">À l’instant</string>
+    <plurals name="notifications_when_minutes_ago">
+        <item quantity="one">Il y a %1$d minute</item>
+        <item quantity="many">Il y a %1$d minutes</item>
+        <item quantity="other">Il y a %1$d minutes</item>
+    </plurals>
+    <plurals name="notifications_when_hours_ago">
+        <item quantity="one">Il y a %1$d heure</item>
+        <item quantity="many">Il y a %1$d heures</item>
+        <item quantity="other">Il y a %1$d heures</item>
+    </plurals>
+    <plurals name="notifications_when_days_ago">
+        <item quantity="one">Il y a %1$d jour</item>
+        <item quantity="many">Il y a %1$d jours</item>
+        <item quantity="other">Il y a %1$d jours</item>
+    </plurals>
+    <string name="notifications_dismiss_all">Tout effacer</string>
+    <plurals name="notifications_staying">
+        <item quantity="one">%1$d reste jusqu’à ce que son appli la retire</item>
+        <item quantity="many">%1$d restent jusqu’à ce que leurs applis les retirent</item>
+        <item quantity="other">%1$d restent jusqu’à ce que leurs applis les retirent</item>
+    </plurals>
+    <string name="notifications_taken_back">Son appli l’a retirée : il n’y a plus rien à ouvrir.</string>
+    <string name="notifications_offered">Les notifications de vos applis peuvent désormais s’afficher dans la barre du haut. Pour les activer : Paramètres, Notifications</string>
+    <string name="notifications_stays">Celle-ci reste jusqu’à ce que son appli la retire.</string>
+    <string name="notifications_sent">Envoyé</string>
+    <string name="notifications_dismiss">Effacer</string>
+    <string name="notifications_hide_app">Masquer tout ce qui vient de %1$s</string>
+    <string name="notifications_hide_app_subtitle">Lounge n’affiche plus ses notifications</string>
+    <string name="notifications_settings_subtitle">Ce que les applis de cette TV ont à vous dire, à portée d’un appui dans la barre du haut.</string>
+    <string name="notifications_needs_access">Nécessite l’accès aux notifications. OK le demande.</string>
+    <string name="notifications_not_allowed">Non autorisé</string>
+    <string name="notifications_hidden_apps">Applis masquées</string>
+    <string name="notifications_footnote_privacy">Lounge ne lit les notifications que pour les afficher ici, et pas du tout quand ce réglage est désactivé. Il n’en conserve aucune et aucune ne quitte cette TV.</string>
+    <string name="notifications_footnote_left_out">Ce qui est encore en cours, comme un téléchargement, n’apparaît pas, tout comme ce qui est en lecture.</string>
+</resources>

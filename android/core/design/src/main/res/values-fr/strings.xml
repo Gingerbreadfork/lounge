@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="language_tag">fr</string>
+    <string name="common_on">Oui</string>
+    <string name="common_off">Non</string>
+    <string name="common_open">Ouvrir</string>
+    <string name="common_show">Afficher</string>
+    <string name="common_hide">Masquer</string>
+    <string name="common_hidden">Masqué</string>
+    <string name="common_cancel">Annuler</string>
+    <string name="common_back">Retour</string>
+    <string name="common_done">Terminé</string>
+    <string name="common_try_again">Réessayer</string>
+    <string name="common_settings">Paramètres</string>
+    <string name="common_search">Rechercher</string>
+    <string name="common_all_apps">Toutes les applis</string>
+    <string name="common_tv_guide">Guide TV</string>
+    <string name="common_tv_controls">Commandes TV</string>
+    <string name="common_notifications">Notifications</string>
+    <string name="common_screensaver">Économiseur d’écran</string>
+    <string name="common_power_setup">Configuration avancée</string>
+    <string name="common_phone_companion">Lounge sur téléphone</string>
+    <string name="words_just_now">à l’instant</string>
+    <plurals name="words_minutes_ago">
+        <item quantity="one">il y a %1$d minute</item>
+        <item quantity="many">il y a %1$d minutes</item>
+        <item quantity="other">il y a %1$d minutes</item>
+    </plurals>
+    <plurals name="words_hours_ago">
+        <item quantity="one">il y a %1$d heure</item>
+        <item quantity="many">il y a %1$d heures</item>
+        <item quantity="other">il y a %1$d heures</item>
+    </plurals>
+    <plurals name="words_days_ago">
+        <item quantity="one">il y a %1$d jour</item>
+        <item quantity="many">il y a %1$d jours</item>
+        <item quantity="other">il y a %1$d jours</item>
+    </plurals>
+    <string name="words_clock_am">%1$s AM</string>
+    <string name="words_clock_pm">%1$s PM</string>
+</resources>

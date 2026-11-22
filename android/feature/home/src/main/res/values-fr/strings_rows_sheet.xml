@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rows_sheet_title">Rangées de l’écran d’accueil</string>
+    <string name="rows_sheet_subtitle">OK affiche ou masque une rangée. Maintenez OK pour en saisir une, Haut et Bas la déplacent, et OK ou Retour la repose.</string>
+    <string name="rows_sheet_loading">Chargement…</string>
+    <string name="rows_sheet_moving">Déplacement</string>
+    <string name="rows_sheet_shown">Visible</string>
+    <string name="rows_sheet_empty">Vide</string>
+    <string name="rows_sheet_reset">Rétablir l’ordre habituel des rangées</string>
+    <string name="rows_sheet_reset_confirm">Oui, rétablir l’ordre</string>
+    <string name="rows_sheet_reset_keeps">Ce que vous avez masqué le reste</string>
+    <string name="rows_sheet_reset_done">C’est fait. Ce que vous aviez masqué le reste.</string>
+    <string name="rows_sheet_hidden_group">Masqué dans toutes les rangées</string>
+    <string name="rows_sheet_hidden_none">Rien n’est masqué. Maintenez OK sur une vignette et choisissez Masquer.</string>
+    <string name="rows_sheet_continue_group">Sources de Reprendre la lecture</string>
+    <string name="rows_sheet_continue_none">Rien à reprendre pour l’instant. Les applis et les plugins apparaissent ici dès qu’ils apportent quelque chose.</string>
+    <string name="rows_sheet_source_nothing">Rien à reprendre en ce moment</string>
+    <plurals name="rows_sheet_source_titles">
+        <item quantity="one">%1$d titre</item>
+        <item quantity="many">%1$d titres</item>
+        <item quantity="other">%1$d titres</item>
+    </plurals>
+    <string name="rows_sheet_footnote">Une rangée vide reste hors de l’écran tant qu’elle n’a rien à montrer.</string>
+</resources>

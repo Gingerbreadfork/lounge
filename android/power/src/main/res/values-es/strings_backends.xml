@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="backends_took_too_long">La TV tardó demasiado en responder. Vuelve a intentarlo.</string>
+    <string name="backends_unreachable">Lounge no pudo conectar con la depuración por USB. Comprueba que siga activada en Opciones para desarrolladores y vuelve a intentarlo.</string>
+    <string name="backends_dropped">Se cortó la conexión con la depuración por USB. Vuelve a intentarlo.</string>
+    <string name="backends_tls">Esta TV pide el código de vinculación de la depuración inalámbrica, que la Configuración avanzada no puede usar. Activa en su lugar la depuración por USB en Opciones para desarrolladores y vuelve a intentarlo.</string>
+    <string name="backends_not_this_tv">Respondió algo distinto del servicio de depuración de esta TV, así que Lounge no se conectó. Reinicia la TV y vuelve a intentarlo.</string>
+    <string name="backends_key_not_approved">Esta TV ya no le da permiso a Lounge. En Ajustes, abre Configuración avanzada y elige Conectar.</string>
+    <string name="backends_shizuku_not_allowed">Shizuku no le ha dado permiso a Lounge. Abre Shizuku, dale permiso a Lounge y vuelve a intentarlo.</string>
+    <string name="backends_shizuku_not_running">Shizuku no pudo ejecutarlo. Abre Shizuku y comprueba que esté en marcha.</string>
+</resources>

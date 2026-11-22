@@ -1,6 +1,7 @@
 package tv.lounge.update
 
 import android.content.pm.PackageInstaller
+import android.content.res.Resources
 import java.io.File
 import java.util.zip.ZipFile
 import org.json.JSONObject
@@ -144,14 +145,15 @@ data class Release(
 }
 
 /**
- * Why an APK may not replace this build, or null when it may. It has to be newer than what is
- * installed, and the version its release names; otherwise the same release would look new again
- * after every install.
+ * Why an APK may not replace this build, as a sentence for the screen, or null when it may. It has
+ * to be newer than what is installed, and the version its release names; otherwise the same
+ * release would look new again after every install.
  */
-fun versionProblem(release: Version, apkVersionName: String?, apkVersionCode: Long, installedVersionCode: Long): String? = when {
-    apkVersionCode <= installedVersionCode -> "The update is no newer than this copy of Lounge"
-    Version.parse(apkVersionName.orEmpty()) != release -> "The release says $release, but the app in it says ${apkVersionName ?: "nothing"}"
-    else -> null
+fun versionProblem(resources: Resources, release: Version, apkVersionName: String?, apkVersionCode: Long, installedVersionCode: Long): String? = when {
+    apkVersionCode <= installedVersionCode -> resources.getString(R.string.release_no_newer)
+    Version.parse(apkVersionName.orEmpty()) == release -> null
+    apkVersionName == null -> resources.getString(R.string.release_no_version, release.toString())
+    else -> resources.getString(R.string.release_other_version, release.toString(), apkVersionName)
 }
 
 /**

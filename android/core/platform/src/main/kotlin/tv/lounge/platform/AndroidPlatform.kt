@@ -44,13 +44,6 @@ sealed interface UiCommand {
     data class OpenLive(val plugin: String, val title: String, val url: String) : UiCommand
 }
 
-/** What a press is told when it would open one of Lounge's own screens behind another app. */
-internal const val NOT_IN_FRONT = "That opens on Lounge's own screen. Open Lounge on the TV, then try again."
-
-/** What the phone is told when Android would drop a start made from behind another app. */
-internal const val OPENED_FROM_BEHIND =
-    "Lounge isn't on the TV's screen, and it can only open things from behind another app when it is the TV's home screen. Open Lounge on the TV, then try again."
-
 /**
  * The core's view of Android: launch, view, switch, tune, control. Every failure becomes a
  * [PlatformException] so the core can report it.
@@ -102,9 +95,9 @@ class AndroidPlatform(private val context: Context) : Platform {
                 else -> Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             }
         } catch (e: URISyntaxException) {
-            throw PlatformException.Failed("That link is not one Lounge can open")
+            throw PlatformException.Failed(context.getString(R.string.android_platform_link_unknown))
         }
-        val refused = PlatformException.Failed("Lounge won't open that link")
+        val refused = PlatformException.Failed(context.getString(R.string.android_platform_link_refused))
         val explicit = intent.component != null || intent.`package` != null
         when (intent.action) {
             null, Intent.ACTION_VIEW -> Unit
@@ -175,7 +168,8 @@ class AndroidPlatform(private val context: Context) : Platform {
             command.startsWith("search:") -> _commands.tryEmit(UiCommand.Search(command.removePrefix("search:")))
             command.startsWith("sheet:") || command.startsWith("live:") -> {
                 val screen = pluginScreen(command) ?: throw PlatformException.Failed("Unknown control: $command")
-                if (!inFront()) throw PlatformException.Failed(NOT_IN_FRONT)
+                // A press that would open one of Lounge's own screens behind another app is told so.
+                if (!inFront()) throw PlatformException.Failed(context.getString(R.string.android_platform_not_in_front))
                 _commands.tryEmit(screen)
             }
             else -> throw PlatformException.Failed("Unknown control: $command")
@@ -196,6 +190,9 @@ class AndroidPlatform(private val context: Context) : Platform {
     private fun mayOpen(): Boolean =
         android.os.Build.VERSION.SDK_INT < 29 || onScreen() || isHomeScreen() || Settings.canDrawOverlays(context)
 
+    /** What the phone is told when Android would drop a start made from behind another app. */
+    private fun openedFromBehind() = PlatformException.Failed(context.getString(R.string.android_platform_opened_from_behind))
+
     private fun isHomeScreen(): Boolean = runCatching {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         context.packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == context.packageName
@@ -211,7 +208,7 @@ class AndroidPlatform(private val context: Context) : Platform {
     @Volatile var listTvControls: () -> TvControls = { TvControls(note = null, controls = emptyList()) }
 
     /** Set by the shell: runs one of those rows by its id, or throws with a sentence saying why not. */
-    @Volatile var pressTvControl: (String) -> Unit = { throw PlatformException.Failed("Lounge on the TV is still starting. Try again in a moment.") }
+    @Volatile var pressTvControl: (String) -> Unit = { throw PlatformException.Failed(context.getString(R.string.android_platform_still_starting)) }
 
     override fun tvControls(): TvControls = listTvControls()
 
@@ -260,26 +257,26 @@ class AndroidPlatform(private val context: Context) : Platform {
                     "center", "ok", "select" -> android.view.KeyEvent.KEYCODE_DPAD_CENTER
                     "back" -> android.view.KeyEvent.KEYCODE_BACK
                     "menu" -> android.view.KeyEvent.KEYCODE_MENU
-                    else -> throw PlatformException.Failed("Lounge on the TV doesn't know that key. Update Lounge, then try again.")
+                    else -> throw PlatformException.Failed(context.getString(R.string.android_platform_unknown_key))
                 }
                 if (!inFront() && !keysForOtherApps()) {
-                    throw PlatformException.Failed("Another app is in front. Connect Power Setup on the TV so the phone's keys reach it.")
+                    throw PlatformException.Failed(context.getString(R.string.android_platform_keys_need_power_setup))
                 }
-                if (!_commands.tryEmit(UiCommand.Key(code))) throw PlatformException.Failed(BUSY)
+                if (!_commands.tryEmit(UiCommand.Key(code))) throw PlatformException.Failed(context.getString(R.string.android_platform_busy))
             }
         }
     }
 
     /** Text from the phone lands only in a field open in Lounge, so it needs Lounge in front with a field open. */
     override fun typeText(text: String) {
-        if (!inFront()) throw PlatformException.Failed("Another app is in front, and the phone types only into Lounge. Press Home, then try again.")
-        if (!fieldOpen()) throw PlatformException.Failed("Open Search or a field in Lounge first.")
-        if (!_commands.tryEmit(UiCommand.TypeText(text))) throw PlatformException.Failed(BUSY)
+        if (!inFront()) throw PlatformException.Failed(context.getString(R.string.android_platform_typing_needs_lounge))
+        if (!fieldOpen()) throw PlatformException.Failed(context.getString(R.string.android_platform_no_field))
+        if (!_commands.tryEmit(UiCommand.TypeText(text))) throw PlatformException.Failed(context.getString(R.string.android_platform_busy))
     }
 
     override fun mediaCommand(`package`: String, command: String) {
-        val sender = mediaSender ?: throw PlatformException.Failed("Now playing needs notification access")
-        if (!sender(`package`, command)) throw PlatformException.Failed("That app is not playing anything")
+        val sender = mediaSender ?: throw PlatformException.Failed(context.getString(R.string.android_platform_needs_notification_access))
+        if (!sender(`package`, command)) throw PlatformException.Failed(context.getString(R.string.android_platform_not_playing))
     }
 
     override fun requestPermission(name: String) {
@@ -287,7 +284,7 @@ class AndroidPlatform(private val context: Context) : Platform {
     }
 
     override fun playStream(url: String, title: String, startMs: Long?, headers: Map<String, String>, audio: Boolean) {
-        if (!mayOpen()) throw PlatformException.Failed(OPENED_FROM_BEHIND)
+        if (!mayOpen()) throw openedFromBehind()
         // Sound is offered to audio players first, and to a video player on a TV that has none.
         for (type in if (audio) listOf("audio/*", "video/*") else listOf("video/*")) {
             val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -320,7 +317,7 @@ class AndroidPlatform(private val context: Context) : Platform {
                 throw PlatformException.Failed(e.message ?: "not allowed")
             }
         }
-        throw PlatformException.Failed(if (audio) "No player can open this stream. Install VLC or another player." else "No video player can open this stream. Install VLC or another player.")
+        throw PlatformException.Failed(context.getString(if (audio) R.string.android_platform_no_player else R.string.android_platform_no_video_player))
     }
 
     /** Both are called off the main thread, by the phone's backup and restore. */
@@ -330,7 +327,7 @@ class AndroidPlatform(private val context: Context) : Platform {
         try {
             runBlocking { prefs.restore(preferences) }
         } catch (e: java.io.IOException) {
-            throw PlatformException.Failed("The TV couldn't save its settings. Check it has free space, then try again.")
+            throw PlatformException.Failed(context.getString(R.string.android_platform_settings_not_saved))
         }
     }
 
@@ -341,7 +338,7 @@ class AndroidPlatform(private val context: Context) : Platform {
     }
 
     private fun start(intent: Intent, fallback: (() -> Unit)?) {
-        if (!mayOpen()) throw PlatformException.Failed(OPENED_FROM_BEHIND)
+        if (!mayOpen()) throw openedFromBehind()
         try {
             context.startActivity(intent)
         } catch (e: ActivityNotFoundException) {
@@ -362,7 +359,6 @@ class AndroidPlatform(private val context: Context) : Platform {
 
     private companion object {
         const val TAG = "LoungePlatform"
-        const val BUSY = "The TV is busy with the last few presses. Try again in a moment."
         const val APK_TYPE = "application/vnd.android.package-archive"
         const val URI_GRANTS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION

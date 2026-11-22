@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -44,6 +47,7 @@ import tv.lounge.core.CoreClient
 import tv.lounge.core.PluginSheet
 import tv.lounge.core.PluginSheetRow
 import tv.lounge.core.PluginSheetRowKind
+import tv.lounge.core.reason
 import tv.lounge.design.LoungeGlyphs
 import tv.lounge.design.LoungeTheme
 
@@ -136,6 +140,7 @@ fun PluginSheetContent(
     onOpen: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val resources by rememberUpdatedState(LocalResources.current)
     var sheet by remember(plugin, id) { mutableStateOf<PluginSheet?>(null) }
     var problem by remember(plugin, id) { mutableStateOf<String?>(null) }
     var stale by remember(plugin, id) { mutableStateOf(false) }
@@ -164,7 +169,7 @@ fun PluginSheetContent(
                 }
                 .onFailure { e ->
                     // What was read before stays up; a sheet never read says why.
-                    if (sheet == null) problem = friendlyError(e, "That") else stale = true
+                    if (sheet == null) problem = sheetProblem(resources, e) else stale = true
                 }
             delay(150)
         }
@@ -184,7 +189,7 @@ fun PluginSheetContent(
                         reads.trySend(Unit)
                     }
                 }
-                .onFailure { e -> failed[row] = friendlyError(e, "That") }
+                .onFailure { e -> failed[row] = sheetProblem(resources, e) }
         }
     }
     fun press(row: String, action: String) {
@@ -206,7 +211,7 @@ fun PluginSheetContent(
 
     val shown = sheet
     if (shown == null) {
-        SheetHeading(if (problem == null) "One moment" else "Not answering", problem)
+        SheetHeading(stringResource(if (problem == null) R.string.plugin_sheets_one_moment else R.string.plugin_sheets_not_answering), problem)
         return
     }
     PluginSheetBody(
@@ -222,6 +227,13 @@ fun PluginSheetContent(
         onPress = ::press,
         onOpen = onOpen,
     )
+}
+
+/** Why a sheet, or a press on one of its rows, failed: the plugin's own sentence, or that it did not answer. */
+internal fun sheetProblem(resources: android.content.res.Resources, e: Throwable): String {
+    val reason = e.reason
+    android.util.Log.w("Lounge", "a plugin's sheet failed: $reason")
+    return if (e is tv.lounge.core.CoreException.Plugin && readsAsSentence(reason)) reason.trim() else resources.getString(R.string.plugin_sheets_no_answer)
 }
 
 /**
@@ -277,7 +289,7 @@ internal fun PluginSheetBody(
             key(row.id) {
                 val glyph = LoungeGlyphs.named(row.glyph)
                 val reason = failed[row.id]
-                val value = if (reason != null) "Didn't work" else row.value
+                val value = if (reason != null) stringResource(R.string.plugin_sheets_didnt_work) else row.value
                 val accent = when {
                     reason != null -> colors.ember
                     row.on == true -> colors.houselight
@@ -330,7 +342,7 @@ internal fun PluginSheetBody(
             }
         }
     }
-    val notes = listOfNotNull(sheet.footnote, "Not answering just now. This is what it last said.".takeIf { stale })
+    val notes = listOfNotNull(sheet.footnote, if (stale) stringResource(R.string.plugin_sheets_stale) else null)
     if (notes.isNotEmpty()) SheetFootnote(*notes.toTypedArray())
 }
 

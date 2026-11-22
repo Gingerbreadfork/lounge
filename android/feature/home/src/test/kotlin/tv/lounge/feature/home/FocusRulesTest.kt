@@ -9,11 +9,16 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import tv.lounge.core.CoreException
 import tv.lounge.core.GuideProgramme
 
 /** The focus decisions the home makes, and the words it says, as plain rules. */
+@RunWith(RobolectricTestRunner::class)
 class FocusRulesTest {
+    private val resources get() = RuntimeEnvironment.getApplication().resources
     private val first = Any()
     private val middle = Any()
     private val last = Any()
@@ -35,11 +40,11 @@ class FocusRulesTest {
         val cable = listOf(set, lounge, console)
 
         // Without Power Setup there is nothing to press, and the phone is told where to set it up.
-        val none = phoneTvControls(ready = false, hasCec = true, isTelevision = false, devices = cable)
-        assertEquals(PHONE_NEEDS_POWER_SETUP to emptyList<String>(), none.note to none.controls.map { it.id })
+        val none = phoneTvControls(resources, ready = false, hasCec = true, isTelevision = false, devices = cable)
+        assertEquals("Power and input need Power Setup. On the TV, open Settings, then Power Setup." to emptyList<String>(), none.note to none.controls.map { it.id })
 
         // A box plugged into a TV: the sheet's power rows, then the inputs under their own label.
-        val box = phoneTvControls(ready = true, hasCec = true, isTelevision = false, devices = cable)
+        val box = phoneTvControls(resources, ready = true, hasCec = true, isTelevision = false, devices = cable)
         assertEquals(null, box.note)
         assertEquals(listOf("cec_otp", "cec_tv_power", "sleep", "cec_select_4", "cec_select_8"), box.controls.map { it.id })
         assertEquals(listOf("TV is off", "On or off", "Sleep, TV follows", "On", "Standby"), box.controls.map { it.value })
@@ -47,24 +52,24 @@ class FocusRulesTest {
         assertEquals(listOf("Streamer", "Console"), box.controls.drop(3).map { it.title })
 
         // With nothing else on the cable there is nothing to switch to.
-        val alone = phoneTvControls(ready = true, hasCec = true, isTelevision = false, devices = listOf(lounge))
+        val alone = phoneTvControls(resources, ready = true, hasCec = true, isTelevision = false, devices = listOf(lounge))
         assertEquals(listOf("cec_otp", "cec_tv_power", "sleep"), alone.controls.map { it.id })
         assertEquals(null, alone.controls.first().value)
 
         // A television cannot wake or switch itself over the cable, and a box without control
         // on its cable cannot reach the TV: each can only sleep.
-        val television = phoneTvControls(ready = true, hasCec = true, isTelevision = true, devices = cable)
+        val television = phoneTvControls(resources, ready = true, hasCec = true, isTelevision = true, devices = cable)
         assertEquals(listOf("sleep" to "Turn the TV off"), television.controls.map { it.id to it.title })
-        val deaf = phoneTvControls(ready = true, hasCec = false, isTelevision = false, devices = cable)
+        val deaf = phoneTvControls(resources, ready = true, hasCec = false, isTelevision = false, devices = cable)
         assertEquals(listOf("sleep" to "Go to sleep"), deaf.controls.map { it.id to it.title })
     }
 
     @Test
     fun theLastSetupStepNamesTheTopBarThisTvHas() {
-        assertEquals("Up from the Stage reaches Search and Settings.", topBarWords(showGuide = false, showTvControls = false))
-        assertEquals("Up from the Stage reaches Search, TV controls and Settings.", topBarWords(showGuide = false, showTvControls = true))
-        assertEquals("Up from the Stage reaches Search, the TV guide and Settings.", topBarWords(showGuide = true, showTvControls = false))
-        assertEquals("Up from the Stage reaches Search, the TV guide, TV controls and Settings.", topBarWords(showGuide = true, showTvControls = true))
+        assertEquals("Up from the Stage reaches Search and Settings.", resources.getString(topBarWords(showGuide = false, showTvControls = false)))
+        assertEquals("Up from the Stage reaches Search, TV controls and Settings.", resources.getString(topBarWords(showGuide = false, showTvControls = true)))
+        assertEquals("Up from the Stage reaches Search, the TV guide and Settings.", resources.getString(topBarWords(showGuide = true, showTvControls = false)))
+        assertEquals("Up from the Stage reaches Search, the TV guide, TV controls and Settings.", resources.getString(topBarWords(showGuide = true, showTvControls = true)))
     }
 
     @Test
@@ -116,13 +121,13 @@ class FocusRulesTest {
         val crystal = testTile("wn:2", "Crystal Lake", subtitle = "S5 E16, Jellyfin", kind = tv.lounge.core.TileKind.LANDSCAPE)
         val snapshot = testSnapshot(rows = listOf(testRow("continue", testaments, crystal, title = "Continue watching")), allApps = listOf(store, stan))
 
-        val rows = search(snapshot, "st")
+        val rows = search(snapshot, "st", testSearchTitles)
         assertEquals(listOf("allapps", "continue"), rows.map { it.id })
         assertEquals("Apps", rows[0].title)
         assertEquals(listOf("Stan", "Google Play Store"), rows[0].tiles.map { it.title })
 
         // Episode codes never match, and neither does a single letter on the second line.
-        assertTrue(search(snapshot, "e16").isEmpty())
+        assertTrue(search(snapshot, "e16", testSearchTitles).isEmpty())
         assertEquals(null, matchScore("Crystal Lake", "S5 E16, Jellyfin", searchWords("j")))
         assertEquals(1, matchScore("Crystal Lake", "S5 E16, Jellyfin", searchWords("jelly")))
         // Title first, then a word of it, then anywhere in it.
@@ -139,25 +144,41 @@ class FocusRulesTest {
         val onStage = testTile("wn:1", "Severance", kind = tv.lounge.core.TileKind.LANDSCAPE, provider = "tv.apple")
         val hidden = testTile("app:x", "Xbox", hidden = true)
         val snapshot = testSnapshot(strip = listOf(onStage), allApps = listOf(hidden))
-        assertEquals(listOf("continue"), search(snapshot, "sev").map { it.id })
-        assertEquals(listOf("app:x"), search(snapshot, "xb").single().tiles.map { it.id })
+        assertEquals(listOf("continue"), search(snapshot, "sev", testSearchTitles).map { it.id })
+        assertEquals(listOf("app:x"), search(snapshot, "xb", testSearchTitles).single().tiles.map { it.id })
         // Being hidden is a state the tile wears and says, not words to be found by.
-        assertTrue(search(snapshot, "hi").isEmpty())
-        assertTrue(search(snapshot, "ro").isEmpty())
-        assertEquals("Xbox, All apps, hidden from every row", tileDescription(hidden, "All apps"))
+        assertTrue(search(snapshot, "hi", testSearchTitles).isEmpty())
+        assertTrue(search(snapshot, "ro", testSearchTitles).isEmpty())
+        assertEquals("Xbox, All apps, hidden from every row", tileDescription(resources, hidden, "All apps"))
+    }
+
+    @Test
+    fun aFailureSaidInAnotherLanguageIsStillKnown() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val german = context.createConfigurationContext(android.content.res.Configuration().apply { setLocale(java.util.Locale.GERMAN) }).resources
+        // The platform words its failures in the language in use, and the home knows them by those words.
+        val said = german.getString(tv.lounge.platform.R.string.android_platform_no_video_player)
+        assertTrue(said != resources.getString(tv.lounge.platform.R.string.android_platform_no_video_player))
+        assertEquals(german.getString(R.string.home_screen_error_no_video_player, "Ein Film"), friendlyReason(german, CoreException.Platform(said), said, "Ein Film"))
+        val playing = german.getString(tv.lounge.platform.R.string.android_platform_not_playing)
+        assertEquals(german.getString(R.string.home_screen_error_not_playing, "Radio"), friendlyReason(german, CoreException.Platform(playing), playing, "Radio"))
+        // Episode codes are read as words whichever letters the language writes them with.
+        assertEquals(german.getString(R.string.tiles_spoken_episode, "2", "4") + ", Honeydew", spokenEpisodes(german, "S2 F4, Honeydew"))
+        assertEquals(resources.getString(R.string.tiles_spoken_episode, "2", "4"), spokenEpisodes(resources, "T2 E4"))
+        assertEquals("Mix: A1 B2", spokenEpisodes(resources, "Mix: A1 B2"))
     }
 
     @Test
     fun failuresAreSentencesWithTheirFix() {
         // What the TV says when nothing can play a stream names the kind of player to install.
         val film = "No video player can open this stream. Install VLC or another player."
-        assertEquals("Nothing on this TV can play A film. Install VLC or another video player, then try again.", friendlyReason(CoreException.Platform(film), film, "A film"))
+        assertEquals("Nothing on this TV can play A film. Install VLC or another video player, then try again.", friendlyReason(resources, CoreException.Platform(film), film, "A film"))
         val station = "No player can open this stream. Install VLC or another player."
-        assertEquals("Nothing on this TV can play A station. Install VLC or another player, then try again.", friendlyReason(CoreException.Platform(station), station, "A station"))
-        val launch = friendlyReason(CoreException.Platform("No launch intent for com.netflix.ninja"), "No launch intent for com.netflix.ninja", "Netflix")
+        assertEquals("Nothing on this TV can play A station. Install VLC or another player, then try again.", friendlyReason(resources, CoreException.Platform(station), station, "A station"))
+        val launch = friendlyReason(resources, CoreException.Platform("No launch intent for com.netflix.ninja"), "No launch intent for com.netflix.ninja", "Netflix")
         assertEquals("Nothing on this TV can open Netflix. Is its app still installed?", launch)
         val unknown = CoreException.UnknownAction("open:wn:42")
-        assertEquals("Alien: Earth isn't on this TV any more. Its app may have removed it.", friendlyReason(unknown, "no such item or action: open:wn:42", "Alien: Earth"))
+        assertEquals("Alien: Earth isn't on this TV any more. Its app may have removed it.", friendlyReason(resources, unknown, "no such item or action: open:wn:42", "Alien: Earth"))
         // A plugin's sentence and the host's show as written, whatever words they hold.
         for (written in listOf(
             "Kodi has no episodes of this show. Update Kodi's library, then try again.",
@@ -165,16 +186,16 @@ class FocusRulesTest {
             "Jellyfin didn't answer at 192.168.0.20:8096. Check the server, then try again.",
             "Its plugin is turned off or no longer installed. Turn the plugin on, then try again.",
         )) {
-            assertEquals(written, friendlyReason(CoreException.Plugin(written), written, "The Bear"))
+            assertEquals(written, friendlyReason(resources, CoreException.Plugin(written), written, "The Bear"))
         }
         // What is not a sentence is worded here.
         val late = CoreException.Plugin("tv.lounge.kodi did not answer in time")
-        assertEquals("The Bear's source didn't answer. Check that it is running, then try again.", friendlyReason(late, late.detail, "The Bear"))
+        assertEquals("The Bear's source didn't answer. Check that it is running, then try again.", friendlyReason(resources, late, late.detail, "The Bear"))
         val gone = CoreException.Plugin("plugin thread is gone")
-        assertEquals("Static Bloom's plugin stopped partway through. Try again in a moment.", friendlyReason(gone, gone.detail, "Static Bloom"))
+        assertEquals("Static Bloom's plugin stopped partway through. Try again in a moment.", friendlyReason(resources, gone, gone.detail, "Static Bloom"))
         // Text not known here never reaches the screen.
         val odd = RuntimeException("java.lang.IllegalStateException: Binder transaction failed at 0x7f")
-        val said = friendlyReason(odd, odd.message!!, "The Bear")
+        val said = friendlyReason(resources, odd, odd.message!!, "The Bear")
         assertEquals("Couldn't open The Bear. Try again in a moment.", said)
         assertFalse("Binder" in said)
     }
@@ -219,17 +240,17 @@ class FocusRulesTest {
     fun theProgrammeOnAirSaysSoInWords() {
         val start = 1_700_000_000_000L
         val on = GuideProgramme(id = "p", title = "News", subtitle = null, startMs = start, endMs = start + 1_800_000, isNow = true)
-        assertTrue(programmeTimes(on, is24Hour = true).startsWith("On now, until "))
+        assertTrue(programmeTimes(resources, on, is24Hour = true).startsWith("On now, until "))
         val later = on.copy(isNow = false)
-        assertTrue(" to " in programmeTimes(later, is24Hour = true))
+        assertTrue(" to " in programmeTimes(resources, later, is24Hour = true))
     }
 
     @Test
     fun episodeCodesAreReadAsWords() {
-        assertEquals("Season 2, Episode 4, Netflix", spokenEpisodes("S2 E4, Netflix"))
-        assertEquals("Honeydew", spokenEpisodes("Honeydew"))
+        assertEquals("Season 2, Episode 4, Netflix", spokenEpisodes(resources, "S2 E4, Netflix"))
+        assertEquals("Honeydew", spokenEpisodes(resources, "Honeydew"))
         val tile = testTile("wn:1", "The Bear", subtitle = "S2 E4, Netflix").copy(timeLeft = "23 minutes left")
-        assertEquals("The Bear, Continue watching, Season 2, Episode 4, Netflix, 23 minutes left", tileDescription(tile, "Continue watching"))
+        assertEquals("The Bear, Continue watching, Season 2, Episode 4, Netflix, 23 minutes left", tileDescription(resources, tile, "Continue watching"))
     }
 
     @Test
@@ -240,8 +261,8 @@ class FocusRulesTest {
             primary = tv.lounge.core.StageAction(label = "Continue", action = "open:wn:1"), secondary = null, explanation = null,
             framed = false, artAspect = 0f, glowArgb = emptyList(), focalY = 0.5f, source = "Netflix", sourceIconPath = null,
         )
-        assertEquals("The Bear, Continue watching, Season 2, Episode 4, on Netflix", spotlightDescription(sp))
-        assertEquals("The Bear, Continue watching, Season 2, Episode 4, on Netflix, pinned to the Stage", spotlightDescription(sp, pinned = true))
+        assertEquals("The Bear, Continue watching, Season 2, Episode 4, on Netflix", spotlightDescription(resources, sp))
+        assertEquals("The Bear, Continue watching, Season 2, Episode 4, on Netflix, pinned to the Stage", spotlightDescription(resources, sp, pinned = true))
     }
 
     @Test

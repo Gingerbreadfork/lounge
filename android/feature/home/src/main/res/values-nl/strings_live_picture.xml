@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_picture_resting">In rust. Druk op OK om verder te gaan.</string>
+    <string name="live_picture_stopped">Het beeld komt niet meer binnen. Lounge blijft het proberen.</string>
+    <string name="live_picture_not_arriving">Het beeld komt niet binnen. Lounge blijft het proberen.</string>
+    <string name="live_picture_waiting">Een ogenblik</string>
+</resources>

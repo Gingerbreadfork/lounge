@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stage_row_name">o Palco</string>
+    <string name="stage_spoken_source">em %1$s</string>
+    <string name="stage_empty_category">O seu ecrã principal</string>
+    <string name="stage_empty_title">Vamos configurar o seu ecrã principal</string>
+    <string name="stage_empty_body">Alguns passos rápidos e as suas apps e séries aparecem aqui.</string>
+    <string name="stage_empty_start">Começar</string>
+    <string name="stage_indexing_title">A configurar o seu ecrã principal</string>
+    <string name="stage_indexing_body">A ver o que existe nesta TV.</string>
+</resources>

@@ -1,5 +1,7 @@
 package tv.lounge.feature.home
 
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
@@ -59,6 +61,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -84,6 +88,7 @@ import tv.lounge.design.Hairline
 import tv.lounge.design.Lights
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 import tv.lounge.design.Swap
 import tv.lounge.design.focusRim
 import tv.lounge.design.glowRoom
@@ -185,6 +190,7 @@ fun AllAppsScreen(
     val rise = with(LocalDensity.current) { 10.dp.roundToPx() }
     // The focused row sits a glow's width below the fade, so its light is never under it.
     val pivotPx = with(LocalDensity.current) { (Dimens.glowRoom * 2).toPx() }
+    val allApps = stringResource(DesignR.string.common_all_apps)
 
     AnimatedVisibility(visibleState, enter = fadeIn(motion.timed(180)), exit = fadeOut(motion.settle())) {
         Box(
@@ -205,7 +211,7 @@ fun AllAppsScreen(
                 }
                 .focusGroup()
                 .focusProperties { if (leaving) canFocus = false }
-                .semantics { paneTitle = "All apps" },
+                .semantics { paneTitle = allApps },
         ) {
             // The grid comes first so the heading paints over it: scrolled rows pass under a fade
             // rather than through the words. The keyboard covers the grid's lower rows rather than
@@ -220,6 +226,11 @@ fun AllAppsScreen(
                                 val first = firstOfLetter[c]
                                 val live = first != null && alphabetical
                                 var letterFocused by remember { mutableStateOf(false) }
+                                val spoken = when {
+                                    !live -> ""
+                                    c == '#' -> stringResource(R.string.all_apps_screen_letter_other)
+                                    else -> stringResource(R.string.all_apps_screen_letter, c.toString())
+                                }
                                 Box(
                                     Modifier
                                         .size(40.dp, 28.dp)
@@ -245,7 +256,7 @@ fun AllAppsScreen(
                                                         }
                                                     }
                                                     .focusable()
-                                                    .semantics { contentDescription = if (c == '#') "Apps starting with a number or symbol" else "Apps starting with $c" }
+                                                    .semantics { contentDescription = spoken }
                                             } else {
                                                 Modifier
                                             },
@@ -274,7 +285,7 @@ fun AllAppsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Icon(LoungeIcons.Apps, contentDescription = null, tint = colors.dust, modifier = Modifier.size(32.dp))
                         Text(
-                            if (query.isEmpty()) "Apps appear here once they are installed." else "No app is called “$query”. Back clears the search.",
+                            if (query.isEmpty()) stringResource(R.string.all_apps_screen_empty) else stringResource(R.string.all_apps_screen_empty_search, query),
                             style = LoungeTheme.typography.meta,
                             color = colors.dust,
                         )
@@ -303,7 +314,7 @@ fun AllAppsScreen(
                                     kind = TileKind.APP_BANNER,
                                     size = size,
                                     lights = lights,
-                                    rowName = "All apps",
+                                    rowName = allApps,
                                     focusRequester = requester(index),
                                     onFocused = { focused, _ ->
                                         if (focused) {
@@ -343,20 +354,20 @@ fun AllAppsScreen(
                         verticalAlignment = Alignment.Top,
                     ) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("All apps", style = LoungeTheme.typography.displayL, color = colors.limelight, modifier = Modifier.semantics { heading() })
+                            Text(allApps, style = LoungeTheme.typography.displayL, color = colors.limelight, modifier = Modifier.semantics { heading() })
                             Text(
                                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                                 text = when {
-                                    apps.isEmpty() -> "Nothing here yet."
-                                    query.isNotEmpty() && shown.isEmpty() -> "Nothing matches “$query”."
-                                    query.isNotEmpty() -> "${shown.size} of ${apps.size} match “$query”."
-                                    else -> "${apps.size} ${if (apps.size == 1) "app" else "apps"}, ${sortLine(sortNow)}."
+                                    apps.isEmpty() -> stringResource(R.string.all_apps_screen_nothing)
+                                    query.isNotEmpty() && shown.isEmpty() -> stringResource(R.string.all_apps_screen_no_match, query)
+                                    query.isNotEmpty() -> pluralStringResource(R.plurals.all_apps_screen_matching, shown.size, shown.size, apps.size, query)
+                                    else -> pluralStringResource(sortLine(sortNow), apps.size, apps.size)
                                 },
                                 style = LoungeTheme.typography.meta,
                                 color = colors.dust,
                             )
                             Text(
-                                if (alphabetical) "Hold OK on an app to pin it to Your apps. Up to search or sort, Left for the alphabet." else "Hold OK on an app to pin it to Your apps. Up to search or sort.",
+                                stringResource(if (alphabetical) R.string.all_apps_screen_hint_alphabet else R.string.all_apps_screen_hint),
                                 style = LoungeTheme.typography.caption,
                                 color = colors.dust,
                             )
@@ -389,15 +400,16 @@ private fun SortPill(sort: String, onSetSort: (String) -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val at = SORTS.indexOf(sort).coerceAtLeast(0)
     val next = { onSetSort(SORTS[(at + 1) % SORTS.size]) }
+    val spoken = stringResource(sortSpoken(sort))
     Row(
         Modifier
             .clip(RoundedCornerShape(24.dp))
             .background(if (focused) colors.curtainEdge else colors.curtain)
             .focusRim(colors, { if (focused) 1f else 0f }, 24.dp)
             .onFocusChanged { focused = it.isFocused }
-            .tilePress(next, next, clickLabel = "Change the order")
+            .tilePress(next, next, clickLabel = stringResource(R.string.all_apps_screen_change_order))
             .focusable()
-            .semantics { role = Role.Button; contentDescription = "Sorted ${sortLabel(sort)}. OK changes the order" }
+            .semantics { role = Role.Button; contentDescription = spoken }
             .height(48.dp)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -405,7 +417,7 @@ private fun SortPill(sort: String, onSetSort: (String) -> Unit) {
     ) {
         Icon(LoungeIcons.Rows, contentDescription = null, tint = if (focused) colors.houselight else colors.dust, modifier = Modifier.size(22.dp))
         Swap(sortLabel(sort), rise = 0.dp, shiftX = 8.dp, durationMs = 180) { label ->
-            Text(label, style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1)
+            Text(stringResource(label), style = LoungeTheme.typography.title, color = colors.limelight, maxLines = 1)
         }
         // A quiet cue that OK turns it over.
         Text("\u21bb", style = LoungeTheme.typography.meta, color = if (focused) colors.houselight else colors.dust)
@@ -417,6 +429,7 @@ private fun SortPill(sort: String, onSetSort: (String) -> Unit) {
 private fun SearchField(field: TextFieldValue, onChange: (TextFieldValue) -> Unit, focusRequester: FocusRequester, onFocused: (Boolean) -> Unit, onDown: () -> Unit) {
     val colors = LoungeTheme.colors
     var focused by remember { mutableStateOf(false) }
+    val find = stringResource(R.string.all_apps_screen_find)
     Column(
         Modifier
             .width(440.dp)
@@ -428,7 +441,7 @@ private fun SearchField(field: TextFieldValue, onChange: (TextFieldValue) -> Uni
         Row(Modifier.height(48.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(LoungeIcons.Search, contentDescription = null, tint = if (focused) colors.houselight else colors.dust, modifier = Modifier.size(24.dp))
             Box(Modifier.weight(1f)) {
-                if (field.text.isEmpty()) Text("Find an app", style = LoungeTheme.typography.title, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (field.text.isEmpty()) Text(find, style = LoungeTheme.typography.title, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 BasicTextField(
                     value = field,
                     onValueChange = onChange,
@@ -441,7 +454,7 @@ private fun SearchField(field: TextFieldValue, onChange: (TextFieldValue) -> Uni
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
                         .onFocusChanged { focused = it.isFocused; onFocused(it.isFocused) }
-                        .semantics { contentDescription = "Find an app" },
+                        .semantics { contentDescription = find },
                 )
             }
         }
@@ -456,16 +469,27 @@ private val FadeHeight = 40.dp
 private val ALPHABET: List<Char> = listOf('#') + ('A'..'Z')
 private val SORTS = listOf(Prefs.SORT_AZ, Prefs.SORT_OPENED, Prefs.SORT_INSTALLED)
 
-private fun sortLabel(sort: String) = when (sort) {
-    Prefs.SORT_OPENED -> "Recently opened"
-    Prefs.SORT_INSTALLED -> "Recently installed"
-    else -> "A to Z"
+@StringRes
+private fun sortLabel(sort: String): Int = when (sort) {
+    Prefs.SORT_OPENED -> R.string.all_apps_screen_sort_opened
+    Prefs.SORT_INSTALLED -> R.string.all_apps_screen_sort_installed
+    else -> R.string.all_apps_screen_sort_az
 }
 
-private fun sortLine(sort: String) = when (sort) {
-    Prefs.SORT_OPENED -> "most recently opened first"
-    Prefs.SORT_INSTALLED -> "newest first"
-    else -> "A to Z"
+/** The pill as a screen reader says it: the order in use and what OK does. */
+@StringRes
+private fun sortSpoken(sort: String): Int = when (sort) {
+    Prefs.SORT_OPENED -> R.string.all_apps_screen_sorted_opened
+    Prefs.SORT_INSTALLED -> R.string.all_apps_screen_sorted_installed
+    else -> R.string.all_apps_screen_sorted_az
+}
+
+/** The line under the heading: how many apps, and the order they are in. */
+@PluralsRes
+private fun sortLine(sort: String): Int = when (sort) {
+    Prefs.SORT_OPENED -> R.plurals.all_apps_screen_count_opened
+    Prefs.SORT_INSTALLED -> R.plurals.all_apps_screen_count_installed
+    else -> R.plurals.all_apps_screen_count_az
 }
 
 private val collator: java.text.Collator = java.text.Collator.getInstance().apply { strength = java.text.Collator.PRIMARY }

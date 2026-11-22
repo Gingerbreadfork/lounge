@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Power Setup connects Lounge to the TV's own USB debugging, or to the Shizuku app, to do what an app cannot do alone. -->
+    <!-- Said before anyone turns USB debugging on, in Power Setup and in the setup steps. -->
+    <string name="power_debugging_stays_on">USB debugging stays on afterwards. Other devices on your home network can then ask to connect, and the TV asks you before any can. TV controls and the phone\'s keys over other apps need it, and turning it off stops them. Updates still come, though the TV may ask you to confirm one.</string>
+    <!-- How to turn USB debugging on. System, About, Android TV OS build and Developer options are places in Android TV's settings; Connect is a row in Power Setup. -->
+    <string name="power_debugging_how_heading">To turn on USB debugging:</string>
+    <string name="power_debugging_how_1">1. In the TV\'s settings, open System, then About, and press OK on Android TV OS build seven times.</string>
+    <string name="power_debugging_how_2">2. Go back to System, open Developer options and turn on USB debugging.</string>
+    <string name="power_debugging_how_3">3. Come back here and choose Connect.</string>
+
+    <!-- The line under the Power Setup heading, by how the connection stands. -->
+    <string name="power_status_shizuku">Connected through Shizuku.</string>
+    <string name="power_status_debugging">Connected to this TV\'s USB debugging.</string>
+    <!-- “Always allow” is what Android's own prompt says. -->
+    <string name="power_status_waiting">Allow it on the prompt the TV is showing. Tick “Always allow” so you only do this once.</string>
+    <string name="power_status_not_paired">Lets Lounge do the few things an app can\'t: become the home screen, allow its own accesses, and turn the TV on and switch its input.</string>
+
+    <!-- The first row of Power Setup: its title in each state. -->
+    <string name="power_connect">Connect</string>
+    <string name="power_connect_connected">Connected</string>
+    <string name="power_connect_waiting">Waiting for you to allow it…</string>
+    <string name="power_connect_open_developer_options">Open Developer options</string>
+    <!-- The same row's value in each state. The first says what Power Setup is connected through. -->
+    <string name="power_connect_by_debugging">USB debugging</string>
+    <!-- %1$s is the start of the key's fingerprint, which the TV's prompt shows too. -->
+    <string name="power_connect_key">Key %1$s…</string>
+    <string name="power_connect_look_at_prompt">Look at the prompt</string>
+    <string name="power_connect_turn_on_debugging">Turn on USB debugging</string>
+    <string name="power_connect_connecting">Connecting…</string>
+    <string name="power_connect_asks_once">The TV asks you once</string>
+    <!-- A row offered when the Shizuku app is installed, and its value: OK asks Shizuku for permission. -->
+    <string name="power_shizuku_instead">Use Shizuku instead</string>
+    <string name="power_shizuku_ask">Ask</string>
+
+    <!-- The heading over the list of actions Power Setup can run. -->
+    <string name="power_actions_heading">What it can do</string>
+    <!-- An action's value: how it last went, or what OK does. -->
+    <string name="power_action_running">Running…</string>
+    <string name="power_action_done">Done</string>
+    <string name="power_action_failed">Failed</string>
+    <string name="power_action_didnt_take">Didn\'t take</string>
+    <string name="power_action_run">Run</string>
+    <string name="power_action_connect_first">Connect first</string>
+    <!-- Under an action that ran without an error and changed nothing. -->
+    <string name="power_not_taken">The TV ran this, but nothing changed. Try again.</string>
+    <string name="power_not_taken_homes_first">The TV still opens its own home first. Turn it off below.</string>
+    <!-- Default home screen is a row in Lounge's Settings. -->
+    <string name="power_home_not_taken">Android didn\'t make Lounge the home screen. Try again, or in Settings open Default home screen for other ways.</string>
+
+    <!-- The row that forgets the connection, and its second press. -->
+    <string name="power_forget">Forget this connection</string>
+    <string name="power_forget_confirm">Yes, forget this connection</string>
+    <string name="power_forget_subtitle">The TV asks you again the next time you connect</string>
+    <string name="power_forgotten">Connection forgotten</string>
+    <string name="power_footnote_shown_first">Nothing runs until you press it, and every command is shown first.</string>
+    <!-- %1$s is the fingerprint of the key Power Setup connects with. -->
+    <string name="power_footnote_key">The key stays on this TV: %1$s</string>
+    <string name="power_footnote_key_unknown">The key stays on this TV.</string>
+
+    <!-- A TV control that did not work, on the TV and on the phone. -->
+    <string name="power_control_no_sleep">It didn\'t go to sleep. Try again.</string>
+    <string name="power_control_no_answer">The TV didn\'t answer. Check that HDMI-CEC is on in the TV\'s settings, then try again.</string>
+
+    <!-- TV controls as the phone lists them. Shown on the phone when Power Setup is not connected. -->
+    <string name="power_phone_needs_power_setup">Power and input need Power Setup. On the TV, open Settings, then Power Setup.</string>
+    <!-- The one control of a television, and of a box whose cable carries no control. -->
+    <string name="power_phone_turn_tv_off">Turn the TV off</string>
+    <string name="power_phone_sleep">Go to sleep</string>
+    <string name="power_phone_wake">Wake the TV and switch to Lounge</string>
+    <string name="power_phone_control_gone">That control isn\'t there any more. Close TV controls and open it again.</string>
+
+    <!-- The TV controls sheet. Its rows are also what the phone lists. -->
+    <string name="power_controls_subtitle_ready">Turn the TV on, switch its input and choose where the sound plays.</string>
+    <string name="power_controls_subtitle_not_ready">Volume and playback work now. Power and input need Power Setup.</string>
+    <!-- "me" is this device, a box plugged into the TV. -->
+    <string name="power_controls_wake">Wake the TV and switch to me</string>
+    <string name="power_controls_set_up">Set up TV power and input</string>
+    <string name="power_controls_needs_debugging">Needs USB debugging</string>
+    <string name="power_tv_is_on">TV is on</string>
+    <string name="power_tv_is_off">TV is off</string>
+    <!-- A row that turns the TV on when it is off and off when it is on, and its value. -->
+    <string name="power_tv_power">TV power</string>
+    <string name="power_tv_power_value">On or off</string>
+    <!-- A row that puts this device to sleep, and its value: the TV turns off with it. -->
+    <string name="power_everything_off">Everything off</string>
+    <string name="power_everything_off_value">Sleep, TV follows</string>
+    <string name="power_controls_sound_soundbar">Sound through the soundbar</string>
+    <string name="power_controls_sound_tv">Sound through the TV</string>
+    <!-- The heading over the other devices plugged into the TV; each row under it is a device's name. -->
+    <string name="power_switch_tv_to">Switch the TV to</string>
+    <!-- Whether a device plugged into the TV is switched on or in standby. -->
+    <string name="power_device_on">On</string>
+    <string name="power_device_standby">Standby</string>
+    <!-- A control's value after OK: the request is going, has gone, or failed. -->
+    <string name="power_control_sending">Sending…</string>
+    <string name="power_control_sent">Sent</string>
+    <string name="power_control_didnt_work">Didn\'t work</string>
+    <string name="power_controls_sound_heading">Sound and playback</string>
+    <string name="power_controls_volume_up">Volume up</string>
+    <string name="power_controls_volume_down">Volume down</string>
+    <string name="power_controls_mute">Mute</string>
+    <string name="power_controls_play_pause">Play or pause</string>
+    <string name="power_controls_footnote_ready">Lounge asks the TV through its HDMI cable; the TV decides what it does.</string>
+    <string name="power_controls_footnote_not_ready">Volume reaches the TV or soundbar the way the remote\'s own buttons do.</string>
+</resources>

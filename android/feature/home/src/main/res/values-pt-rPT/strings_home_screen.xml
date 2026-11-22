@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_screen_updated">Lounge atualizado para %1$s</string>
+    <string name="home_screen_two_notes">%1$s. %2$s</string>
+    <string name="home_screen_background_too_heavy">A cena %1$s é demasiado pesada para esta TV, por isso o fundo fica parado</string>
+    <string name="home_screen_background_not_drawn">Não foi possível desenhar a cena %1$s nesta TV, por isso o fundo fica parado</string>
+    <string name="home_screen_hidden">Oculto em todas as linhas</string>
+    <string name="home_screen_shown">Visível de novo em todas as linhas</string>
+    <string name="home_screen_source_hidden">Tudo de %1$s oculto. Para repor: Definições, Linhas</string>
+    <string name="home_screen_row_hidden">Linha «%1$s» oculta. Para repor: Definições, Linhas</string>
+    <string name="home_screen_row_hidden_unnamed">Linha oculta. Para repor: Definições, Linhas</string>
+    <string name="home_screen_pinned_app">Fixada no início de As suas apps</string>
+    <string name="home_screen_unpinned_app">Desafixada de As suas apps</string>
+    <string name="home_screen_pinned_stage">Fixado no Palco</string>
+    <string name="home_screen_unpinned_stage">Desafixado do Palco</string>
+    <string name="home_screen_that_channel">esse canal</string>
+    <string name="home_screen_error_storage_full">O armazenamento da TV está cheio. Liberte espaço nas definições da TV e tente novamente.</string>
+    <string name="home_screen_error_gone">%1$s já não está nesta TV. A app pode ter removido esse conteúdo.</string>
+    <string name="home_screen_error_nothing_opens">Nada nesta TV consegue abrir %1$s. A app ainda está instalada?</string>
+    <string name="home_screen_error_not_installed">Falta instalar %1$s nesta TV. Instale a partir da Play Store e tente novamente.</string>
+    <string name="home_screen_error_no_video_player">Nada nesta TV consegue reproduzir %1$s. Instale o VLC ou outro leitor de vídeo e tente novamente.</string>
+    <string name="home_screen_error_no_player">Nada nesta TV consegue reproduzir %1$s. Instale o VLC ou outro leitor e tente novamente.</string>
+    <string name="home_screen_error_notification_access">O Lounge ainda não consegue ver o que está a reproduzir. Em Definições, permita o Acesso a notificações.</string>
+    <string name="home_screen_error_not_playing">Essa app parou de reproduzir. Abra-a para voltar a iniciar algo.</string>
+    <string name="home_screen_error_no_answer">A fonte de %1$s não respondeu. Verifique se está a funcionar e tente novamente.</string>
+    <string name="home_screen_error_busy">A TV está ocupada. Tente novamente dentro de momentos.</string>
+    <string name="home_screen_error_wrong_link">O Lounge não consegue abrir %1$s a partir daqui. Abra antes a partir da respetiva app.</string>
+    <string name="home_screen_error_not_allowed">O Android não deixou o Lounge abrir %1$s. Abra antes a partir da respetiva app.</string>
+    <string name="home_screen_error_plugin_stopped">O plugin de %1$s parou a meio. Tente novamente dentro de momentos.</string>
+    <string name="home_screen_error_other">Não foi possível abrir %1$s. Tente novamente dentro de momentos.</string>
+    <string name="home_screen_rows_all_shown">Todas visíveis</string>
+    <plurals name="home_screen_rows_hidden">
+        <item quantity="one">%1$d oculta</item>
+        <item quantity="many">%1$d ocultas</item>
+        <item quantity="other">%1$d ocultas</item>
+    </plurals>
+    <string name="home_screen_notifications_dismissed">Notificações dispensadas</string>
+    <string name="home_screen_notification_dismissed">Dispensada</string>
+    <string name="home_screen_notifications_app_hidden">Notificações de %1$s ocultas. Para repor: Definições, Notificações</string>
+</resources>

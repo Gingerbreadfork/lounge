@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The row editor, opened from Rows in Settings. -->
+    <string name="rows_sheet_title">Home screen rows</string>
+    <string name="rows_sheet_subtitle">OK shows or hides a row. Hold OK to pick one up, Up and Down move it, and OK or Back sets it down.</string>
+    <string name="rows_sheet_loading">Loading…</string>
+    <!-- A row's value: it is being moved, is on the home screen, or is on it with nothing in it. -->
+    <string name="rows_sheet_moving">Moving</string>
+    <string name="rows_sheet_shown">Shown</string>
+    <string name="rows_sheet_empty">Empty</string>
+    <!-- The row that undoes every move, and its second press. -->
+    <string name="rows_sheet_reset">Put the rows back in their usual order</string>
+    <string name="rows_sheet_reset_confirm">Yes, put them back</string>
+    <string name="rows_sheet_reset_keeps">Keeps what you have hidden</string>
+    <string name="rows_sheet_reset_done">Done. What you hid stays hidden.</string>
+    <!-- The heading over the tiles hidden from the whole home screen. -->
+    <string name="rows_sheet_hidden_group">Hidden from every row</string>
+    <!-- Hide is an item in a tile's menu. -->
+    <string name="rows_sheet_hidden_none">Nothing is hidden. Hold OK on any tile and choose Hide.</string>
+    <!-- The heading over the apps and plugins that fill the Continue watching row. -->
+    <string name="rows_sheet_continue_group">Continue watching comes from</string>
+    <string name="rows_sheet_continue_none">Nothing to continue yet. Apps and plugins are listed here once they bring something.</string>
+    <string name="rows_sheet_source_nothing">Nothing to continue now</string>
+    <!-- How many films or episodes an app or plugin has to continue. -->
+    <plurals name="rows_sheet_source_titles">
+        <item quantity="one">%1$d title</item>
+        <item quantity="other">%1$d titles</item>
+    </plurals>
+    <string name="rows_sheet_footnote">A row with nothing in it stays off the screen until it has something to show.</string>
+</resources>

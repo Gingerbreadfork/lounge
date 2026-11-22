@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="now_playing_pane_title">Lecture en cours</string>
+    <string name="now_playing_previous">Précédent</string>
+    <string name="now_playing_pause">Pause</string>
+    <string name="now_playing_play">Lire</string>
+    <string name="now_playing_next">Suivant</string>
+</resources>

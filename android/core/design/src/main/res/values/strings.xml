@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The tag of the language these resources are in, which the core is told to write in. Each translation carries its own tag. -->
+    <string name="language_tag">en</string>
+
+    <!-- Words many screens share. A setting's value: switched on or switched off. -->
+    <string name="common_on">On</string>
+    <string name="common_off">Off</string>
+    <string name="common_open">Open</string>
+    <string name="common_show">Show</string>
+    <string name="common_hide">Hide</string>
+    <string name="common_hidden">Hidden</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_back">Back</string>
+    <string name="common_done">Done</string>
+    <string name="common_try_again">Try again</string>
+    <string name="common_settings">Settings</string>
+    <string name="common_search">Search</string>
+    <string name="common_all_apps">All apps</string>
+    <string name="common_tv_guide">TV guide</string>
+    <string name="common_tv_controls">TV controls</string>
+    <string name="common_notifications">Notifications</string>
+    <string name="common_screensaver">Screensaver</string>
+    <string name="common_power_setup">Power Setup</string>
+    <string name="common_phone_companion">Phone companion</string>
+
+    <!-- How long ago something happened, as a line of its own or the end of one. -->
+    <string name="words_just_now">just now</string>
+    <plurals name="words_minutes_ago">
+        <item quantity="one">%1$d minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
+    </plurals>
+    <plurals name="words_hours_ago">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="words_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
+    <!-- A time on a 12-hour clock, such as 9:42 pm. %1$s is the hour and minutes. -->
+    <string name="words_clock_am">%1$s am</string>
+    <string name="words_clock_pm">%1$s pm</string>
+</resources>

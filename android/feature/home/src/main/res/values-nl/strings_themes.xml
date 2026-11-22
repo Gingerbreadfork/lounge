@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="themes_dusk_title">Schemering</string>
+    <string name="themes_dusk_tagline">Indigo nacht, koraalrode lamp</string>
+    <string name="themes_house_title">Zaal</string>
+    <string name="themes_house_tagline">Warm pruimenpaars, gloeilamplicht</string>
+    <string name="themes_hearth_title">Haard</string>
+    <string name="themes_hearth_tagline">Omberbruine muren, vuurgloed</string>
+    <string name="themes_opera_title">Opera</string>
+    <string name="themes_opera_tagline">Rood fluweel en verguldsel</string>
+    <string name="themes_marquee_title">Première</string>
+    <string name="themes_marquee_tagline">Marineblauw, theaterlampjes</string>
+    <string name="themes_green_room_title">Artiestenfoyer</string>
+    <string name="themes_green_room_tagline">Diepgroen, koperen lamp</string>
+    <string name="themes_moonlight_title">Maanlicht</string>
+    <string name="themes_moonlight_tagline">Koel leigrijs, maanlicht</string>
+    <string name="themes_graphite_title">Grafiet</string>
+    <string name="themes_graphite_tagline">Geen kleur, warm wit</string>
+    <string name="themes_cabaret_title">Cabaret</string>
+    <string name="themes_cabaret_tagline">Zwartviolet, roze neon</string>
+    <string name="themes_aquarium_title">Aquarium</string>
+    <string name="themes_aquarium_tagline">Diep blauwgroen, de gloed van een aquarium</string>
+    <string name="themes_absinthe_title">Absint</string>
+    <string name="themes_absinthe_tagline">Donker olijfgroen, groengouden gloed</string>
+    <string name="themes_ultraviolet_title">Ultraviolet</string>
+    <string name="themes_ultraviolet_tagline">Bijna zwart, een blacklight</string>
+    <string name="themes_blackout_title">Black-out</string>
+    <string name="themes_blackout_tagline">Echt zwart voor OLED-schermen</string>
+    <string name="themes_high_contrast_title">Hoog contrast</string>
+    <string name="themes_high_contrast_tagline">Krachtigere tekst en randen</string>
+</resources>

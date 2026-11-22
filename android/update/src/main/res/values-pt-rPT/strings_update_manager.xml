@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_manager_next_later">O Lounge volta a tentar mais tarde.</string>
+    <string name="update_manager_next_when_asked">Tente novamente quando quiser.</string>
+    <string name="update_manager_next_release">O Lounge aguarda a próxima versão.</string>
+    <string name="update_manager_install_unfinished">A instalação não terminou.</string>
+    <string name="update_manager_install_not_started">O Android não conseguiu iniciar a instalação.</string>
+    <string name="update_manager_install_failed">O Android não conseguiu instalar a atualização.</string>
+    <string name="update_manager_rate_limited">O GitHub está a limitar as verificações a partir desta rede.</string>
+    <string name="update_manager_unexpected_answer">O GitHub não respondeu como esperado.</string>
+    <string name="update_manager_not_sent">O GitHub não enviou a atualização.</string>
+    <string name="update_manager_too_large">A transferência era maior do que a versão indica, por isso o Lounge interrompeu-a.</string>
+    <string name="update_manager_checksum_mismatch">A transferência não correspondia à soma de verificação, por isso o Lounge descartou-a.</string>
+    <string name="update_manager_changed">A atualização mudou depois de verificada, por isso o Lounge descartou-a.</string>
+    <string name="update_manager_not_stored">O Lounge não conseguiu guardar a atualização no armazenamento da TV. Liberte espaço na TV.</string>
+    <string name="update_manager_not_staged">A Configuração avançada não conseguiu chegar à atualização no armazenamento da TV.</string>
+    <string name="update_manager_unreachable">O Lounge não conseguiu contactar o GitHub. Verifique a ligação da TV à Internet.</string>
+    <string name="update_manager_timed_out">O GitHub demorou demasiado a responder.</string>
+    <string name="update_manager_not_secure">O Lounge não conseguiu ligar-se ao GitHub em segurança. Verifique se a data e a hora da TV estão certas.</string>
+    <string name="update_manager_dropped">A ligação ao GitHub caiu.</string>
+    <string name="update_manager_did_not_go_through">A atualização não foi concluída.</string>
+    <string name="update_manager_power_setup_failed">A Configuração avançada não conseguiu instalar a atualização. Tente novamente ou permita que o Lounge instale apps.</string>
+    <string name="update_manager_no_checksum">Esta versão não tem soma de verificação para confirmar a transferência, por isso o Lounge não a instala.</string>
+    <string name="update_manager_unreadable">A atualização não é uma app que o Android consiga ler. O Lounge aguarda a próxima versão.</string>
+    <string name="update_manager_not_lounge">A atualização não é o Lounge. O Lounge aguarda a próxima versão.</string>
+    <string name="update_manager_other_signer">A atualização não está assinada como esta cópia do Lounge. O Lounge aguarda a próxima versão.</string>
+    <string name="update_manager_gave_up">O Lounge %1$s não se instalou nesta TV, por isso aguarda a próxima versão.</string>
+    <string name="update_manager_install_cancelled">A instalação foi cancelada. Escolha Tentar novamente para a instalar.</string>
+    <string name="update_manager_install_blocked">O Android bloqueou a instalação. Tente novamente ou ligue a Configuração avançada para a instalar.</string>
+    <string name="update_manager_install_no_space">Não há armazenamento suficiente para a atualização. Liberte espaço na TV e tente novamente.</string>
+    <string name="update_manager_install_incompatible">Esta atualização não funciona nesta TV. O Lounge aguarda a próxima versão.</string>
+    <string name="update_manager_install_refused">O Android recusa instalar esta atualização nesta TV. O Lounge aguarda a próxima versão.</string>
+    <string name="update_manager_install_hint">Procure o Lounge na lista do Android, ative-o e prima Voltar.</string>
+    <string name="update_manager_no_install_screen">Esta TV não tem aqui um ecrã para isso. Nas definições da TV, abra Apps, depois Acesso especial a apps e depois Instalar apps desconhecidas, ou ligue a Configuração avançada.</string>
+</resources>

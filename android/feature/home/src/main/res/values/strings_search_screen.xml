@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The search field, before anything is typed in it. -->
+    <string name="search_screen_field">Search your TV</string>
+
+    <!-- The line under the search field. -->
+    <string name="search_screen_hint_empty">Type with the remote. Results update as you type.</string>
+    <!-- %1$s is what was typed. -->
+    <string name="search_screen_no_match">Nothing matches “%1$s” yet.</string>
+    <!-- Down is a key on the remote. -->
+    <string name="search_screen_hint_results">The keyboard\'s search key, or Down, takes you to the results.</string>
+
+    <!-- Titles of the rows of results. Apps holds every app found. -->
+    <string name="search_screen_row_apps">Apps</string>
+    <string name="search_screen_row_continue">Continue watching</string>
+    <string name="search_screen_row_your_apps">Your apps</string>
+</resources>

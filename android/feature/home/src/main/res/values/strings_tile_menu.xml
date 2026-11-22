@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The menu that opens when OK is held on a tile, as a screen reader names it. %1$s is the tile's title. -->
+    <string name="tile_menu_pane_title">Options for %1$s</string>
+
+    <!-- The menu's entries. An entry may have a second line that says what it does. -->
+    <!-- On a notice Lounge put on the home screen itself. -->
+    <string name="tile_menu_dismiss_notice">Don\'t show this again</string>
+    <string name="tile_menu_app_info">App info</string>
+    <string name="tile_menu_play_store">Open in Play Store</string>
+    <string name="tile_menu_uninstall">Uninstall</string>
+    <!-- Move a pinned app one place along Your apps. -->
+    <string name="tile_menu_move_left">Move left</string>
+    <string name="tile_menu_move_right">Move right</string>
+    <!-- Opens the sheet where a control, such as a lamp or a thermostat, is set more finely. -->
+    <string name="tile_menu_adjust">Adjust</string>
+    <string name="tile_menu_pin_app">Pin to the front of Your apps</string>
+    <string name="tile_menu_pin_app_detail">Stays put ahead of recent apps</string>
+    <string name="tile_menu_unpin_app">Unpin from Your apps</string>
+    <string name="tile_menu_unpin_app_detail">Follows what you open again</string>
+    <string name="tile_menu_pin_stage">Pin to the Stage</string>
+    <string name="tile_menu_pin_stage_detail">Stays in the big pictures up top</string>
+    <string name="tile_menu_unpin_stage">Unpin from the Stage</string>
+    <string name="tile_menu_unpin_stage_detail">What you watch takes its place</string>
+    <!-- The second line under Hide and under Show. -->
+    <string name="tile_menu_hide_detail">Off every row until you show it</string>
+    <string name="tile_menu_show_detail">Back on every row it belongs in</string>
+    <!-- %1$s is the app or service the tile comes from, such as Netflix. -->
+    <string name="tile_menu_hide_all_from">Hide everything from %1$s</string>
+    <string name="tile_menu_hide_all_from_detail">Off Continue watching until you show it</string>
+    <string name="tile_menu_hide_row">Hide this row</string>
+    <!-- "Settings, Rows" is the way to the setting. -->
+    <string name="tile_menu_hide_row_detail">Settings, Rows brings it back</string>
+</resources>

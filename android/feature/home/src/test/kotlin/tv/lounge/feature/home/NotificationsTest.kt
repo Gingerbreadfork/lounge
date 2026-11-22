@@ -22,6 +22,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import tv.lounge.design.LoungeTheme
 import tv.lounge.platform.AppNotification
 import tv.lounge.platform.Prefs
@@ -34,6 +35,8 @@ import tv.lounge.platform.Prefs
 @RunWith(RobolectricTestRunner::class)
 class NotificationsTest {
     @get:Rule val rule = createComposeRule()
+
+    private val resources get() = RuntimeEnvironment.getApplication().resources
 
     private fun notice(
         key: String,
@@ -77,21 +80,21 @@ class NotificationsTest {
 
     @Test
     fun theWordsAreSentencesAndAButtonIsNeverShouted() {
-        assertEquals("1 notification", NotificationWords.count(1))
-        assertEquals("3 notifications, 2 new", NotificationWords.spoken(3, 2))
-        assertEquals("3 notifications", NotificationWords.spoken(3, 0))
+        assertEquals("1 notification", NotificationWords.count(resources, 1))
+        assertEquals("3 notifications, 2 new", NotificationWords.spoken(resources, 3, 2))
+        assertEquals("3 notifications", NotificationWords.spoken(resources, 3, 0))
         assertEquals("Free up space. Then try again.", NotificationWords.preview(" Free up space.\n\nThen   try again. "))
         val now = 10 * 60_000L
-        assertEquals("Shop, 5 minutes ago", NotificationWords.byline(notice("a", at = 5 * 60_000L), now))
+        assertEquals("Shop, 5 minutes ago", NotificationWords.byline(resources, notice("a", at = 5 * 60_000L), now))
         // A notification with no title of its own is titled with its app, which is then not said twice.
-        assertEquals("Just now", NotificationWords.byline(notice("a", at = now, title = "Shop"), now))
+        assertEquals("Just now", NotificationWords.byline(resources, notice("a", at = now, title = "Shop"), now))
         assertEquals("Show in folder", NotificationWords.button("SHOW IN FOLDER"))
         assertEquals("Open in VLC", NotificationWords.button("Open in VLC"))
         assertEquals("OK", NotificationWords.button("OK"))
         assertEquals("Turn off TV", NotificationWords.button("TURN OFF TV"))
         assertEquals("Yes", NotificationWords.button("YES"))
-        assertNull(NotificationWords.staying(0))
-        assertEquals("2 stay until their apps take them back", NotificationWords.staying(2))
+        assertNull(NotificationWords.staying(resources, 0))
+        assertEquals("2 stay until their apps take them back", NotificationWords.staying(resources, 2))
     }
 
     @Test
@@ -214,7 +217,7 @@ class NotificationsTest {
         page(notice("a", opens = false, dismissible = false))
         assertFocusedRow("Hide everything from Shop")
         rule.onNodeWithText("Dismiss").assertDoesNotExist()
-        rule.onNodeWithText(NotificationWords.STAYS).assertExists()
+        rule.onNodeWithText(resources.getString(NotificationWords.STAYS)).assertExists()
     }
 
     @Test

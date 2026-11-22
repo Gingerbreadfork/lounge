@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tiles_press">Appuyer</string>
+    <string name="tiles_options">Options</string>
+    <string name="tiles_description">%1$s, %2$s</string>
+    <string name="tiles_description_state">%1$s, %2$s, %3$s</string>
+    <string name="tiles_spoken_join">%1$s, %2$s</string>
+    <string name="tiles_spoken_live">en direct</string>
+    <string name="tiles_spoken_new">nouveau</string>
+    <string name="tiles_spoken_connected">connecté</string>
+    <string name="tiles_spoken_pinned_stage">épinglé sur la Scène</string>
+    <string name="tiles_spoken_pinned">épinglé</string>
+    <string name="tiles_spoken_hidden">masqué dans toutes les rangées</string>
+    <string name="tiles_spoken_episode">Saison %1$s, épisode %2$s</string>
+    <string name="tiles_badge_live">Direct</string>
+    <string name="tiles_badge_new">Nouveau</string>
+</resources>

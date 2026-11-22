@@ -69,8 +69,8 @@ class OverlayFocusTest {
                             tile = testTile("app:tv.a", "Alpha"),
                             anchor = Rect(96f, 300f, 480f, 516f),
                             items = listOf(
-                                MenuItem("Pin to the Stage", LoungeIcons.Pin) {},
-                                MenuItem("Hide", LoungeIcons.Hide) {},
+                                MenuItem(PinWords.PIN_STAGE, LoungeIcons.Pin) {},
+                                MenuItem(tv.lounge.design.R.string.common_hide, LoungeIcons.Hide) {},
                             ),
                             visibleState = MutableTransitionState(true),
                             onDismiss = {

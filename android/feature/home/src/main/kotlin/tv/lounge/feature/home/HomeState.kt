@@ -25,6 +25,8 @@ sealed interface Overlay {
     data class TileMenu(val tile: Tile, val rowId: String, val anchor: Rect, val returnFocus: FocusRequester, val under: Overlay = None) : Overlay
     data object QuickSettings : Overlay
     data object HomeRole : Overlay
+    /** The languages Lounge is written in, to choose one over the TV's own. */
+    data object Language : Overlay
     data object Search : Overlay
     /** Every app, A to Z, with an alphabet to jump by. */
     data object AllApps : Overlay

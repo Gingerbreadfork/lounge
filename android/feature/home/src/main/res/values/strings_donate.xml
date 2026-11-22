@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Support Lounge page, which asks for a gift of money. Its name, read aloud as the page opens. -->
+    <string name="donate_title">Support Lounge</string>
+    <string name="donate_headline">No adverts. No tracking. No price.</string>
+    <string name="donate_one_thing">This is the one thing Lounge asks for.</string>
+    <!-- How long Lounge has been on this TV. Each of these is followed by the sentence that starts "If it has earned its place". -->
+    <plurals name="donate_had_weeks">
+        <item quantity="one">You\'ve had Lounge on this TV for %1$d week.</item>
+        <item quantity="other">You\'ve had Lounge on this TV for %1$d weeks.</item>
+    </plurals>
+    <plurals name="donate_had_months">
+        <item quantity="one">You\'ve had Lounge on this TV for %1$d month.</item>
+        <item quantity="other">You\'ve had Lounge on this TV for %1$d months.</item>
+    </plurals>
+    <string name="donate_had_over_a_year">You\'ve had Lounge on this TV for over a year.</string>
+    <!-- Two years or more. -->
+    <plurals name="donate_had_over_years">
+        <item quantity="one">You\'ve had Lounge on this TV for over %1$d year.</item>
+        <item quantity="other">You\'ve had Lounge on this TV for over %1$d years.</item>
+    </plurals>
+    <string name="donate_ask">If it has earned its place, give what it has been worth to you. Even the price of a coffee keeps it going, and absolutely anything helps.</string>
+    <string name="donate_how">It takes about a minute from your phone, and all of it goes straight to its maker. Lounge stays just the same whether you give or not.</string>
+    <!-- Over the maker's name, Gingerbreadfork. -->
+    <string name="donate_thank_you">Thank you, from</string>
+    <!-- Over the QR code. -->
+    <string name="donate_point_camera">Point your phone\'s camera here</string>
+    <!-- The row under the QR code; its value is a way to pay, such as PayPal or Bitcoin. -->
+    <string name="donate_give_with">Give with</string>
+    <!-- Under the PayPal code, on two lines. -->
+    <string name="donate_note_paypal">Scan with your phone\'s camera.\nYou choose the amount.</string>
+    <!-- Under a coin's code, on two lines. %1$s is the coin's name, such as Bitcoin. -->
+    <string name="donate_note_coin">Scan with a wallet.\nSend only %1$s to this address.</string>
+    <!-- Read aloud for the QR code. %1$s is the way to pay, such as PayPal; %2$s is the address the gift goes to. -->
+    <string name="donate_code_description">A code for giving with %1$s, to %2$s</string>
+</resources>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="all_apps_screen_letter">Apps die beginnen met %1$s</string>
+    <string name="all_apps_screen_letter_other">Apps die beginnen met een cijfer of symbool</string>
+    <string name="all_apps_screen_empty">Apps verschijnen hier zodra ze zijn geïnstalleerd.</string>
+    <string name="all_apps_screen_empty_search">Er is geen app met de naam “%1$s”. Met Terug wis je de zoekopdracht.</string>
+    <string name="all_apps_screen_nothing">Hier staat nog niets.</string>
+    <string name="all_apps_screen_no_match">Niets gevonden voor “%1$s”.</string>
+    <plurals name="all_apps_screen_matching">
+        <item quantity="one">%1$d van de %2$d komt overeen met “%3$s”.</item>
+        <item quantity="other">%1$d van de %2$d komen overeen met “%3$s”.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_az">
+        <item quantity="one">%1$d app, van A tot Z.</item>
+        <item quantity="other">%1$d apps, van A tot Z.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_opened">
+        <item quantity="one">%1$d app, laatst geopende eerst.</item>
+        <item quantity="other">%1$d apps, laatst geopende eerst.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_installed">
+        <item quantity="one">%1$d app, nieuwste eerst.</item>
+        <item quantity="other">%1$d apps, nieuwste eerst.</item>
+    </plurals>
+    <string name="all_apps_screen_hint">Houd OK ingedrukt op een app om die in Je apps vast te maken. Omhoog om te zoeken of te sorteren.</string>
+    <string name="all_apps_screen_hint_alphabet">Houd OK ingedrukt op een app om die in Je apps vast te maken. Omhoog om te zoeken of te sorteren, Links voor het alfabet.</string>
+    <string name="all_apps_screen_sort_az">A tot Z</string>
+    <string name="all_apps_screen_sort_opened">Recent geopend</string>
+    <string name="all_apps_screen_sort_installed">Recent geïnstalleerd</string>
+    <string name="all_apps_screen_sorted_az">Gesorteerd van A tot Z. OK wijzigt de volgorde</string>
+    <string name="all_apps_screen_sorted_opened">Gesorteerd op recent geopend. OK wijzigt de volgorde</string>
+    <string name="all_apps_screen_sorted_installed">Gesorteerd op recent geïnstalleerd. OK wijzigt de volgorde</string>
+    <string name="all_apps_screen_change_order">Volgorde wijzigen</string>
+    <string name="all_apps_screen_find">Een app zoeken</string>
+</resources>

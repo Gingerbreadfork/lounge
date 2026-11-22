@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The screen shown in place of the home screen when Lounge cannot start. -->
+    <string name="recovery_title">Lounge couldn\'t start</string>
+    <!-- Settings here is the TV's own settings. -->
+    <string name="recovery_storage_full">The TV\'s storage is full, so Lounge can\'t open its saved layout and settings. Free some space in Settings, then try again.</string>
+    <!-- "Start fresh" is a button on this screen. -->
+    <string name="recovery_storage">Its saved layout and settings could not be opened. Try again first. If it keeps happening, start fresh: they are set aside, Lounge begins again, and your apps, channels and inputs come back on their own.</string>
+    <string name="recovery_other">Lounge\'s core did not load. Try again first. If it keeps happening, start fresh, or reinstall Lounge.</string>
+    <!-- The Try again button while an attempt runs. -->
+    <string name="recovery_opening">Opening…</string>
+    <!-- A button that sets the saved layout and settings aside, and its second press. -->
+    <string name="recovery_start_fresh">Start fresh</string>
+    <string name="recovery_start_fresh_confirm">Yes, start fresh</string>
+    <!-- A button that opens the TV's own settings. -->
+    <string name="recovery_settings">Settings</string>
+    <string name="recovery_settings_stuck">This TV\'s settings didn\'t open. Open them from the TV\'s own home screen instead.</string>
+    <!-- Buttons for another home screen on the TV. %1$s is its name. -->
+    <string name="recovery_open_home">Open %1$s</string>
+    <string name="recovery_turn_home_on">Turn %1$s back on</string>
+    <!-- %1$s is the name of another home screen. Apps is a place in the TV's own settings. -->
+    <string name="recovery_home_stuck">%1$s didn\'t open. In the TV\'s settings, open Apps to find it.</string>
+    <string name="recovery_still_wont_open">It still won\'t open.</string>
+</resources>

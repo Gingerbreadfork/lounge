@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The label of the top bar's notifications button. -->
+    <plurals name="notifications_count">
+        <item quantity="one">%1$d notification</item>
+        <item quantity="other">%1$d notifications</item>
+    </plurals>
+    <!-- The top bar's notifications button as a screen reader says it. %2$s says how many are new, such as "2 new". -->
+    <plurals name="notifications_count_spoken">
+        <item quantity="one">%1$d notification, %2$s</item>
+        <item quantity="other">%1$d notifications, %2$s</item>
+    </plurals>
+    <!-- How many notifications are new, said after how many there are: "3 notifications, 2 new". -->
+    <plurals name="notifications_new">
+        <item quantity="one">%1$d new</item>
+        <item quantity="other">%1$d new</item>
+    </plurals>
+
+    <!-- Under a notification: who says it and when. %1$s is the app's name and %2$s how long ago, such as "5 minutes ago". -->
+    <string name="notifications_byline">%1$s, %2$s</string>
+    <!-- Under a notification whose title is its app's name: how long ago it came, as a line of its own. -->
+    <string name="notifications_when_just_now">Just now</string>
+    <plurals name="notifications_when_minutes_ago">
+        <item quantity="one">%1$d minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
+    </plurals>
+    <plurals name="notifications_when_hours_ago">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="notifications_when_days_ago">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
+
+    <string name="notifications_dismiss_all">Dismiss all</string>
+    <!-- Under Dismiss all: how many notifications cannot be dismissed. -->
+    <plurals name="notifications_staying">
+        <item quantity="one">%1$d stays until its app takes it back</item>
+        <item quantity="other">%1$d stay until their apps take them back</item>
+    </plurals>
+    <!-- Said when a notification was gone before it could be opened or its button pressed. -->
+    <string name="notifications_taken_back">Its app has taken that back, so there is nothing to open.</string>
+    <!-- Said once on the home screen. "Settings, Notifications" is the way to the setting. -->
+    <string name="notifications_offered">Your apps\' notifications can show in the top bar now. Settings, Notifications turns them on</string>
+    <!-- Under a notification that has no Dismiss. -->
+    <string name="notifications_stays">This one stays until its app takes it back.</string>
+
+    <!-- Beside one of a notification's buttons, just after it was pressed. -->
+    <string name="notifications_sent">Sent</string>
+    <string name="notifications_dismiss">Dismiss</string>
+    <!-- %1$s is the name of the app that posted the notification. -->
+    <string name="notifications_hide_app">Hide everything from %1$s</string>
+    <string name="notifications_hide_app_subtitle">Lounge stops showing its notifications</string>
+
+    <string name="notifications_settings_subtitle">What apps on this TV want to tell you, a press away in the top bar.</string>
+    <string name="notifications_needs_access">Needs notification access. OK asks for it.</string>
+    <!-- The value of the Notifications switch while Lounge has no notification access. -->
+    <string name="notifications_not_allowed">Not allowed</string>
+    <!-- Over the list of apps whose notifications are left out. -->
+    <string name="notifications_hidden_apps">Hidden apps</string>
+    <string name="notifications_footnote_privacy">Lounge reads notifications only to show them here, and not at all while this is off. It keeps none of them and none leave this TV.</string>
+    <string name="notifications_footnote_left_out">Things still going on, such as a download, are left out, and so is what is playing.</string>
+</resources>

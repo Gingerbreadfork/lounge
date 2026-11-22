@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_screen_field">Buscar en tu TV</string>
+    <string name="search_screen_hint_empty">Escribe con el control remoto. Los resultados cambian mientras escribes.</string>
+    <string name="search_screen_no_match">Todavía nada coincide con «%1$s».</string>
+    <string name="search_screen_hint_results">La tecla de búsqueda del teclado, o Abajo, te lleva a los resultados.</string>
+    <string name="search_screen_row_apps">Apps</string>
+    <string name="search_screen_row_continue">Seguir viendo</string>
+    <string name="search_screen_row_your_apps">Tus apps</string>
+</resources>

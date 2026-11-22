@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_next">Suivant</string>
+    <string name="onboarding_start">Commencer</string>
+    <string name="onboarding_skip">Passer</string>
+    <string name="onboarding_look_title">Bienvenue dans Lounge</string>
+    <string name="onboarding_look_body">Votre TV, organisée autour de ce que vous regardez vraiment. D’abord, quelle allure lui donner ? Vous pourrez en changer à tout moment.</string>
+    <string name="onboarding_look_controller">Avec une manette, A valide, B revient en arrière, Y ouvre les options d’une vignette, Start lance la recherche et Select ouvre Paramètres.</string>
+    <string name="onboarding_access_title">Que peut voir Lounge ?</string>
+    <string name="onboarding_access_body">Chaque accès ajoute une partie de l’écran d’accueil. Rien ne quitte cette TV ; vous pouvez refuser n’importe lequel.</string>
+    <string name="onboarding_access_power">La Configuration avancée, à l’étape suivante, peut aussi les autoriser.</string>
+    <string name="onboarding_power_title">Faites-en votre écran d’accueil</string>
+    <string name="onboarding_power_body_done">C’est fait : la touche Accueil affiche Lounge. La Configuration avancée peut aussi autoriser les accès de l’étape précédente, allumer la TV et changer son entrée.</string>
+    <string name="onboarding_power_body">Google TV n’a pas de réglage pour cela. La Configuration avancée peut le faire grâce au débogage USB de la TV, et la TV vous pose la question une seule fois : cochez « Toujours autoriser », puis choisissez Autoriser.</string>
+    <string name="onboarding_power_connect">Connecter la Configuration avancée</string>
+    <string name="onboarding_power_connected">Connecté</string>
+    <string name="onboarding_power_waiting">En attente de votre accord…</string>
+    <string name="onboarding_power_debugging_first">Activez d’abord le débogage USB</string>
+    <string name="onboarding_power_by_usb_debugging">Débogage USB</string>
+    <string name="onboarding_power_look_at_prompt">Regardez la demande à l’écran</string>
+    <string name="onboarding_power_open_developer_options">Ouvrir Options pour les développeurs</string>
+    <string name="onboarding_power_connecting">Connexion…</string>
+    <string name="onboarding_power_asks_once">La TV demande une seule fois</string>
+    <string name="onboarding_home_title">Faire de Lounge l’écran d’accueil</string>
+    <string name="onboarding_home_done">Fait</string>
+    <string name="onboarding_home_working">En cours…</string>
+    <string name="onboarding_home_failed">Échec</string>
+    <string name="onboarding_home_do">Le faire</string>
+    <string name="onboarding_home_connect_first">Connectez d’abord</string>
+    <string name="onboarding_home_not_taken">Android n’a pas fait de Lounge l’écran d’accueil. Réessayez, ou dans Paramètres, ouvrez Écran d’accueil par défaut pour d’autres méthodes.</string>
+    <plurals name="onboarding_power_homes_off">
+        <item quantity="one">L’accueil d’origine de cette TV passe avant tout accueil choisi, donc Lounge désactive aussi %1$s. Rien n’est désinstallé ; pour le réactiver, dans Paramètres, ouvrez Configuration avancée, et faites-le avant de désinstaller Lounge.</item>
+        <item quantity="many">L’accueil d’origine de cette TV passe avant tout accueil choisi, donc Lounge désactive aussi %1$s. Rien n’est désinstallé ; pour les réactiver, dans Paramètres, ouvrez Configuration avancée, et faites-le avant de désinstaller Lounge.</item>
+        <item quantity="other">L’accueil d’origine de cette TV passe avant tout accueil choisi, donc Lounge désactive aussi %1$s. Rien n’est désinstallé ; pour les réactiver, dans Paramètres, ouvrez Configuration avancée, et faites-le avant de désinstaller Lounge.</item>
+    </plurals>
+    <string name="onboarding_power_homes_and">%1$s et %2$s</string>
+    <string name="onboarding_power_home_stays">L’écran d’accueil d’origine de la TV reste installé : la diffusion depuis un téléphone, le bouton roue dentée et le guide TV continuent de fonctionner. Pour annuler, dans Paramètres, ouvrez Configuration avancée.</string>
+    <string name="onboarding_phone_title">Ajoutez votre téléphone</string>
+    <string name="onboarding_phone_body_on">Scannez le code avec l’appareil photo de votre téléphone. Votre téléphone devient une télécommande et un clavier, et l’endroit où organiser les rangées et installer des plugins.</string>
+    <string name="onboarding_phone_body_off">Activez Lounge sur téléphone pour afficher un code à scanner avec votre téléphone. Votre téléphone devient une télécommande et un clavier, et l’endroit où organiser les rangées et installer des plugins.</string>
+    <string name="onboarding_phone_footnote">Tout reste sur votre réseau domestique. Pour oublier un téléphone plus tard, dans Paramètres, ouvrez Lounge sur téléphone.</string>
+    <string name="onboarding_phone_qr">Code d’association</string>
+    <string name="onboarding_phone_type_code">Ou saisissez ce code</string>
+    <string name="onboarding_phone_at">à l’adresse %1$s</string>
+    <string name="onboarding_done_title">Voilà pour la visite</string>
+    <string name="onboarding_done_body">Appuyez sur Accueil à tout moment pour revenir à la Scène. Maintenez OK sur une vignette pour ouvrir son menu, Paramètres réunit l’essentiel, et le reste est sur votre téléphone.</string>
+    <string name="onboarding_done_reach">Depuis la Scène, Haut mène à Rechercher et Paramètres.</string>
+    <string name="onboarding_done_reach_controls">Depuis la Scène, Haut mène à Rechercher, Commandes TV et Paramètres.</string>
+    <string name="onboarding_done_reach_guide">Depuis la Scène, Haut mène à Rechercher, Guide TV et Paramètres.</string>
+    <string name="onboarding_done_reach_guide_controls">Depuis la Scène, Haut mène à Rechercher, Guide TV, Commandes TV et Paramètres.</string>
+    <string name="onboarding_done_back">Retour remonte toujours d’un niveau ; depuis les rangées, il ramène à la Scène.</string>
+    <string name="onboarding_done_plugins">Les plugins apportent votre serveur multimédia, la TV en direct et les lumières de la maison. Dans Paramètres, ouvrez Plugins.</string>
+</resources>

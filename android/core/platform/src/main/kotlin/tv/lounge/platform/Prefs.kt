@@ -66,6 +66,8 @@ class Prefs(private val context: Context) {
         val allAppsSort: String = SORT_AZ,
         /** Whether apps' notifications are read and shown in the top bar. */
         val notifications: Boolean = true,
+        /** The tag of the language chosen over the TV's own, or null to follow the TV. */
+        val language: String? = null,
         /** False only for the placeholder used before the store has been read. */
         val loaded: Boolean = false,
     )
@@ -83,6 +85,7 @@ class Prefs(private val context: Context) {
             backdrop = p[BACKDROP] ?: STILL_BACKDROP,
             allAppsSort = p[ALL_APPS_SORT] ?: SORT_AZ,
             notifications = notificationsShown(p[NOTIFICATIONS], p[ONBOARDING_DONE] ?: false),
+            language = p[LANGUAGE],
             loaded = true,
         )
     }
@@ -180,6 +183,8 @@ class Prefs(private val context: Context) {
 
     suspend fun setShowMobileApps(on: Boolean) { context.dataStore.edit { it[SHOW_MOBILE_APPS] = on } }
     suspend fun setTheme(theme: Theme) { context.dataStore.edit { it[THEME] = theme.name } }
+    /** Chooses a language over the TV's own by its tag; null follows the TV again. */
+    suspend fun setLanguage(tag: String?) { context.dataStore.edit { if (tag == null) it.remove(LANGUAGE) else it[LANGUAGE] = tag } }
     suspend fun setSounds(on: Boolean) { context.dataStore.edit { it[SOUNDS] = on } }
     suspend fun setLiteMode(on: Boolean?) { context.dataStore.edit { if (on == null) it.remove(LITE_MODE) else it[LITE_MODE] = on } }
     suspend fun setOnboardingDone(done: Boolean) { context.dataStore.edit { it[ONBOARDING_DONE] = done } }
@@ -244,6 +249,7 @@ class Prefs(private val context: Context) {
         private const val MAX_HIDDEN_APPS = 200
         private val PACKAGE_NAME = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)*")
         private val THEME = stringPreferencesKey("theme")
+        private val LANGUAGE = stringPreferencesKey("language")
         private val SOUNDS = booleanPreferencesKey("sounds")
         private val LITE_MODE = booleanPreferencesKey("lite_mode")
         private val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")

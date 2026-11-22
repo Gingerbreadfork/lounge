@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ambient_playing_description">En reproducción</string>
+    <string name="ambient_tv_own">El de la TV</string>
+    <string name="ambient_subtitle_ours">Tus imágenes o una escena abstracta y pausada, con un reloj; se desplaza y se atenúa para cuidar los paneles OLED.</string>
+    <string name="ambient_subtitle_other">Muestra tus imágenes o una escena abstracta y pausada, con un reloj, cuando la TV queda inactiva.</string>
+    <string name="ambient_switching">Cambiando…</string>
+    <string name="ambient_ok_puts_back">OK vuelve a poner el anterior</string>
+    <string name="ambient_power_puts_back">La Configuración avanzada puede volver a poner el anterior</string>
+    <string name="ambient_ok_makes_lounge">OK pone el salvapantallas de Lounge</string>
+    <string name="ambient_ok_opens_tv_settings">OK abre los ajustes de salvapantallas de la TV: elige Lounge ahí y pulsa Atrás</string>
+    <string name="ambient_tv_did_not_take">Los ajustes de la TV no pusieron el salvapantallas de Lounge. OK abre la Configuración avanzada, que puede hacerlo si la depuración por USB está activada</string>
+    <string name="ambient_tv_cannot_choose">Los ajustes de esta TV no dejan elegir salvapantallas. OK abre la Configuración avanzada, que puede hacerlo si la depuración por USB está activada</string>
+    <string name="ambient_ok_opens_power_setup">OK abre la Configuración avanzada, que puede poner el salvapantallas de Lounge</string>
+    <string name="ambient_not_taken">La TV no aplicó el cambio. Vuelve a intentarlo o, en los ajustes de la TV, abre Sistema y luego Salvapantallas.</string>
+    <string name="ambient_style_title">Estilo</string>
+    <string name="ambient_style_pictures">Imágenes</string>
+    <string name="ambient_style_pictures_about">Imágenes de tu pantalla de inicio</string>
+    <string name="ambient_style_mix">Mezcla</string>
+    <string name="ambient_style_mix_about">Todas las escenas en orden aleatorio, unos minutos cada una</string>
+    <string name="ambient_style_too_heavy">%1$s exige demasiado a esta TV, así que se muestra Imágenes</string>
+    <string name="ambient_style_not_drawn">%1$s no se pudo dibujar en esta TV, así que se muestra Imágenes</string>
+    <string name="ambient_preview_title">Verlo en pantalla completa</string>
+    <string name="ambient_preview_subtitle">Cualquier tecla te trae de vuelta</string>
+    <string name="ambient_footnote_pictures">Las imágenes salen de lo que ya hay en tu pantalla de inicio y las escenas abstractas se dibujan en la TV; no se descarga nada para esto.</string>
+    <string name="ambient_footnote_when">La TV decide cuándo empieza el salvapantallas. Para cambiarlo, en los ajustes de la TV abre Sistema y luego Salvapantallas.</string>
+</resources>

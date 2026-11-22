@@ -9,6 +9,8 @@ android {
         minSdk = 28
         consumerProguardFiles("consumer-rules.pro")
     }
+    // The wording tests read real string resources on the JVM.
+    testOptions { unitTests { isIncludeAndroidResources = true } }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -21,4 +23,5 @@ dependencies {
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
 }

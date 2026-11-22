@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugins_title">Plugins</string>
+    <string name="plugins_subtitle">Ils ajoutent les rangées, les chaînes et le guide TV de vos services.</string>
+    <string name="plugins_loading">Chargement…</string>
+    <string name="plugins_none">Aucun plugin installé. Ils s’installent depuis Lounge sur téléphone : sur votre téléphone, ouvrez Plugins.</string>
+    <string name="plugins_footnote_reach">Chaque plugin ne peut joindre que les adresses qu’il déclare et ne voit que ses propres paramètres.</string>
+    <string name="plugins_footnote_more">D’autres plugins s’installent depuis Lounge sur téléphone.</string>
+    <string name="plugins_status_on">Activé</string>
+    <string name="plugins_status_off">Désactivé</string>
+    <string name="plugins_status_sign_in">Connexion requise</string>
+    <string name="plugins_status_needs_setup">À configurer</string>
+    <string name="plugins_status_problem">Problème</string>
+    <string name="plugins_status_held">Désactivé par sa mise à jour</string>
+    <string name="plugins_gone_title">Plugin</string>
+    <string name="plugins_gone_subtitle">Ce plugin n’est plus installé.</string>
+    <string name="plugins_gone_back">Revenir aux plugins</string>
+    <string name="plugins_version">Version %1$s</string>
+    <string name="plugins_version_by">Version %1$s, par %2$s</string>
+    <string name="plugins_held">Désactivé par sa mise à jour, qui demande aussi à joindre %1$s.</string>
+    <string name="plugins_allow">Autoriser et activer</string>
+    <string name="plugins_allow_subtitle">Il pourra alors joindre aussi %1$s</string>
+    <string name="plugins_settings">Paramètres</string>
+    <string name="plugins_turn_on">Activer %1$s</string>
+    <string name="plugins_fill_in_first">Remplissez d’abord : %1$s</string>
+    <string name="plugins_refresh">Actualiser maintenant</string>
+    <string name="plugins_refreshing">Actualisation…</string>
+    <string name="plugins_log">Journal</string>
+    <string name="plugins_log_empty">Journal vide pour l’instant.</string>
+    <string name="plugins_remove">Supprimer</string>
+    <string name="plugins_remove_confirm">Oui, le supprimer avec ses paramètres</string>
+    <string name="plugins_removed">Plugin supprimé : %1$s</string>
+    <string name="plugins_reach">Il peut joindre %1$s.</string>
+    <string name="plugins_reach_self_signed">Il peut joindre %1$s et accepte le certificat propre à un serveur domestique.</string>
+    <string name="plugins_reach_nothing">Il ne peut rien joindre.</string>
+    <string name="plugins_reach_setting">ce que vous saisissez dans « %1$s »</string>
+    <string name="plugins_reach_anywhere">tout site public</string>
+    <string name="plugins_reach_home_network">les appareils de votre réseau domestique</string>
+    <string name="plugins_reach_this_tv">cette TV</string>
+    <string name="plugins_list_next">%1$s, %2$s</string>
+    <string name="plugins_list_last">%1$s et %2$s</string>
+    <plurals name="plugins_refreshes_seconds">
+        <item quantity="one">Il s’actualise chaque seconde tant que Lounge est à l’écran.</item>
+        <item quantity="many">Il s’actualise toutes les %1$d secondes tant que Lounge est à l’écran.</item>
+        <item quantity="other">Il s’actualise toutes les %1$d secondes tant que Lounge est à l’écran.</item>
+    </plurals>
+    <plurals name="plugins_refreshes_minutes">
+        <item quantity="one">Il s’actualise chaque minute tant que la TV est allumée.</item>
+        <item quantity="many">Il s’actualise toutes les %1$d minutes tant que la TV est allumée.</item>
+        <item quantity="other">Il s’actualise toutes les %1$d minutes tant que la TV est allumée.</item>
+    </plurals>
+    <string name="plugins_publisher_key">Les mises à jour ne sont acceptées que de son éditeur, dont la clé commence par %1$s.</string>
+    <string name="plugins_ask_sign_in_phone">Connectez-vous sur votre téléphone</string>
+    <string name="plugins_ask_sign_in">Se connecter</string>
+    <string name="plugins_ask_open">Scannez ceci avec son appareil photo, ou ouvrez %1$s</string>
+    <string name="plugins_ask_open_enter">Scannez ceci avec son appareil photo, ou ouvrez %1$s et saisissez</string>
+    <string name="plugins_ask_tap">Scannez ceci avec son appareil photo, ou touchez le lien dans Lounge sur téléphone</string>
+    <string name="plugins_ask_tap_enter">Scannez ceci avec son appareil photo, ou touchez le lien dans Lounge sur téléphone et saisissez</string>
+    <plurals name="plugins_items_refreshed">
+        <item quantity="one">%1$d élément, actualisé %2$s</item>
+        <item quantity="many">%1$d éléments, actualisés %2$s</item>
+        <item quantity="other">%1$d éléments, actualisés %2$s</item>
+    </plurals>
+    <string name="plugins_fetching_first">Première récupération…</string>
+    <string name="plugins_fill_in_settings">Remplissez les paramètres ci-dessous, puis activez-le.</string>
+    <string name="plugins_help_on_phone">%1$s Votre téléphone affiche toutes les étapes.</string>
+    <string name="plugins_setting_optional">%1$s (facultatif)</string>
+    <string name="plugins_setting_secret_saved">•••••••• (enregistré)</string>
+    <string name="plugins_setting_not_set">Non défini</string>
+    <string name="plugins_setting_saved">Enregistré</string>
+    <string name="plugins_setting_not_set_uses">Non défini, utilise %1$s</string>
+</resources>

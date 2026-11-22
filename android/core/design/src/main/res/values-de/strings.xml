@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="language_tag">de</string>
+    <string name="common_on">An</string>
+    <string name="common_off">Aus</string>
+    <string name="common_open">Öffnen</string>
+    <string name="common_show">Einblenden</string>
+    <string name="common_hide">Ausblenden</string>
+    <string name="common_hidden">Ausgeblendet</string>
+    <string name="common_cancel">Abbrechen</string>
+    <string name="common_back">Zurück</string>
+    <string name="common_done">Fertig</string>
+    <string name="common_try_again">Erneut versuchen</string>
+    <string name="common_settings">Einstellungen</string>
+    <string name="common_search">Suche</string>
+    <string name="common_all_apps">Alle Apps</string>
+    <string name="common_tv_guide">TV-Programm</string>
+    <string name="common_tv_controls">TV-Steuerung</string>
+    <string name="common_notifications">Benachrichtigungen</string>
+    <string name="common_screensaver">Bildschirmschoner</string>
+    <string name="common_power_setup">Erweiterte Einrichtung</string>
+    <string name="common_phone_companion">Lounge fürs Handy</string>
+    <string name="words_just_now">gerade eben</string>
+    <plurals name="words_minutes_ago">
+        <item quantity="one">vor %1$d Minute</item>
+        <item quantity="other">vor %1$d Minuten</item>
+    </plurals>
+    <plurals name="words_hours_ago">
+        <item quantity="one">vor %1$d Stunde</item>
+        <item quantity="other">vor %1$d Stunden</item>
+    </plurals>
+    <plurals name="words_days_ago">
+        <item quantity="one">vor %1$d Tag</item>
+        <item quantity="other">vor %1$d Tagen</item>
+    </plurals>
+    <string name="words_clock_am">%1$s AM</string>
+    <string name="words_clock_pm">%1$s PM</string>
+</resources>

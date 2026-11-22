@@ -33,6 +33,16 @@ internal object SettingsGlyphs {
         path(fill = SolidColor(Color.White), stroke = null, pathBuilder = d)
     }
 
+    /** A globe: the language Lounge is shown in. */
+    val Language: ImageVector by lazy {
+        icon("language") {
+            stroke { moveTo(4f, 14f); arcTo(10f, 10f, 0f, true, true, 24f, 14f); arcTo(10f, 10f, 0f, true, true, 4f, 14f); close() }
+            stroke { moveTo(14f, 4f); arcTo(4.6f, 10f, 0f, false, true, 14f, 24f); arcTo(4.6f, 10f, 0f, false, true, 14f, 4f); close() }
+            stroke { moveTo(4.6f, 10.5f); lineTo(23.4f, 10.5f) }
+            stroke { moveTo(4.6f, 17.5f); lineTo(23.4f, 17.5f) }
+        }
+    }
+
     /** A heart: giving to the project. */
     val Heart: ImageVector by lazy {
         icon("heart") {

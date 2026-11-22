@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="themes_dusk_title">Anochecer</string>
+    <string name="themes_dusk_tagline">Noche añil, lámpara coral</string>
+    <string name="themes_house_title">Sala</string>
+    <string name="themes_house_tagline">Ciruela cálido, luz de tungsteno</string>
+    <string name="themes_hearth_title">Chimenea</string>
+    <string name="themes_hearth_tagline">Paredes tierra, luz del fuego</string>
+    <string name="themes_opera_title">Ópera</string>
+    <string name="themes_opera_tagline">Terciopelo rojo y dorados</string>
+    <string name="themes_marquee_title">Marquesina</string>
+    <string name="themes_marquee_tagline">Azul marino, bombillas de marquesina</string>
+    <string name="themes_green_room_title">Camerino</string>
+    <string name="themes_green_room_tagline">Verde profundo, lámpara de latón</string>
+    <string name="themes_moonlight_title">Claro de luna</string>
+    <string name="themes_moonlight_tagline">Pizarra fría, luz de luna</string>
+    <string name="themes_graphite_title">Grafito</string>
+    <string name="themes_graphite_tagline">Sin color, blanco cálido</string>
+    <string name="themes_cabaret_title">Cabaret</string>
+    <string name="themes_cabaret_tagline">Violeta negro, neón rosa</string>
+    <string name="themes_aquarium_title">Acuario</string>
+    <string name="themes_aquarium_tagline">Verde azulado profundo, brillo de pecera</string>
+    <string name="themes_absinthe_title">Absenta</string>
+    <string name="themes_absinthe_tagline">Oliva oscuro, brillo verde dorado</string>
+    <string name="themes_ultraviolet_title">Ultravioleta</string>
+    <string name="themes_ultraviolet_tagline">Casi negro, luz negra</string>
+    <string name="themes_blackout_title">Apagón</string>
+    <string name="themes_blackout_tagline">Negro puro para paneles OLED</string>
+    <string name="themes_high_contrast_title">Alto contraste</string>
+    <string name="themes_high_contrast_tagline">Texto y bordes más marcados</string>
+</resources>

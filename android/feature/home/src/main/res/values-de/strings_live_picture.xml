@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_picture_resting">Pausiert. Mit OK geht es weiter.</string>
+    <string name="live_picture_stopped">Das Bild kommt nicht mehr an. Lounge versucht es weiter.</string>
+    <string name="live_picture_not_arriving">Das Bild kommt nicht an. Lounge versucht es weiter.</string>
+    <string name="live_picture_waiting">Einen Moment</string>
+</resources>

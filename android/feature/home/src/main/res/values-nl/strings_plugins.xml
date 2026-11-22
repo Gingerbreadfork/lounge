@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugins_title">Plug-ins</string>
+    <string name="plugins_subtitle">Ze voegen rijen, zenders en gidsgegevens van je diensten toe.</string>
+    <string name="plugins_loading">Laden…</string>
+    <string name="plugins_none">Geen plug-ins geïnstalleerd. Installeren doe je met Lounge op je telefoon: open daar Plug-ins.</string>
+    <string name="plugins_footnote_reach">Elke plug-in kan alleen verbinding maken met de plekken die hij noemt, en ziet alleen zijn eigen instellingen.</string>
+    <string name="plugins_footnote_more">Meer plug-ins installeer je met Lounge op je telefoon.</string>
+    <string name="plugins_status_on">Aan</string>
+    <string name="plugins_status_off">Uit</string>
+    <string name="plugins_status_sign_in">Inloggen</string>
+    <string name="plugins_status_needs_setup">Instellen nodig</string>
+    <string name="plugins_status_problem">Probleem</string>
+    <string name="plugins_status_held">Uitgezet door de update</string>
+    <string name="plugins_gone_title">Plug-in</string>
+    <string name="plugins_gone_subtitle">Deze plug-in is niet meer geïnstalleerd.</string>
+    <string name="plugins_gone_back">Terug naar Plug-ins</string>
+    <string name="plugins_version">Versie %1$s</string>
+    <string name="plugins_version_by">Versie %1$s, door %2$s</string>
+    <string name="plugins_held">Uitgezet door de update, die ook verbinding wil maken met %1$s.</string>
+    <string name="plugins_allow">Toestaan en aanzetten</string>
+    <string name="plugins_allow_subtitle">De plug-in kan dan ook verbinding maken met %1$s</string>
+    <string name="plugins_settings">Instellingen</string>
+    <string name="plugins_turn_on">%1$s aanzetten</string>
+    <string name="plugins_fill_in_first">Vul eerst dit in: %1$s</string>
+    <string name="plugins_refresh">Nu vernieuwen</string>
+    <string name="plugins_refreshing">Vernieuwen…</string>
+    <string name="plugins_log">Logboek</string>
+    <string name="plugins_log_empty">Nog niets vastgelegd.</string>
+    <string name="plugins_remove">Verwijderen</string>
+    <string name="plugins_remove_confirm">Ja, verwijderen met alle instellingen</string>
+    <string name="plugins_removed">%1$s verwijderd</string>
+    <string name="plugins_reach">De plug-in kan verbinding maken met %1$s.</string>
+    <string name="plugins_reach_self_signed">De plug-in kan verbinding maken met %1$s en accepteert het eigen certificaat van een thuisserver.</string>
+    <string name="plugins_reach_nothing">De plug-in kan nergens verbinding mee maken.</string>
+    <string name="plugins_reach_setting">wat je invult bij %1$s</string>
+    <string name="plugins_reach_anywhere">elke openbare site</string>
+    <string name="plugins_reach_home_network">apparaten in je thuisnetwerk</string>
+    <string name="plugins_reach_this_tv">deze tv</string>
+    <string name="plugins_list_next">%1$s, %2$s</string>
+    <string name="plugins_list_last">%1$s en %2$s</string>
+    <plurals name="plugins_refreshes_seconds">
+        <item quantity="one">De plug-in vernieuwt elke seconde zolang Lounge op het scherm staat.</item>
+        <item quantity="other">De plug-in vernieuwt elke %1$d seconden zolang Lounge op het scherm staat.</item>
+    </plurals>
+    <plurals name="plugins_refreshes_minutes">
+        <item quantity="one">De plug-in vernieuwt elke minuut zolang de tv aanstaat.</item>
+        <item quantity="other">De plug-in vernieuwt elke %1$d minuten zolang de tv aanstaat.</item>
+    </plurals>
+    <string name="plugins_publisher_key">Updates worden alleen geaccepteerd van de uitgever, wiens sleutel begint met %1$s.</string>
+    <string name="plugins_ask_sign_in_phone">Log in op je telefoon</string>
+    <string name="plugins_ask_sign_in">Inloggen</string>
+    <string name="plugins_ask_open">Scan dit met de camera, of open %1$s</string>
+    <string name="plugins_ask_open_enter">Scan dit met de camera, of open %1$s en voer deze code in</string>
+    <string name="plugins_ask_tap">Scan dit met de camera, of tik op de link in Lounge op je telefoon</string>
+    <string name="plugins_ask_tap_enter">Scan dit met de camera, of tik op de link in Lounge op je telefoon en voer deze code in</string>
+    <plurals name="plugins_items_refreshed">
+        <item quantity="one">%1$d item, %2$s vernieuwd</item>
+        <item quantity="other">%1$d items, %2$s vernieuwd</item>
+    </plurals>
+    <string name="plugins_fetching_first">Voor het eerst ophalen…</string>
+    <string name="plugins_fill_in_settings">Vul de instellingen hieronder in en zet de plug-in dan aan.</string>
+    <string name="plugins_help_on_phone">%1$s Op je telefoon staan alle stappen.</string>
+    <string name="plugins_setting_optional">%1$s (optioneel)</string>
+    <string name="plugins_setting_secret_saved">•••••••• (opgeslagen)</string>
+    <string name="plugins_setting_not_set">Niet ingesteld</string>
+    <string name="plugins_setting_saved">Opgeslagen</string>
+    <string name="plugins_setting_not_set_uses">Niet ingesteld, gebruikt %1$s</string>
+</resources>

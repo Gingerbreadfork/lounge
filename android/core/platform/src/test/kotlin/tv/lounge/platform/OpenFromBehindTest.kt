@@ -53,7 +53,7 @@ class OpenFromBehindTest {
             { platform.openAppInfo("tv.example.app") },
         )) {
             val refused = assertThrows(PlatformException.Failed::class.java) { open() }
-            assertEquals(OPENED_FROM_BEHIND, refused.detail)
+            assertEquals(tv.getString(R.string.android_platform_opened_from_behind), refused.detail)
         }
         assertTrue(tv.opened.isEmpty())
     }

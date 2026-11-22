@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Stands where a row's name would when a screen reader says a tile on the Stage: "Netflix, the Stage". -->
+    <string name="stage_row_name">the Stage</string>
+    <!-- Part of what a screen reader says of a tile on the Stage: where it plays. %1$s is an app or service, such as Netflix. -->
+    <string name="stage_spoken_source">on %1$s</string>
+
+    <!-- The Stage before the home screen has anything to show. -->
+    <string name="stage_empty_category">Your home screen</string>
+    <!-- Nothing is set up yet. Start opens the setup steps. -->
+    <string name="stage_empty_title">Let\'s set up your home screen</string>
+    <string name="stage_empty_body">A few quick steps, then your apps and shows appear here.</string>
+    <string name="stage_empty_start">Start</string>
+    <!-- Lounge is still reading what is on the TV. -->
+    <string name="stage_indexing_title">Setting up your home screen</string>
+    <string name="stage_indexing_body">Looking at what is on this TV.</string>
+</resources>

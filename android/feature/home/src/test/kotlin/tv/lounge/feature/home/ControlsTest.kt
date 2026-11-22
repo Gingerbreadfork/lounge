@@ -6,12 +6,18 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import tv.lounge.core.Tile
 import tv.lounge.core.TileKind
 import tv.lounge.design.LoungeGlyphs
 
 /** A control tile: how it is drawn, what holding OK offers and how a press waits for its answer. */
+@RunWith(RobolectricTestRunner::class)
 class ControlsTest {
+    private val resources get() = RuntimeEnvironment.getApplication().resources
+
     private fun lamp(on: Boolean? = false, subtitle: String? = "Off") =
         testTile("plugin:h:lamp", title = "Lamp", subtitle = subtitle, kind = TileKind.COMPACT, action = "open:plugin:h:lamp", glyph = "light", on = on, more = "h:lamp")
 
@@ -38,7 +44,7 @@ class ControlsTest {
         onPlay = {},
         onDismissNotice = {},
         onGuide = {},
-    ).map { it.label }
+    ).map { resources.getString(it.label) }
 
     @Test
     fun aGlyphIsLitByItsStateAndHalfLitWhileItWaits() {
@@ -97,13 +103,13 @@ class ControlsTest {
 
     @Test
     fun aControlOffersAdjustFirstAndNoPlaceOnTheStage() {
-        assertEquals(listOf("Adjust", "Hide", PinWords.HIDE_ROW), menu(lamp()))
+        assertEquals(listOf("Adjust", "Hide", "Hide this row"), menu(lamp()))
         // Without a sheet of its own it has nothing to adjust.
-        assertEquals(listOf("Hide", PinWords.HIDE_ROW), menu(lamp().copy(more = null)))
+        assertEquals(listOf("Hide", "Hide this row"), menu(lamp().copy(more = null)))
         // One pinned to the Stage before it became a control can still be taken off it.
-        assertEquals(listOf("Adjust", PinWords.UNPIN_STAGE, "Hide", PinWords.HIDE_ROW), menu(lamp(), stagePinned = true))
+        assertEquals(listOf("Adjust", "Unpin from the Stage", "Hide", "Hide this row"), menu(lamp(), stagePinned = true))
         // Anything else that opens keeps its place on the Stage.
-        assertTrue(PinWords.PIN_STAGE in menu(testTile("plugin:h:film", kind = TileKind.LANDSCAPE)))
+        assertTrue("Pin to the Stage" in menu(testTile("plugin:h:film", kind = TileKind.LANDSCAPE)))
     }
 
     @Test
@@ -123,6 +129,6 @@ class ControlsTest {
         val room = testTile("plugin:h:den", title = "Den", kind = TileKind.COMPACT, action = "control:sheet:h:room:den", glyph = "home")
         val allApps = testTile("control:allapps", title = "Den of apps", action = "control:allapps")
         val snapshot = testSnapshot(rows = listOf(testRow("plugin:h:rooms", room, allApps, kind = TileKind.COMPACT)))
-        assertEquals(listOf("plugin:h:den"), search(snapshot, "den").flatMap { it.tiles }.map { it.id })
+        assertEquals(listOf("plugin:h:den"), search(snapshot, "den", testSearchTitles).flatMap { it.tiles }.map { it.id })
     }
 }

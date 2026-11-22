@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- What follows a failed update, said as a sentence of its own right after the sentence that says what went wrong. -->
+    <string name="update_manager_next_later">Lounge tries again later.</string>
+    <string name="update_manager_next_when_asked">Try again when you are ready.</string>
+    <string name="update_manager_next_release">Lounge waits for the next release.</string>
+
+    <!-- What went wrong with an update, shown under Updates in Settings and on the phone. One of the three sentences above may follow it. -->
+    <string name="update_manager_install_unfinished">The install didn\'t finish.</string>
+    <string name="update_manager_install_not_started">Android couldn\'t start the install.</string>
+    <string name="update_manager_install_failed">Android couldn\'t install the update.</string>
+    <string name="update_manager_rate_limited">GitHub is limiting checks from this network.</string>
+    <string name="update_manager_unexpected_answer">GitHub didn\'t answer as expected.</string>
+    <string name="update_manager_not_sent">GitHub didn\'t send the update.</string>
+    <string name="update_manager_too_large">The download was larger than its release says, so Lounge stopped it.</string>
+    <string name="update_manager_checksum_mismatch">The download didn\'t match its checksum, so Lounge threw it away.</string>
+    <string name="update_manager_changed">The update changed after it was checked, so Lounge threw it away.</string>
+    <string name="update_manager_not_stored">Lounge couldn\'t save the update on the TV\'s storage. Free some space on the TV.</string>
+    <string name="update_manager_not_staged">Power Setup couldn\'t reach the update on the TV\'s storage.</string>
+    <string name="update_manager_unreachable">Lounge couldn\'t reach GitHub. Check the TV\'s internet connection.</string>
+    <string name="update_manager_timed_out">GitHub took too long to answer.</string>
+    <string name="update_manager_not_secure">Lounge couldn\'t connect to GitHub safely. Check that the TV\'s date and time are right.</string>
+    <string name="update_manager_dropped">The connection to GitHub dropped.</string>
+    <string name="update_manager_did_not_go_through">The update didn\'t go through.</string>
+
+    <!-- What went wrong with an update, with what happens next already said. Nothing follows these. -->
+    <string name="update_manager_power_setup_failed">Power Setup couldn\'t install the update. Try again, or allow Lounge to install apps.</string>
+    <string name="update_manager_no_checksum">This release has no checksum to check the download against, so Lounge won\'t install it.</string>
+    <string name="update_manager_unreadable">The update is not an app Android can read. Lounge waits for the next release.</string>
+    <string name="update_manager_not_lounge">The update is not Lounge. Lounge waits for the next release.</string>
+    <string name="update_manager_other_signer">The update is not signed like this copy of Lounge. Lounge waits for the next release.</string>
+    <!-- %1$s is a version number, such as 0.9.1. -->
+    <string name="update_manager_gave_up">Lounge %1$s didn\'t install on this TV, so it waits for the next release.</string>
+    <!-- "Try again" is the row under Updates in Settings. -->
+    <string name="update_manager_install_cancelled">The install was cancelled. Choose Try again to install it.</string>
+    <string name="update_manager_install_blocked">Android blocked the install. Try again, or connect Power Setup to install it.</string>
+    <string name="update_manager_install_no_space">There isn\'t enough storage for the update. Free some space on the TV, then try again.</string>
+    <string name="update_manager_install_incompatible">This update doesn\'t work on this TV. Lounge waits for the next release.</string>
+    <string name="update_manager_install_refused">Android won\'t install this update on this TV. Lounge waits for the next release.</string>
+
+    <!-- A toast shown for a moment before Android's list of apps allowed to install other apps opens. -->
+    <string name="update_manager_install_hint">Find Lounge in Android\'s list and turn it on, then press Back.</string>
+    <!-- A toast for a TV whose settings have no such list to open. Apps, Special app access and Install unknown apps are names in Android's settings: use the words the TV shows in this language. -->
+    <string name="update_manager_no_install_screen">This TV has no screen for that here. In its settings open Apps, then Special app access, then Install unknown apps, or connect Power Setup.</string>
+</resources>

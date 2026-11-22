@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lounge's own scenes, shown as a screensaver or behind the home screen: each has a name and a line saying what it shows. -->
+    <string name="shader_styles_ink_name">Ink</string>
+    <string name="shader_styles_ink_description">Light moving through ink in water</string>
+    <string name="shader_styles_current_name">Current</string>
+    <string name="shader_styles_current_description">Slow water folding over itself under one light</string>
+    <string name="shader_styles_rain_name">Rain</string>
+    <string name="shader_styles_rain_description">A window at night, drops running down the glass</string>
+    <string name="shader_styles_smoke_name">Smoke</string>
+    <string name="shader_styles_smoke_description">Wisps rising and thinning as they climb</string>
+    <string name="shader_styles_embers_name">Embers</string>
+    <string name="shader_styles_embers_description">Sparks lifting off a fire that has burned down</string>
+    <string name="shader_styles_shallows_name">Shallows</string>
+    <string name="shader_styles_shallows_description">Light on the floor of a pool</string>
+    <string name="shader_styles_lava_name">Lava</string>
+    <string name="shader_styles_lava_description">A lava lamp, slowly</string>
+    <string name="shader_styles_aurora_name">Aurora</string>
+    <string name="shader_styles_aurora_description">Northern lights over the hills</string>
+    <string name="shader_styles_silk_name">Silk</string>
+    <string name="shader_styles_silk_description">Folds of satin turning under the lamp</string>
+    <string name="shader_styles_curtain_name">Curtain</string>
+    <string name="shader_styles_curtain_description">The house curtain before the show, lit from the footlights</string>
+    <string name="shader_styles_moonpath_name">Moonpath</string>
+    <string name="shader_styles_moonpath_description">The sea at night, and the road the moon lays across it</string>
+    <string name="shader_styles_city_name">City</string>
+    <string name="shader_styles_city_description">The city at night, out of focus beyond the glass</string>
+    <string name="shader_styles_record_name">Record</string>
+    <string name="shader_styles_record_description">A record turning under the lamp</string>
+    <string name="shader_styles_eclipse_name">Eclipse</string>
+    <string name="shader_styles_eclipse_description">The sun behind the moon, and a bead of it blazing at the edge</string>
+    <string name="shader_styles_gravity_name">Gravity</string>
+    <string name="shader_styles_gravity_description">A black hole, and the light bent round it</string>
+    <string name="shader_styles_orbit_name">Orbit</string>
+    <string name="shader_styles_orbit_description">Daybreak from orbit, over the lights of the night side</string>
+    <string name="shader_styles_tide_name">Tide</string>
+    <string name="shader_styles_tide_description">The sea coming in at night, glowing where it breaks</string>
+    <string name="shader_styles_lanterns_name">Lanterns</string>
+    <string name="shader_styles_lanterns_description">Paper lanterns let go over the lake</string>
+    <string name="shader_styles_snow_name">Snow</string>
+    <string name="shader_styles_snow_description">A lane of street lamps in falling snow</string>
+    <!-- A scene read from a file put on the TV: the line about it, and where it came from. -->
+    <string name="shader_styles_local_description">From this TV\'s screensavers folder</string>
+    <string name="shader_styles_local_origin">This TV</string>
+</resources>

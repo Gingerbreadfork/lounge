@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- What a screen reader says for the controller picture beside the Games row's title. -->
+    <string name="rows_controller_connected">Controller connected</string>
+</resources>

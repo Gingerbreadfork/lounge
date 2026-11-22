@@ -1,7 +1,9 @@
 package tv.lounge.feature.home
 
 import android.content.Intent
+import android.content.res.Resources
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
@@ -58,7 +60,11 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -85,8 +91,10 @@ import tv.lounge.design.Dimens
 import tv.lounge.design.Dot
 import tv.lounge.design.Hairline
 import tv.lounge.design.LoungeIcons
+import tv.lounge.design.Language
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.LocalSwapSlotActive
+import tv.lounge.design.R as DesignR
 import tv.lounge.design.Swap
 import tv.lounge.design.sounds
 import tv.lounge.design.focusRim
@@ -385,13 +393,13 @@ fun QuickSettingsSheet(
     onPowerSetup: () -> Unit,
     powerStatus: tv.lounge.power.PowerStatus,
     onAmbient: () -> Unit,
-    /** The screensaver's name as the Screensaver sheet gives it, read again on return to Lounge. */
-    screensaver: () -> String,
+    /** The screensaver the TV starts, as the Screensaver sheet names it, read again on return to Lounge. */
+    screensaver: () -> TvScreensaver,
     onSetupAgain: () -> Unit,
     onAbout: () -> Unit,
     onDonate: () -> Unit,
     onUpdates: () -> Unit,
-    updateStatus: String,
+    updateStatus: UpdateWord,
     firstFocus: FocusRequester,
     cameFrom: Overlay? = null,
     backdrop: String = Prefs.STILL_BACKDROP,
@@ -400,6 +408,9 @@ fun QuickSettingsSheet(
     onSetBackdrop: (String) -> Unit = {},
     notificationsOn: Boolean = true,
     onNotifications: () -> Unit = {},
+    /** The tag of the language chosen over the TV's own, or null while Lounge follows the TV. */
+    language: String? = null,
+    onLanguage: () -> Unit = {},
 ) {
     val colors = LoungeTheme.colors
     val sounds0 = LoungeTheme.sounds
@@ -410,20 +421,23 @@ fun QuickSettingsSheet(
         diag = if (showDiagnostics) withContext(Dispatchers.IO) { diagnostics() } else null
     }
     val access = rememberAccessAsker(onRequestPermission, say, onPowerSetup)
-    var saverName by remember { mutableStateOf(screensaver()) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { saverName = screensaver() }
+    val resources = LocalResources.current
+    val on = stringResource(DesignR.string.common_on)
+    val off = stringResource(DesignR.string.common_off)
+    var saver by remember { mutableStateOf(screensaver()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { saver = screensaver() }
     // Back from one of its pages puts focus on the row that opened it.
-    val pages = listOf(Overlay.Rows, Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate)
+    val pages = listOf(Overlay.Rows, Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.Language, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate)
     val returnTo = cameFrom?.takeIf { it in pages }
     fun focusFor(page: Overlay?) = firstFocus.takeIf { page == returnTo }
 
-    SheetHeading("Settings")
+    SheetHeading(stringResource(DesignR.string.common_settings))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SheetGroup("Home screen")
+        SheetGroup(stringResource(R.string.sheets_group_home))
         SheetRow(
             icon = LoungeIcons.Rows,
-            title = "Rows",
-            subtitle = "Show, hide and move rows",
+            title = stringResource(R.string.sheets_rows_title),
+            subtitle = stringResource(R.string.sheets_rows_subtitle),
             value = rowsSummary,
             onClick = onRows,
             focusRequester = focusFor(Overlay.Rows) ?: focusFor(null),
@@ -432,148 +446,160 @@ fun QuickSettingsSheet(
         val at = steps.indexOf(recentApps).let { if (it < 0) 1 else it }
         SheetRow(
             icon = LoungeIcons.Apps,
-            title = "Your apps",
-            subtitle = "Pinned apps, then recent ones",
-            value = if (recentApps == 0) "Pinned only" else "$recentApps recent",
+            title = stringResource(R.string.sheets_your_apps_title),
+            subtitle = stringResource(R.string.sheets_your_apps_subtitle),
+            value = if (recentApps == 0) stringResource(R.string.sheets_your_apps_pinned_only) else pluralStringResource(R.plurals.sheets_your_apps_recent, recentApps, recentApps),
             onClick = { sounds0?.tick(); onSetRecentApps(steps[(at + 1) % steps.size]) },
             onCycle = { by -> sounds0?.tick(); onSetRecentApps(steps[(at + by).mod(steps.size)]) },
         )
         SheetRow(
             icon = SettingsGlyphs.PhoneApps,
-            title = "Phone apps in All apps",
-            subtitle = "Apps made for phones, which may not work well with a remote",
-            value = if (showMobileApps) "On" else "Off",
+            title = stringResource(R.string.sheets_phone_apps_title),
+            subtitle = stringResource(R.string.sheets_phone_apps_subtitle),
+            value = if (showMobileApps) on else off,
             accent = if (showMobileApps) colors.signal else colors.dust,
             onClick = { sounds0?.tick(); onSetShowMobileApps(!showMobileApps) },
             onCycle = { sounds0?.tick(); onSetShowMobileApps(!showMobileApps) },
         )
         SheetRow(
             icon = LoungeIcons.Guide,
-            title = "Channels from apps",
-            subtitle = "Rows that apps on this TV publish",
-            value = if (enabledChannels == 0) "None" else "$enabledChannels on",
+            title = stringResource(R.string.sheets_channels_title),
+            subtitle = stringResource(R.string.sheets_channels_subtitle),
+            value = if (enabledChannels == 0) stringResource(R.string.sheets_channels_none) else pluralStringResource(R.plurals.sheets_channels_on, enabledChannels, enabledChannels),
             onClick = onChannels,
             focusRequester = focusFor(Overlay.Channels),
         )
         SheetRow(
             icon = SettingsGlyphs.Plugin,
-            title = "Plugins",
-            subtitle = "Rows, channels and guide data from your services",
-            value = if (enabledPlugins == 0) "None on" else "$enabledPlugins on",
+            title = stringResource(R.string.sheets_plugins_title),
+            subtitle = stringResource(R.string.sheets_plugins_subtitle),
+            value = if (enabledPlugins == 0) stringResource(R.string.sheets_plugins_none_on) else pluralStringResource(R.plurals.sheets_plugins_on, enabledPlugins, enabledPlugins),
             onClick = onPlugins,
             focusRequester = focusFor(Overlay.Plugins),
         )
         val notificationsAllowed = access.isOn(Access.NowPlaying)
         SheetRow(
             icon = LoungeIcons.Bell,
-            title = "Notifications",
-            subtitle = "What apps want to tell you",
-            value = if (!notificationsAllowed) "Not allowed" else if (notificationsOn) "On" else "Off",
+            title = stringResource(DesignR.string.common_notifications),
+            subtitle = stringResource(R.string.sheets_notifications_subtitle),
+            value = if (!notificationsAllowed) stringResource(R.string.sheets_not_allowed) else if (notificationsOn) on else off,
             accent = if (notificationsAllowed && notificationsOn) colors.signal else colors.dust,
             onClick = onNotifications,
             focusRequester = focusFor(Overlay.NotificationSettings),
         )
         Spacer(Modifier.height(16.dp))
         Hairline(Modifier.fillMaxWidth())
-        SheetGroup("Look and sound")
+        SheetGroup(stringResource(R.string.sheets_group_look))
         SheetRow(
             icon = LoungeIcons.Theme,
-            title = "Theme",
-            value = theme.title,
+            title = stringResource(R.string.sheets_theme_title),
+            value = stringResource(theme.title),
             onClick = { sounds0?.tick(); onSetTheme(theme.step(1)) },
             onCycle = { by -> sounds0?.tick(); onSetTheme(theme.step(by)) },
         )
-        val scenes = listOf(Triple(Prefs.STILL_BACKDROP, "Still", "The room's own light")) + backdrops.map { Triple(it.id, it.name, it.description ?: it.origin) }
+        val scenes = listOf(Triple(Prefs.STILL_BACKDROP, stringResource(R.string.sheets_background_still), stringResource(R.string.sheets_background_still_about))) +
+            backdrops.map { Triple(it.id, it.nameIn(resources), it.aboutIn(resources)) }
         val sceneAt = scenes.indexOfFirst { it.first == backdrop }.coerceAtLeast(0)
         SheetRow(
             icon = SettingsGlyphs.Scene,
-            title = "Background",
+            title = stringResource(R.string.sheets_background_title),
             value = scenes[sceneAt].second,
-            subtitle = if (!liveBackdrops && sceneAt > 0) "Still while Lite mode or Reduce motion is on" else scenes[sceneAt].third,
+            subtitle = if (!liveBackdrops && sceneAt > 0) stringResource(R.string.sheets_background_still_for_now) else scenes[sceneAt].third,
             onClick = { sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + 1).mod(scenes.size)].first) },
             onCycle = { by -> sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + by).mod(scenes.size)].first) },
         )
         SheetRow(
             icon = LoungeIcons.Frame,
-            title = "Screensaver",
-            value = saverName,
-            accent = if (saverName == "Lounge") colors.signal else colors.dust,
+            title = stringResource(DesignR.string.common_screensaver),
+            value = saver.words(),
+            accent = if (saver == TvScreensaver.Lounge) colors.signal else colors.dust,
             onClick = onAmbient,
             focusRequester = focusFor(Overlay.Ambient),
         )
         SheetRow(
             icon = LoungeIcons.Volume,
-            title = "Sounds",
-            value = if (sounds) "On" else "Off",
+            title = stringResource(R.string.sheets_sounds_title),
+            value = if (sounds) on else off,
             accent = if (sounds) colors.signal else colors.dust,
             onClick = { sounds0?.tick(); onSetSounds(!sounds) },
             onCycle = { sounds0?.tick(); onSetSounds(!sounds) },
         )
         SheetRow(
             icon = SettingsGlyphs.Gauge,
-            title = "Lite mode",
-            subtitle = when (lite) {
-                null -> if (liteNow) "On for this TV now: no moving light or live backgrounds" else "Off for this TV now; on, it stops the moving light and live backgrounds"
-                true -> "No moving light or live backgrounds, so the TV stays quick"
-                false -> "The moving light and live backgrounds stay on"
-            },
+            title = stringResource(R.string.sheets_lite_title),
+            subtitle = stringResource(
+                when (lite) {
+                    null -> if (liteNow) R.string.sheets_lite_auto_on else R.string.sheets_lite_auto_off
+                    true -> R.string.sheets_lite_on
+                    false -> R.string.sheets_lite_off
+                },
+            ),
             subtitleLines = WHOLE,
-            value = when (lite) { null -> "Automatic"; true -> "On"; false -> "Off" },
+            value = when (lite) { null -> stringResource(R.string.sheets_automatic); true -> on; false -> off },
             onClick = { sounds0?.tick(); onSetLite(lite.stepTri(1)) },
             onCycle = { by -> sounds0?.tick(); onSetLite(lite.stepTri(by)) },
         )
         SheetRow(
             icon = LoungeIcons.Move,
-            title = "Reduce motion",
-            value = when (reducedMotion) { null -> "Follow system"; true -> "On"; false -> "Off" },
+            title = stringResource(R.string.sheets_reduce_motion_title),
+            value = when (reducedMotion) { null -> stringResource(R.string.sheets_follow_system); true -> on; false -> off },
             onClick = { sounds0?.tick(); onSetReducedMotion(reducedMotion.stepTri(1)) },
             onCycle = { by -> sounds0?.tick(); onSetReducedMotion(reducedMotion.stepTri(by)) },
         )
         Spacer(Modifier.height(16.dp))
         Hairline(Modifier.fillMaxWidth())
-        SheetGroup("Access")
+        SheetGroup(stringResource(R.string.sheets_group_access))
         Access.entries.forEach { a -> AccessRow(a, access) }
         Spacer(Modifier.height(16.dp))
         Hairline(Modifier.fillMaxWidth())
-        SheetGroup("This TV")
+        SheetGroup(stringResource(R.string.sheets_group_this_tv))
+        SheetRow(
+            icon = SettingsGlyphs.Language,
+            title = stringResource(R.string.sheets_language_title),
+            value = Language.shipped.firstOrNull { it.tag == language }?.name ?: stringResource(R.string.sheets_language_same_as_tv),
+            onClick = onLanguage,
+            focusRequester = focusFor(Overlay.Language),
+        )
         SheetRow(
             icon = SettingsGlyphs.Home,
-            title = "Default home screen",
-            subtitle = "What the Home button opens",
-            value = if (isDefaultHome) "Lounge" else "Set up",
+            title = stringResource(R.string.sheets_default_home_title),
+            subtitle = stringResource(R.string.sheets_default_home_subtitle),
+            value = if (isDefaultHome) "Lounge" else stringResource(R.string.sheets_default_home_set_up),
             accent = if (isDefaultHome) colors.signal else colors.dust,
             onClick = onRecheckHome,
             focusRequester = focusFor(Overlay.HomeRole),
         )
         SheetRow(
             icon = LoungeIcons.Power,
-            title = "Power Setup",
-            subtitle = "Lets Lounge do what an app can't on its own",
-            value = when (powerStatus) {
-                is tv.lounge.power.PowerStatus.Ready -> "Connected"
-                tv.lounge.power.PowerStatus.WaitingForApproval -> "Waiting for you"
-                else -> "Not connected"
-            },
+            title = stringResource(DesignR.string.common_power_setup),
+            subtitle = stringResource(R.string.sheets_power_subtitle),
+            value = stringResource(
+                when (powerStatus) {
+                    is tv.lounge.power.PowerStatus.Ready -> R.string.sheets_power_connected
+                    tv.lounge.power.PowerStatus.WaitingForApproval -> R.string.sheets_power_waiting
+                    else -> R.string.sheets_power_not_connected
+                },
+            ),
             accent = if (powerStatus is tv.lounge.power.PowerStatus.Ready) colors.signal else colors.dust,
             onClick = onPowerSetup,
             focusRequester = focusFor(Overlay.PowerSetup),
         )
         SheetRow(
             icon = LoungeIcons.Phone,
-            title = "Phone companion",
-            value = if (companionOn) "On" else "Off",
+            title = stringResource(DesignR.string.common_phone_companion),
+            value = if (companionOn) on else off,
             accent = if (companionOn) colors.signal else colors.dust,
             onClick = onCompanion,
             focusRequester = focusFor(Overlay.Companion),
         )
         SheetRow(
             icon = SettingsGlyphs.Download,
-            title = "Updates",
-            value = updateStatus,
-            accent = when {
-                updateStatus == "Up to date" -> colors.signal
-                updateStatus == "Problem" -> colors.ember
-                updateStatus.endsWith(" available") || updateStatus.endsWith(" ready") -> colors.houselight
+            title = stringResource(R.string.sheets_updates_title),
+            value = updateStatus.shown(),
+            accent = when (updateStatus.text) {
+                R.string.updates_word_up_to_date -> colors.signal
+                R.string.updates_word_problem -> colors.ember
+                R.string.updates_word_available, R.string.updates_word_ready -> colors.houselight
                 else -> colors.dust
             },
             onClick = onUpdates,
@@ -581,35 +607,76 @@ fun QuickSettingsSheet(
         )
         SheetRow(
             icon = LoungeIcons.Info,
-            title = "Diagnostics",
-            subtitle = "Numbers to include when you report a problem",
-            value = if (showDiagnostics) "Hide" else "Show",
+            title = stringResource(R.string.sheets_diagnostics_title),
+            subtitle = stringResource(R.string.sheets_diagnostics_subtitle),
+            value = stringResource(if (showDiagnostics) DesignR.string.common_hide else DesignR.string.common_show),
             onClick = { showDiagnostics = !showDiagnostics },
         )
         if (showDiagnostics) {
             diag?.let { d ->
                 Column(Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    DiagLine("Things Lounge knows about", d.items.toString())
-                    DiagLine("Home screen version", d.revision.toString())
-                    DiagLine("Requests answered", d.ffiCalls.toString())
-                    DiagLine("Last rebuild took", "${d.lastBuildMicros / 1000u} ms")
-                    DiagLine("Saved data", "${d.dbBytes / 1024u} KB")
-                    DiagLine("Work waiting", d.queueDepth.toString())
+                    DiagLine(stringResource(R.string.sheets_diagnostics_items), d.items.toString())
+                    DiagLine(stringResource(R.string.sheets_diagnostics_revision), d.revision.toString())
+                    DiagLine(stringResource(R.string.sheets_diagnostics_requests), d.ffiCalls.toString())
+                    DiagLine(stringResource(R.string.sheets_diagnostics_rebuild), stringResource(R.string.sheets_diagnostics_ms, (d.lastBuildMicros / 1000u).toString()))
+                    DiagLine(stringResource(R.string.sheets_diagnostics_saved), stringResource(R.string.sheets_diagnostics_kb, (d.dbBytes / 1024u).toString()))
+                    DiagLine(stringResource(R.string.sheets_diagnostics_waiting), d.queueDepth.toString())
                 }
             }
         }
-        SheetRow(icon = LoungeIcons.Refresh, title = "Run the setup steps again", onClick = onSetupAgain, focusRequester = focusFor(Overlay.Onboarding))
-        SheetRow(icon = SettingsGlyphs.Sofa, title = "About Lounge", subtitle = "What it is, where its code lives and who made it", onClick = onAbout, focusRequester = focusFor(Overlay.About))
-        SheetRow(icon = SettingsGlyphs.Heart, title = "Support Lounge", subtitle = "Ways to give. Anything helps", onClick = onDonate, focusRequester = focusFor(Overlay.Donate))
+        SheetRow(icon = LoungeIcons.Refresh, title = stringResource(R.string.sheets_setup_again), onClick = onSetupAgain, focusRequester = focusFor(Overlay.Onboarding))
+        SheetRow(icon = SettingsGlyphs.Sofa, title = stringResource(R.string.sheets_about_title), subtitle = stringResource(R.string.sheets_about_subtitle), onClick = onAbout, focusRequester = focusFor(Overlay.About))
+        SheetRow(icon = SettingsGlyphs.Heart, title = stringResource(R.string.sheets_support_title), subtitle = stringResource(R.string.sheets_support_subtitle), onClick = onDonate, focusRequester = focusFor(Overlay.Donate))
     }
-    SheetFootnote("Left and Right change a value. Back closes.")
+    SheetFootnote(stringResource(R.string.sheets_footnote))
 }
 
-/** One of Lounge's optional accesses, as Settings and the setup steps name it. */
-internal enum class Access(val key: String, val title: String, val what: String) {
-    TvListings("tv_listings", "TV listings", "Continue watching, channels and the TV guide"),
-    NowPlaying("notifications", "Notification access", "What is playing, and what apps want to tell you"),
-    Usage("usage", "Usage access", "Lets Your apps follow what you open"),
+/**
+ * The languages Lounge is written in, each under its own name, after the choice to follow the
+ * TV. The one in use carries the dot, and choosing another changes every screen at once.
+ */
+@Composable
+fun LanguageSheet(chosen: String?, onChoose: (String?) -> Unit, firstFocus: FocusRequester) {
+    val colors = LoungeTheme.colors
+    val sounds = LoungeTheme.sounds
+    val inUse = stringResource(R.string.sheets_language_in_use)
+    // The TV's own language under its own name, and whether Lounge is written in it.
+    val tv = remember(LocalConfiguration.current) { android.content.res.Resources.getSystem().configuration.locales[0] }
+    val tvName = remember(tv) { tv.getDisplayLanguage(tv).replaceFirstChar { it.titlecase(tv) } }
+    val shippedForTv = remember(tv) { Language.shipped.any { it.tag.substringBefore('-') == tv.language } }
+    SheetHeading(stringResource(R.string.sheets_language_title), stringResource(R.string.sheets_language_subtitle))
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SheetRow(
+            icon = LoungeIcons.Tv,
+            title = stringResource(R.string.sheets_language_same_as_tv),
+            subtitle = if (shippedForTv) tvName else stringResource(R.string.sheets_language_tv_not_shipped, tvName),
+            value = inUse.takeIf { chosen == null },
+            accent = colors.signal,
+            onClick = { sounds?.tick(); onChoose(null) },
+            focusRequester = firstFocus.takeIf { chosen == null },
+        )
+        Language.shipped.forEach { language ->
+            SheetRow(
+                icon = null,
+                title = language.name,
+                value = inUse.takeIf { chosen == language.tag },
+                accent = colors.signal,
+                onClick = { sounds?.tick(); onChoose(language.tag) },
+                focusRequester = firstFocus.takeIf { chosen == language.tag },
+            )
+        }
+    }
+    SheetFootnote(stringResource(R.string.sheets_language_footnote))
+}
+
+/**
+ * One of Lounge's optional accesses, as Settings and the setup steps name it: its name, what it is
+ * for, how to allow it on Lounge's page in Android's settings, and what is said when no screen can.
+ */
+internal enum class Access(val key: String, @StringRes val title: Int, @StringRes val what: Int, @StringRes val allow: Int, @StringRes val noScreen: Int) {
+    TvListings("tv_listings", R.string.sheets_access_tv_listings, R.string.sheets_access_tv_listings_what, R.string.sheets_access_tv_listings_allow, R.string.sheets_access_tv_listings_no_screen),
+    NowPlaying("notifications", R.string.sheets_access_notifications, R.string.sheets_access_notifications_what, R.string.sheets_access_notifications_allow, R.string.sheets_access_notifications_no_screen),
+    Usage("usage", R.string.sheets_access_usage, R.string.sheets_access_usage_what, R.string.sheets_access_usage_allow, R.string.sheets_access_usage_no_screen),
 }
 
 private fun Access.granted(context: android.content.Context): Boolean = when (this) {
@@ -624,8 +691,6 @@ private fun Access.screen(): String? = when (this) {
     Access.NowPlaying -> android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
     Access.Usage -> android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS
 }
-
-private const val NO_SCREEN = "This TV has no screen for this. OK opens Power Setup, which can allow it."
 
 /**
  * Lounge's accesses and how to ask for each without leaving the sheet. Once Android stops showing
@@ -654,12 +719,13 @@ internal class AccessAsker(private val context: android.content.Context, private
     private fun opens(intent: Intent) = runCatching { intent.resolveActivity(context.packageManager) != null }.getOrDefault(false)
 
     /** What the row says under its title: what the access is for, or where OK goes instead. */
-    fun note(a: Access): String {
+    @StringRes
+    fun note(a: Access): Int {
         val screen = a.screen()
         return when {
             isOn(a) -> a.what
-            refused[a] == true -> "Android won't ask again. OK opens Lounge's page in Android's settings."
-            screen != null && !opens(Intent(screen)) -> NO_SCREEN
+            refused[a] == true -> R.string.sheets_access_wont_ask
+            screen != null && !opens(Intent(screen)) -> R.string.sheets_access_no_screen
             else -> a.what
         }
     }
@@ -668,10 +734,10 @@ internal class AccessAsker(private val context: android.content.Context, private
         if (isOn(a) || leaving) return
         val screen = a.screen()
         when {
-            screen != null -> leaveFor(Intent(screen), "Find Lounge in the list and turn it on, then press Back.", a)
+            screen != null -> leaveFor(Intent(screen), R.string.sheets_access_hint_find, a)
             refused[a] == true -> leaveFor(
                 Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
-                "Open Permissions and allow ${a.title}, then press Back.",
+                a.allow,
                 a,
             )
             else -> {
@@ -688,21 +754,20 @@ internal class AccessAsker(private val context: android.content.Context, private
     }
 
     /** Says [hint] and leaves it on screen a moment, then opens [intent]; Power Setup when nothing can. */
-    private fun leaveFor(intent: Intent, hint: String, a: Access) {
+    private fun leaveFor(intent: Intent, @StringRes hint: Int, a: Access) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val noScreen = "This TV has no screen to allow ${a.title}. Power Setup can allow it."
         if (!opens(intent)) {
-            say(noScreen)
+            say(context.getString(a.noScreen))
             onPowerSetup()
             return
         }
         leaving = true
-        say(hint)
+        say(context.getString(hint))
         scope.launch {
             kotlinx.coroutines.delay(1_500)
             leaving = false
             runCatching { context.startActivity(intent) }.onFailure {
-                say(noScreen)
+                say(context.getString(a.noScreen))
                 onPowerSetup()
             }
         }
@@ -734,10 +799,10 @@ internal fun AccessRow(access: Access, asker: AccessAsker, focusRequester: Focus
             Access.NowPlaying -> LoungeIcons.Equaliser
             Access.Usage -> SettingsGlyphs.Clock
         },
-        title = access.title,
-        subtitle = asker.note(access),
+        title = stringResource(access.title),
+        subtitle = stringResource(asker.note(access)),
         subtitleLines = WHOLE,
-        value = if (on) "On" else "Not allowed",
+        value = stringResource(if (on) DesignR.string.common_on else R.string.sheets_not_allowed),
         accent = if (on) colors.signal else colors.dust,
         onClick = { asker.ask(access) },
         focusRequester = focusRequester,
@@ -752,6 +817,7 @@ internal fun AccessRow(access: Access, asker: AccessAsker, focusRequester: Focus
 @Composable
 fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<CompanionStatus?>(null) }
     var pairing by remember { mutableStateOf<PairingInfo?>(null) }
@@ -761,7 +827,7 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
     var forgotten by remember { mutableStateOf(false) }
     // Starting binds a port and a new code writes its picture, so the server's calls run off the main thread.
     suspend fun newCode() {
-        withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; error = null }.onFailure { pairing = null; error = pairingProblem(it) }
+        withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; error = null }.onFailure { pairing = null; error = pairingProblem(resources, it) }
     }
     suspend fun refresh() {
         val s = withContext(Dispatchers.IO) { core.companionStatus() }
@@ -774,7 +840,7 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
     LaunchedEffect(enabled) {
         if (enabled) {
             withContext(Dispatchers.IO) { if (core.companionStatus().running) null else core.startCompanion(CoreClient.COMPANION_PORT) }
-                ?.onFailure { error = companionStartProblem(it) }
+                ?.onFailure { error = companionStartProblem(resources, it) }
         } else {
             withContext(Dispatchers.IO) { core.stopCompanion() }
             pairing = null
@@ -788,13 +854,13 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
         }
     }
 
-    SheetHeading("Phone companion", "Your phone becomes a remote, a keyboard and the place to arrange this screen.")
+    SheetHeading(stringResource(DesignR.string.common_phone_companion), stringResource(R.string.sheets_companion_subtitle))
     val running = enabled && status?.running == true
     SheetRow(
         icon = LoungeIcons.Phone,
-        title = "Phone companion",
-        subtitle = if (enabled) null else "Turn it on to pair a phone",
-        value = if (enabled) "On" else "Off",
+        title = stringResource(DesignR.string.common_phone_companion),
+        subtitle = if (enabled) null else stringResource(R.string.sheets_companion_turn_on),
+        value = stringResource(if (enabled) DesignR.string.common_on else DesignR.string.common_off),
         accent = if (running) colors.signal else colors.dust,
         onClick = { onSetEnabled(!enabled) },
         focusRequester = firstFocus,
@@ -809,23 +875,23 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
         } else if (s != null && s.running && p != null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Box(Modifier.size(300.dp).clip(RoundedCornerShape(16.dp)).background(colors.limelight)) {
-                    coil3.compose.AsyncImage(model = p.qrPngPath, contentDescription = "Pairing code", modifier = Modifier.fillMaxSize())
+                    coil3.compose.AsyncImage(model = p.qrPngPath, contentDescription = stringResource(R.string.sheets_companion_code_description), modifier = Modifier.fillMaxSize())
                 }
                 Spacer(Modifier.height(20.dp))
-                Text("Or type this code", style = LoungeTheme.typography.meta, color = colors.dust)
+                Text(stringResource(R.string.sheets_companion_or_type), style = LoungeTheme.typography.meta, color = colors.dust)
                 Spacer(Modifier.height(6.dp))
                 Text(p.code.chunked(3).joinToString(" "), style = LoungeTheme.typography.displayL, color = colors.limelight)
                 Spacer(Modifier.height(10.dp))
-                Text(s.url?.let { "at $it" } ?: "", style = LoungeTheme.typography.caption, color = colors.dust)
+                Text(s.url?.let { stringResource(R.string.sheets_companion_at, it) } ?: "", style = LoungeTheme.typography.caption, color = colors.dust)
             }
             Spacer(Modifier.height(20.dp))
             SheetRow(
                 icon = LoungeIcons.Refresh,
-                title = "New code",
+                title = stringResource(R.string.sheets_companion_new_code),
                 onClick = { scope.launch { newCode() } },
             )
         } else {
-            Text("Starting…", style = LoungeTheme.typography.meta, color = colors.dust)
+            Text(stringResource(R.string.sheets_companion_starting), style = LoungeTheme.typography.meta, color = colors.dust)
         }
         if (s != null) {
             Spacer(Modifier.height(8.dp))
@@ -833,17 +899,17 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
             // could not be saved would undo itself at the next restart, so it stays on offer.
             SheetRow(
                 icon = LoungeIcons.Phone,
-                title = if (forgetting) "Yes, forget every phone" else "Paired phones",
+                title = stringResource(if (forgetting) R.string.sheets_companion_forget_confirm else R.string.sheets_companion_paired),
                 titleColor = if (forgetting) colors.ember else colors.limelight,
                 subtitle = when {
-                    forgetFailed -> "Lounge couldn't save that. Try again."
-                    forgetting -> "Each phone needs a new code to pair again"
-                    forgotten && s.paired == 0u -> "Forgotten. Each phone needs a new code to pair again."
-                    s.paired > 0u -> "OK forgets every paired phone"
+                    forgetFailed -> stringResource(R.string.sheets_companion_forget_failed)
+                    forgetting -> stringResource(R.string.sheets_companion_forget_warning)
+                    forgotten && s.paired == 0u -> stringResource(R.string.sheets_companion_forgotten)
+                    s.paired > 0u -> stringResource(R.string.sheets_companion_forget_hint)
                     else -> null
                 },
                 subtitleLines = WHOLE,
-                value = if (forgetting) null else if (s.paired == 0u) "None" else s.paired.toString(),
+                value = if (forgetting) null else if (s.paired == 0u) stringResource(R.string.sheets_companion_paired_none) else s.paired.toString(),
                 accent = if (forgetFailed) colors.ember else colors.dust,
                 modifier = Modifier.onFocusChanged { if (!it.isFocused) forgetting = false },
                 onClick = {
@@ -863,8 +929,8 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
         }
     }
     SheetFootnote(
-        "Everything stays on your home network.",
-        "Add the page to your phone's home screen to open it quickly.",
+        stringResource(R.string.sheets_companion_footnote_network),
+        stringResource(R.string.sheets_companion_footnote_home_screen),
     )
 }
 
@@ -872,20 +938,20 @@ fun CompanionSheet(core: CoreClient, enabled: Boolean, onSetEnabled: (Boolean) -
 internal fun CompanionStatus.livePairing(): PairingInfo? = pairing?.takeIf { p -> url?.let { p.url.startsWith(it) } == true }
 
 /** Why the companion could not start, with what to do; the raw reason goes to the log. */
-internal fun companionStartProblem(e: Throwable): String {
+internal fun companionStartProblem(resources: Resources, e: Throwable): String {
     val why = e.reason
     android.util.Log.w("Lounge", "companion: $why")
     return when {
-        "in use" in why -> "Another app on this TV is using port ${CoreClient.COMPANION_PORT}, so the phone companion can't start. Restart the TV, then turn it on again."
-        else -> "The phone companion couldn't start. Turn it off and on again, or restart the TV."
+        "in use" in why -> resources.getString(R.string.sheets_companion_port_in_use, CoreClient.COMPANION_PORT.toString())
+        else -> resources.getString(R.string.sheets_companion_cant_start)
     }
 }
 
 /** Why no pairing code could be made: the core's own sentence when it wrote one, with the raw reason in the log. */
-internal fun pairingProblem(e: Throwable): String {
+internal fun pairingProblem(resources: Resources, e: Throwable): String {
     val why = e.reason
     android.util.Log.w("Lounge", "companion: $why")
-    return if (readsAsSentence(why)) why.trim() else "Lounge couldn't make a pairing code. Turn the phone companion off and on again."
+    return if (readsAsSentence(why)) why.trim() else resources.getString(R.string.sheets_companion_no_code)
 }
 
 /**
@@ -895,17 +961,17 @@ internal fun pairingProblem(e: Throwable): String {
 @Composable
 fun ChannelsSheet(channels: List<ChannelInfo>?, onToggle: (ChannelInfo) -> Unit, firstFocus: FocusRequester) {
     val colors = LoungeTheme.colors
-    SheetHeading("Channels from apps", "Turn on the ones you want as rows on your home screen.")
+    SheetHeading(stringResource(R.string.sheets_channels_title), stringResource(R.string.sheets_channels_heading_subtitle))
     when {
-        channels == null -> Text("Loading…", style = LoungeTheme.typography.meta, color = colors.dust)
-        channels.isEmpty() -> Text("No app has published a channel yet.", style = LoungeTheme.typography.meta, color = colors.dust)
+        channels == null -> Text(stringResource(R.string.sheets_loading), style = LoungeTheme.typography.meta, color = colors.dust)
+        channels.isEmpty() -> Text(stringResource(R.string.sheets_channels_empty), style = LoungeTheme.typography.meta, color = colors.dust)
         else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             channels.forEachIndexed { i, ch ->
                 SheetRow(
                     icon = LoungeIcons.Guide,
                     title = ch.name,
-                    subtitle = if (ch.programmes == 1u) "1 programme" else "${ch.programmes} programmes",
-                    value = if (ch.enabled) "On" else "Off",
+                    subtitle = pluralStringResource(R.plurals.sheets_channels_programmes, ch.programmes.toInt(), ch.programmes.toInt()),
+                    value = stringResource(if (ch.enabled) DesignR.string.common_on else DesignR.string.common_off),
                     accent = if (ch.enabled) colors.signal else colors.dust,
                     onClick = { onToggle(ch) },
                     focusRequester = if (i == 0) firstFocus else null,
@@ -913,7 +979,7 @@ fun ChannelsSheet(channels: List<ChannelInfo>?, onToggle: (ChannelInfo) -> Unit,
             }
         }
     }
-    SheetFootnote("Apps decide what goes in their channels; Lounge only chooses which to show.")
+    SheetFootnote(stringResource(R.string.sheets_channels_footnote))
     // The list can arrive after the sheet's own request for focus has given up.
     LaunchedEffect(channels != null) { if (!channels.isNullOrEmpty()) firstFocus.requestWhenReady() }
 }
@@ -927,7 +993,9 @@ private fun DiagLine(label: String, value: String) {
     }
 }
 
-internal const val HOME_NOT_TAKEN = "Android didn't make Lounge the home screen. Try one of the other ways below."
+/** Said when Do it now ran and Lounge is still not the home screen. */
+@StringRes
+internal val HOME_NOT_TAKEN: Int = R.string.sheets_home_not_taken
 
 /**
  * The "make this my home screen" guide, honest about what each path needs. [takeHome] is what
@@ -948,16 +1016,15 @@ fun HomeRoleSheet(
     val colors = LoungeTheme.colors
     val context = LocalContext.current
     val turnOff = takeHome.filter { it.id.startsWith("home_off_") }
-    val them = if (turnOff.size == 1) "it" else "them"
     SheetHeading(
-        if (isDefaultHome) "Lounge is your home screen" else "Make Lounge your home screen",
-        if (isDefaultHome) "Pressing Home brings you here." else "Google TV has no setting for this. One of these works.",
+        stringResource(if (isDefaultHome) R.string.sheets_home_is_lounge else R.string.sheets_home_make_lounge),
+        stringResource(if (isDefaultHome) R.string.sheets_home_is_lounge_subtitle else R.string.sheets_home_make_subtitle),
     )
     if (!isDefaultHome) {
         SheetRow(
             icon = LoungeIcons.Power,
-            title = if (powerReady) "Do it now" else "Let Lounge do it",
-            value = if (powerReady) "Through Power Setup" else "Power Setup",
+            title = stringResource(if (powerReady) R.string.sheets_home_do_it_now else R.string.sheets_home_let_lounge),
+            value = stringResource(if (powerReady) R.string.sheets_home_through_power_setup else DesignR.string.common_power_setup),
             accent = colors.houselight,
             onClick = if (powerReady) onDoItNow else onPowerSetup,
             focusRequester = firstFocus,
@@ -965,47 +1032,45 @@ fun HomeRoleSheet(
         if (turnOff.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             Step(
-                if (turnOff.size == 1) "This TV's own home comes first" else "This TV's own homes come first",
-                "Android opens $them before any chosen home, so this also turns $them off. Nothing is uninstalled; " +
-                    "turn $them back on in Power Setup, and do that before you uninstall Lounge.",
+                pluralStringResource(R.plurals.sheets_home_own_first_title, turnOff.size),
+                pluralStringResource(R.plurals.sheets_home_own_first_body, turnOff.size),
                 takeHome.joinToString("\n") { it.command },
             )
         }
         Spacer(Modifier.height(20.dp))
         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Step(
-                "Or from a computer, once",
-                "Turn on USB debugging on this TV, connect to it with adb from a computer, then run:",
+                stringResource(R.string.sheets_home_from_computer_title),
+                stringResource(R.string.sheets_home_from_computer_body),
                 takeHome.joinToString("\n") { "adb shell ${it.command}" }.ifEmpty { "adb shell cmd package set-home-activity $packageName/tv.lounge.launcher.MainActivity" },
             )
             Step(
-                "Or let Android ask",
-                "Some TVs show a chooser the next time you press Home. Pick Lounge and choose Always.",
+                stringResource(R.string.sheets_home_let_android_title),
+                stringResource(R.string.sheets_home_let_android_body),
                 null,
             )
         }
         Spacer(Modifier.height(24.dp))
-        SheetRow(icon = LoungeIcons.Refresh, title = "Check again", onClick = onRecheck)
+        SheetRow(icon = LoungeIcons.Refresh, title = stringResource(R.string.sheets_home_check_again), onClick = onRecheck)
         SheetRow(
             icon = LoungeIcons.Settings,
-            title = "Open Developer options",
+            title = stringResource(R.string.sheets_home_open_developer_options),
             onClick = { runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
         )
     } else {
-        SheetRow(icon = LoungeIcons.Refresh, title = "Check again", onClick = onRecheck, focusRequester = firstFocus)
+        SheetRow(icon = LoungeIcons.Refresh, title = stringResource(R.string.sheets_home_check_again), onClick = onRecheck, focusRequester = firstFocus)
         if (homesOff.isNotEmpty()) {
-            SheetRow(icon = LoungeIcons.Power, title = if (homesOff.size == 1) "Turn it back on" else "Turn them back on", value = "Power Setup", onClick = onPowerSetup)
+            SheetRow(icon = LoungeIcons.Power, title = pluralStringResource(R.plurals.sheets_home_turn_back_on, homesOff.size), value = stringResource(DesignR.string.common_power_setup), onClick = onPowerSetup)
         }
     }
     SheetFootnote(
         when {
             homesOff.isNotEmpty() -> {
-                val off = if (homesOff.size == 1) "it" else "them"
-                homesOff.joinToString(" and ") + (if (homesOff.size == 1) " is" else " are") +
-                    " turned off. Turn $off back on before you uninstall Lounge, or the TV has no home screen to fall back on."
+                val names = homesOff.reduce { listed, name -> stringResource(R.string.sheets_home_names_and, listed, name) }
+                pluralStringResource(R.plurals.sheets_home_footnote_off, homesOff.size, names)
             }
-            turnOff.isNotEmpty() -> "What $them provide${if (turnOff.size == 1) "s" else ""} may be missing while $them ${if (turnOff.size == 1) "is" else "are"} off."
-            else -> "The TV's own home screen stays installed, so casting, the gear button and the TV guide keep working."
+            turnOff.isNotEmpty() -> pluralStringResource(R.plurals.sheets_home_footnote_missing, turnOff.size)
+            else -> stringResource(R.string.sheets_home_footnote_stays)
         },
     )
 }

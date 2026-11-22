@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_menu_pane_title">Opzioni per %1$s</string>
+    <string name="tile_menu_dismiss_notice">Non mostrare più</string>
+    <string name="tile_menu_app_info">Informazioni app</string>
+    <string name="tile_menu_play_store">Apri nel Play Store</string>
+    <string name="tile_menu_uninstall">Disinstalla</string>
+    <string name="tile_menu_move_left">Sposta a sinistra</string>
+    <string name="tile_menu_move_right">Sposta a destra</string>
+    <string name="tile_menu_adjust">Regola</string>
+    <string name="tile_menu_pin_app">Fissa in cima a Le tue app</string>
+    <string name="tile_menu_pin_app_detail">Resta ferma davanti alle app recenti</string>
+    <string name="tile_menu_unpin_app">Stacca da Le tue app</string>
+    <string name="tile_menu_unpin_app_detail">Torna a seguire quello che apri</string>
+    <string name="tile_menu_pin_stage">Fissa sul Palco</string>
+    <string name="tile_menu_pin_stage_detail">Resta tra le grandi immagini in alto</string>
+    <string name="tile_menu_unpin_stage">Stacca dal Palco</string>
+    <string name="tile_menu_unpin_stage_detail">Quello che guardi prende il suo posto</string>
+    <string name="tile_menu_hide_detail">Fuori da tutte le righe finché non lo mostri</string>
+    <string name="tile_menu_show_detail">Torna in tutte le sue righe</string>
+    <string name="tile_menu_hide_all_from">Nascondi tutto di %1$s</string>
+    <string name="tile_menu_hide_all_from_detail">Fuori da Continua a guardare finché non lo mostri</string>
+    <string name="tile_menu_hide_row">Nascondi questa riga</string>
+    <string name="tile_menu_hide_row_detail">Per riaverla: Impostazioni, Righe</string>
+</resources>

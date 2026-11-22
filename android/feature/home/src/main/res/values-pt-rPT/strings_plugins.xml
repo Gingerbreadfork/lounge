@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugins_title">Plugins</string>
+    <string name="plugins_subtitle">Acrescentam linhas, canais e dados do guia dos seus serviços.</string>
+    <string name="plugins_loading">A carregar…</string>
+    <string name="plugins_none">Nenhum plugin instalado. Instalam-se a partir do Lounge no telemóvel: no telemóvel, abra Plugins.</string>
+    <string name="plugins_footnote_reach">Cada plugin só pode contactar os locais que indica e só vê as suas próprias definições.</string>
+    <string name="plugins_footnote_more">Instalam-se mais plugins a partir do Lounge no telemóvel.</string>
+    <string name="plugins_status_on">Ativado</string>
+    <string name="plugins_status_off">Desativado</string>
+    <string name="plugins_status_sign_in">Iniciar sessão</string>
+    <string name="plugins_status_needs_setup">Por configurar</string>
+    <string name="plugins_status_problem">Problema</string>
+    <string name="plugins_status_held">Desativado pela atualização</string>
+    <string name="plugins_gone_title">Plugin</string>
+    <string name="plugins_gone_subtitle">Este plugin já não está instalado.</string>
+    <string name="plugins_gone_back">Voltar a Plugins</string>
+    <string name="plugins_version">Versão %1$s</string>
+    <string name="plugins_version_by">Versão %1$s, de %2$s</string>
+    <string name="plugins_held">Desativado pela atualização, que pede para contactar também %1$s.</string>
+    <string name="plugins_allow">Permitir e ativar</string>
+    <string name="plugins_allow_subtitle">Passa a poder contactar também %1$s</string>
+    <string name="plugins_settings">Definições</string>
+    <string name="plugins_turn_on">Ativar %1$s</string>
+    <string name="plugins_fill_in_first">Preencha primeiro: %1$s</string>
+    <string name="plugins_refresh">Atualizar agora</string>
+    <string name="plugins_refreshing">A atualizar…</string>
+    <string name="plugins_log">Registo</string>
+    <string name="plugins_log_empty">Ainda nada registado.</string>
+    <string name="plugins_remove">Remover</string>
+    <string name="plugins_remove_confirm">Sim, remover o plugin e as suas definições</string>
+    <string name="plugins_removed">Plugin %1$s removido</string>
+    <string name="plugins_reach">Pode contactar %1$s.</string>
+    <string name="plugins_reach_self_signed">Pode contactar %1$s e aceita o certificado próprio de um servidor doméstico.</string>
+    <string name="plugins_reach_nothing">Não pode contactar nada.</string>
+    <string name="plugins_reach_setting">o que introduzir em %1$s</string>
+    <string name="plugins_reach_anywhere">qualquer site público</string>
+    <string name="plugins_reach_home_network">dispositivos da sua rede doméstica</string>
+    <string name="plugins_reach_this_tv">esta TV</string>
+    <string name="plugins_list_next">%1$s, %2$s</string>
+    <string name="plugins_list_last">%1$s e %2$s</string>
+    <plurals name="plugins_refreshes_seconds">
+        <item quantity="one">Atualiza a cada %1$d segundo enquanto o Lounge está no ecrã.</item>
+        <item quantity="many">Atualiza a cada %1$d segundos enquanto o Lounge está no ecrã.</item>
+        <item quantity="other">Atualiza a cada %1$d segundos enquanto o Lounge está no ecrã.</item>
+    </plurals>
+    <plurals name="plugins_refreshes_minutes">
+        <item quantity="one">Atualiza a cada %1$d minuto enquanto a TV está ligada.</item>
+        <item quantity="many">Atualiza a cada %1$d minutos enquanto a TV está ligada.</item>
+        <item quantity="other">Atualiza a cada %1$d minutos enquanto a TV está ligada.</item>
+    </plurals>
+    <string name="plugins_publisher_key">As atualizações só são aceites do seu editor, cuja chave começa por %1$s.</string>
+    <string name="plugins_ask_sign_in_phone">Inicie sessão no telemóvel</string>
+    <string name="plugins_ask_sign_in">Iniciar sessão</string>
+    <string name="plugins_ask_open">Leia isto com a câmara do telemóvel ou abra %1$s</string>
+    <string name="plugins_ask_open_enter">Leia isto com a câmara do telemóvel ou abra %1$s e introduza</string>
+    <string name="plugins_ask_tap">Leia isto com a câmara do telemóvel ou toque no link do Lounge no telemóvel</string>
+    <string name="plugins_ask_tap_enter">Leia isto com a câmara do telemóvel ou toque no link do Lounge no telemóvel e introduza</string>
+    <plurals name="plugins_items_refreshed">
+        <item quantity="one">%1$d item, atualizado %2$s</item>
+        <item quantity="many">%1$d itens, atualizados %2$s</item>
+        <item quantity="other">%1$d itens, atualizados %2$s</item>
+    </plurals>
+    <string name="plugins_fetching_first">A obter pela primeira vez…</string>
+    <string name="plugins_fill_in_settings">Preencha as definições abaixo e ative-o.</string>
+    <string name="plugins_help_on_phone">%1$s O telemóvel mostra os passos completos.</string>
+    <string name="plugins_setting_optional">%1$s (opcional)</string>
+    <string name="plugins_setting_secret_saved">•••••••• (guardado)</string>
+    <string name="plugins_setting_not_set">Por definir</string>
+    <string name="plugins_setting_saved">Guardado</string>
+    <string name="plugins_setting_not_set_uses">Por definir, usa %1$s</string>
+</resources>

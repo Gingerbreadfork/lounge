@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="themes_dusk_title">Crepúsculo</string>
+    <string name="themes_dusk_tagline">Noite índigo, candeeiro coral</string>
+    <string name="themes_house_title">Sala</string>
+    <string name="themes_house_tagline">Ameixa quente, luz de tungsténio</string>
+    <string name="themes_hearth_title">Lareira</string>
+    <string name="themes_hearth_tagline">Paredes castanho-terra, luz do lume</string>
+    <string name="themes_opera_title">Ópera</string>
+    <string name="themes_opera_tagline">Veludo vermelho e dourados</string>
+    <string name="themes_marquee_title">Letreiro</string>
+    <string name="themes_marquee_tagline">Azul-marinho, lâmpadas de letreiro</string>
+    <string name="themes_green_room_title">Camarim</string>
+    <string name="themes_green_room_tagline">Verde profundo, candeeiro de latão</string>
+    <string name="themes_moonlight_title">Luar</string>
+    <string name="themes_moonlight_tagline">Ardósia fria, luz da lua</string>
+    <string name="themes_graphite_title">Grafite</string>
+    <string name="themes_graphite_tagline">Sem cor, branco quente</string>
+    <string name="themes_cabaret_title">Cabaré</string>
+    <string name="themes_cabaret_tagline">Violeta negro, néon rosa</string>
+    <string name="themes_aquarium_title">Aquário</string>
+    <string name="themes_aquarium_tagline">Azul-petróleo profundo, o brilho de um aquário</string>
+    <string name="themes_absinthe_title">Absinto</string>
+    <string name="themes_absinthe_tagline">Verde-azeitona escuro, brilho verde-dourado</string>
+    <string name="themes_ultraviolet_title">Ultravioleta</string>
+    <string name="themes_ultraviolet_tagline">Quase preto, uma luz negra</string>
+    <string name="themes_blackout_title">Breu</string>
+    <string name="themes_blackout_tagline">Preto verdadeiro para painéis OLED</string>
+    <string name="themes_high_contrast_title">Alto contraste</string>
+    <string name="themes_high_contrast_tagline">Texto e contornos mais marcados</string>
+</resources>

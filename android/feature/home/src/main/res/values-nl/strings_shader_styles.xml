@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shader_styles_ink_name">Inkt</string>
+    <string name="shader_styles_ink_description">Licht dat door inkt in water beweegt</string>
+    <string name="shader_styles_current_name">Stroming</string>
+    <string name="shader_styles_current_description">Traag water dat onder één licht over zichzelf heen vouwt</string>
+    <string name="shader_styles_rain_name">Regen</string>
+    <string name="shader_styles_rain_description">Een raam in de nacht, druppels die langs het glas lopen</string>
+    <string name="shader_styles_smoke_name">Rook</string>
+    <string name="shader_styles_smoke_description">Slierten die opstijgen en al klimmend ijler worden</string>
+    <string name="shader_styles_embers_name">Sintels</string>
+    <string name="shader_styles_embers_description">Vonken die opstijgen uit een vuur dat bijna is opgebrand</string>
+    <string name="shader_styles_shallows_name">Ondiepte</string>
+    <string name="shader_styles_shallows_description">Licht op de bodem van een zwembad</string>
+    <string name="shader_styles_lava_name">Lava</string>
+    <string name="shader_styles_lava_description">Een lavalamp, heel langzaam</string>
+    <string name="shader_styles_aurora_name">Aurora</string>
+    <string name="shader_styles_aurora_description">Noorderlicht boven de heuvels</string>
+    <string name="shader_styles_silk_name">Zijde</string>
+    <string name="shader_styles_silk_description">Satijnen plooien die draaien onder de lamp</string>
+    <string name="shader_styles_curtain_name">Doek</string>
+    <string name="shader_styles_curtain_description">Het voordoek vlak voor de voorstelling, beschenen door het voetlicht</string>
+    <string name="shader_styles_moonpath_name">Maanpad</string>
+    <string name="shader_styles_moonpath_description">De zee bij nacht, en de weg die de maan eroverheen legt</string>
+    <string name="shader_styles_city_name">Stad</string>
+    <string name="shader_styles_city_description">De stad bij nacht, onscherp achter het glas</string>
+    <string name="shader_styles_record_name">Plaat</string>
+    <string name="shader_styles_record_description">Een plaat die draait onder de lamp</string>
+    <string name="shader_styles_eclipse_name">Eclips</string>
+    <string name="shader_styles_eclipse_description">De zon achter de maan, met één felle parel licht aan de rand</string>
+    <string name="shader_styles_gravity_name">Zwaartekracht</string>
+    <string name="shader_styles_gravity_description">Een zwart gat, en het licht dat eromheen buigt</string>
+    <string name="shader_styles_orbit_name">Omloopbaan</string>
+    <string name="shader_styles_orbit_description">Zonsopkomst vanuit de ruimte, boven de lichtjes van de nachtzijde</string>
+    <string name="shader_styles_tide_name">Getij</string>
+    <string name="shader_styles_tide_description">De zee die \'s nachts opkomt en oplicht waar ze breekt</string>
+    <string name="shader_styles_lanterns_name">Lampionnen</string>
+    <string name="shader_styles_lanterns_description">Papieren lampionnen, losgelaten boven het meer</string>
+    <string name="shader_styles_snow_name">Sneeuw</string>
+    <string name="shader_styles_snow_description">Een laantje met straatlantaarns in de vallende sneeuw</string>
+    <string name="shader_styles_local_description">Uit de map screensavers van deze tv</string>
+    <string name="shader_styles_local_origin">Deze tv</string>
+</resources>

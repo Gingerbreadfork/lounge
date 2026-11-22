@@ -45,6 +45,9 @@ internal fun testTile(
     more = more,
 )
 
+/** The titles search gives its own rows, as they read in English. */
+internal val testSearchTitles = SearchTitles(apps = "Apps", continueWatching = "Continue watching", yourApps = "Your apps")
+
 internal fun testRow(id: String, vararg tiles: Tile, title: String = id, kind: TileKind = TileKind.LANDSCAPE) =
     Row(id = id, title = title, kind = kind, size = RowSize.M, badge = null, tiles = tiles.toList(), note = null)
 

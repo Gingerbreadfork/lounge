@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_title">Sobre o Lounge</string>
+    <string name="about_what">Uma tela inicial para a sua TV, organizada em torno do que você está assistindo.</string>
+    <string name="about_terms">Gratuito e de código aberto, sob a licença MIT. Sem conta, sem anúncios, e nada sai da sua casa.</string>
+    <string name="about_version">Versão %1$s</string>
+    <string name="about_version_unknown">Versão desconhecida</string>
+    <plurals name="about_fact_plugins">
+        <item quantity="one">plugin</item>
+        <item quantity="many">plugins</item>
+        <item quantity="other">plugins</item>
+    </plurals>
+    <plurals name="about_fact_scenes">
+        <item quantity="one">cena</item>
+        <item quantity="many">cenas</item>
+        <item quantity="other">cenas</item>
+    </plurals>
+    <plurals name="about_fact_themes">
+        <item quantity="one">tema</item>
+        <item quantity="many">temas</item>
+        <item quantity="other">temas</item>
+    </plurals>
+    <string name="about_made_by">Feito por</string>
+    <string name="about_set_in">Composto em Bricolage Grotesque e Figtree.</string>
+    <string name="about_scan">Escaneie com a câmera do celular</string>
+    <string name="about_leads_to">Leva a</string>
+    <string name="about_link_source">O código-fonte</string>
+    <string name="about_link_report">Relatar um problema</string>
+    <string name="about_link_whats_new">Novidades</string>
+    <string name="about_link_maker_on_x">Gingerbreadfork no X</string>
+    <string name="about_code_description">Um código que abre %1$s</string>
+    <string name="about_support">Apoiar o Lounge</string>
+    <string name="about_support_value">Qualquer valor ajuda</string>
+</resources>

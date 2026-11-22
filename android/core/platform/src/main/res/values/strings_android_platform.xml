@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Why something asked for from the phone did not happen on the TV. The phone shows these. -->
+    <string name="android_platform_not_in_front">That opens on Lounge\'s own screen. Open Lounge on the TV, then try again.</string>
+    <string name="android_platform_opened_from_behind">Lounge isn\'t on the TV\'s screen, and it can only open things from behind another app when it is the TV\'s home screen. Open Lounge on the TV, then try again.</string>
+    <string name="android_platform_still_starting">Lounge on the TV is still starting. Try again in a moment.</string>
+    <!-- The phone's remote sent a key this version of Lounge has no meaning for. -->
+    <string name="android_platform_unknown_key">Lounge on the TV doesn\'t know that key. Update Lounge, then try again.</string>
+    <string name="android_platform_keys_need_power_setup">Another app is in front. Connect Power Setup on the TV so the phone\'s keys reach it.</string>
+    <!-- "presses" are presses of the phone's remote buttons. -->
+    <string name="android_platform_busy">The TV is busy with the last few presses. Try again in a moment.</string>
+    <!-- "Home" is the Home button on the phone's remote. -->
+    <string name="android_platform_typing_needs_lounge">Another app is in front, and the phone types only into Lounge. Press Home, then try again.</string>
+    <!-- "Search" is Lounge's search screen. A field is a box to type in. -->
+    <string name="android_platform_no_field">Open Search or a field in Lounge first.</string>
+    <!-- Restoring a backup from the phone could not write the TV's settings. -->
+    <string name="android_platform_settings_not_saved">The TV couldn\'t save its settings. Check it has free space, then try again.</string>
+    <!-- Why a link, a stream or what is playing could not be opened or controlled. The phone shows these as they are; the TV says its own sentence in their place. -->
+    <string name="android_platform_link_unknown">That link is not one Lounge can open</string>
+    <string name="android_platform_link_refused">Lounge won\'t open that link</string>
+    <!-- "Now playing" is what an app is playing, which Lounge reads through Android's notification access. -->
+    <string name="android_platform_needs_notification_access">Now playing needs notification access</string>
+    <string name="android_platform_not_playing">That app is not playing anything</string>
+    <string name="android_platform_no_player">No player can open this stream. Install VLC or another player.</string>
+    <string name="android_platform_no_video_player">No video player can open this stream. Install VLC or another player.</string>
+</resources>

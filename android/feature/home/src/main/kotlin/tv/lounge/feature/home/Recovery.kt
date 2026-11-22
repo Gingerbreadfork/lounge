@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -31,12 +32,19 @@ import tv.lounge.design.ButtonKind
 import tv.lounge.design.Dimens
 import tv.lounge.design.LoungeButton
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 
 /** Why the home could not start. */
 enum class RecoveryReason { Storage, StorageFull, Other }
 
 /** Another home screen on the TV, such as the stock launcher Lounge replaced. */
 data class OtherHome(val packageName: String, val label: String, val enabled: Boolean)
+
+/** What did not open when asked: the TV's settings, or another home screen. */
+private sealed interface Stuck {
+    data object Settings : Stuck
+    data class Home(val label: String) : Stuck
+}
 
 /**
  * Shown in place of the home when the core will not open, so the TV is never left without a way
@@ -57,7 +65,7 @@ fun RecoveryScreen(
     var busy by remember { mutableStateOf(false) }
     var failedAttempts by remember { mutableIntStateOf(0) }
     var confirmFresh by remember { mutableStateOf(false) }
-    var stuck by remember { mutableStateOf<String?>(null) }
+    var stuck by remember { mutableStateOf<Stuck?>(null) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { first.requestWhenReady() }
     // Buttons stay enabled while an attempt runs, so focus never falls off the one just pressed.
@@ -84,33 +92,32 @@ fun RecoveryScreen(
     ) {
         Column(Modifier.width(1100.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
             // A heading and a live region: TalkBack says it as the screen comes up.
-            Text("Lounge couldn't start", style = type.displayL, color = colors.limelight, modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite })
+            Text(stringResource(R.string.recovery_title), style = type.displayL, color = colors.limelight, modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite })
             Text(
-                when (reason) {
-                    RecoveryReason.StorageFull ->
-                        "The TV's storage is full, so Lounge can't open its saved layout and settings. Free some space in Settings, then try again."
-                    RecoveryReason.Storage ->
-                        "Its saved layout and settings could not be opened. Try again first. If it keeps happening, start fresh: they are set aside, Lounge begins again, and your apps, channels and inputs come back on their own."
-                    RecoveryReason.Other ->
-                        "Lounge's core did not load. Try again first. If it keeps happening, start fresh, or reinstall Lounge."
-                },
+                stringResource(
+                    when (reason) {
+                        RecoveryReason.StorageFull -> R.string.recovery_storage_full
+                        RecoveryReason.Storage -> R.string.recovery_storage
+                        RecoveryReason.Other -> R.string.recovery_other
+                    },
+                ),
                 style = type.body,
                 color = colors.limelight,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                LoungeButton(label = if (busy) "Opening…" else "Try again", onClick = { attempt(fresh = false) }, focusRequester = first)
+                LoungeButton(label = stringResource(if (busy) R.string.recovery_opening else DesignR.string.common_try_again), onClick = { attempt(fresh = false) }, focusRequester = first)
                 if (reason != RecoveryReason.StorageFull) {
                     // One button that changes, rather than two, so the confirmation keeps focus.
                     LoungeButton(
-                        label = if (confirmFresh) "Yes, start fresh" else "Start fresh",
+                        label = stringResource(if (confirmFresh) R.string.recovery_start_fresh_confirm else R.string.recovery_start_fresh),
                         onClick = { if (confirmFresh) attempt(fresh = true) else confirmFresh = true },
                         kind = if (confirmFresh) ButtonKind.Primary else ButtonKind.Secondary,
                         light = if (confirmFresh) colors.ember else colors.houselight,
                     )
                 }
                 LoungeButton(
-                    label = "Settings",
-                    onClick = { stuck = if (onOpenSettings()) null else "This TV's settings didn't open. Open them from the TV's own home screen instead." },
+                    label = stringResource(R.string.recovery_settings),
+                    onClick = { stuck = if (onOpenSettings()) null else Stuck.Settings },
                     kind = ButtonKind.Secondary,
                 )
             }
@@ -118,16 +125,20 @@ fun RecoveryScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     for (home in otherHomes) {
                         LoungeButton(
-                            label = if (home.enabled) "Open ${home.label}" else "Turn ${home.label} back on",
-                            onClick = { stuck = if (onOtherHome(home)) null else "${home.label} didn't open. In the TV's settings, open Apps to find it." },
+                            label = stringResource(if (home.enabled) R.string.recovery_open_home else R.string.recovery_turn_home_on, home.label),
+                            onClick = { stuck = if (onOtherHome(home)) null else Stuck.Home(home.label) },
                             kind = ButtonKind.Secondary,
                         )
                     }
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (failedAttempts > 0 && !busy) Text("It still won't open.", style = type.meta, color = colors.dust)
-                stuck?.let { Text(it, style = type.meta, color = colors.dust) }
+                if (failedAttempts > 0 && !busy) Text(stringResource(R.string.recovery_still_wont_open), style = type.meta, color = colors.dust)
+                when (val s = stuck) {
+                    Stuck.Settings -> Text(stringResource(R.string.recovery_settings_stuck), style = type.meta, color = colors.dust)
+                    is Stuck.Home -> Text(stringResource(R.string.recovery_home_stuck, s.label), style = type.meta, color = colors.dust)
+                    null -> Unit
+                }
             }
         }
     }

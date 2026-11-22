@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The card for what is playing, as a screen reader names it. -->
+    <string name="now_playing_pane_title">Now playing</string>
+    <!-- The card's round buttons, as a screen reader says them: the track before, pause or play what is playing, the track after. -->
+    <string name="now_playing_previous">Previous</string>
+    <string name="now_playing_pause">Pause</string>
+    <string name="now_playing_play">Play</string>
+    <string name="now_playing_next">Next</string>
+</resources>

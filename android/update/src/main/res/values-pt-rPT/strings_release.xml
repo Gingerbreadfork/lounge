@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="release_no_newer">A atualização não é mais recente do que esta cópia do Lounge. O Lounge aguarda a próxima versão.</string>
+    <string name="release_other_version">A versão publicada indica %1$s, mas a app que traz indica %2$s. O Lounge aguarda a próxima versão.</string>
+    <string name="release_no_version">A versão publicada indica %1$s, mas a app que traz não indica nada. O Lounge aguarda a próxima versão.</string>
+</resources>

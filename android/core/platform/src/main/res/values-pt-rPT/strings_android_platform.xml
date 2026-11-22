@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_platform_not_in_front">Isso abre no ecrã do próprio Lounge. Abra o Lounge na TV e tente novamente.</string>
+    <string name="android_platform_opened_from_behind">O Lounge não está no ecrã da TV e só consegue abrir coisas por trás de outra app quando é o ecrã principal da TV. Abra o Lounge na TV e tente novamente.</string>
+    <string name="android_platform_still_starting">O Lounge ainda está a iniciar na TV. Tente novamente dentro de momentos.</string>
+    <string name="android_platform_unknown_key">O Lounge na TV não conhece essa tecla. Atualize o Lounge e tente novamente.</string>
+    <string name="android_platform_keys_need_power_setup">Há outra app à frente. Ligue a Configuração avançada na TV para que as teclas do telemóvel cheguem até ela.</string>
+    <string name="android_platform_busy">A TV está ocupada com os últimos toques. Tente novamente dentro de momentos.</string>
+    <string name="android_platform_typing_needs_lounge">Há outra app à frente, e o telemóvel só escreve no Lounge. Prima Início e tente novamente.</string>
+    <string name="android_platform_no_field">Abra primeiro Pesquisar ou um campo no Lounge.</string>
+    <string name="android_platform_settings_not_saved">A TV não conseguiu guardar as definições. Verifique se tem espaço livre e tente novamente.</string>
+    <string name="android_platform_link_unknown">Esse link não é dos que o Lounge consegue abrir</string>
+    <string name="android_platform_link_refused">O Lounge não abre esse link</string>
+    <string name="android_platform_needs_notification_access">«A reproduzir» precisa do acesso a notificações</string>
+    <string name="android_platform_not_playing">Essa app não está a reproduzir nada</string>
+    <string name="android_platform_no_player">Nenhum leitor consegue abrir esta transmissão. Instale o VLC ou outro leitor.</string>
+    <string name="android_platform_no_video_player">Nenhum leitor de vídeo consegue abrir esta transmissão. Instale o VLC ou outro leitor.</string>
+</resources>

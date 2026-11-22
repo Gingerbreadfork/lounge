@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A letter of the alphabet down the side of All apps, as a screen reader says it. %1$s is the letter. -->
+    <string name="all_apps_screen_letter">Apps starting with %1$s</string>
+    <string name="all_apps_screen_letter_other">Apps starting with a number or symbol</string>
+
+    <!-- In place of the apps when there are none to show. %1$s is what was typed in the search field. -->
+    <string name="all_apps_screen_empty">Apps appear here once they are installed.</string>
+    <string name="all_apps_screen_empty_search">No app is called “%1$s”. Back clears the search.</string>
+
+    <!-- The line under the All apps heading. -->
+    <string name="all_apps_screen_nothing">Nothing here yet.</string>
+    <!-- %1$s is what was typed in the search field. -->
+    <string name="all_apps_screen_no_match">Nothing matches “%1$s”.</string>
+    <!-- %1$d is how many apps match what was typed, %2$d how many apps there are and %3$s what was typed. -->
+    <plurals name="all_apps_screen_matching">
+        <item quantity="one">%1$d of %2$d match “%3$s”.</item>
+        <item quantity="other">%1$d of %2$d match “%3$s”.</item>
+    </plurals>
+    <!-- How many apps there are and the order they are in, one for each order. -->
+    <plurals name="all_apps_screen_count_az">
+        <item quantity="one">%1$d app, A to Z.</item>
+        <item quantity="other">%1$d apps, A to Z.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_opened">
+        <item quantity="one">%1$d app, most recently opened first.</item>
+        <item quantity="other">%1$d apps, most recently opened first.</item>
+    </plurals>
+    <plurals name="all_apps_screen_count_installed">
+        <item quantity="one">%1$d app, newest first.</item>
+        <item quantity="other">%1$d apps, newest first.</item>
+    </plurals>
+
+    <!-- How to use the screen. The second is shown while the alphabet is. OK, Up and Left are keys on the remote. -->
+    <string name="all_apps_screen_hint">Hold OK on an app to pin it to Your apps. Up to search or sort.</string>
+    <string name="all_apps_screen_hint_alphabet">Hold OK on an app to pin it to Your apps. Up to search or sort, Left for the alphabet.</string>
+
+    <!-- The button that changes the order of the apps. It shows the order in use. -->
+    <string name="all_apps_screen_sort_az">A to Z</string>
+    <string name="all_apps_screen_sort_opened">Recently opened</string>
+    <string name="all_apps_screen_sort_installed">Recently installed</string>
+    <!-- The same button as a screen reader says it, one for each order, and what pressing it does. -->
+    <string name="all_apps_screen_sorted_az">Sorted A to Z. OK changes the order</string>
+    <string name="all_apps_screen_sorted_opened">Sorted Recently opened. OK changes the order</string>
+    <string name="all_apps_screen_sorted_installed">Sorted Recently installed. OK changes the order</string>
+    <string name="all_apps_screen_change_order">Change the order</string>
+
+    <!-- The search field, before anything is typed in it. -->
+    <string name="all_apps_screen_find">Find an app</string>
+</resources>

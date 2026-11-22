@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="backends_took_too_long">La TV ha impiegato troppo a rispondere. Riprova.</string>
+    <string name="backends_unreachable">Lounge non è riuscito a raggiungere il debug USB. Controlla che sia ancora attivo in Opzioni sviluppatore, poi riprova.</string>
+    <string name="backends_dropped">La connessione al debug USB è caduta. Riprova.</string>
+    <string name="backends_tls">Questa TV chiede il codice di accoppiamento del debug wireless, che Configurazione avanzata non può usare. Attiva invece Debug USB in Opzioni sviluppatore, poi riprova.</string>
+    <string name="backends_not_this_tv">Ha risposto qualcosa di diverso dal servizio di debug di questa TV, quindi Lounge non si è connesso. Riavvia la TV, poi riprova.</string>
+    <string name="backends_key_not_approved">Questa TV non autorizza più Lounge. In Impostazioni, apri Configurazione avanzata e scegli Connetti.</string>
+    <string name="backends_shizuku_not_allowed">Shizuku non ha autorizzato Lounge. Apri Shizuku, autorizza Lounge, poi riprova.</string>
+    <string name="backends_shizuku_not_running">Shizuku non è riuscito a eseguirlo. Apri Shizuku e controlla che sia in esecuzione.</string>
+</resources>

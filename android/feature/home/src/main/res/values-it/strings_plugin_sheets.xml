@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_sheets_one_moment">Un momento</string>
+    <string name="plugin_sheets_not_answering">Non risponde</string>
+    <string name="plugin_sheets_no_answer">Il plugin non ha risposto. Riprova tra poco.</string>
+    <string name="plugin_sheets_didnt_work">Non ha funzionato</string>
+    <string name="plugin_sheets_stale">Al momento non risponde. Ecco cosa ha detto l\'ultima volta.</string>
+</resources>

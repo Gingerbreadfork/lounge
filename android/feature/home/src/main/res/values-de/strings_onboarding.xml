@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_next">Weiter</string>
+    <string name="onboarding_start">Starten</string>
+    <string name="onboarding_skip">Überspringen</string>
+    <string name="onboarding_look_title">Willkommen bei Lounge</string>
+    <string name="onboarding_look_body">Dein Fernseher, ausgerichtet auf das, was du wirklich schaust. Zuerst: Wie soll alles aussehen? Das kannst du jederzeit ändern.</string>
+    <string name="onboarding_look_controller">Auf einem Controller wählt A aus, B geht zurück, Y öffnet die Optionen einer Kachel, Start sucht und Select öffnet die Einstellungen.</string>
+    <string name="onboarding_access_title">Was darf Lounge sehen?</string>
+    <string name="onboarding_access_body">Jeder Zugriff bringt einen Teil des Startbildschirms. Nichts verlässt diesen Fernseher; du kannst jeden ablehnen.</string>
+    <string name="onboarding_access_power">Die Erweiterte Einrichtung, der nächste Schritt, kann jeden davon ebenfalls erlauben.</string>
+    <string name="onboarding_power_title">Zum Startbildschirm machen</string>
+    <string name="onboarding_power_body_done">Erledigt: Home ruft jetzt Lounge auf. Die Erweiterte Einrichtung kann außerdem die Zugriffe aus dem letzten Schritt erlauben, den Fernseher einschalten und seinen Eingang umschalten.</string>
+    <string name="onboarding_power_body">Google TV hat dafür keine Einstellung. Die Erweiterte Einrichtung erledigt das über das USB-Debugging des Fernsehers, und der Fernseher fragt dich einmal: Setze den Haken bei „Immer zulassen“ und wähle dann „Zulassen“.</string>
+    <string name="onboarding_power_connect">Erweiterte Einrichtung verbinden</string>
+    <string name="onboarding_power_connected">Verbunden</string>
+    <string name="onboarding_power_waiting">Wartet auf deine Erlaubnis …</string>
+    <string name="onboarding_power_debugging_first">Zuerst USB-Debugging einschalten</string>
+    <string name="onboarding_power_by_usb_debugging">USB-Debugging</string>
+    <string name="onboarding_power_look_at_prompt">Abfrage beachten</string>
+    <string name="onboarding_power_open_developer_options">Entwickleroptionen öffnen</string>
+    <string name="onboarding_power_connecting">Wird verbunden …</string>
+    <string name="onboarding_power_asks_once">Der Fernseher fragt einmal</string>
+    <string name="onboarding_home_title">Lounge zum Startbildschirm machen</string>
+    <string name="onboarding_home_done">Erledigt</string>
+    <string name="onboarding_home_working">Läuft …</string>
+    <string name="onboarding_home_failed">Hat nicht geklappt</string>
+    <string name="onboarding_home_do">Erledigen</string>
+    <string name="onboarding_home_connect_first">Zuerst verbinden</string>
+    <string name="onboarding_home_not_taken">Android hat Lounge nicht zum Startbildschirm gemacht. Versuche es erneut oder öffne in den Einstellungen „Standard-Startbildschirm“ für andere Wege.</string>
+    <plurals name="onboarding_power_homes_off">
+        <item quantity="one">Der eigene Startbildschirm dieses Fernsehers kommt vor jedem gewählten, deshalb schaltet Lounge auch %1$s aus. Nichts wird deinstalliert; zum Wiedereinschalten öffne in den Einstellungen „Erweiterte Einrichtung“, und zwar bevor du Lounge deinstallierst.</item>
+        <item quantity="other">Der eigene Startbildschirm dieses Fernsehers kommt vor jedem gewählten, deshalb schaltet Lounge auch %1$s aus. Nichts wird deinstalliert; zum Wiedereinschalten öffne in den Einstellungen „Erweiterte Einrichtung“, und zwar bevor du Lounge deinstallierst.</item>
+    </plurals>
+    <string name="onboarding_power_homes_and">%1$s und %2$s</string>
+    <string name="onboarding_power_home_stays">Der eigene Startbildschirm des Fernsehers bleibt installiert, also funktionieren Cast, die Zahnrad-Taste und das TV-Programm weiter. Rückgängig machst du das in den Einstellungen unter „Erweiterte Einrichtung“.</string>
+    <string name="onboarding_phone_title">Dein Handy hinzufügen</string>
+    <string name="onboarding_phone_body_on">Scanne den Code mit deiner Handykamera. Dein Handy wird zur Fernbedienung und Tastatur, und dort ordnest du Reihen an und installierst Plugins.</string>
+    <string name="onboarding_phone_body_off">Schalte Lounge fürs Handy ein, um einen Code zum Scannen zu zeigen. Dein Handy wird zur Fernbedienung und Tastatur, und dort ordnest du Reihen an und installierst Plugins.</string>
+    <string name="onboarding_phone_footnote">Alles bleibt in deinem Heimnetz. Um ein Handy später zu vergessen, öffne in den Einstellungen „Lounge fürs Handy“.</string>
+    <string name="onboarding_phone_qr">Kopplungscode</string>
+    <string name="onboarding_phone_type_code">Oder gib diesen Code ein</string>
+    <string name="onboarding_phone_at">unter %1$s</string>
+    <string name="onboarding_done_title">Das war der Rundgang</string>
+    <string name="onboarding_done_body">Drücke jederzeit Home, um zur Bühne zurückzukehren. Halte OK auf einer Kachel gedrückt, um ihr Menü zu öffnen; die Einstellungen haben das Wichtigste, der Rest ist auf deinem Handy.</string>
+    <string name="onboarding_done_reach">Von der Bühne nach oben geht es zu Suche und Einstellungen.</string>
+    <string name="onboarding_done_reach_controls">Von der Bühne nach oben geht es zu Suche, TV-Steuerung und Einstellungen.</string>
+    <string name="onboarding_done_reach_guide">Von der Bühne nach oben geht es zu Suche, TV-Programm und Einstellungen.</string>
+    <string name="onboarding_done_reach_guide_controls">Von der Bühne nach oben geht es zu Suche, TV-Programm, TV-Steuerung und Einstellungen.</string>
+    <string name="onboarding_done_back">Zurück geht immer eine Ebene höher; aus den Reihen führt es zur Bühne.</string>
+    <string name="onboarding_done_plugins">Plugins bringen deinen Medienserver, Live-TV und das Licht zu Hause mit. Öffne in den Einstellungen „Plugins“.</string>
+</resources>

@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.PinnableContainer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import android.hardware.input.InputManager
 import android.view.InputDevice
@@ -252,7 +253,7 @@ private fun RowLiveDot(modifier: Modifier) = LiveDot(LoungeTheme.lightState.idle
 @Composable
 private fun ControllerGlyph(modifier: Modifier) {
     if (rememberControllerConnected()) {
-        Icon(LoungeIcons.Controller, contentDescription = "Controller connected", tint = LoungeTheme.colors.dust, modifier = modifier)
+        Icon(LoungeIcons.Controller, contentDescription = stringResource(R.string.rows_controller_connected), tint = LoungeTheme.colors.dust, modifier = modifier)
     }
 }
 

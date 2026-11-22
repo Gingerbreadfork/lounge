@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recovery_title">Lounge n’a pas pu démarrer</string>
+    <string name="recovery_storage_full">Le stockage de la TV est plein : Lounge ne peut pas ouvrir sa disposition et ses paramètres enregistrés. Libérez de l’espace dans Paramètres, puis réessayez.</string>
+    <string name="recovery_storage">Sa disposition et ses paramètres enregistrés n’ont pas pu être ouverts. Réessayez d’abord. Si cela se reproduit, repartez de zéro : ils sont mis de côté, Lounge recommence, et vos applis, chaînes et entrées reviennent d’elles-mêmes.</string>
+    <string name="recovery_other">Le cœur de Lounge ne s’est pas chargé. Réessayez d’abord. Si cela se reproduit, repartez de zéro ou réinstallez Lounge.</string>
+    <string name="recovery_opening">Ouverture…</string>
+    <string name="recovery_start_fresh">Repartir de zéro</string>
+    <string name="recovery_start_fresh_confirm">Oui, repartir de zéro</string>
+    <string name="recovery_settings">Paramètres</string>
+    <string name="recovery_settings_stuck">Les paramètres de cette TV ne se sont pas ouverts. Ouvrez-les plutôt depuis l’écran d’accueil d’origine de la TV.</string>
+    <string name="recovery_open_home">Ouvrir %1$s</string>
+    <string name="recovery_turn_home_on">Réactiver %1$s</string>
+    <string name="recovery_home_stuck">%1$s ne s’est pas ouvert. Dans les paramètres de la TV, ouvrez Applications pour le retrouver.</string>
+    <string name="recovery_still_wont_open">Toujours impossible à ouvrir.</string>
+</resources>

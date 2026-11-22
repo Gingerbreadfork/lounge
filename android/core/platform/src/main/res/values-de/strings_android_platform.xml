@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_platform_not_in_front">Das öffnet sich auf dem Bildschirm von Lounge. Öffne Lounge auf dem Fernseher und versuche es dann erneut.</string>
+    <string name="android_platform_opened_from_behind">Lounge ist nicht auf dem Bildschirm des Fernsehers und kann nur dann hinter einer anderen App etwas öffnen, wenn es der Startbildschirm des Fernsehers ist. Öffne Lounge auf dem Fernseher und versuche es dann erneut.</string>
+    <string name="android_platform_still_starting">Lounge auf dem Fernseher startet noch. Versuche es gleich erneut.</string>
+    <string name="android_platform_unknown_key">Lounge auf dem Fernseher kennt diese Taste nicht. Aktualisiere Lounge und versuche es dann erneut.</string>
+    <string name="android_platform_keys_need_power_setup">Eine andere App ist im Vordergrund. Verbinde auf dem Fernseher die Erweiterte Einrichtung, damit die Tasten des Handys sie erreichen.</string>
+    <string name="android_platform_busy">Der Fernseher ist noch mit den letzten Tastendrücken beschäftigt. Versuche es gleich erneut.</string>
+    <string name="android_platform_typing_needs_lounge">Eine andere App ist im Vordergrund, und das Handy tippt nur in Lounge. Drücke Home und versuche es dann erneut.</string>
+    <string name="android_platform_no_field">Öffne zuerst die Suche oder ein Feld in Lounge.</string>
+    <string name="android_platform_settings_not_saved">Der Fernseher konnte seine Einstellungen nicht speichern. Prüfe, ob er freien Speicherplatz hat, und versuche es dann erneut.</string>
+    <string name="android_platform_link_unknown">Diesen Link kann Lounge nicht öffnen</string>
+    <string name="android_platform_link_refused">Lounge öffnet diesen Link nicht</string>
+    <string name="android_platform_needs_notification_access">„Läuft gerade“ braucht Benachrichtigungszugriff</string>
+    <string name="android_platform_not_playing">Diese App spielt gerade nichts ab</string>
+    <string name="android_platform_no_player">Kein Player kann diesen Stream öffnen. Installiere VLC oder einen anderen Player.</string>
+    <string name="android_platform_no_video_player">Kein Videoplayer kann diesen Stream öffnen. Installiere VLC oder einen anderen Player.</string>
+</resources>

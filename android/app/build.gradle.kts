@@ -55,6 +55,8 @@ android {
     }
 
     buildFeatures { compose = true }
+    // The languages Lounge is written in; libraries' text in any other is left out.
+    androidResources { localeFilters += listOf("en", "de", "es", "fr", "it", "nl", "pt", "pt-rPT") }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

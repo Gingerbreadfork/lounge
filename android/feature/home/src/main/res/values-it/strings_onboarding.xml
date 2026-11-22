@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_next">Avanti</string>
+    <string name="onboarding_start">Inizia</string>
+    <string name="onboarding_skip">Salta</string>
+    <string name="onboarding_look_title">Ti diamo il benvenuto in Lounge</string>
+    <string name="onboarding_look_body">La tua TV, costruita attorno a quello che guardi davvero. Per cominciare: che aspetto vuoi darle? Puoi cambiarlo quando vuoi.</string>
+    <string name="onboarding_look_controller">Con un controller, A sceglie, B torna indietro, Y apre le opzioni di un riquadro, Start cerca e Select apre Impostazioni.</string>
+    <string name="onboarding_access_title">Cosa può vedere Lounge?</string>
+    <string name="onboarding_access_body">Ogni accesso aggiunge una parte della schermata Home. Niente lascia questa TV; puoi dire di no a ognuno.</string>
+    <string name="onboarding_access_power">Anche Configurazione avanzata, il prossimo passo, può consentire ognuno di questi accessi.</string>
+    <string name="onboarding_power_title">Fanne la tua schermata Home</string>
+    <string name="onboarding_power_body_done">Fatto: premendo Home si apre Lounge. Configurazione avanzata può anche consentire gli accessi del passo precedente, accendere la TV e cambiarne l\'ingresso.</string>
+    <string name="onboarding_power_body">Google TV non ha un\'impostazione per questo. Configurazione avanzata può farlo tramite il debug USB della TV, e la TV te lo chiede una volta sola: seleziona “Consenti sempre”, poi scegli Consenti.</string>
+    <string name="onboarding_power_connect">Connetti Configurazione avanzata</string>
+    <string name="onboarding_power_connected">Connesso</string>
+    <string name="onboarding_power_waiting">In attesa del tuo consenso…</string>
+    <string name="onboarding_power_debugging_first">Prima attiva il debug USB</string>
+    <string name="onboarding_power_by_usb_debugging">Debug USB</string>
+    <string name="onboarding_power_look_at_prompt">Guarda la richiesta</string>
+    <string name="onboarding_power_open_developer_options">Apri Opzioni sviluppatore</string>
+    <string name="onboarding_power_connecting">Connessione…</string>
+    <string name="onboarding_power_asks_once">La TV te lo chiede una volta</string>
+    <string name="onboarding_home_title">Imposta Lounge come schermata Home</string>
+    <string name="onboarding_home_done">Fatto</string>
+    <string name="onboarding_home_working">In corso…</string>
+    <string name="onboarding_home_failed">Non ha funzionato</string>
+    <string name="onboarding_home_do">Procedi</string>
+    <string name="onboarding_home_connect_first">Prima connetti</string>
+    <string name="onboarding_home_not_taken">Android non ha impostato Lounge come schermata Home. Riprova, oppure in Impostazioni apri Schermata Home predefinita per altri modi.</string>
+    <plurals name="onboarding_power_homes_off">
+        <item quantity="one">La Home di questa TV viene prima di qualsiasi altra scelta, quindi Lounge disattiva anche %1$s. Non viene disinstallato nulla; per riattivarla, in Impostazioni apri Configurazione avanzata, e fallo prima di disinstallare Lounge.</item>
+        <item quantity="many">La Home di questa TV viene prima di qualsiasi altra scelta, quindi Lounge disattiva anche %1$s. Non viene disinstallato nulla; per riattivarle, in Impostazioni apri Configurazione avanzata, e fallo prima di disinstallare Lounge.</item>
+        <item quantity="other">La Home di questa TV viene prima di qualsiasi altra scelta, quindi Lounge disattiva anche %1$s. Non viene disinstallato nulla; per riattivarle, in Impostazioni apri Configurazione avanzata, e fallo prima di disinstallare Lounge.</item>
+    </plurals>
+    <string name="onboarding_power_homes_and">%1$s e %2$s</string>
+    <string name="onboarding_power_home_stays">La schermata Home della TV resta installata, quindi la trasmissione, il tasto con l\'ingranaggio e la guida TV continuano a funzionare. Per annullare, in Impostazioni apri Configurazione avanzata.</string>
+    <string name="onboarding_phone_title">Aggiungi il tuo telefono</string>
+    <string name="onboarding_phone_body_on">Inquadra il codice con la fotocamera del telefono. Il telefono diventa telecomando e tastiera, e il posto dove ordinare le righe e installare i plugin.</string>
+    <string name="onboarding_phone_body_off">Attiva Lounge sul telefono per mostrare un codice da inquadrare. Il telefono diventa telecomando e tastiera, e il posto dove ordinare le righe e installare i plugin.</string>
+    <string name="onboarding_phone_footnote">Tutto resta nella tua rete di casa. Per dimenticare un telefono in seguito, in Impostazioni apri Lounge sul telefono.</string>
+    <string name="onboarding_phone_qr">Codice di abbinamento</string>
+    <string name="onboarding_phone_type_code">Oppure digita questo codice</string>
+    <string name="onboarding_phone_at">su %1$s</string>
+    <string name="onboarding_done_title">Ecco casa tua</string>
+    <string name="onboarding_done_body">Premi Home quando vuoi per tornare al Palco. Tieni premuto OK su un riquadro per il suo menu, in Impostazioni trovi l\'essenziale e il resto è sul telefono.</string>
+    <string name="onboarding_done_reach">Dal Palco, Su porta a Cerca e Impostazioni.</string>
+    <string name="onboarding_done_reach_controls">Dal Palco, Su porta a Cerca, Controlli TV e Impostazioni.</string>
+    <string name="onboarding_done_reach_guide">Dal Palco, Su porta a Cerca, Guida TV e Impostazioni.</string>
+    <string name="onboarding_done_reach_guide_controls">Dal Palco, Su porta a Cerca, Guida TV, Controlli TV e Impostazioni.</string>
+    <string name="onboarding_done_back">Indietro risale sempre di un livello; dalle righe torna al Palco.</string>
+    <string name="onboarding_done_plugins">I plugin portano qui il tuo server multimediale, la TV in diretta e le luci di casa. In Impostazioni, apri Plugin.</string>
+</resources>

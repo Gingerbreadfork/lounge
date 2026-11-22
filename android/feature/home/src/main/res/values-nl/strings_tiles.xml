@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tiles_press">Indrukken</string>
+    <string name="tiles_options">Opties</string>
+    <string name="tiles_description">%1$s, %2$s</string>
+    <string name="tiles_description_state">%1$s, %2$s, %3$s</string>
+    <string name="tiles_spoken_join">%1$s, %2$s</string>
+    <string name="tiles_spoken_live">live</string>
+    <string name="tiles_spoken_new">nieuw</string>
+    <string name="tiles_spoken_connected">verbonden</string>
+    <string name="tiles_spoken_pinned_stage">vastgemaakt op het Podium</string>
+    <string name="tiles_spoken_pinned">vastgemaakt</string>
+    <string name="tiles_spoken_hidden">verborgen in elke rij</string>
+    <string name="tiles_spoken_episode">Seizoen %1$s, aflevering %2$s</string>
+    <string name="tiles_badge_live">Live</string>
+    <string name="tiles_badge_new">Nieuw</string>
+</resources>

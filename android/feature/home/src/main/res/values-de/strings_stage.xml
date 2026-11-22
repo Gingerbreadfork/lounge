@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stage_row_name">Bühne</string>
+    <string name="stage_spoken_source">auf %1$s</string>
+    <string name="stage_empty_category">Dein Startbildschirm</string>
+    <string name="stage_empty_title">Richten wir deinen Startbildschirm ein</string>
+    <string name="stage_empty_body">Ein paar kurze Schritte, dann erscheinen hier deine Apps und Serien.</string>
+    <string name="stage_empty_start">Starten</string>
+    <string name="stage_indexing_title">Dein Startbildschirm wird eingerichtet</string>
+    <string name="stage_indexing_body">Lounge sieht nach, was auf diesem Fernseher ist.</string>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recovery_title">Lounge konnte nicht starten</string>
+    <string name="recovery_storage_full">Der Speicher des Fernsehers ist voll, deshalb kann Lounge die gespeicherte Anordnung und die Einstellungen nicht öffnen. Gib in den Einstellungen Speicherplatz frei und versuche es dann erneut.</string>
+    <string name="recovery_storage">Die gespeicherte Anordnung und die Einstellungen ließen sich nicht öffnen. Versuche es zuerst erneut. Wenn es wieder passiert, wähle „Neu anfangen“: Sie werden beiseitegelegt, Lounge beginnt von vorn, und deine Apps, Sender und Eingänge kommen von selbst zurück.</string>
+    <string name="recovery_other">Der Kern von Lounge wurde nicht geladen. Versuche es zuerst erneut. Wenn es wieder passiert, wähle „Neu anfangen“ oder installiere Lounge neu.</string>
+    <string name="recovery_opening">Wird geöffnet …</string>
+    <string name="recovery_start_fresh">Neu anfangen</string>
+    <string name="recovery_start_fresh_confirm">Ja, neu anfangen</string>
+    <string name="recovery_settings">Einstellungen</string>
+    <string name="recovery_settings_stuck">Die Einstellungen dieses Fernsehers ließen sich nicht öffnen. Öffne sie stattdessen vom eigenen Startbildschirm des Fernsehers.</string>
+    <string name="recovery_open_home">%1$s öffnen</string>
+    <string name="recovery_turn_home_on">%1$s wieder einschalten</string>
+    <string name="recovery_home_stuck">%1$s ließ sich nicht öffnen. Öffne in den Einstellungen des Fernsehers „Apps“, um es zu finden.</string>
+    <string name="recovery_still_wont_open">Es lässt sich immer noch nicht öffnen.</string>
+</resources>

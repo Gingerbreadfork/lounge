@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_next">Volgende</string>
+    <string name="onboarding_start">Starten</string>
+    <string name="onboarding_skip">Overslaan</string>
+    <string name="onboarding_look_title">Welkom bij Lounge</string>
+    <string name="onboarding_look_body">Je tv, ingericht rond wat je echt kijkt. Eerst: hoe moet het eruitzien? Dit kun je altijd nog veranderen.</string>
+    <string name="onboarding_look_controller">Op een controller kies je met A, ga je terug met B, opent Y de opties van een tegel, zoekt Start en opent Select Instellingen.</string>
+    <string name="onboarding_access_title">Wat mag Lounge zien?</string>
+    <string name="onboarding_access_body">Elke toegang voegt een onderdeel aan het startscherm toe. Niets verlaat deze tv; je kunt ze stuk voor stuk weigeren.</string>
+    <string name="onboarding_access_power">Geavanceerde configuratie, de volgende stap, kan deze ook allemaal toestaan.</string>
+    <string name="onboarding_power_title">Maak er je startscherm van</string>
+    <string name="onboarding_power_body_done">Klaar: met Home komt Lounge tevoorschijn. Geavanceerde configuratie kan ook de toegangen uit de vorige stap toestaan, de tv aanzetten en van ingang wisselen.</string>
+    <string name="onboarding_power_body">Google TV heeft hier geen instelling voor. Geavanceerde configuratie kan het via de USB-foutopsporing van de tv, en de tv vraagt het je één keer: vink “Altijd toestaan” aan en kies dan Toestaan.</string>
+    <string name="onboarding_power_connect">Geavanceerde configuratie verbinden</string>
+    <string name="onboarding_power_connected">Verbonden</string>
+    <string name="onboarding_power_waiting">Wachten tot je het toestaat…</string>
+    <string name="onboarding_power_debugging_first">Zet eerst USB-foutopsporing aan</string>
+    <string name="onboarding_power_by_usb_debugging">USB-foutopsporing</string>
+    <string name="onboarding_power_look_at_prompt">Kijk naar de vraag op de tv</string>
+    <string name="onboarding_power_open_developer_options">Ontwikkelaarsopties openen</string>
+    <string name="onboarding_power_connecting">Verbinden…</string>
+    <string name="onboarding_power_asks_once">De tv vraagt het je één keer</string>
+    <string name="onboarding_home_title">Lounge als startscherm instellen</string>
+    <string name="onboarding_home_done">Klaar</string>
+    <string name="onboarding_home_working">Bezig…</string>
+    <string name="onboarding_home_failed">Niet gelukt</string>
+    <string name="onboarding_home_do">Nu doen</string>
+    <string name="onboarding_home_connect_first">Eerst verbinden</string>
+    <string name="onboarding_home_not_taken">Android heeft Lounge niet als startscherm ingesteld. Probeer het opnieuw, of open in Instellingen Standaard startscherm voor andere manieren.</string>
+    <plurals name="onboarding_power_homes_off">
+        <item quantity="one">Het eigen startscherm van deze tv gaat voor op elk gekozen startscherm, dus zet Lounge ook %1$s uit. Er wordt niets verwijderd; open in Instellingen Geavanceerde configuratie om het weer aan te zetten, en doe dat voordat je Lounge verwijdert.</item>
+        <item quantity="other">Het eigen startscherm van deze tv gaat voor op elk gekozen startscherm, dus zet Lounge ook %1$s uit. Er wordt niets verwijderd; open in Instellingen Geavanceerde configuratie om ze weer aan te zetten, en doe dat voordat je Lounge verwijdert.</item>
+    </plurals>
+    <string name="onboarding_power_homes_and">%1$s en %2$s</string>
+    <string name="onboarding_power_home_stays">Het eigen startscherm van de tv blijft geïnstalleerd, dus casten, de tandwielknop en de tv-gids blijven werken. Wil je dit ongedaan maken, open dan in Instellingen Geavanceerde configuratie.</string>
+    <string name="onboarding_phone_title">Voeg je telefoon toe</string>
+    <string name="onboarding_phone_body_on">Scan de code met de camera van je telefoon. Je telefoon wordt een afstandsbediening en een toetsenbord, en de plek om rijen te ordenen en plug-ins te installeren.</string>
+    <string name="onboarding_phone_body_off">Zet Lounge op je telefoon aan om een code te tonen die je telefoon kan scannen. Je telefoon wordt een afstandsbediening en een toetsenbord, en de plek om rijen te ordenen en plug-ins te installeren.</string>
+    <string name="onboarding_phone_footnote">Alles blijft binnen je thuisnetwerk. Wil je een telefoon later vergeten, open dan in Instellingen Lounge op je telefoon.</string>
+    <string name="onboarding_phone_qr">Koppelcode</string>
+    <string name="onboarding_phone_type_code">Of typ deze code</string>
+    <string name="onboarding_phone_at">op %1$s</string>
+    <string name="onboarding_done_title">Dat was de rondleiding</string>
+    <string name="onboarding_done_body">Druk wanneer je wilt op Home om terug te gaan naar het Podium. Houd OK ingedrukt op een tegel voor het menu, in Instellingen staat het belangrijkste, en de rest vind je op je telefoon.</string>
+    <string name="onboarding_done_reach">Met Omhoog vanaf het Podium kom je bij Zoeken en Instellingen.</string>
+    <string name="onboarding_done_reach_controls">Met Omhoog vanaf het Podium kom je bij Zoeken, Tv-bediening en Instellingen.</string>
+    <string name="onboarding_done_reach_guide">Met Omhoog vanaf het Podium kom je bij Zoeken, de tv-gids en Instellingen.</string>
+    <string name="onboarding_done_reach_guide_controls">Met Omhoog vanaf het Podium kom je bij Zoeken, de tv-gids, Tv-bediening en Instellingen.</string>
+    <string name="onboarding_done_back">Terug gaat altijd één niveau omhoog; vanuit de rijen ga je terug naar het Podium.</string>
+    <string name="onboarding_done_plugins">Plug-ins halen je mediaserver, live-tv en de lampen in huis erbij. Open in Instellingen Plug-ins.</string>
+</resources>

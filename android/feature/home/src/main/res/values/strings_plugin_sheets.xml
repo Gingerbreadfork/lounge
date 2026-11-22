@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The heading of a plugin's sheet while it is being read, and when the plugin does not answer. -->
+    <string name="plugin_sheets_one_moment">One moment</string>
+    <string name="plugin_sheets_not_answering">Not answering</string>
+    <!-- Why a plugin's sheet could not be read, or a press on one of its rows did nothing, when the plugin gave no reason of its own. -->
+    <string name="plugin_sheets_no_answer">The plugin didn\'t answer. Try again in a moment.</string>
+    <!-- Beside a row whose press failed. -->
+    <string name="plugin_sheets_didnt_work">Didn\'t work</string>
+    <string name="plugin_sheets_stale">Not answering just now. This is what it last said.</string>
+</resources>

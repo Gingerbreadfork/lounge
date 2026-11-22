@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Read aloud for the small mark beside what is playing, on the screensaver. -->
+    <string name="ambient_playing_description">Playing</string>
+    <!-- The screensaver the TV came with, where Lounge cannot name it. Used as a row's value. -->
+    <string name="ambient_tv_own">The TV\'s own</string>
+
+    <!-- The Screensaver sheet. The line under its heading, with Lounge's screensaver in use and without. -->
+    <string name="ambient_subtitle_ours">Your artwork or a slow abstract scene, with a clock; it drifts and dims to be kind to OLED panels.</string>
+    <string name="ambient_subtitle_other">Show your artwork or a slow abstract scene with a clock when the TV idles.</string>
+    <!-- Under the Screensaver row: what OK on it does. "The one before" is the screensaver in use before Lounge's. -->
+    <string name="ambient_switching">Switching…</string>
+    <string name="ambient_ok_puts_back">OK puts back the one before</string>
+    <string name="ambient_power_puts_back">Power Setup can put back the one before</string>
+    <string name="ambient_ok_makes_lounge">OK makes Lounge\'s the screensaver</string>
+    <string name="ambient_ok_opens_tv_settings">OK opens the TV\'s screensaver settings: choose Lounge there, then press Back</string>
+    <string name="ambient_tv_did_not_take">The TV\'s own settings didn\'t make Lounge the screensaver. OK opens Power Setup, which can once USB debugging is on</string>
+    <string name="ambient_tv_cannot_choose">This TV\'s own settings can\'t choose a screensaver. OK opens Power Setup, which can once USB debugging is on</string>
+    <string name="ambient_ok_opens_power_setup">OK opens Power Setup, which can make Lounge\'s the screensaver</string>
+    <!-- System and Screensaver are places in the TV's own settings. -->
+    <string name="ambient_not_taken">The TV didn\'t take the change. Try again, or in the TV\'s settings open System, then Screensaver.</string>
+
+    <!-- The row that chooses what the screensaver shows. Pictures and Mix are two of its values; the rest are scenes by name. -->
+    <string name="ambient_style_title">Style</string>
+    <string name="ambient_style_pictures">Pictures</string>
+    <string name="ambient_style_pictures_about">Artwork from your home screen</string>
+    <string name="ambient_style_mix">Mix</string>
+    <string name="ambient_style_mix_about">Every scene in shuffled order, a few minutes each</string>
+    <!-- %1$s is the name of a scene, such as Aurora. Pictures is the style of that name. -->
+    <string name="ambient_style_too_heavy">%1$s is too heavy for this TV, so Pictures shows instead</string>
+    <string name="ambient_style_not_drawn">%1$s could not be drawn on this TV, so Pictures shows instead</string>
+    <string name="ambient_preview_title">See it full screen</string>
+    <string name="ambient_preview_subtitle">Any key brings you back</string>
+    <string name="ambient_footnote_pictures">Pictures come from what is already on your home screen and abstract scenes are drawn on the TV; nothing is downloaded for this.</string>
+    <string name="ambient_footnote_when">The TV decides when the screensaver starts. To change when, in the TV\'s settings open System, then Screensaver.</string>
+</resources>

@@ -3,6 +3,7 @@ package tv.lounge.feature.home
 import android.app.AppOpsManager
 import android.content.Context
 import android.os.Process
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -38,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +56,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -78,6 +83,7 @@ import tv.lounge.design.Dimens
 import tv.lounge.design.LoungeButton
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 import tv.lounge.design.SpillMask
 import tv.lounge.design.drawSpill
 import tv.lounge.design.lightGlow
@@ -89,7 +95,8 @@ import tv.lounge.power.PrivilegedException
 
 private const val STEPS = 5
 
-internal const val HOME_NOT_TAKEN_SETUP = "Android didn't make Lounge the home screen. Try again, or in Settings open Default home screen for other ways."
+/** Why Lounge did not become the home screen: Power Setup's own reason, or none when Android left things as they were. */
+private class HomeFailure(val reason: String?)
 
 /**
  * Setup: five full-screen steps, one question each, with a row of dots for progress (DESIGN.md
@@ -178,14 +185,14 @@ fun OnboardingScreen(
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             LoungeButton(
                                 label = when (step) {
-                                    STEPS - 1 -> "Start"
-                                    else -> "Next"
+                                    STEPS - 1 -> stringResource(R.string.onboarding_start)
+                                    else -> stringResource(R.string.onboarding_next)
                                 },
                                 onClick = { next() },
                                 focusRequester = primaryFocus,
                             )
                             if (step in 1 until STEPS - 1) {
-                                LoungeButton(label = "Skip", onClick = { next() }, kind = ButtonKind.Secondary)
+                                LoungeButton(label = stringResource(R.string.onboarding_skip), onClick = { next() }, kind = ButtonKind.Secondary)
                             }
                         }
                         Spacer(Modifier.height(28.dp))
@@ -253,7 +260,7 @@ private fun ChoiceDot(selected: Boolean) {
 @Composable
 private fun StepLook(prefs: Prefs, uiPrefs: Prefs.UiPrefs, choiceFocus: FocusRequester, onPreview: (Prefs.Theme) -> Unit) {
     val scope = rememberCoroutineScope()
-    Heading("Welcome to Lounge", "Your TV, laid out around what you actually watch. First, how should it look? You can change this any time.")
+    Heading(stringResource(R.string.onboarding_look_title), stringResource(R.string.onboarding_look_body))
     // The rooms two to a row, so the grid and the live preview share the screen.
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Prefs.Theme.entries.chunked(2).forEach { pair ->
@@ -262,8 +269,8 @@ private fun StepLook(prefs: Prefs, uiPrefs: Prefs.UiPrefs, choiceFocus: FocusReq
                     val selected = uiPrefs.theme == theme
                     SheetRow(
                         icon = null,
-                        title = theme.title,
-                        subtitle = theme.tagline,
+                        title = stringResource(theme.title),
+                        subtitle = stringResource(theme.tagline),
                         height = 72.dp,
                         onClick = { scope.launch { prefs.setTheme(theme) } },
                         focusRequester = if (selected) choiceFocus else null,
@@ -277,7 +284,7 @@ private fun StepLook(prefs: Prefs, uiPrefs: Prefs.UiPrefs, choiceFocus: FocusReq
     if (rememberControllerConnected()) {
         Spacer(Modifier.height(18.dp))
         Text(
-            "On a controller, A chooses, B goes back, Y opens a tile's options, Start searches and Select opens Settings.",
+            stringResource(R.string.onboarding_look_controller),
             style = LoungeTheme.typography.caption,
             color = LoungeTheme.colors.dust,
         )
@@ -349,13 +356,13 @@ private fun StepAccess(core: CoreClient, choiceFocus: FocusRequester, say: (Stri
         say = say,
         onPowerSetup = onPowerSetup,
     )
-    Heading("What may Lounge see?", "Each one adds a part of the home screen. Nothing leaves this TV; say no to any of them.")
+    Heading(stringResource(R.string.onboarding_access_title), stringResource(R.string.onboarding_access_body))
     val first = Access.entries.firstOrNull { !access.isOn(it) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Access.entries.forEach { a -> AccessRow(a, access, focusRequester = if (a == first) choiceFocus else null) }
     }
     Spacer(Modifier.height(20.dp))
-    Text("Power Setup, the next step, can allow any of these as well.", style = LoungeTheme.typography.caption, color = colors.dust)
+    Text(stringResource(R.string.onboarding_access_power), style = LoungeTheme.typography.caption, color = colors.dust)
 }
 
 @Composable
@@ -365,7 +372,7 @@ private fun StepPower(power: PowerSetup, context: Context, choiceFocus: FocusReq
     val status by power.status.collectAsStateWithLifecycle()
     var pairing by remember { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }
-    var homeFailed by remember { mutableStateOf<String?>(null) }
+    var homeFailed by remember { mutableStateOf<HomeFailure?>(null) }
     var isHome by remember { mutableStateOf(isDefaultHome(context)) }
     val ready = status is PowerStatus.Ready
     val takeHome by produceState(emptyList<PowerAction>(), isHome) { value = withContext(Dispatchers.IO) { power.takeHome() } }
@@ -386,27 +393,30 @@ private fun StepPower(power: PowerSetup, context: Context, choiceFocus: FocusReq
     }
 
     Heading(
-        "Make it your home screen",
-        if (isHome) "Done: pressing Home brings Lounge up. Power Setup can also allow the accesses from the last step, and turn the TV on and switch its input."
-        else "Google TV has no setting for this. Power Setup can do it through the TV's USB debugging, and the TV asks you once: tick “Always allow”, then choose Allow.",
+        stringResource(R.string.onboarding_power_title),
+        stringResource(if (isHome) R.string.onboarding_power_body_done else R.string.onboarding_power_body),
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SheetRow(
             icon = LoungeIcons.Power,
-            title = when (status) {
-                is PowerStatus.Ready -> "Connected"
-                PowerStatus.WaitingForApproval -> "Waiting for you to allow it…"
-                is PowerStatus.Unavailable -> "Turn on USB debugging first"
-                else -> "Connect Power Setup"
-            },
+            title = stringResource(
+                when (status) {
+                    is PowerStatus.Ready -> R.string.onboarding_power_connected
+                    PowerStatus.WaitingForApproval -> R.string.onboarding_power_waiting
+                    is PowerStatus.Unavailable -> R.string.onboarding_power_debugging_first
+                    else -> R.string.onboarding_power_connect
+                },
+            ),
             subtitle = (status as? PowerStatus.Failed)?.reason,
             subtitleLines = WHOLE,
-            value = when (status) {
-                is PowerStatus.Ready -> "USB debugging"
-                PowerStatus.WaitingForApproval -> "Look at the prompt"
-                is PowerStatus.Unavailable -> "Open Developer options"
-                else -> if (pairing) "Connecting…" else "The TV asks you once"
-            },
+            value = stringResource(
+                when (status) {
+                    is PowerStatus.Ready -> R.string.onboarding_power_by_usb_debugging
+                    PowerStatus.WaitingForApproval -> R.string.onboarding_power_look_at_prompt
+                    is PowerStatus.Unavailable -> R.string.onboarding_power_open_developer_options
+                    else -> if (pairing) R.string.onboarding_power_connecting else R.string.onboarding_power_asks_once
+                },
+            ),
             accent = if (ready) colors.signal else colors.houselight,
             onClick = {
                 when (status) {
@@ -424,16 +434,18 @@ private fun StepPower(power: PowerSetup, context: Context, choiceFocus: FocusReq
         )
         SheetRow(
             icon = SettingsGlyphs.Home,
-            title = "Make Lounge the home screen",
-            subtitle = homeFailed,
+            title = stringResource(R.string.onboarding_home_title),
+            subtitle = homeFailed?.let { it.reason ?: stringResource(R.string.onboarding_home_not_taken) },
             subtitleLines = WHOLE,
-            value = when {
-                isHome -> "Done"
-                working -> "Working…"
-                homeFailed != null -> "Didn't work"
-                ready -> "Do it"
-                else -> "Connect first"
-            },
+            value = stringResource(
+                when {
+                    isHome -> R.string.onboarding_home_done
+                    working -> R.string.onboarding_home_working
+                    homeFailed != null -> R.string.onboarding_home_failed
+                    ready -> R.string.onboarding_home_do
+                    else -> R.string.onboarding_home_connect_first
+                },
+            ),
             accent = when {
                 isHome -> colors.signal
                 homeFailed != null -> colors.ember
@@ -448,9 +460,9 @@ private fun StepPower(power: PowerSetup, context: Context, choiceFocus: FocusReq
                         homeFailed = try {
                             val r = power.runAll(takeHome.ifEmpty { listOf(power.homeRole) })
                             isHome = isDefaultHome(context)
-                            if (r.ok || isHome) null else HOME_NOT_TAKEN_SETUP
+                            if (r.ok || isHome) null else HomeFailure(null)
                         } catch (e: PrivilegedException) {
-                            e.message ?: HOME_NOT_TAKEN_SETUP
+                            HomeFailure(e.message)
                         }
                         working = false
                     }
@@ -462,15 +474,14 @@ private fun StepPower(power: PowerSetup, context: Context, choiceFocus: FocusReq
     Spacer(Modifier.height(20.dp))
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val s = status
-        if (s is PowerStatus.Unavailable && s.reason == PowerSetup.DEBUGGING_OFF) DebuggingHowTo()
-        if (!ready) Text(DEBUGGING_STAYS_ON, style = LoungeTheme.typography.caption, color = colors.dust)
+        if (s is PowerStatus.Unavailable && s.debuggingOff) DebuggingHowTo()
+        if (!ready) Text(stringResource(DEBUGGING_STAYS_ON), style = LoungeTheme.typography.caption, color = colors.dust)
         Text(
             if (!isHome && first.isNotEmpty()) {
-                val them = if (first.size == 1) "it" else "them"
-                "This TV's own home comes before any chosen one, so Lounge turns ${first.joinToString(" and ")} off too. " +
-                    "Nothing is uninstalled; to turn $them back on, in Settings open Power Setup, and do that before you uninstall Lounge."
+                val names = first.reduce { said, next -> stringResource(R.string.onboarding_power_homes_and, said, next) }
+                pluralStringResource(R.plurals.onboarding_power_homes_off, first.size, names)
             } else {
-                "The TV's own home screen stays installed, so casting, the gear button and the TV guide keep working. To undo this, in Settings open Power Setup."
+                stringResource(R.string.onboarding_power_home_stays)
             },
             style = LoungeTheme.typography.caption,
             color = colors.dust,
@@ -484,14 +495,13 @@ private fun StepPhone(core: CoreClient, prefs: Prefs, uiPrefs: Prefs.UiPrefs, ch
     val scope = rememberCoroutineScope()
     val on = uiPrefs.companionEnabled
     Heading(
-        "Add your phone",
-        (if (on) "Scan the code with your phone's camera." else "Turn on the phone companion to show a code for your phone to scan.") +
-            " Your phone becomes a remote and a keyboard, and the place to arrange rows and install plugins.",
+        stringResource(R.string.onboarding_phone_title),
+        stringResource(if (on) R.string.onboarding_phone_body_on else R.string.onboarding_phone_body_off),
     )
     SheetRow(
         icon = LoungeIcons.Phone,
-        title = "Phone companion",
-        value = if (on) "On" else "Off",
+        title = stringResource(DesignR.string.common_phone_companion),
+        value = stringResource(if (on) DesignR.string.common_on else DesignR.string.common_off),
         accent = if (on) colors.signal else colors.dust,
         onClick = {
             scope.launch {
@@ -503,23 +513,26 @@ private fun StepPhone(core: CoreClient, prefs: Prefs, uiPrefs: Prefs.UiPrefs, ch
         focusRequester = if (!on) choiceFocus else null,
     )
     Spacer(Modifier.height(20.dp))
-    Text("Everything stays on your home network. To forget a phone later, in Settings open Phone companion.", style = LoungeTheme.typography.caption, color = colors.dust)
+    Text(stringResource(R.string.onboarding_phone_footnote), style = LoungeTheme.typography.caption, color = colors.dust)
 }
 
 /** What Up from the Stage reaches on this TV: the top bar's buttons as it has them, in their order. */
-internal fun topBarWords(showGuide: Boolean, showTvControls: Boolean): String {
-    val buttons = listOfNotNull("Search", "the TV guide".takeIf { showGuide }, "TV controls".takeIf { showTvControls }, "Settings")
-    return "Up from the Stage reaches ${buttons.dropLast(1).joinToString(", ")} and ${buttons.last()}."
+@StringRes
+internal fun topBarWords(showGuide: Boolean, showTvControls: Boolean): Int = when {
+    showGuide && showTvControls -> R.string.onboarding_done_reach_guide_controls
+    showGuide -> R.string.onboarding_done_reach_guide
+    showTvControls -> R.string.onboarding_done_reach_controls
+    else -> R.string.onboarding_done_reach
 }
 
 @Composable
 private fun StepDone(showGuide: Boolean, showTvControls: Boolean) {
     val colors = LoungeTheme.colors
-    Heading("That's the house", "Press Home any time to come back to the Stage. Hold OK on a tile for its menu, Settings has the essentials, and the rest is on your phone.")
+    Heading(stringResource(R.string.onboarding_done_title), stringResource(R.string.onboarding_done_body))
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(topBarWords(showGuide, showTvControls), style = LoungeTheme.typography.meta, color = colors.dust)
-        Text("Back always goes up one level; from the rows it returns to the Stage.", style = LoungeTheme.typography.meta, color = colors.dust)
-        Text("Plugins bring in your media server, live TV and the lights at home. In Settings, open Plugins.", style = LoungeTheme.typography.meta, color = colors.dust)
+        Text(stringResource(topBarWords(showGuide, showTvControls)), style = LoungeTheme.typography.meta, color = colors.dust)
+        Text(stringResource(R.string.onboarding_done_back), style = LoungeTheme.typography.meta, color = colors.dust)
+        Text(stringResource(R.string.onboarding_done_plugins), style = LoungeTheme.typography.meta, color = colors.dust)
     }
 }
 
@@ -549,13 +562,14 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
     var pairing by remember { mutableStateOf<PairingInfo?>(null) }
     var url by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf<String?>(null) }
+    val resources by rememberUpdatedState(LocalResources.current)
     // Starting binds a port and a new code writes its picture, so the server's calls run off the main thread.
     LaunchedEffect(uiPrefs.companionEnabled) {
         failed = null
         if (!uiPrefs.companionEnabled) { pairing = null; return@LaunchedEffect }
         withContext(Dispatchers.IO) { if (core.companionStatus().running) null else core.startCompanion(CoreClient.COMPANION_PORT) }
             ?.onFailure {
-                failed = companionStartProblem(it)
+                failed = companionStartProblem(resources, it)
                 return@LaunchedEffect
             }
         while (true) {
@@ -567,7 +581,7 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
                 pairing = live
                 failed = null
             } else {
-                withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; failed = null }.onFailure { pairing = null; failed = pairingProblem(it) }
+                withContext(Dispatchers.IO) { core.companionPairing() }.onSuccess { pairing = it; failed = null }.onFailure { pairing = null; failed = pairingProblem(resources, it) }
             }
             delay(2_000)
         }
@@ -584,14 +598,14 @@ private fun PhoneArt(core: CoreClient, uiPrefs: Prefs.UiPrefs) {
     } else {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(320.dp).clip(RoundedCornerShape(20.dp)).background(colors.limelight)) {
-                AsyncImage(model = p.qrPngPath, contentDescription = "Pairing code", modifier = Modifier.fillMaxSize())
+                AsyncImage(model = p.qrPngPath, contentDescription = stringResource(R.string.onboarding_phone_qr), modifier = Modifier.fillMaxSize())
             }
             Spacer(Modifier.height(24.dp))
-            Text("Or type this code", style = LoungeTheme.typography.meta, color = colors.dust)
+            Text(stringResource(R.string.onboarding_phone_type_code), style = LoungeTheme.typography.meta, color = colors.dust)
             Spacer(Modifier.height(6.dp))
             Text(p.code.chunked(3).joinToString(" "), style = LoungeTheme.typography.displayL, color = colors.limelight)
             Spacer(Modifier.height(8.dp))
-            Text(url?.let { "at $it" } ?: "", style = LoungeTheme.typography.caption, color = colors.dust)
+            Text(url?.let { stringResource(R.string.onboarding_phone_at, it) } ?: "", style = LoungeTheme.typography.caption, color = colors.dust)
         }
     }
 }

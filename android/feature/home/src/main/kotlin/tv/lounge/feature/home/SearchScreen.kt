@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
@@ -69,6 +70,7 @@ import tv.lounge.design.Dimens
 import tv.lounge.design.Hairline
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 
 /**
  * Search (DESIGN.md §5.5): the query in display type over ordinary rows that update per keystroke,
@@ -129,7 +131,14 @@ fun SearchScreen(
     PhoneTextInput(active = !leaving && !covered) { text -> setQuery(field.text + text) }
 
     val rise = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.roundToPx() }
-    val local: List<CoreRow> = remember(query, snapshot) { search(snapshot, query) }
+    val titles = SearchTitles(
+        apps = stringResource(R.string.search_screen_row_apps),
+        continueWatching = stringResource(R.string.search_screen_row_continue),
+        yourApps = stringResource(R.string.search_screen_row_your_apps),
+    )
+    val pane = stringResource(DesignR.string.common_search)
+    val fieldName = stringResource(R.string.search_screen_field)
+    val local: List<CoreRow> = remember(query, snapshot, titles) { search(snapshot, query, titles) }
     // The plugins are asked once typing pauses; their last answer stays until the next arrives.
     var fromPlugins by remember { mutableStateOf(emptyList<CoreRow>()) }
     LaunchedEffect(query, again) {
@@ -142,7 +151,7 @@ fun SearchScreen(
         fromPlugins = withContext(Dispatchers.IO) { searchPlugins(q) }
     }
     val results: List<CoreRow> = remember(local, fromPlugins) { mergedResults(local, fromPlugins) }
-    val recent: List<CoreRow> = remember(snapshot) { recentlyOpened(snapshot) }
+    val recent: List<CoreRow> = remember(snapshot, titles) { recentlyOpened(snapshot, titles) }
     val shown = if (query.isBlank()) recent else results
 
     // A result hidden or unpinned from its menu leaves the list: focus goes to its neighbour, or
@@ -168,7 +177,7 @@ fun SearchScreen(
             Modifier
                 .fillMaxSize()
                 .background(colors.velvet)
-                .semantics { paneTitle = "Search" }
+                .semantics { paneTitle = pane }
                 .onPreviewKeyEvent { e ->
                     if (e.isBack() && e.type == KeyEventType.KeyUp && !fieldFocused) { onClose(); true } else false
                 }
@@ -191,7 +200,7 @@ fun SearchScreen(
                             Icon(LoungeIcons.Search, contentDescription = null, tint = colors.dust, modifier = Modifier.size(40.dp))
                             Box(Modifier.weight(1f)) {
                                 if (query.isEmpty()) {
-                                    Text("Search your TV", style = LoungeTheme.typography.displayL, color = colors.dust)
+                                    Text(fieldName, style = LoungeTheme.typography.displayL, color = colors.dust)
                                 }
                                 BasicTextField(
                                     value = field,
@@ -212,16 +221,16 @@ fun SearchScreen(
                                             fieldFocused = it.isFocused
                                             if (it.isFocused) lastResult.tileId = null
                                         }
-                                        .semantics { contentDescription = "Search your TV" },
+                                        .semantics { contentDescription = fieldName },
                                 )
                             }
                         }
                         Hairline(Modifier.fillMaxWidth())
                         Text(
                             when {
-                                query.isBlank() -> "Type with the remote. Results update as you type."
-                                results.isEmpty() -> "Nothing matches “$query” yet."
-                                else -> "The keyboard's search key, or Down, takes you to the results."
+                                query.isBlank() -> stringResource(R.string.search_screen_hint_empty)
+                                results.isEmpty() -> stringResource(R.string.search_screen_no_match, query)
+                                else -> stringResource(R.string.search_screen_hint_results)
                             },
                             style = LoungeTheme.typography.meta,
                             color = colors.dust,
@@ -264,6 +273,9 @@ fun SearchScreen(
 
 private const val PLUGIN_SEARCH_PAUSE_MS = 350L
 
+/** The titles of the rows search makes itself, in the language on screen. */
+internal data class SearchTitles(val apps: String, val continueWatching: String, val yourApps: String)
+
 /** The result that last had focus; cleared when the field takes it. */
 private class LastResult {
     var rowId: String? = null
@@ -277,14 +289,14 @@ private class LastResult {
  * name starts with what was typed. Hidden rows and hidden apps are searched too: hiding takes
  * something off the home, not out of reach.
  */
-internal fun search(snapshot: HomeSnapshot, query: String): List<CoreRow> {
+internal fun search(snapshot: HomeSnapshot, query: String, titles: SearchTitles): List<CoreRow> {
     val tokens = searchWords(query)
     if (tokens.isEmpty()) return emptyList()
     val home = snapshot.rows + snapshot.hiddenRows
     val apps = (home.filter { it.id == "apps" }.flatMap { it.tiles } + snapshot.allApps).distinctBy { it.id }
     val sources = buildList {
-        add(CoreRow(id = "allapps", title = "Apps", kind = TileKind.APP_BANNER, size = RowSize.M, badge = null, tiles = apps, note = null))
-        continueRow(snapshot, home.firstOrNull { it.id == "continue" })?.let(::add)
+        add(CoreRow(id = "allapps", title = titles.apps, kind = TileKind.APP_BANNER, size = RowSize.M, badge = null, tiles = apps, note = null))
+        continueRow(snapshot, home.firstOrNull { it.id == "continue" }, titles)?.let(::add)
         addAll(home.filter { it.id != "apps" && it.id != "continue" && !it.id.startsWith("notice:") })
     }
     val seen = HashSet<String>()
@@ -344,20 +356,20 @@ internal fun matchScore(title: String, subtitle: String?, tokens: List<String>):
  * Continue watching as one row: what the Stage strip has to continue, then the row after it, which
  * starts where the strip leaves off.
  */
-private fun continueRow(snapshot: HomeSnapshot, row: CoreRow?): CoreRow? {
+private fun continueRow(snapshot: HomeSnapshot, row: CoreRow?, titles: SearchTitles): CoreRow? {
     val tiles = (snapshot.stage.strip.filter { it.provider != null } + row?.tiles.orEmpty().filter { !it.id.startsWith("notice:") }).distinctBy { it.id }
     if (tiles.isEmpty()) return null
-    return CoreRow(id = "continue", title = "Continue watching", kind = TileKind.LANDSCAPE, size = RowSize.M, badge = null, tiles = tiles, note = null)
+    return CoreRow(id = "continue", title = titles.continueWatching, kind = TileKind.LANDSCAPE, size = RowSize.M, badge = null, tiles = tiles, note = null)
 }
 
 /** Before anything is typed: the head of Continue watching, then Your apps, as one row each. */
-private fun recentlyOpened(snapshot: HomeSnapshot): List<CoreRow> {
+private fun recentlyOpened(snapshot: HomeSnapshot, titles: SearchTitles): List<CoreRow> {
     val out = ArrayList<CoreRow>(2)
-    continueRow(snapshot, snapshot.rows.firstOrNull { it.id == "continue" })?.let {
+    continueRow(snapshot, snapshot.rows.firstOrNull { it.id == "continue" }, titles)?.let {
         out += it.copy(id = "recent:continue", tiles = it.tiles.take(6))
     }
     snapshot.rows.firstOrNull { it.id == "apps" && it.tiles.any { t -> !t.id.startsWith("control:") } }?.let {
-        out += it.copy(id = "recent:apps", title = "Your apps", tiles = it.tiles.filter { t -> !t.id.startsWith("control:") }.take(6))
+        out += it.copy(id = "recent:apps", title = titles.yourApps, tiles = it.tiles.filter { t -> !t.id.startsWith("control:") }.take(6))
     }
     return out
 }

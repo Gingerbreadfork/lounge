@@ -53,6 +53,8 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -71,6 +73,7 @@ import tv.lounge.core.HomeSnapshot
 import tv.lounge.core.TileKind
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
+import tv.lounge.design.R as DesignR
 import tv.lounge.design.lightsFilter
 import tv.lounge.design.sounds
 import tv.lounge.platform.PanelSize
@@ -441,7 +444,7 @@ internal fun AmbientCaption(room: AmbientRoom, title: String?, line: String?) {
             if (playing != null) {
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-                    Icon(LoungeIcons.Equaliser, contentDescription = "Playing", tint = colors.dust, modifier = Modifier.size(16.dp))
+                    Icon(LoungeIcons.Equaliser, contentDescription = stringResource(R.string.ambient_playing_description), tint = colors.dust, modifier = Modifier.size(16.dp))
                     Text(playing, style = LoungeTheme.typography.caption, color = colors.dust, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 760.dp))
                 }
             }
@@ -505,7 +508,7 @@ fun Screensaver(core: CoreClient, prefs: Prefs, preview: Boolean = false) {
         onUnusable = { why ->
             android.util.Log.w("Lounge", "screensaver: ${style.id} gives way: $why")
             // A compile error's own text is for the log, not the screen (DESIGN.md §8).
-            SceneMemory.seen[style.id] = SceneMemory.words(if ("heavy" in why) SceneRecord.HEAVY else SceneRecord.BROKEN, style.name).orEmpty()
+            SceneMemory.seen[style.id] = if ("heavy" in why) SceneRecord.HEAVY else SceneRecord.BROKEN
             if (id == ShaderStyles.MIX) turn++ else unusable = true
         },
         preview = preview,
@@ -533,27 +536,41 @@ fun AmbientPreviewKeys(onClose: () -> Unit) {
     LaunchedEffect(Unit) { focus.requestWhenReady() }
 }
 
-/**
- * The screensaver by the name Settings and the Screensaver sheet both give it: Lounge, off, or
- * the TV's own by its app's name.
- */
-internal fun screensaverName(power: PowerSetup, context: android.content.Context): String {
+/** The screensaver the TV starts: none, Lounge's, its own, or another app's by that app's name. */
+sealed interface TvScreensaver {
+    data object Off : TvScreensaver
+    data object TvOwn : TvScreensaver
+    data object Lounge : TvScreensaver
+    data class App(val label: String) : TvScreensaver
+}
+
+/** The name Settings and the Screensaver sheet both give it. */
+@Composable
+internal fun TvScreensaver.words(): String = when (this) {
+    TvScreensaver.Off -> stringResource(DesignR.string.common_off)
+    TvScreensaver.TvOwn -> stringResource(R.string.ambient_tv_own)
+    TvScreensaver.Lounge -> "Lounge"
+    is TvScreensaver.App -> label
+}
+
+/** The screensaver the TV starts now, as Settings and the Screensaver sheet both show it. */
+internal fun screensaverName(power: PowerSetup, context: android.content.Context): TvScreensaver {
     val enabled = runCatching { android.provider.Settings.Secure.getInt(context.contentResolver, "screensaver_enabled", 1) }.getOrDefault(1)
     val current = power.currentScreensaver
     return when {
-        enabled == 0 -> "Off"
-        current == null -> "The TV's own"
-        current.contains(context.packageName) -> "Lounge"
+        enabled == 0 -> TvScreensaver.Off
+        current == null -> TvScreensaver.TvOwn
+        current.contains(context.packageName) -> TvScreensaver.Lounge
         // A label that is only a package name says nothing to a person.
-        else -> power.labelFor(current).takeUnless { it.contains('.') && ' ' !in it } ?: "The TV's own"
+        else -> power.labelFor(current).takeUnless { it.contains('.') && ' ' !in it }?.let { TvScreensaver.App(it) } ?: TvScreensaver.TvOwn
     }
 }
 
-/** The styles the Screensaver sheet offers, in order: id, name and one line about it. */
-internal fun styleChoices(scenes: List<ShaderStyle>): List<Triple<String, String, String>> = buildList {
-    add(Triple(ShaderStyles.PICTURES, "Pictures", "Artwork from your home screen"))
-    if (scenes.size > 1) add(Triple(ShaderStyles.MIX, "Mix", "Every scene in shuffled order, a few minutes each"))
-    scenes.forEach { add(Triple(it.id, it.name, it.description ?: it.origin)) }
+/** The styles the Screensaver sheet offers, in order: each one's id, and the scene where it is one. */
+internal fun styleChoices(scenes: List<ShaderStyle>): List<Pair<String, ShaderStyle?>> = buildList {
+    add(ShaderStyles.PICTURES to null)
+    if (scenes.size > 1) add(ShaderStyles.MIX to null)
+    scenes.forEach { add(it.id to it) }
 }
 
 /**
@@ -566,13 +583,14 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
     val colors = LoungeTheme.colors
     val sounds = LoungeTheme.sounds
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val styles by produceState(emptyList<ShaderStyle>()) { value = withContext(Dispatchers.IO) { ShaderStyles.all(context, core) } }
     val chosen by prefs.ambientStyle.collectAsState(initial = ShaderStyles.PICTURES)
     val choices = styleChoices(styles)
     val at = choices.indexOfFirst { it.first == chosen }.coerceAtLeast(0)
     val memory = remember { SceneMemory(context) }
-    // Why the chosen scene is not what shows, read again when the preview behind finds a problem.
+    // Why the chosen scene is not what shows, as its record names it, read again when the preview behind finds a problem.
     val problem by produceState<String?>(null, chosen, styles, SceneMemory.seen.size) {
         val style = styles.firstOrNull { it.id == chosen }
         value = if (style == null) null else withContext(Dispatchers.IO) { memory.problem(style) }
@@ -587,7 +605,8 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val ready = status is PowerStatus.Ready
-    val ours = name == "Lounge"
+    val ours = name == TvScreensaver.Lounge
+    val notTaken = stringResource(R.string.ambient_not_taken)
 
     // Not every TV has a screen for choosing a screensaver, and some that do list only their own.
     val tvSettings = remember { Intent(android.provider.Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
@@ -599,7 +618,7 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
     LaunchedEffect(Unit) { power.refresh() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         name = screensaverName(power, context)
-        if (sentToTv && name != "Lounge") tvDidNotTake = true
+        if (sentToTv && name != TvScreensaver.Lounge) tvDidNotTake = true
         sentToTv = false
     }
 
@@ -628,19 +647,19 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
                 // Lounge's own is never the one before, whatever was saved.
                 val before = prefs.previousScreensaver.first()?.takeUnless { it.contains(context.packageName) }
                 val r = power.run(power.restoreScreensaver(before, prefs.previousScreensaverEnabled.first()))
-                if (r.ok && screensaverName(power, context) != "Lounge") null else NOT_TAKEN
+                if (r.ok && screensaverName(power, context) != TvScreensaver.Lounge) null else notTaken
             }
             ready -> run {
                 val previous = power.currentScreensaver
                 val r = power.run(power.useAmbient)
                 // The one before is kept only once the switch has happened, so a failed one cannot lose
                 // it, and never when it is Lounge's own with the screensaver turned off.
-                val took = screensaverName(power, context) == "Lounge"
+                val took = screensaverName(power, context) == TvScreensaver.Lounge
                 if (took && previous?.contains(context.packageName) != true) {
                     prefs.setPreviousScreensaver(previous)
                     prefs.setPreviousScreensaverEnabled(PowerSetup.previousScreensaverEnabled(r.output))
                 }
-                if (r.ok && took) null else NOT_TAKEN
+                if (r.ok && took) null else notTaken
             }
             viaTv -> runCatching {
                 context.startActivity(tvSettings)
@@ -651,52 +670,62 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
     }
 
     SheetHeading(
-        "Screensaver",
-        if (ours) "Your artwork or a slow abstract scene, with a clock; it drifts and dims to be kind to OLED panels."
-        else "Show your artwork or a slow abstract scene with a clock when the TV idles.",
+        stringResource(DesignR.string.common_screensaver),
+        stringResource(if (ours) R.string.ambient_subtitle_ours else R.string.ambient_subtitle_other),
     )
     Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
         SheetRow(
             icon = LoungeIcons.Frame,
-            title = "Screensaver",
-            subtitle = when {
-                busy -> "Switching…"
-                ours && ready -> "OK puts back the one before"
-                ours -> "Power Setup can put back the one before"
-                ready -> "OK makes Lounge's the screensaver"
-                viaTv -> "OK opens the TV's screensaver settings: choose Lounge there, then press Back"
-                tvDidNotTake -> "The TV's own settings didn't make Lounge the screensaver. OK opens Power Setup, which can once USB debugging is on"
-                status is PowerStatus.Unavailable -> "This TV's own settings can't choose a screensaver. OK opens Power Setup, which can once USB debugging is on"
-                else -> "OK opens Power Setup, which can make Lounge's the screensaver"
-            },
+            title = stringResource(DesignR.string.common_screensaver),
+            subtitle = stringResource(
+                when {
+                    busy -> R.string.ambient_switching
+                    ours && ready -> R.string.ambient_ok_puts_back
+                    ours -> R.string.ambient_power_puts_back
+                    ready -> R.string.ambient_ok_makes_lounge
+                    viaTv -> R.string.ambient_ok_opens_tv_settings
+                    tvDidNotTake -> R.string.ambient_tv_did_not_take
+                    status is PowerStatus.Unavailable -> R.string.ambient_tv_cannot_choose
+                    else -> R.string.ambient_ok_opens_power_setup
+                },
+            ),
             subtitleLines = WHOLE,
-            value = name,
+            value = name.words(),
             accent = if (ours) colors.signal else colors.dust,
             onClick = { if (!busy) switch() },
             focusRequester = firstFocus.takeUnless { fromPreview },
         )
+        val scene = choices[at].second
         SheetRow(
             icon = SettingsGlyphs.Scene,
-            title = "Style",
-            value = choices[at].second,
-            subtitle = problem?.let { "$it, so Pictures shows instead" } ?: choices[at].third,
+            title = stringResource(R.string.ambient_style_title),
+            value = when {
+                scene != null -> scene.nameIn(resources)
+                choices[at].first == ShaderStyles.MIX -> stringResource(R.string.ambient_style_mix)
+                else -> stringResource(R.string.ambient_style_pictures)
+            },
+            subtitle = when {
+                scene != null && problem == SceneRecord.HEAVY -> stringResource(R.string.ambient_style_too_heavy, scene.nameIn(resources))
+                scene != null && problem == SceneRecord.BROKEN -> stringResource(R.string.ambient_style_not_drawn, scene.nameIn(resources))
+                scene != null -> scene.aboutIn(resources)
+                choices[at].first == ShaderStyles.MIX -> stringResource(R.string.ambient_style_mix_about)
+                else -> stringResource(R.string.ambient_style_pictures_about)
+            },
             subtitleLines = if (problem != null) WHOLE else 2,
             onClick = { step(1) },
             onCycle = { step(it) },
         )
         SheetRow(
             icon = LoungeIcons.Play,
-            title = "See it full screen",
-            subtitle = "Any key brings you back",
+            title = stringResource(R.string.ambient_preview_title),
+            subtitle = stringResource(R.string.ambient_preview_subtitle),
             onClick = onPreview,
             focusRequester = firstFocus.takeIf { fromPreview },
         )
         if (error != null) Text(error!!, style = LoungeTheme.typography.caption, color = colors.ember)
     }
     SheetFootnote(
-        "Pictures come from what is already on your home screen and abstract scenes are drawn on the TV; nothing is downloaded for this.",
-        "The TV decides when the screensaver starts. To change when, in the TV's settings open System, then Screensaver.",
+        stringResource(R.string.ambient_footnote_pictures),
+        stringResource(R.string.ambient_footnote_when),
     )
 }
-
-private const val NOT_TAKEN = "The TV didn't take the change. Try again, or in the TV's settings open System, then Screensaver."

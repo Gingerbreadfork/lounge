@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tiles_press">Premir</string>
+    <string name="tiles_options">Opções</string>
+    <string name="tiles_description">%1$s, %2$s</string>
+    <string name="tiles_description_state">%1$s, %2$s, %3$s</string>
+    <string name="tiles_spoken_join">%1$s, %2$s</string>
+    <string name="tiles_spoken_live">em direto</string>
+    <string name="tiles_spoken_new">novo</string>
+    <string name="tiles_spoken_connected">ligado</string>
+    <string name="tiles_spoken_pinned_stage">fixado no Palco</string>
+    <string name="tiles_spoken_pinned">fixada</string>
+    <string name="tiles_spoken_hidden">oculto em todas as linhas</string>
+    <string name="tiles_spoken_episode">Temporada %1$s, episódio %2$s</string>
+    <string name="tiles_badge_live">Direto</string>
+    <string name="tiles_badge_new">Novo</string>
+</resources>

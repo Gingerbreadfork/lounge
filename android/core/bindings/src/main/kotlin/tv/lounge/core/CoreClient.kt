@@ -64,6 +64,9 @@ class CoreClient(val core: Core) : SnapshotListener {
     /** Whether the TV shows a 24-hour clock, so the times the core writes match it. */
     fun setClock24h(on: Boolean) = core.setClock24h(on)
 
+    /** The language the screen is shown in, by its tag; what the core and the plugins write follows it. */
+    fun setLocale(tag: String) = core.setLocale(tag)
+
     fun ingestPrograms(programs: List<ProgramRecord>) = core.ingestPrograms(programs)
 
     fun ingestSessions(sessions: List<SessionRecord>) = core.ingestSessions(sessions)

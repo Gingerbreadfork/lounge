@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="language_tag">it</string>
+    <string name="common_on">Sì</string>
+    <string name="common_off">No</string>
+    <string name="common_open">Apri</string>
+    <string name="common_show">Mostra</string>
+    <string name="common_hide">Nascondi</string>
+    <string name="common_hidden">Nascosto</string>
+    <string name="common_cancel">Annulla</string>
+    <string name="common_back">Indietro</string>
+    <string name="common_done">Fine</string>
+    <string name="common_try_again">Riprova</string>
+    <string name="common_settings">Impostazioni</string>
+    <string name="common_search">Cerca</string>
+    <string name="common_all_apps">Tutte le app</string>
+    <string name="common_tv_guide">Guida TV</string>
+    <string name="common_tv_controls">Controlli TV</string>
+    <string name="common_notifications">Notifiche</string>
+    <string name="common_screensaver">Salvaschermo</string>
+    <string name="common_power_setup">Configurazione avanzata</string>
+    <string name="common_phone_companion">Lounge sul telefono</string>
+    <string name="words_just_now">adesso</string>
+    <plurals name="words_minutes_ago">
+        <item quantity="one">%1$d minuto fa</item>
+        <item quantity="many">%1$d minuti fa</item>
+        <item quantity="other">%1$d minuti fa</item>
+    </plurals>
+    <plurals name="words_hours_ago">
+        <item quantity="one">%1$d ora fa</item>
+        <item quantity="many">%1$d ore fa</item>
+        <item quantity="other">%1$d ore fa</item>
+    </plurals>
+    <plurals name="words_days_ago">
+        <item quantity="one">%1$d giorno fa</item>
+        <item quantity="many">%1$d giorni fa</item>
+        <item quantity="other">%1$d giorni fa</item>
+    </plurals>
+    <string name="words_clock_am">%1$s AM</string>
+    <string name="words_clock_pm">%1$s PM</string>
+</resources>

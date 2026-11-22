@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="themes_dusk_title">Crepúsculo</string>
+    <string name="themes_dusk_tagline">Noite índigo, luminária coral</string>
+    <string name="themes_house_title">Casa</string>
+    <string name="themes_house_tagline">Ameixa quente, luz de tungstênio</string>
+    <string name="themes_hearth_title">Lareira</string>
+    <string name="themes_hearth_tagline">Paredes cor de terra, luz do fogo</string>
+    <string name="themes_opera_title">Ópera</string>
+    <string name="themes_opera_tagline">Veludo vermelho e dourado</string>
+    <string name="themes_marquee_title">Letreiro</string>
+    <string name="themes_marquee_tagline">Azul-marinho, lâmpadas de letreiro</string>
+    <string name="themes_green_room_title">Camarim</string>
+    <string name="themes_green_room_tagline">Verde profundo, luminária de latão</string>
+    <string name="themes_moonlight_title">Luar</string>
+    <string name="themes_moonlight_tagline">Ardósia fria, luz da lua</string>
+    <string name="themes_graphite_title">Grafite</string>
+    <string name="themes_graphite_tagline">Sem cor, branco quente</string>
+    <string name="themes_cabaret_title">Cabaré</string>
+    <string name="themes_cabaret_tagline">Violeta quase preto, neon rosa</string>
+    <string name="themes_aquarium_title">Aquário</string>
+    <string name="themes_aquarium_tagline">Verde-azulado profundo, o brilho de um aquário</string>
+    <string name="themes_absinthe_title">Absinto</string>
+    <string name="themes_absinthe_tagline">Oliva escuro, brilho verde-dourado</string>
+    <string name="themes_ultraviolet_title">Ultravioleta</string>
+    <string name="themes_ultraviolet_tagline">Quase preto, uma luz negra</string>
+    <string name="themes_blackout_title">Blecaute</string>
+    <string name="themes_blackout_tagline">Preto puro para telas OLED</string>
+    <string name="themes_high_contrast_title">Alto contraste</string>
+    <string name="themes_high_contrast_tagline">Texto e contornos mais fortes</string>
+</resources>

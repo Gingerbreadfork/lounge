@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ambient_playing_description">Reproduzindo</string>
+    <string name="ambient_tv_own">O da própria TV</string>
+    <string name="ambient_subtitle_ours">Imagens da sua tela inicial ou uma cena abstrata e lenta, com relógio; tudo se move devagar e escurece para poupar telas OLED.</string>
+    <string name="ambient_subtitle_other">Mostre imagens da sua tela inicial ou uma cena abstrata e lenta, com relógio, quando a TV ficar ociosa.</string>
+    <string name="ambient_switching">Trocando…</string>
+    <string name="ambient_ok_puts_back">OK traz de volta o anterior</string>
+    <string name="ambient_power_puts_back">A Configuração avançada pode trazer de volta o anterior</string>
+    <string name="ambient_ok_makes_lounge">OK usa o do Lounge como protetor de tela</string>
+    <string name="ambient_ok_opens_tv_settings">OK abre as configurações de protetor de tela da TV: escolha Lounge e pressione Voltar</string>
+    <string name="ambient_tv_did_not_take">As configurações da TV não definiram o Lounge como protetor de tela. OK abre a Configuração avançada, que consegue assim que a Depuração USB estiver ativada</string>
+    <string name="ambient_tv_cannot_choose">As configurações desta TV não deixam escolher um protetor de tela. OK abre a Configuração avançada, que consegue assim que a Depuração USB estiver ativada</string>
+    <string name="ambient_ok_opens_power_setup">OK abre a Configuração avançada, que pode usar o do Lounge como protetor de tela</string>
+    <string name="ambient_not_taken">A TV não aceitou a mudança. Tente novamente ou, nas configurações da TV, abra Sistema e depois Protetor de tela.</string>
+    <string name="ambient_style_title">Estilo</string>
+    <string name="ambient_style_pictures">Imagens</string>
+    <string name="ambient_style_pictures_about">Imagens da sua tela inicial</string>
+    <string name="ambient_style_mix">Mistura</string>
+    <string name="ambient_style_mix_about">Todas as cenas em ordem aleatória, alguns minutos cada</string>
+    <string name="ambient_style_too_heavy">A cena %1$s é pesada demais para esta TV, então Imagens aparece no lugar</string>
+    <string name="ambient_style_not_drawn">Esta TV não conseguiu desenhar a cena %1$s, então Imagens aparece no lugar</string>
+    <string name="ambient_preview_title">Ver em tela cheia</string>
+    <string name="ambient_preview_subtitle">Qualquer tecla traz você de volta</string>
+    <string name="ambient_footnote_pictures">As imagens vêm do que já está na sua tela inicial e as cenas abstratas são desenhadas na própria TV; nada é baixado para isso.</string>
+    <string name="ambient_footnote_when">A TV decide quando o protetor de tela começa. Para mudar isso, nas configurações da TV, abra Sistema e depois Protetor de tela.</string>
+</resources>

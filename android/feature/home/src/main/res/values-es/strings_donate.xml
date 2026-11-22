@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="donate_title">Apoyar a Lounge</string>
+    <string name="donate_headline">Sin anuncios. Sin rastreo. Sin precio.</string>
+    <string name="donate_one_thing">Esto es lo único que Lounge pide.</string>
+    <plurals name="donate_had_weeks">
+        <item quantity="one">Llevas %1$d semana con Lounge en esta TV.</item>
+        <item quantity="many">Llevas %1$d semanas con Lounge en esta TV.</item>
+        <item quantity="other">Llevas %1$d semanas con Lounge en esta TV.</item>
+    </plurals>
+    <plurals name="donate_had_months">
+        <item quantity="one">Llevas %1$d mes con Lounge en esta TV.</item>
+        <item quantity="many">Llevas %1$d meses con Lounge en esta TV.</item>
+        <item quantity="other">Llevas %1$d meses con Lounge en esta TV.</item>
+    </plurals>
+    <string name="donate_had_over_a_year">Llevas más de un año con Lounge en esta TV.</string>
+    <plurals name="donate_had_over_years">
+        <item quantity="one">Llevas más de %1$d año con Lounge en esta TV.</item>
+        <item quantity="many">Llevas más de %1$d años con Lounge en esta TV.</item>
+        <item quantity="other">Llevas más de %1$d años con Lounge en esta TV.</item>
+    </plurals>
+    <string name="donate_ask">Si se ha ganado su lugar, dona lo que para ti haya valido. Hasta el precio de un café lo mantiene en marcha, y cualquier cantidad ayuda.</string>
+    <string name="donate_how">Lleva más o menos un minuto desde el teléfono, y todo llega directo a su creador. Lounge sigue igual, dones o no.</string>
+    <string name="donate_thank_you">Gracias, de parte de</string>
+    <string name="donate_point_camera">Apunta aquí con la cámara del teléfono</string>
+    <string name="donate_give_with">Donar con</string>
+    <string name="donate_note_paypal">Escanea con la cámara del teléfono.\nTú eliges la cantidad.</string>
+    <string name="donate_note_coin">Escanea con una billetera.\nEnvía solo %1$s a esta dirección.</string>
+    <string name="donate_code_description">Un código para donar con %1$s a %2$s</string>
+</resources>

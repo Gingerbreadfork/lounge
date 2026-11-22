@@ -8,6 +8,8 @@ android {
     compileSdk = 37
     defaultConfig { minSdk = 28 }
     buildFeatures { compose = true }
+    // The wording tests read real string resources on the JVM.
+    testOptions { unitTests { isIncludeAndroidResources = true } }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -33,4 +35,5 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.compose.ui.tooling.preview)
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
 }

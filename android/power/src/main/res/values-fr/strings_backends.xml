@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="backends_took_too_long">La TV a mis trop de temps à répondre. Réessayez.</string>
+    <string name="backends_unreachable">Lounge n’a pas pu joindre le débogage USB. Vérifiez qu’il est toujours activé dans Options pour les développeurs, puis réessayez.</string>
+    <string name="backends_dropped">La connexion au débogage USB a été coupée. Réessayez.</string>
+    <string name="backends_tls">Cette TV demande le code d’association du débogage sans fil, que la Configuration avancée ne peut pas utiliser. Activez plutôt le débogage USB dans Options pour les développeurs, puis réessayez.</string>
+    <string name="backends_not_this_tv">Ce n’est pas le service de débogage de cette TV qui a répondu, donc Lounge ne s’est pas connecté. Redémarrez la TV, puis réessayez.</string>
+    <string name="backends_key_not_approved">Cette TV n’autorise plus Lounge. Dans Paramètres, ouvrez Configuration avancée et choisissez Connecter.</string>
+    <string name="backends_shizuku_not_allowed">Shizuku n’a pas autorisé Lounge. Ouvrez Shizuku, autorisez Lounge, puis réessayez.</string>
+    <string name="backends_shizuku_not_running">Shizuku n’a pas pu exécuter cette action. Ouvrez Shizuku et vérifiez qu’il fonctionne.</string>
+</resources>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="updates_word_checking">Controleren…</string>
+    <string name="updates_word_available">%1$s beschikbaar</string>
+    <string name="updates_word_downloading">Downloaden…</string>
+    <string name="updates_word_ready">%1$s staat klaar</string>
+    <string name="updates_word_installing">Installeren…</string>
+    <string name="updates_word_problem">Probleem</string>
+    <string name="updates_word_up_to_date">Up-to-date</string>
+    <string name="updates_word_manual">Handmatig</string>
+    <string name="updates_title">Updates</string>
+    <string name="updates_not_checked">Nog niet gecontroleerd</string>
+    <string name="updates_checked_ago">Laatst gecontroleerd: %1$s</string>
+    <string name="updates_checked_never">Nooit gecontroleerd</string>
+    <string name="updates_press_to_check">Druk om nu te controleren</string>
+    <string name="updates_check_twice">Twee keer per dag controleren</string>
+    <string name="updates_get">Lounge %1$s ophalen</string>
+    <string name="updates_download">Downloaden</string>
+    <string name="updates_downloading">Lounge %1$s wordt gedownload</string>
+    <string name="updates_percent">%1$d%%</string>
+    <string name="updates_install">Lounge %1$s installeren</string>
+    <string name="updates_confirm">Bevestigen</string>
+    <string name="updates_now">Nu</string>
+    <string name="updates_installing">Lounge %1$s wordt geïnstalleerd…</string>
+    <string name="updates_allow_install">Lounge updates laten installeren</string>
+    <string name="updates_install_hint">OK opent de lijst van Android: zet Lounge daar aan en druk dan op Terug</string>
+    <string name="updates_whats_new">Wat is er nieuw in %1$s</string>
+    <string name="updates_how_silent">Lounge kijkt twee keer per dag naar zijn releases op GitHub. Updates worden vanzelf geïnstalleerd terwijl je in een andere app bent, en Lounge komt terug zoals het was.</string>
+    <string name="updates_how_power_setup">Lounge kijkt twee keer per dag naar zijn releases op GitHub. Geavanceerde configuratie installeert updates zonder te vragen, terwijl je in een andere app bent.</string>
+    <string name="updates_how_confirm">Lounge kijkt twee keer per dag naar zijn releases op GitHub. Android vraagt je deze update te bevestigen, en Play Protect kan erbij zeggen dat het deze ontwikkelaar niet kent: kies Meer details en dan Toch installeren. Na deze keer worden updates vanzelf geïnstalleerd.</string>
+    <string name="updates_how_needs_permission">Lounge kijkt twee keer per dag naar zijn releases op GitHub. Android laat Lounge nog geen apps installeren. Wil je dat toestaan, open dan in de instellingen van de tv Apps, dan Speciale app-toegang en dan Onbekende apps installeren; of verbind Geavanceerde configuratie.</string>
+</resources>

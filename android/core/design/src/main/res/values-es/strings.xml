@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="language_tag">es</string>
+    <string name="common_on">Sí</string>
+    <string name="common_off">No</string>
+    <string name="common_open">Abrir</string>
+    <string name="common_show">Mostrar</string>
+    <string name="common_hide">Ocultar</string>
+    <string name="common_hidden">Oculto</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_back">Atrás</string>
+    <string name="common_done">Listo</string>
+    <string name="common_try_again">Reintentar</string>
+    <string name="common_settings">Ajustes</string>
+    <string name="common_search">Buscar</string>
+    <string name="common_all_apps">Todas las apps</string>
+    <string name="common_tv_guide">Guía de TV</string>
+    <string name="common_tv_controls">Controles de la TV</string>
+    <string name="common_notifications">Notificaciones</string>
+    <string name="common_screensaver">Salvapantallas</string>
+    <string name="common_power_setup">Configuración avanzada</string>
+    <string name="common_phone_companion">Lounge en el teléfono</string>
+    <string name="words_just_now">hace un momento</string>
+    <plurals name="words_minutes_ago">
+        <item quantity="one">hace %1$d minuto</item>
+        <item quantity="many">hace %1$d minutos</item>
+        <item quantity="other">hace %1$d minutos</item>
+    </plurals>
+    <plurals name="words_hours_ago">
+        <item quantity="one">hace %1$d hora</item>
+        <item quantity="many">hace %1$d horas</item>
+        <item quantity="other">hace %1$d horas</item>
+    </plurals>
+    <plurals name="words_days_ago">
+        <item quantity="one">hace %1$d día</item>
+        <item quantity="many">hace %1$d días</item>
+        <item quantity="other">hace %1$d días</item>
+    </plurals>
+    <string name="words_clock_am">%1$s a. m.</string>
+    <string name="words_clock_pm">%1$s p. m.</string>
+</resources>

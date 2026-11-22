@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="top_bar_now_playing">Lecture en cours, %1$s</string>
+</resources>

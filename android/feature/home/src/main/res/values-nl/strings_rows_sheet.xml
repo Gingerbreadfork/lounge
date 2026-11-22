@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rows_sheet_title">Rijen op het startscherm</string>
+    <string name="rows_sheet_subtitle">OK toont of verbergt een rij. Houd OK ingedrukt om er een op te pakken, verplaats die met Omhoog en Omlaag, en zet hem neer met OK of Terug.</string>
+    <string name="rows_sheet_loading">Laden…</string>
+    <string name="rows_sheet_moving">Wordt verplaatst</string>
+    <string name="rows_sheet_shown">Zichtbaar</string>
+    <string name="rows_sheet_empty">Leeg</string>
+    <string name="rows_sheet_reset">Rijen terugzetten in de gewone volgorde</string>
+    <string name="rows_sheet_reset_confirm">Ja, terugzetten</string>
+    <string name="rows_sheet_reset_keeps">Wat je hebt verborgen blijft verborgen</string>
+    <string name="rows_sheet_reset_done">Klaar. Wat je hebt verborgen blijft verborgen.</string>
+    <string name="rows_sheet_hidden_group">Verborgen in elke rij</string>
+    <string name="rows_sheet_hidden_none">Er is niets verborgen. Houd OK ingedrukt op een tegel en kies Verbergen.</string>
+    <string name="rows_sheet_continue_group">Verder kijken komt van</string>
+    <string name="rows_sheet_continue_none">Nog niets om verder te kijken. Apps en plug-ins staan hier zodra ze iets aanleveren.</string>
+    <string name="rows_sheet_source_nothing">Nu niets om verder te kijken</string>
+    <plurals name="rows_sheet_source_titles">
+        <item quantity="one">%1$d titel</item>
+        <item quantity="other">%1$d titels</item>
+    </plurals>
+    <string name="rows_sheet_footnote">Een lege rij verschijnt pas op het scherm als er iets te tonen is.</string>
+</resources>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The colour themes, called rooms: each has a name and a line saying what it looks like. Shown in Settings and in the setup steps. -->
+    <string name="themes_dusk_title">Dusk</string>
+    <string name="themes_dusk_tagline">Indigo night, coral lamp</string>
+    <string name="themes_house_title">House</string>
+    <string name="themes_house_tagline">Warm plum, tungsten light</string>
+    <string name="themes_hearth_title">Hearth</string>
+    <string name="themes_hearth_tagline">Umber walls, firelight</string>
+    <string name="themes_opera_title">Opera</string>
+    <string name="themes_opera_tagline">Red velvet and gilt</string>
+    <string name="themes_marquee_title">Marquee</string>
+    <string name="themes_marquee_tagline">Navy, marquee bulbs</string>
+    <string name="themes_green_room_title">Green room</string>
+    <string name="themes_green_room_tagline">Deep green, brass lamp</string>
+    <string name="themes_moonlight_title">Moonlight</string>
+    <string name="themes_moonlight_tagline">Cool slate, moonlight</string>
+    <string name="themes_graphite_title">Graphite</string>
+    <string name="themes_graphite_tagline">No colour, warm white</string>
+    <string name="themes_cabaret_title">Cabaret</string>
+    <string name="themes_cabaret_tagline">Black violet, pink neon</string>
+    <string name="themes_aquarium_title">Aquarium</string>
+    <string name="themes_aquarium_tagline">Deep teal, a fish tank\'s glow</string>
+    <string name="themes_absinthe_title">Absinthe</string>
+    <string name="themes_absinthe_tagline">Dark olive, green-gold glow</string>
+    <string name="themes_ultraviolet_title">Ultraviolet</string>
+    <string name="themes_ultraviolet_tagline">Near black, a blacklight</string>
+    <string name="themes_blackout_title">Blackout</string>
+    <string name="themes_blackout_tagline">True black for OLED panels</string>
+    <string name="themes_high_contrast_title">High contrast</string>
+    <string name="themes_high_contrast_tagline">Bolder text and edges</string>
+</resources>

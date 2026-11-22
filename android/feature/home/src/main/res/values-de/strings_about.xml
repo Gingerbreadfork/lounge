@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_title">Über Lounge</string>
+    <string name="about_what">Ein Startbildschirm für deinen Fernseher, der sich nach dem richtet, was du schaust.</string>
+    <string name="about_terms">Kostenlos und quelloffen unter der MIT-Lizenz. Kein Konto, keine Werbung, und nichts verlässt das Haus.</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_version_unknown">Version unbekannt</string>
+    <plurals name="about_fact_plugins">
+        <item quantity="one">Plugin</item>
+        <item quantity="other">Plugins</item>
+    </plurals>
+    <plurals name="about_fact_scenes">
+        <item quantity="one">Szene</item>
+        <item quantity="other">Szenen</item>
+    </plurals>
+    <plurals name="about_fact_themes">
+        <item quantity="one">Design</item>
+        <item quantity="other">Designs</item>
+    </plurals>
+    <string name="about_made_by">Entwickelt von</string>
+    <string name="about_set_in">Gesetzt in Bricolage Grotesque und Figtree.</string>
+    <string name="about_scan">Scanne das mit deiner Handykamera</string>
+    <string name="about_leads_to">Führt zu</string>
+    <string name="about_link_source">Quellcode</string>
+    <string name="about_link_report">Problem melden</string>
+    <string name="about_link_whats_new">Neuerungen</string>
+    <string name="about_link_maker_on_x">Gingerbreadfork auf X</string>
+    <string name="about_code_description">Ein Code, der %1$s öffnet</string>
+    <string name="about_support">Lounge unterstützen</string>
+    <string name="about_support_value">Jeder Beitrag hilft</string>
+</resources>

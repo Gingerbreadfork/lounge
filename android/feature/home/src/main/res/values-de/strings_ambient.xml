@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ambient_playing_description">Läuft</string>
+    <string name="ambient_tv_own">Vom Fernseher</string>
+    <string name="ambient_subtitle_ours">Deine Bilder oder eine ruhige abstrakte Szene, mit Uhr. Alles wandert leicht und wird gedimmt, um OLED-Displays zu schonen.</string>
+    <string name="ambient_subtitle_other">Zeigt deine Bilder oder eine ruhige abstrakte Szene mit Uhr, wenn der Fernseher im Leerlauf ist.</string>
+    <string name="ambient_switching">Wird umgestellt …</string>
+    <string name="ambient_ok_puts_back">OK stellt den vorherigen wieder ein</string>
+    <string name="ambient_power_puts_back">Die Erweiterte Einrichtung kann den vorherigen wieder einstellen</string>
+    <string name="ambient_ok_makes_lounge">OK macht Lounge zum Bildschirmschoner</string>
+    <string name="ambient_ok_opens_tv_settings">OK öffnet die Bildschirmschoner-Einstellungen des Fernsehers: Wähle dort Lounge und drücke dann Zurück</string>
+    <string name="ambient_tv_did_not_take">Die Einstellungen des Fernsehers haben Lounge nicht zum Bildschirmschoner gemacht. OK öffnet die Erweiterte Einrichtung; sie kann das, sobald USB-Debugging an ist</string>
+    <string name="ambient_tv_cannot_choose">In den Einstellungen dieses Fernsehers lässt sich kein Bildschirmschoner wählen. OK öffnet die Erweiterte Einrichtung; sie kann das, sobald USB-Debugging an ist</string>
+    <string name="ambient_ok_opens_power_setup">OK öffnet die Erweiterte Einrichtung, die Lounge zum Bildschirmschoner machen kann</string>
+    <string name="ambient_not_taken">Der Fernseher hat die Änderung nicht übernommen. Versuche es erneut oder öffne in den Einstellungen des Fernsehers „System“ und dann „Bildschirmschoner“.</string>
+    <string name="ambient_style_title">Stil</string>
+    <string name="ambient_style_pictures">Bilder</string>
+    <string name="ambient_style_pictures_about">Bilder von deinem Startbildschirm</string>
+    <string name="ambient_style_mix">Mix</string>
+    <string name="ambient_style_mix_about">Alle Szenen in zufälliger Folge, jede ein paar Minuten</string>
+    <string name="ambient_style_too_heavy">%1$s ist für diesen Fernseher zu aufwendig, daher wird stattdessen „Bilder“ gezeigt</string>
+    <string name="ambient_style_not_drawn">%1$s ließ sich auf diesem Fernseher nicht darstellen, daher wird stattdessen „Bilder“ gezeigt</string>
+    <string name="ambient_preview_title">Im Vollbild ansehen</string>
+    <string name="ambient_preview_subtitle">Jede Taste bringt dich zurück</string>
+    <string name="ambient_footnote_pictures">Bilder stammen von dem, was schon auf deinem Startbildschirm ist, und abstrakte Szenen werden auf dem Fernseher gezeichnet; dafür wird nichts heruntergeladen.</string>
+    <string name="ambient_footnote_when">Der Fernseher bestimmt, wann der Bildschirmschoner startet. Um das zu ändern, öffne in den Einstellungen des Fernsehers „System“ und dann „Bildschirmschoner“.</string>
+</resources>

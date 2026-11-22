@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- What a screen reader offers on a tile: OK on a control such as a lamp, and holding OK for the tile's menu. -->
+    <string name="tiles_press">Press</string>
+    <string name="tiles_options">Options</string>
+
+    <!-- A tile as a screen reader says it. %1$s is its title and %2$s the row it sits in: "Netflix, Your apps". -->
+    <string name="tiles_description">%1$s, %2$s</string>
+    <!-- The same with the tile's state after it as %3$s: "The Bear, Continue watching, Season 2, Episode 4, 23 minutes left". -->
+    <string name="tiles_description_state">%1$s, %2$s, %3$s</string>
+    <!-- Two things a screen reader says of a tile, one after the other: "live, pinned". -->
+    <string name="tiles_spoken_join">%1$s, %2$s</string>
+    <!-- The states a screen reader says after a tile's title, each a part of that list. -->
+    <string name="tiles_spoken_live">live</string>
+    <string name="tiles_spoken_new">new</string>
+    <!-- Said of a device that is connected to the TV. -->
+    <string name="tiles_spoken_connected">connected</string>
+    <string name="tiles_spoken_pinned_stage">pinned to the Stage</string>
+    <!-- Said of an app pinned to the front of Your apps. -->
+    <string name="tiles_spoken_pinned">pinned</string>
+    <string name="tiles_spoken_hidden">hidden from every row</string>
+    <!-- Said by a screen reader in place of an episode code such as S2 E4. %1$s is the season's number and %2$s the episode's. -->
+    <string name="tiles_spoken_episode">Season %1$s, Episode %2$s</string>
+
+    <!-- The badges drawn on a tile: on air now, and newly added. -->
+    <string name="tiles_badge_live">Live</string>
+    <string name="tiles_badge_new">New</string>
+</resources>

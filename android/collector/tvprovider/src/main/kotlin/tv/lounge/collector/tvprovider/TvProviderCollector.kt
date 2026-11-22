@@ -345,7 +345,7 @@ class TvProviderCollector internal constructor(private val context: Context, pri
         id = "chan:$id",
         kind = ProgramKind.CHANNEL,
         pkg = packageName ?: "",
-        title = displayName?.takeIf { it.isNotBlank() } ?: displayNumber ?: "Channel $id",
+        title = displayName?.takeIf { it.isNotBlank() } ?: displayNumber ?: context.getString(R.string.tv_provider_collector_channel, id),
         subtitle = description?.takeIf { it.isNotBlank() },
         season = null,
         episode = null,

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The buttons under each setup step. Start is on the last step and closes setup. -->
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_start">Start</string>
+    <string name="onboarding_skip">Skip</string>
+
+    <!-- The first step: choosing a theme. -->
+    <string name="onboarding_look_title">Welcome to Lounge</string>
+    <string name="onboarding_look_body">Your TV, laid out around what you actually watch. First, how should it look? You can change this any time.</string>
+    <!-- Shown when a game controller is connected. A, B, Y, Start and Select are its buttons. -->
+    <string name="onboarding_look_controller">On a controller, A chooses, B goes back, Y opens a tile\'s options, Start searches and Select opens Settings.</string>
+
+    <!-- The second step: what Lounge is allowed to read. -->
+    <string name="onboarding_access_title">What may Lounge see?</string>
+    <string name="onboarding_access_body">Each one adds a part of the home screen. Nothing leaves this TV; say no to any of them.</string>
+    <string name="onboarding_access_power">Power Setup, the next step, can allow any of these as well.</string>
+
+    <!-- The third step: making Lounge the home screen through Power Setup. -->
+    <string name="onboarding_power_title">Make it your home screen</string>
+    <string name="onboarding_power_body_done">Done: pressing Home brings Lounge up. Power Setup can also allow the accesses from the last step, and turn the TV on and switch its input.</string>
+    <!-- “Always allow” and Allow are what Android's own prompt says. -->
+    <string name="onboarding_power_body">Google TV has no setting for this. Power Setup can do it through the TV\'s USB debugging, and the TV asks you once: tick “Always allow”, then choose Allow.</string>
+    <!-- The row that connects Power Setup: its title in each state. -->
+    <string name="onboarding_power_connect">Connect Power Setup</string>
+    <string name="onboarding_power_connected">Connected</string>
+    <string name="onboarding_power_waiting">Waiting for you to allow it…</string>
+    <string name="onboarding_power_debugging_first">Turn on USB debugging first</string>
+    <!-- The same row's value in each state. The first says how Power Setup is connected. -->
+    <string name="onboarding_power_by_usb_debugging">USB debugging</string>
+    <string name="onboarding_power_look_at_prompt">Look at the prompt</string>
+    <string name="onboarding_power_open_developer_options">Open Developer options</string>
+    <string name="onboarding_power_connecting">Connecting…</string>
+    <string name="onboarding_power_asks_once">The TV asks you once</string>
+    <!-- The row that makes Lounge the home screen, and its value in each state. -->
+    <string name="onboarding_home_title">Make Lounge the home screen</string>
+    <string name="onboarding_home_done">Done</string>
+    <string name="onboarding_home_working">Working…</string>
+    <string name="onboarding_home_failed">Didn\'t work</string>
+    <string name="onboarding_home_do">Do it</string>
+    <string name="onboarding_home_connect_first">Connect first</string>
+    <!-- Default home screen is a row in Lounge's Settings. -->
+    <string name="onboarding_home_not_taken">Android didn\'t make Lounge the home screen. Try again, or in Settings open Default home screen for other ways.</string>
+    <!-- Counts the TV's own home apps that Lounge turns off. %1$s names them, such as "Google TV Home". -->
+    <plurals name="onboarding_power_homes_off">
+        <item quantity="one">This TV\'s own home comes before any chosen one, so Lounge turns %1$s off too. Nothing is uninstalled; to turn it back on, in Settings open Power Setup, and do that before you uninstall Lounge.</item>
+        <item quantity="other">This TV\'s own home comes before any chosen one, so Lounge turns %1$s off too. Nothing is uninstalled; to turn them back on, in Settings open Power Setup, and do that before you uninstall Lounge.</item>
+    </plurals>
+    <!-- Joins the names of two home apps inside the sentence above. -->
+    <string name="onboarding_power_homes_and">%1$s and %2$s</string>
+    <string name="onboarding_power_home_stays">The TV\'s own home screen stays installed, so casting, the gear button and the TV guide keep working. To undo this, in Settings open Power Setup.</string>
+
+    <!-- The fourth step: pairing a phone. -->
+    <string name="onboarding_phone_title">Add your phone</string>
+    <string name="onboarding_phone_body_on">Scan the code with your phone\'s camera. Your phone becomes a remote and a keyboard, and the place to arrange rows and install plugins.</string>
+    <string name="onboarding_phone_body_off">Turn on the phone companion to show a code for your phone to scan. Your phone becomes a remote and a keyboard, and the place to arrange rows and install plugins.</string>
+    <string name="onboarding_phone_footnote">Everything stays on your home network. To forget a phone later, in Settings open Phone companion.</string>
+    <!-- What a screen reader says for the QR code. -->
+    <string name="onboarding_phone_qr">Pairing code</string>
+    <!-- Under the QR code, above the code in digits. -->
+    <string name="onboarding_phone_type_code">Or type this code</string>
+    <!-- Under the code in digits: where to type it. %1$s is a web address, such as http://192.168.0.20:8787. -->
+    <string name="onboarding_phone_at">at %1$s</string>
+
+    <!-- The last step. -->
+    <string name="onboarding_done_title">That\'s the house</string>
+    <string name="onboarding_done_body">Press Home any time to come back to the Stage. Hold OK on a tile for its menu, Settings has the essentials, and the rest is on your phone.</string>
+    <!-- The top bar's buttons as this TV has them, in their order. -->
+    <string name="onboarding_done_reach">Up from the Stage reaches Search and Settings.</string>
+    <string name="onboarding_done_reach_controls">Up from the Stage reaches Search, TV controls and Settings.</string>
+    <string name="onboarding_done_reach_guide">Up from the Stage reaches Search, the TV guide and Settings.</string>
+    <string name="onboarding_done_reach_guide_controls">Up from the Stage reaches Search, the TV guide, TV controls and Settings.</string>
+    <string name="onboarding_done_back">Back always goes up one level; from the rows it returns to the Stage.</string>
+    <string name="onboarding_done_plugins">Plugins bring in your media server, live TV and the lights at home. In Settings, open Plugins.</string>
+</resources>

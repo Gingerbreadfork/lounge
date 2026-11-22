@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="donate_title">Soutenir Lounge</string>
+    <string name="donate_headline">Pas de publicité. Pas de pistage. Pas de prix.</string>
+    <string name="donate_one_thing">C’est la seule chose que Lounge demande.</string>
+    <plurals name="donate_had_weeks">
+        <item quantity="one">Lounge est sur cette TV depuis %1$d semaine.</item>
+        <item quantity="many">Lounge est sur cette TV depuis %1$d semaines.</item>
+        <item quantity="other">Lounge est sur cette TV depuis %1$d semaines.</item>
+    </plurals>
+    <plurals name="donate_had_months">
+        <item quantity="one">Lounge est sur cette TV depuis %1$d mois.</item>
+        <item quantity="many">Lounge est sur cette TV depuis %1$d mois.</item>
+        <item quantity="other">Lounge est sur cette TV depuis %1$d mois.</item>
+    </plurals>
+    <string name="donate_had_over_a_year">Lounge est sur cette TV depuis plus d’un an.</string>
+    <plurals name="donate_had_over_years">
+        <item quantity="one">Lounge est sur cette TV depuis plus de %1$d an.</item>
+        <item quantity="many">Lounge est sur cette TV depuis plus de %1$d ans.</item>
+        <item quantity="other">Lounge est sur cette TV depuis plus de %1$d ans.</item>
+    </plurals>
+    <string name="donate_ask">S’il a mérité sa place, donnez ce qu’il vaut à vos yeux. Même le prix d’un café le fait vivre, et le moindre geste compte vraiment.</string>
+    <string name="donate_how">Cela prend environ une minute depuis votre téléphone, et tout va directement à son créateur. Lounge reste exactement le même, que vous donniez ou non.</string>
+    <string name="donate_thank_you">Merci, de la part de</string>
+    <string name="donate_point_camera">Pointez l’appareil photo de votre téléphone ici</string>
+    <string name="donate_give_with">Donner avec</string>
+    <string name="donate_note_paypal">Scannez avec l’appareil photo de votre téléphone.\nVous choisissez le montant.</string>
+    <string name="donate_note_coin">Scannez avec un portefeuille.\nN’envoyez à cette adresse que cette monnaie : %1$s.</string>
+    <string name="donate_code_description">Un code pour donner avec %1$s, à l’adresse %2$s</string>
+</resources>

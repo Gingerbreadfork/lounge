@@ -37,6 +37,9 @@ class AmbientDreamService : DreamService(), LifecycleOwner, SavedStateRegistryOw
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val savedStateRegistry: SavedStateRegistry get() = savedState.savedStateRegistry
     override val viewModelStore: ViewModelStore = ViewModelStore()
+    private val spoken = tv.lounge.design.SpokenResources(this)
+
+    override fun getResources(): android.content.res.Resources = spoken.over(super.getResources())
 
     override fun onCreate() {
         super.onCreate()
@@ -57,18 +60,20 @@ class AmbientDreamService : DreamService(), LifecycleOwner, SavedStateRegistryOw
             setViewTreeViewModelStoreOwner(this@AmbientDreamService)
             setContent {
                 val uiPrefs by prefs.all.collectAsState(initial = app.startPrefs ?: Prefs.UiPrefs())
-                LoungeTheme(
-                    variant = LoungeThemeVariant.valueOf(uiPrefs.theme.name),
-                    reducedMotion = uiPrefs.reducedMotion ?: systemReducedMotion(),
-                    visuals = visualsFor(tier, uiPrefs.liteMode),
-                ) {
-                    // A dream started while the core is still opening waits for it off the main thread.
-                    val opened by produceState<CoreClient?>(if (app.coreSettled) app.awaitCoreOrNull() else null) {
-                        if (value == null) value = withContext(Dispatchers.IO) { app.awaitCoreOrNull() }
+                tv.lounge.design.InLanguage(uiPrefs.language) {
+                    LoungeTheme(
+                        variant = LoungeThemeVariant.valueOf(uiPrefs.theme.name),
+                        reducedMotion = uiPrefs.reducedMotion ?: systemReducedMotion(),
+                        visuals = visualsFor(tier, uiPrefs.liteMode),
+                    ) {
+                        // A dream started while the core is still opening waits for it off the main thread.
+                        val opened by produceState<CoreClient?>(if (app.coreSettled) app.awaitCoreOrNull() else null) {
+                            if (value == null) value = withContext(Dispatchers.IO) { app.awaitCoreOrNull() }
+                        }
+                        val core = opened
+                        // Without a core there is nothing to show, but the panel still rests in the dark.
+                        if (core != null) Screensaver(core, prefs) else Box(Modifier.fillMaxSize().background(LoungeTheme.colors.velvet))
                     }
-                    val core = opened
-                    // Without a core there is nothing to show, but the panel still rests in the dark.
-                    if (core != null) Screensaver(core, prefs) else Box(Modifier.fillMaxSize().background(LoungeTheme.colors.velvet))
                 }
             }
         }

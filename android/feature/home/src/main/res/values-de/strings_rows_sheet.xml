@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rows_sheet_title">Reihen des Startbildschirms</string>
+    <string name="rows_sheet_subtitle">OK blendet eine Reihe ein oder aus. Halte OK gedrückt, um eine aufzunehmen; mit den Pfeiltasten nach oben und unten verschiebst du sie, OK oder Zurück legt sie ab.</string>
+    <string name="rows_sheet_loading">Wird geladen …</string>
+    <string name="rows_sheet_moving">Wird verschoben</string>
+    <string name="rows_sheet_shown">Eingeblendet</string>
+    <string name="rows_sheet_empty">Leer</string>
+    <string name="rows_sheet_reset">Reihen wieder in die übliche Reihenfolge bringen</string>
+    <string name="rows_sheet_reset_confirm">Ja, zurücksetzen</string>
+    <string name="rows_sheet_reset_keeps">Ausgeblendetes bleibt ausgeblendet</string>
+    <string name="rows_sheet_reset_done">Erledigt. Was du ausgeblendet hast, bleibt ausgeblendet.</string>
+    <string name="rows_sheet_hidden_group">In allen Reihen ausgeblendet</string>
+    <string name="rows_sheet_hidden_none">Nichts ist ausgeblendet. Halte OK auf einer Kachel gedrückt und wähle „Ausblenden“.</string>
+    <string name="rows_sheet_continue_group">Quellen für „Weiterschauen“</string>
+    <string name="rows_sheet_continue_none">Noch nichts zum Weiterschauen. Apps und Plugins erscheinen hier, sobald sie etwas bringen.</string>
+    <string name="rows_sheet_source_nothing">Gerade nichts zum Weiterschauen</string>
+    <plurals name="rows_sheet_source_titles">
+        <item quantity="one">%1$d Titel</item>
+        <item quantity="other">%1$d Titel</item>
+    </plurals>
+    <string name="rows_sheet_footnote">Eine leere Reihe erscheint erst auf dem Bildschirm, wenn sie etwas zu zeigen hat.</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tiles_press">Premi</string>
+    <string name="tiles_options">Opzioni</string>
+    <string name="tiles_description">%1$s, %2$s</string>
+    <string name="tiles_description_state">%1$s, %2$s, %3$s</string>
+    <string name="tiles_spoken_join">%1$s, %2$s</string>
+    <string name="tiles_spoken_live">in diretta</string>
+    <string name="tiles_spoken_new">novità</string>
+    <string name="tiles_spoken_connected">connesso</string>
+    <string name="tiles_spoken_pinned_stage">fissato sul Palco</string>
+    <string name="tiles_spoken_pinned">fissata</string>
+    <string name="tiles_spoken_hidden">nascosto da tutte le righe</string>
+    <string name="tiles_spoken_episode">Stagione %1$s, episodio %2$s</string>
+    <string name="tiles_badge_live">In diretta</string>
+    <string name="tiles_badge_new">Novità</string>
+</resources>

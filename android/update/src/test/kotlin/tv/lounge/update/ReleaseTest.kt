@@ -5,10 +5,16 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import java.io.File
 import java.security.MessageDigest
 
+@RunWith(RobolectricTestRunner::class)
 class ReleaseTest {
+    private val resources get() = RuntimeEnvironment.getApplication().resources
+
     @Test
     fun theInstallScriptInstallsOnlyACopyThatStillMatches() {
         val dir = kotlin.io.path.createTempDirectory().toFile()
@@ -223,16 +229,16 @@ class ReleaseTest {
     @Test
     fun anUpdateMustBeNewerAndTheVersionItsReleaseNames() {
         val release = Version(0, 3, 2)
-        assertNull(versionProblem(release, "0.3.2", apkVersionCode = 7, installedVersionCode = 6))
+        assertNull(versionProblem(resources, release, "0.3.2", apkVersionCode = 7, installedVersionCode = 6))
         // A tag pushed before the version was bumped: installing it would leave 0.3.2 looking new forever.
-        assertTrue(versionProblem(release, "0.3.1", apkVersionCode = 7, installedVersionCode = 6)!!.contains("says 0.3.1"))
-        assertTrue(versionProblem(release, "0.3.2", apkVersionCode = 6, installedVersionCode = 6)!!.contains("no newer"))
-        assertTrue(versionProblem(release, null, apkVersionCode = 7, installedVersionCode = 6) != null)
+        assertTrue(versionProblem(resources, release, "0.3.1", apkVersionCode = 7, installedVersionCode = 6)!!.contains("says 0.3.1"))
+        assertTrue(versionProblem(resources, release, "0.3.2", apkVersionCode = 6, installedVersionCode = 6)!!.contains("no newer"))
+        assertTrue(versionProblem(resources, release, null, apkVersionCode = 7, installedVersionCode = 6) != null)
     }
 
     @Test
     fun failuresAreSaidAsSentencesWithWhatHappensNext() {
-        fun said(e: Throwable, next: Next) = failureCause(e).let { (cause, settled) -> UpdateState.Failed(cause, next.takeUnless { settled }, null, 0L).message }
+        fun said(e: Throwable, next: Next) = failureCause(resources, e).let { (cause, settled) -> failureMessage(resources, cause, next.takeUnless { settled }) }
         assertEquals("Lounge couldn't reach GitHub. Check the TV's internet connection. Lounge tries again later.", said(java.net.UnknownHostException("api.github.com"), Next.Later))
         assertEquals("GitHub took too long to answer. Lounge tries again later.", said(java.net.SocketTimeoutException("Read timed out"), Next.Later))
         assertEquals("The connection to GitHub dropped. Lounge tries again later.", said(java.io.EOFException(), Next.Later))
@@ -249,24 +255,25 @@ class ReleaseTest {
 
     @Test
     fun aFileThatWillNotWriteIsNotBlamedOnTheNetwork() {
-        val full = runCatching { onStorage { throw java.io.IOException("write failed: ENOSPC (No space left on device)") } }.exceptionOrNull()!!
-        assertEquals(NOT_STORED to false, failureCause(full))
+        val notStored = resources.getString(R.string.update_manager_not_stored)
+        val full = runCatching { onStorage(resources) { throw java.io.IOException("write failed: ENOSPC (No space left on device)") } }.exceptionOrNull()!!
+        assertEquals(notStored to false, failureCause(resources, full))
         assertTrue(full.cause is java.io.IOException)
-        assertEquals("kept", onStorage { "kept" })
-        assertFalse(NOT_STORED.contains("GitHub"))
+        assertEquals("kept", onStorage(resources) { "kept" })
+        assertFalse(notStored.contains("GitHub"))
     }
 
     @Test
     fun anInstallAndroidWillNeverTakeDoesNotSayTryAgain() {
         for (status in listOf(android.content.pm.PackageInstaller.STATUS_FAILURE_INCOMPATIBLE, android.content.pm.PackageInstaller.STATUS_FAILURE_CONFLICT, android.content.pm.PackageInstaller.STATUS_FAILURE_INVALID)) {
-            val problem = installProblem(status)
+            val problem = installProblem(resources, status)
             assertTrue(installNeverWorks(status) && problem.settled)
             assertFalse(problem.message!!, problem.message!!.contains("Try again", ignoreCase = true))
             assertTrue(problem.message!!.endsWith("Lounge waits for the next release."))
         }
         // One that could go better says what the person can do, or leaves the ending to what happens next.
-        assertTrue(installProblem(android.content.pm.PackageInstaller.STATUS_FAILURE_STORAGE).message!!.contains("Free some space"))
-        val other = installProblem(android.content.pm.PackageInstaller.STATUS_FAILURE)
+        assertTrue(installProblem(resources, android.content.pm.PackageInstaller.STATUS_FAILURE_STORAGE).message!!.contains("Free some space"))
+        val other = installProblem(resources, android.content.pm.PackageInstaller.STATUS_FAILURE)
         assertEquals("Android couldn't install the update." to false, other.message to other.settled)
     }
 
