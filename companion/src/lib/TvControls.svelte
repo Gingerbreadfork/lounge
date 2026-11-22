@@ -4,6 +4,7 @@
   import { api, explain, type TvControl, type TvControls } from './api';
   import BottomSheet from './BottomSheet.svelte';
   import Icon from './Icon.svelte';
+  import { t } from './lang.svelte';
   import { quiet, unpair } from './state.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
@@ -42,7 +43,8 @@
 
   function value(c: TvControl) {
     const r = runs[c.id];
-    return r?.state === 'sending' ? 'Sending…' : r?.state === 'sent' ? 'Sent' : r?.state === 'failed' ? "Didn't work" : (c.value ?? '');
+    // Translators: beside one of the TV's controls after it is pressed: how telling the TV went
+    return r?.state === 'sending' ? t('Sending…') : r?.state === 'sent' ? t('Sent') : r?.state === 'failed' ? t("Didn't work") : (c.value ?? '');
   }
   function why(c: TvControl) {
     const r = runs[c.id];
@@ -53,10 +55,10 @@
   const cable = $derived(!!tv?.controls.some((c) => c.id !== 'sleep'));
 </script>
 
-<BottomSheet title="TV controls" subtitle={ready && cable ? 'Turn the TV on or off and switch its input.' : null} {onclose}>
+<BottomSheet title={t('TV controls')} subtitle={ready && cable ? t('Turn the TV on or off and switch its input.') : null} {onclose}>
   {#if tv?.note}
     <p class="note">{tv.note}</p>
-    <p class="caption note">Volume and playback are on the remote, and work without it.</p>
+    <p class="caption note">{t('Volume and playback are on the remote, and work without it.')}</p>
   {:else if tv}
     <div class="list">
       {#each tv.controls as c, i (c.id)}
@@ -71,9 +73,10 @@
         </button>
       {/each}
     </div>
-    {#if cable}<p class="caption note">Lounge asks the TV through its HDMI cable; the TV decides what it does.</p>{/if}
+    {#if cable}<p class="caption note">{t('Lounge asks the TV through its HDMI cable; the TV decides what it does.')}</p>{/if}
   {:else}
-    <p class="caption note">{unread ? "The TV isn't answering. Check it is on, then open this again." : 'Reading them from the TV…'}</p>
+    <!-- Translators: in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls -->
+    <p class="caption note">{unread ? t("The TV isn't answering. Check it is on, then open this again.") : t('Reading them from the TV…')}</p>
   {/if}
 </BottomSheet>
 

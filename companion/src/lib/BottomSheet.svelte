@@ -3,6 +3,7 @@
   // Tab stays among its own buttons while it is open.
   import type { Snippet } from 'svelte';
   import Icon from './Icon.svelte';
+  import { t } from './lang.svelte';
   import { layer, type Opened } from './layers';
 
   let {
@@ -64,7 +65,7 @@
       <div class="title">{title}</div>
       {#if subtitle}<div class="caption">{subtitle}</div>{/if}
     </div>
-    <button class="icon-btn" onclick={close} aria-label="Close"><Icon name="close" size={22} /></button>
+    <button class="icon-btn" onclick={close} aria-label={t('Close')}><Icon name="close" size={22} /></button>
   </div>
   {@render children()}
 </div>

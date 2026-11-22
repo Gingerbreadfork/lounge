@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { AWAY, light, onLight } from './lib/api';
+  import { away, light, onLight } from './lib/api';
+  import { mark, t, tr } from './lib/lang.svelte';
   import { app, go } from './lib/state.svelte';
   import LiveView from './lib/LiveView.svelte';
   import PluginPanel from './lib/PluginPanel.svelte';
@@ -13,11 +14,15 @@
   import Pair from './pages/Pair.svelte';
 
   const tabs = [
-    { page: 'home', label: 'Home', d: 'M4 11 12 4l8 7v9H4z M10 20v-6h4v6' },
-    { page: 'remote', label: 'Remote', d: 'M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M12 9v6 M9 12h6' },
-    { page: 'layout', label: 'Layout', d: 'M4 5h16v4H4z M4 11h16v4H4z M4 17h16v2H4z' },
-    { page: 'plugins', label: 'Plugins', d: 'M9 4h6v3a2 2 0 0 0 2 2h3v6h-3a2 2 0 0 0-2 2v3H9v-3a2 2 0 0 0-2-2H4V9h3a2 2 0 0 0 2-2z' },
-    { page: 'more', label: 'More', d: 'M5 12h.01 M12 12h.01 M19 12h.01' },
+    // Translators: the first tab, which shows what is on the TV's home screen
+    { page: 'home', label: mark('Home'), d: 'M4 11 12 4l8 7v9H4z M10 20v-6h4v6' },
+    // Translators: the tab with the remote control for the TV
+    { page: 'remote', label: mark('Remote'), d: 'M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M12 9v6 M9 12h6' },
+    // Translators: the tab that arranges the TV's home screen
+    { page: 'layout', label: mark('Layout'), d: 'M4 5h16v4H4z M4 11h16v4H4z M4 17h16v2H4z' },
+    { page: 'plugins', label: mark('Plugins'), d: 'M9 4h6v3a2 2 0 0 0 2 2h3v6h-3a2 2 0 0 0-2 2v3H9v-3a2 2 0 0 0-2-2H4V9h3a2 2 0 0 0 2-2z' },
+    // Translators: the last tab, for backups, paired phones, diagnostics and about
+    { page: 'more', label: mark('More'), d: 'M5 12h.01 M12 12h.01 M19 12h.01' },
   ] as const;
 
   // The light follows what is on the TV: the spotlight's palette tints the companion's accent,
@@ -40,7 +45,7 @@
   <Pair />
 {:else}
   <div class="away-region" role="status">
-    {#if app.away}<p class="away">{AWAY}</p>{/if}
+    {#if app.away}<p class="away">{away()}</p>{/if}
   </div>
 
   {#if app.route.page === 'home' && app.route.id === 'apps'}<Apps />
@@ -58,11 +63,11 @@
     {#key app.live}<LiveView live={app.live} onclose={() => (app.live = null)} />{/key}
   {/if}
 
-  <nav class="tabs" aria-label="Sections">
-    {#each tabs as t (t.page)}
-      <button class="tab" class:active={app.route.page === t.page} onclick={() => go(t.page, undefined, { replace: true })} aria-current={app.route.page === t.page ? 'page' : undefined}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={t.d} /></svg>
-        {t.label}
+  <nav class="tabs" aria-label={t('Sections')}>
+    {#each tabs as tab (tab.page)}
+      <button class="tab" class:active={app.route.page === tab.page} onclick={() => go(tab.page, undefined, { replace: true })} aria-current={app.route.page === tab.page ? 'page' : undefined}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={tab.d} /></svg>
+        {tr(tab.label)}
       </button>
     {/each}
   </nav>

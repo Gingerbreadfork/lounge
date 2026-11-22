@@ -4,6 +4,7 @@
   import { api, type Panel, type PanelRow } from './api';
   import BottomSheet from './BottomSheet.svelte';
   import Icon, { drawn } from './Icon.svelte';
+  import { t } from './lang.svelte';
   import { layer, type Opened } from './layers';
   import { act, quiet, show, toast } from './state.svelte';
 
@@ -21,7 +22,7 @@
   let steps: Opened[] = [];
   const current = $derived(trail[trail.length - 1] ?? id);
   let panel = $state<Panel | null>(null);
-  let failed = $state<string | null>(null);
+  let failed = $state(false);
   let busy = $state<string | null>(null);
   let asking = $state<string | null>(null);
   let askTimer: ReturnType<typeof setTimeout> | undefined;
@@ -32,9 +33,9 @@
     if (of !== current) return;
     if (fresh) {
       panel = fresh;
-      failed = null;
+      failed = false;
     } else if (!panel && !document.hidden) {
-      failed = "The TV couldn't read this from the plugin. Close it and try again.";
+      failed = true;
     }
   }
 
@@ -42,7 +43,7 @@
   $effect(() => {
     const of = current;
     panel = null;
-    failed = null;
+    failed = false;
     asking = null;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -115,11 +116,13 @@
 
 <svelte:window {onkeydown} />
 
-<BottomSheet title={panel?.title ?? 'One moment'} subtitle={panel?.subtitle} {onclose}>
+<BottomSheet title={panel?.title ?? t('One moment')} subtitle={panel?.subtitle} {onclose}>
   {#snippet lead()}
-    {#if trail.length > 0}<button class="icon-btn" onclick={up} aria-label="Back"><Icon name="left" size={22} /></button>{/if}
+    <!-- Translators: a button that goes back to the panel this one was opened from -->
+    {#if trail.length > 0}<button class="icon-btn" onclick={up} aria-label={t('Back')}><Icon name="left" size={22} /></button>{/if}
   {/snippet}
-  {#if failed}<p class="caption note">{failed}</p>{/if}
+  <!-- Translators: "this" and "it" are a plugin's panel, such as a room or a thermostat -->
+  {#if failed}<p class="caption note">{t("The TV couldn't read this from the plugin. Close it and try again.")}</p>{/if}
   {#if panel}
     <div class="list" aria-live="polite">
       {#each panel.rows as row (row.id)}
@@ -138,9 +141,11 @@
                 {@render words(row, row.title)}
               </div>
             {/if}
-            <button class="icon-btn" disabled={!row.down} onclick={() => press(row, 'down')} aria-label="{row.title}, less"><Icon name="minus" size={22} /></button>
+            <!-- Translators: a button that turns down what {title} names, such as a light's brightness -->
+            <button class="icon-btn" disabled={!row.down} onclick={() => press(row, 'down')} aria-label={t('{title}, less', { title: row.title })}><Icon name="minus" size={22} /></button>
             <span class="value amount">{row.value ?? ''}</span>
-            <button class="icon-btn" disabled={!row.up} onclick={() => press(row, 'up')} aria-label="{row.title}, more"><Icon name="plus" size={22} /></button>
+            <!-- Translators: a button that turns up what {title} names, such as a light's brightness -->
+            <button class="icon-btn" disabled={!row.up} onclick={() => press(row, 'up')} aria-label={t('{title}, more', { title: row.title })}><Icon name="plus" size={22} /></button>
           </div>
         {:else if row.kind === 'open'}
           <button class="list-row" onclick={() => { tappedAt = Date.now(); if (row.sheet) open(row.sheet); }} aria-label={describe(row)}>
@@ -166,7 +171,8 @@
     </div>
     {#if panel.footnote}<p class="caption note">{panel.footnote}</p>{/if}
   {:else if !failed}
-    <p class="caption note">Reading it from the TV…</p>
+    <!-- Translators: "it" is a plugin's panel, such as a room or a thermostat -->
+    <p class="caption note">{t('Reading it from the TV…')}</p>
   {/if}
 </BottomSheet>
 

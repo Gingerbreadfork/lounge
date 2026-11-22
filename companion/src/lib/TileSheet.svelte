@@ -4,6 +4,7 @@
   import { api, art, type Layout, type Tile } from './api';
   import Icon from './Icon.svelte';
   import BottomSheet from './BottomSheet.svelte';
+  import { t } from './lang.svelte';
   import { act, app, isControl, openOnTv, panelOf, press, quiet } from './state.svelte';
   import { words } from './words';
 
@@ -47,28 +48,30 @@
     close();
   }
   function toggleStage() {
-    if (tile.stagePinned) change('Unpinned from the Stage', (l) => ({ stagePins: l.stagePins.filter((p) => p !== tile.id) }));
+    if (tile.stagePinned) change(t('Unpinned from the Stage'), (l) => ({ stagePins: l.stagePins.filter((p) => p !== tile.id) }));
     // The Stage has six places, so the oldest pin makes room.
-    else change('Pinned to the Stage', (l) => ({ stagePins: [...l.stagePins.filter((p) => p !== tile.id), tile.id].slice(-6) }));
+    else change(t('Pinned to the Stage'), (l) => ({ stagePins: [...l.stagePins.filter((p) => p !== tile.id), tile.id].slice(-6) }));
   }
   function toggleApp() {
-    if (tile.pinned) change('Unpinned from Your apps', (l) => ({ pinnedApps: l.pinnedApps.filter((p) => p !== pkg) }));
-    else change('Pinned to the front of Your apps', (l) => ({ pinnedApps: [...l.pinnedApps.filter((p) => p !== pkg), pkg] }));
+    if (tile.pinned) change(t('Unpinned from Your apps'), (l) => ({ pinnedApps: l.pinnedApps.filter((p) => p !== pkg) }));
+    else change(t('Pinned to the front of Your apps'), (l) => ({ pinnedApps: [...l.pinnedApps.filter((p) => p !== pkg), pkg] }));
   }
   function hide() {
-    change('Hidden from every row', (l) => ({ hidden: [...l.hidden.filter((h) => h !== tile.id), tile.id] }));
+    change(t('Hidden from every row'), (l) => ({ hidden: [...l.hidden.filter((h) => h !== tile.id), tile.id] }));
   }
   function hideAllFrom() {
     const from = tile.provider;
     if (!from) return;
-    change(`Everything from ${tile.providerName} hidden`, (l) => ({ mutedProviders: [...l.mutedProviders.filter((p) => p !== from), from] }));
+    // Translators: {source} is the app or plugin whose titles are hidden from Continue watching
+    change(t('Everything from {source} hidden', { source: tile.providerName ?? '' }), (l) => ({ mutedProviders: [...l.mutedProviders.filter((p) => p !== from), from] }));
   }
   function dismiss() {
-    change('It will not be shown again', (l) => ({ dismissedNotices: [...l.dismissedNotices.filter((n) => n !== tile.id), tile.id] }));
+    change(t('It will not be shown again'), (l) => ({ dismissedNotices: [...l.dismissedNotices.filter((n) => n !== tile.id), tile.id] }));
   }
   function hideRow() {
     if (!rowId) return;
-    change(`${rowTitle} row hidden`, (l) => ({ rowVisibility: { ...l.rowVisibility, [rowId]: false } }));
+    // Translators: {row} is a home screen row's title, such as "Continue watching"
+    change(t('{row} row hidden', { row: rowTitle ?? '' }), (l) => ({ rowVisibility: { ...l.rowVisibility, [rowId]: false } }));
   }
   // A control's own panel opens here on the phone, in this sheet's place.
   const panel = $derived(panelOf(tile.more));
@@ -87,7 +90,7 @@
     <div class="list">
       <button class="list-row" {@attach focus} disabled={busy} onclick={dismiss}>
         <span class="glyph"><Icon name="hide" size={24} /></span>
-        <span class="grow title">Don't show this again</span>
+        <span class="grow title">{t("Don't show this again")}</span>
       </button>
     </div>
   {:else}
@@ -99,7 +102,8 @@
       </button>
     {/if}
     {#if opens}
-      <button class="list-row" {@attach !panel && focus} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">{isControl(tile) ? 'Press' : 'Open on the TV'}</span></button>
+      <!-- Translators: menu choices; "Press" works a control such as a light switch, as a tap on it does -->
+      <button class="list-row" {@attach !panel && focus} onclick={open}><span class="glyph"><Icon name="open" size={22} /></span><span class="grow title">{isControl(tile) ? t('Press') : t('Open on the TV')}</span></button>
     {/if}
     {#if (opens && !tile.glyph) || tile.stagePinned}
       <button class="list-row" disabled={busy} onclick={toggleStage}>
@@ -115,12 +119,13 @@
     {/if}
     <button class="list-row" {@attach !opens && !panel && focus} disabled={busy} onclick={hide}>
       <span class="glyph"><Icon name="hide" size={24} /></span>
-      <span class="grow"><span class="title">{words.hide} {tile.title}</span><span class="caption">{words.hideDetail}</span></span>
+      <span class="grow"><span class="title">{words.hide(tile.title)}</span><span class="caption">{words.hideDetail}</span></span>
     </button>
     {#if tile.provider && tile.providerName}
       <button class="list-row" disabled={busy} onclick={hideAllFrom}>
         <span class="glyph"><Icon name="hide" size={24} /></span>
-        <span class="grow"><span class="title">Hide everything from {tile.providerName}</span><span class="caption">{words.hideAllFromDetail}</span></span>
+        <!-- Translators: a menu choice; {source} is the app or plugin a title comes from -->
+        <span class="grow"><span class="title">{t('Hide everything from {source}', { source: tile.providerName })}</span><span class="caption">{words.hideAllFromDetail}</span></span>
       </button>
     {/if}
     {#if rowId && rowTitle && rowShown}

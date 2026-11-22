@@ -2,6 +2,8 @@
 // header. Pictures, the live socket and the backup load by URL, so they ride on a session cookie
 // the TV sets once the token checks out; the token itself never goes into a URL.
 
+import { t } from './lang.svelte';
+
 export type Tile = {
   id: string; kind: 'POSTER' | 'LANDSCAPE' | 'APP_BANNER' | 'COMPACT' | string; title: string; subtitle?: string | null;
   artworkPath?: string | null; iconPath?: string | null; lightArgb: number; progress?: number | null;
@@ -48,7 +50,7 @@ export type NowPlaying = {
 export type Wallpaper = { artworkPath: string; title: string; subtitle?: string | null; source: string; framed?: boolean };
 export type Snapshot = { revision: number; generatedAtMs: number; stage: { spotlights: Spotlight[]; strip: Tile[] }; rows: Row[]; nowPlaying?: NowPlaying | null; wallpapers?: Wallpaper[] };
 /** The snapshot is null while the TV is shutting down. */
-export type State = { device: { name: string; model: string; version: string; tier: string }; snapshot: Snapshot | null };
+export type State = { device: { name: string; model: string; version: string; tier: string; lang?: string }; snapshot: Snapshot | null };
 /** One row the home could show: whether it is on, and one line on what it holds. */
 export type RowRef = { id: string; title: string; shown: boolean; chosen: boolean; count: number; detail: string };
 export type NamedRef = { id: string; title: string; iconPath?: string | null };
@@ -87,8 +89,8 @@ const TOKEN_KEY = 'lounge.token';
 export function token(): string | null {
   try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
-export function setToken(t: string | null) {
-  try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ }
+export function setToken(held: string | null) {
+  try { if (held) localStorage.setItem(TOKEN_KEY, held); else localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ }
 }
 
 /** A request that failed, with a sentence to show for it. `status` is 0 when the TV did not answer. */
@@ -97,8 +99,12 @@ export class ApiError extends Error {
 }
 
 /** What the phone says while the TV cannot be reached. */
-export const AWAY = "Lounge on the TV isn't answering. Check the TV is on and this phone is on the same Wi-Fi.";
-const SLOW = 'The TV took too long to answer. Check it is on, then try again.';
+export function away(): string {
+  return t("Lounge on the TV isn't answering. Check the TV is on and this phone is on the same Wi-Fi.");
+}
+function slow(): string {
+  return t('The TV took too long to answer. Check it is on, then try again.');
+}
 /** How long a request may take before the phone gives up on it; uploads and installs get longer. */
 const WAIT_MS = 8000;
 const UPLOAD_WAIT_MS = 120000;
@@ -112,31 +118,31 @@ export const contact = { heard: () => {}, missed: () => {} };
 
 /** Whether the TV's text already reads as a sentence for a person rather than for a developer. */
 function written(text: string): boolean {
-  return /^[A-Z]/.test(text) && /[.?]$/.test(text) && !text.includes('Exception') && text.length <= 400;
+  return /^[¿¡«„“"‹\s]*\p{Lu}/u.test(text) && /[.?]$/.test(text) && !text.includes('Exception') && text.length <= 400;
 }
 
 /** The TV's own sentence for a failure, or one for its status when it sent none. */
 function said(status: number, text: string): string {
   if (written(text)) return text;
   if (text) console.warn(`The TV answered ${status}: ${text}`);
-  if (status === 401) return 'Pair this phone with the TV first.';
-  if (status === 413) return 'That is too much to send to the TV at once.';
-  if (status >= 500) return 'Lounge on the TV ran into a problem. Try again in a moment.';
-  return "The TV couldn't do that. Try again.";
+  if (status === 401) return t('Pair this phone with the TV first.');
+  if (status === 413) return t('That is too much to send to the TV at once.');
+  if (status >= 500) return t('Lounge on the TV ran into a problem. Try again in a moment.');
+  return t("The TV couldn't do that. Try again.");
 }
 
 /** The sentence for any failure, ready for a toast. */
 export function explain(e: unknown): string {
   if (e instanceof ApiError) return e.message;
   console.warn(e);
-  return "That didn't work. Try again.";
+  return t("That didn't work. Try again.");
 }
 
 /** A picture from the TV, sent with the token as every request is. */
 async function picture(path: string): Promise<Blob> {
   const headers: Record<string, string> = {};
-  const t = token();
-  if (t) headers.Authorization = `Bearer ${t}`;
+  const held = token();
+  if (held) headers.Authorization = `Bearer ${held}`;
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), LIVE_WAIT_MS);
   try {
@@ -145,7 +151,7 @@ async function picture(path: string): Promise<Blob> {
     return await res.blob();
   } catch (e) {
     if (e instanceof ApiError) throw e;
-    throw new ApiError(0, abort.signal.aborted ? SLOW : AWAY);
+    throw new ApiError(0, abort.signal.aborted ? slow() : away());
   } finally {
     clearTimeout(timer);
   }
@@ -153,8 +159,8 @@ async function picture(path: string): Promise<Blob> {
 
 async function call<T>(method: string, path: string, body?: unknown, raw?: BodyInit, wait = WAIT_MS): Promise<T> {
   const headers: Record<string, string> = {};
-  const t = token();
-  if (t) headers.Authorization = `Bearer ${t}`;
+  const held = token();
+  if (held) headers.Authorization = `Bearer ${held}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), wait);
@@ -173,7 +179,7 @@ async function call<T>(method: string, path: string, body?: unknown, raw?: BodyI
     if (e instanceof SyntaxError) throw new ApiError(500, said(500, ''));
     // The request never got an answer: the TV is off, asleep or on another network.
     contact.missed();
-    throw new ApiError(0, abort.signal.aborted ? SLOW : AWAY);
+    throw new ApiError(0, abort.signal.aborted ? slow() : away());
   } finally {
     clearTimeout(timer);
   }

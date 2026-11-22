@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from '../lib/api';
   import Icon from '../lib/Icon.svelte';
+  import { t, tc } from '../lib/lang.svelte';
   import { app, connectionLabel, done, toast } from '../lib/state.svelte';
 
 
@@ -54,22 +55,22 @@
     };
   }
   // What was typed stays in the field until the TV has it, so a failure loses nothing.
-  async function sendText(label: string, f: (t: string) => Promise<unknown>) {
-    const t = text;
-    if (!t.trim()) return;
-    if ((await done(label, () => f(t))) && text === t) text = '';
+  async function sendText(label: string, f: (typed: string) => Promise<unknown>) {
+    const typed = text;
+    if (!typed.trim()) return;
+    if ((await done(label, () => f(typed))) && text === typed) text = '';
   }
   function send() {
-    sendText('Sent to Lounge on the TV', (t) => api.text(t));
+    sendText(t('Sent to Lounge on the TV'), (typed) => api.text(typed));
   }
   function search() {
-    sendText(`Searching the TV for “${text.trim()}”`, (t) => api.search(t));
+    sendText(t('Searching the TV for “{query}”', { query: text.trim() }), (typed) => api.search(typed));
   }
   let link = $derived(text.trim().match(/^https?:\/\/\S+$/) ? text.trim() : null);
   function openLink() {
     if (!link) return;
     const l = link;
-    sendText('Opened on the TV', () => api.open(`url:${l}`));
+    sendText(t('Opened on the TV'), () => api.open(`url:${l}`));
   }
 
   // Voice through the phone's own recogniser; the TV never needs one. Browsers give the microphone
@@ -90,9 +91,9 @@
     recognition.onend = () => (listening = false);
     recognition.onerror = (e: any) => {
       listening = false;
-      if (e?.error === 'no-speech') toast('Nothing was heard. Press the microphone and speak.');
-      else if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') toast("The browser did not allow the microphone. The keyboard's own dictation works in the field.");
-      else if (e?.error !== 'aborted') toast('Voice did not work this time. Try again, or use the keyboard.');
+      if (e?.error === 'no-speech') toast(t('Nothing was heard. Press the microphone and speak.'));
+      else if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') toast(t("The browser did not allow the microphone. The keyboard's own dictation works in the field."));
+      else if (e?.error !== 'aborted') toast(t('Voice did not work this time. Try again, or use the keyboard.'));
     };
     listening = true;
     recognition.start();
@@ -101,52 +102,54 @@
 
 <main class="page remote">
   <header class="page-head">
-    <div><p class="meta">{app.state?.device.name ?? 'Your TV'}</p><h1>Remote</h1></div>
+    <div><p class="meta">{app.state?.device.name ?? t('Your TV')}</p><h1>{t('Remote')}</h1></div>
     <div class="head-end">
       <span class="pill" class:on={app.connected}>{connectionLabel()}</span>
-      <button class="power" onclick={() => (app.tvControls = true)} aria-label="TV power and input"><Icon name="power" size={24} /></button>
+      <button class="power" onclick={() => (app.tvControls = true)} aria-label={t('TV power and input')}><Icon name="power" size={24} /></button>
     </div>
   </header>
 
-  <section class="dpad" aria-label="Direction pad">
-    <button class="pad up" {...press('up', true)} aria-label="Up"><Icon name="up" size={28} /></button>
-    <button class="pad left" {...press('left', true)} aria-label="Left"><Icon name="left" size={28} /></button>
-    <button class="pad ok" {...press('center')}>OK</button>
-    <button class="pad right" {...press('right', true)} aria-label="Right"><Icon name="right" size={28} /></button>
-    <button class="pad down" {...press('down', true)} aria-label="Down"><Icon name="down" size={28} /></button>
+  <section class="dpad" aria-label={t('Direction pad')}>
+    <button class="pad up" {...press('up', true)} aria-label={tc('remote key', 'Up')}><Icon name="up" size={28} /></button>
+    <button class="pad left" {...press('left', true)} aria-label={tc('remote key', 'Left')}><Icon name="left" size={28} /></button>
+    <button class="pad ok" {...press('center')}>{tc('remote key', 'OK')}</button>
+    <button class="pad right" {...press('right', true)} aria-label={tc('remote key', 'Right')}><Icon name="right" size={28} /></button>
+    <button class="pad down" {...press('down', true)} aria-label={tc('remote key', 'Down')}><Icon name="down" size={28} /></button>
   </section>
 
   <section class="keys nav">
-    <button class="key labelled" {...press('back')}><Icon name="back" size={22} /><span>Back</span></button>
-    <button class="key labelled" {...press('home')}><Icon name="home" size={22} /><span>Home</span></button>
-    <button class="key labelled" {...press('menu')}><Icon name="menu" size={22} /><span>Menu</span></button>
+    <button class="key labelled" {...press('back')}><Icon name="back" size={22} /><span>{tc('remote key', 'Back')}</span></button>
+    <button class="key labelled" {...press('home')}><Icon name="home" size={22} /><span>{tc('remote key', 'Home')}</span></button>
+    <button class="key labelled" {...press('menu')}><Icon name="menu" size={22} /><span>{tc('remote key', 'Menu')}</span></button>
   </section>
 
-  <section class="keys media" aria-label="Playback and volume">
-    <button class="key" {...press('rewind', true)} aria-label="Rewind"><Icon name="rewind" /></button>
-    <button class="key" {...press('play_pause')} aria-label="Play or pause"><Icon name="play_pause" size={26} /></button>
-    <button class="key" {...press('fast_forward', true)} aria-label="Fast forward"><Icon name="fast_forward" /></button>
-    <button class="key" {...press('volume_down', true)} aria-label="Volume down"><Icon name="volume_down" /></button>
-    <button class="key" {...press('mute')} aria-label="Mute"><Icon name="mute" /></button>
-    <button class="key" {...press('volume_up', true)} aria-label="Volume up"><Icon name="volume_up" /></button>
+  <section class="keys media" aria-label={t('Playback and volume')}>
+    <button class="key" {...press('rewind', true)} aria-label={tc('remote key', 'Rewind')}><Icon name="rewind" /></button>
+    <button class="key" {...press('play_pause')} aria-label={tc('remote key', 'Play or pause')}><Icon name="play_pause" size={26} /></button>
+    <button class="key" {...press('fast_forward', true)} aria-label={tc('remote key', 'Fast forward')}><Icon name="fast_forward" /></button>
+    <button class="key" {...press('volume_down', true)} aria-label={tc('remote key', 'Volume down')}><Icon name="volume_down" /></button>
+    <button class="key" {...press('mute')} aria-label={tc('remote key', 'Mute')}><Icon name="mute" /></button>
+    <button class="key" {...press('volume_up', true)} aria-label={tc('remote key', 'Volume up')}><Icon name="volume_up" /></button>
   </section>
 
   <section class="card type">
-    <label class="caption" for="type">Type on the TV</label>
+    <label class="caption" for="type">{t('Type on the TV')}</label>
     <div class="type-row">
-      <input id="type" bind:value={text} placeholder="Types into the field open in Lounge" enterkeyhint="send" onkeydown={(e) => { if (e.key === 'Enter') send(); }} autocapitalize="off" autocorrect="off" />
-      {#if Speech}<button class="round" class:listening onclick={voice} aria-label={listening ? 'Stop listening' : 'Speak'}><Icon name="mic" size={22} /></button>{/if}
+      <input id="type" bind:value={text} placeholder={t('Types into the field open in Lounge')} enterkeyhint="send" onkeydown={(e) => { if (e.key === 'Enter') send(); }} autocapitalize="off" autocorrect="off" />
+      {#if Speech}<button class="round" class:listening onclick={voice} aria-label={listening ? t('Stop listening') : t('Speak')}><Icon name="mic" size={22} /></button>{/if}
     </div>
     <div class="type-actions">
       {#if link}
-        <button class="btn" onclick={send}>Type</button>
-        <button class="btn primary" onclick={openLink}>Open on the TV</button>
+        <!-- Translators: a button that types the text into the field open on the TV -->
+        <button class="btn" onclick={send}>{t('Type')}</button>
+        <button class="btn primary" onclick={openLink}>{t('Open on the TV')}</button>
       {:else}
-        <button class="btn" onclick={send} disabled={!text.trim()}>Type</button>
-        <button class="btn primary" onclick={search} disabled={!text.trim()}>Search the TV</button>
+        <!-- Translators: a button that types the text into the field open on the TV -->
+        <button class="btn" onclick={send} disabled={!text.trim()}>{t('Type')}</button>
+        <button class="btn primary" onclick={search} disabled={!text.trim()}>{t('Search the TV')}</button>
       {/if}
     </div>
-    <p class="caption">Paste a link to open it on the TV.</p>
+    <p class="caption">{t('Paste a link to open it on the TV.')}</p>
   </section>
 </main>
 

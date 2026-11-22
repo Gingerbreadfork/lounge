@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { catalogs } from './po';
 
 // Served by the launcher's own HTTP server on the TV; in development it proxies to a TV.
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte(), catalogs()],
   build: { outDir: 'dist', emptyOutDir: true, target: 'es2022', sourcemap: false },
   server: {
     proxy: {

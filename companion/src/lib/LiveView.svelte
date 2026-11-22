@@ -4,6 +4,7 @@
   // one stops answering.
   import { api, type Live } from './api';
   import Icon from './Icon.svelte';
+  import { t } from './lang.svelte';
   import { layer, type Opened } from './layers';
   import { done, unpair } from './state.svelte';
 
@@ -22,9 +23,9 @@
   let address = '';
 
   const note = $derived(
-    resting ? 'Resting. Tap to carry on.'
-    : misses >= 3 ? (frame ? 'The picture has stopped arriving. Still trying.' : "The picture isn't arriving. Still trying.")
-    : frame ? null : 'One moment',
+    resting ? t('Resting. Tap to carry on.')
+    : misses >= 3 ? (frame ? t('The picture has stopped arriving. Still trying.') : t("The picture isn't arriving. Still trying."))
+    : frame ? null : t('One moment'),
   );
 
   let opened: Opened | null = null;
@@ -101,7 +102,8 @@
   }
   function onTv() {
     tap();
-    done(`${live.title} is on the TV`, () => api.liveOnTv({ ...live, url: address }));
+    // Translators: {title} is the name of a live picture, such as a camera
+    done(t('{title} is on the TV', { title: live.title }), () => api.liveOnTv({ ...live, url: address }));
   }
 </script>
 
@@ -110,14 +112,15 @@
 <div class="live" role="dialog" aria-modal="true" aria-label={live.title} tabindex="-1" bind:this={view} onpointerdown={tap}>
   {#if frame}<img src={frame} alt="" />{/if}
   <div class="top">
-    <button class="icon-btn" onclick={close} aria-label="Close"><Icon name="close" size={22} /></button>
+    <button class="icon-btn" onclick={close} aria-label={t('Close')}><Icon name="close" size={22} /></button>
   </div>
   <div class="foot">
     <div class="grow">
       <p class="title">{live.title}</p>
       <p class="caption" aria-live="polite">{note ?? ''}</p>
     </div>
-    <button class="btn" onclick={onTv}><Icon name="tv" size={20} />On the TV</button>
+    <!-- Translators: a button that puts this live picture on the TV's screen -->
+    <button class="btn" onclick={onTv}><Icon name="tv" size={20} />{t('On the TV')}</button>
   </div>
 </div>
 

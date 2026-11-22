@@ -5,6 +5,7 @@
   import { tick, type Snippet } from 'svelte';
   import { flip } from 'svelte/animate';
   import Icon from './Icon.svelte';
+  import { t } from './lang.svelte';
 
   let {
     items,
@@ -97,9 +98,15 @@
     offset = 0;
     if (moved) {
       const i = indexOf(key);
-      if (i >= 0) announcement = `${nameOf(items[i])} is now ${i + 1} of ${items.length}`;
+      if (i >= 0) announcement = placed(i);
       ondone();
     }
+  }
+
+  /** What a screen reader hears once the row now at `i` has been moved there. */
+  function placed(i: number): string {
+    // Translators: read out after a row is moved; {place} is its new place in a list of {count} rows
+    return t('{name} is now {place} of {count}', { name: nameOf(items[i]), place: i + 1, count: items.length });
   }
 
   /** The page scrolls on its own when the finger nears the top or bottom of the screen. */
@@ -123,7 +130,7 @@
     const key = keyOf(items[i]);
     onmove(i, to);
     await tick();
-    announcement = `${nameOf(items[to])} is now ${to + 1} of ${items.length}`;
+    announcement = placed(to);
     ondone();
     container.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"] ${refocus}`)?.focus();
   }
@@ -146,7 +153,7 @@
     >
       <button
         class="grip"
-        aria-label="Drag to move {nameOf(item)}, or use the arrow keys"
+        aria-label={t('Drag to move {name}, or use the arrow keys', { name: nameOf(item) })}
         onpointerdown={(e) => begin(e, i)}
         onpointermove={dragged}
         onpointerup={end}
@@ -156,8 +163,8 @@
         <Icon name="grip" size={22} />
       </button>
       <span class="sr-only">
-        <button class="sr-move up" disabled={i === 0} onclick={() => step(i, -1, '.sr-move.up')}>Move {nameOf(item)} up</button>
-        <button class="sr-move down" disabled={i === items.length - 1} onclick={() => step(i, 1, '.sr-move.down')}>Move {nameOf(item)} down</button>
+        <button class="sr-move up" disabled={i === 0} onclick={() => step(i, -1, '.sr-move.up')}>{t('Move {name} up', { name: nameOf(item) })}</button>
+        <button class="sr-move down" disabled={i === items.length - 1} onclick={() => step(i, 1, '.sr-move.down')}>{t('Move {name} down', { name: nameOf(item) })}</button>
       </span>
       {@render children(item, i)}
     </div>

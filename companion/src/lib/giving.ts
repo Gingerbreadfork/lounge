@@ -1,14 +1,17 @@
 // Where Lounge lives and the ways to give to its maker, as the TV's About and Support pages have
 // them. A test on the TV's side holds the two lists to each other, and each address to its checksum.
 
+import { mark } from './lang.svelte';
+
+/** A link's `name` is held as written and goes through `tr` where it is shown. */
 export type Link = { name: string; href: string; shown: string };
 export type Coin = { name: string; href: string; address: string };
 
 export const aboutLinks: Link[] = [
-  { name: 'The source code', href: 'https://github.com/Gingerbreadfork/lounge', shown: 'github.com/Gingerbreadfork/lounge' },
-  { name: 'Report a problem', href: 'https://github.com/Gingerbreadfork/lounge/issues', shown: 'github.com/Gingerbreadfork/lounge/issues' },
-  { name: "What's new", href: 'https://github.com/Gingerbreadfork/lounge/releases', shown: 'github.com/Gingerbreadfork/lounge/releases' },
-  { name: 'Gingerbreadfork on X', href: 'https://x.com/gingerbreadfork', shown: 'x.com/gingerbreadfork' },
+  { name: mark('The source code'), href: 'https://github.com/Gingerbreadfork/lounge', shown: 'github.com/Gingerbreadfork/lounge' },
+  { name: mark('Report a problem'), href: 'https://github.com/Gingerbreadfork/lounge/issues', shown: 'github.com/Gingerbreadfork/lounge/issues' },
+  { name: mark("What's new"), href: 'https://github.com/Gingerbreadfork/lounge/releases', shown: 'github.com/Gingerbreadfork/lounge/releases' },
+  { name: mark('Gingerbreadfork on X'), href: 'https://x.com/gingerbreadfork', shown: 'x.com/gingerbreadfork' },
 ];
 
 export const paypal: Link = { name: 'PayPal', href: 'https://paypal.me/gingerbreadfork', shown: 'paypal.me/gingerbreadfork' };

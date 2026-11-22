@@ -1,0 +1,1439 @@
+# Lounge, phone: nl
+#
+msgid ""
+msgstr ""
+"Language: nl\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. the first tab, which shows what is on the TV's home screen
+#: src/App.svelte src/pages/Apps.svelte
+msgid "Home"
+msgstr "Home"
+
+#. the tab with the remote control for the TV
+#: src/App.svelte src/pages/Remote.svelte
+msgid "Remote"
+msgstr "Remote"
+
+#. the tab that arranges the TV's home screen
+#: src/App.svelte src/pages/Layout.svelte
+msgid "Layout"
+msgstr "Indeling"
+
+#: src/App.svelte src/pages/More.svelte src/pages/Plugins.svelte
+msgid "Plugins"
+msgstr "Plug-ins"
+
+#. the last tab, for backups, paired phones, diagnostics and about
+#: src/App.svelte src/pages/More.svelte
+msgid "More"
+msgstr "Meer"
+
+#: src/App.svelte
+msgid "Sections"
+msgstr "Onderdelen"
+
+#: src/lib/BottomSheet.svelte src/lib/LiveView.svelte
+msgid "Close"
+msgstr "Sluiten"
+
+#: src/lib/LiveView.svelte
+msgid "Resting. Tap to carry on."
+msgstr "In rust. Tik om verder te gaan."
+
+#: src/lib/LiveView.svelte
+msgid "The picture has stopped arriving. Still trying."
+msgstr "Het beeld komt niet meer binnen. Lounge blijft het proberen."
+
+#: src/lib/LiveView.svelte
+msgid "The picture isn't arriving. Still trying."
+msgstr "Het beeld komt niet binnen. Lounge blijft het proberen."
+
+#: src/lib/LiveView.svelte src/lib/PluginPanel.svelte
+msgid "One moment"
+msgstr "Een ogenblik"
+
+#. {title} is the name of a live picture, such as a camera
+#: src/lib/LiveView.svelte
+msgid "{title} is on the TV"
+msgstr "{title} staat op de tv"
+
+#. a button that puts this live picture on the TV's screen
+#: src/lib/LiveView.svelte
+msgid "On the TV"
+msgstr "Op de tv tonen"
+
+#. a button that goes back to the panel this one was opened from
+#: src/lib/PluginPanel.svelte
+msgid "Back"
+msgstr "Terug"
+
+#. "this" and "it" are a plugin's panel, such as a room or a thermostat
+#: src/lib/PluginPanel.svelte
+msgid "The TV couldn't read this from the plugin. Close it and try again."
+msgstr "De tv kon dit niet uit de plug-in lezen. Sluit dit en probeer het opnieuw."
+
+#. a button that turns down what {title} names, such as a light's brightness
+#: src/lib/PluginPanel.svelte
+msgid "{title}, less"
+msgstr "{title}, minder"
+
+#. a button that turns up what {title} names, such as a light's brightness
+#: src/lib/PluginPanel.svelte
+msgid "{title}, more"
+msgstr "{title}, meer"
+
+#. "it" is a plugin's panel, such as a room or a thermostat
+#: src/lib/PluginPanel.svelte
+msgid "Reading it from the TV…"
+msgstr "Ophalen van de tv…"
+
+#. read out after a row is moved; {place} is its new place in a list of {count} rows
+#: src/lib/Reorder.svelte
+msgid "{name} is now {place} of {count}"
+msgstr "{name} staat nu op plek {place} van {count}"
+
+#: src/lib/Reorder.svelte
+msgid "Drag to move {name}, or use the arrow keys"
+msgstr "Sleep om {name} te verplaatsen, of gebruik de pijltoetsen"
+
+#: src/lib/Reorder.svelte
+msgid "Move {name} up"
+msgstr "{name} omhoog verplaatsen"
+
+#: src/lib/Reorder.svelte
+msgid "Move {name} down"
+msgstr "{name} omlaag verplaatsen"
+
+#: src/lib/TileSheet.svelte src/pages/Layout.svelte
+msgid "Unpinned from the Stage"
+msgstr "Van het Podium losgemaakt"
+
+#: src/lib/TileSheet.svelte
+msgid "Pinned to the Stage"
+msgstr "Op het Podium vastgemaakt"
+
+#: src/lib/TileSheet.svelte
+msgid "Unpinned from Your apps"
+msgstr "Losgemaakt uit Je apps"
+
+#: src/lib/TileSheet.svelte
+msgid "Pinned to the front of Your apps"
+msgstr "Vooraan in Je apps vastgemaakt"
+
+#: src/lib/TileSheet.svelte
+msgid "Hidden from every row"
+msgstr "Verborgen in elke rij"
+
+#. {source} is the app or plugin whose titles are hidden from Continue watching
+#: src/lib/TileSheet.svelte
+msgid "Everything from {source} hidden"
+msgstr "Alles van {source} verborgen"
+
+#: src/lib/TileSheet.svelte
+msgid "It will not be shown again"
+msgstr "Dit wordt niet meer getoond"
+
+#. {row} is a home screen row's title, such as "Continue watching"
+#: src/lib/TileSheet.svelte
+msgid "{row} row hidden"
+msgstr "Rij “{row}” verborgen"
+
+#: src/lib/TileSheet.svelte
+msgid "Don't show this again"
+msgstr "Dit niet meer tonen"
+
+#. menu choices; "Press" works a control such as a light switch, as a tap on it does
+#: src/lib/TileSheet.svelte
+msgid "Press"
+msgstr "Indrukken"
+
+#. menu choices; "Press" works a control such as a light switch, as a tap on it does
+#: src/lib/TileSheet.svelte src/pages/Home.svelte src/pages/Remote.svelte
+msgid "Open on the TV"
+msgstr "Openen op de tv"
+
+#. a menu choice; {source} is the app or plugin a title comes from
+#: src/lib/TileSheet.svelte
+msgid "Hide everything from {source}"
+msgstr "Alles van {source} verbergen"
+
+#. beside one of the TV's controls after it is pressed: how telling the TV went
+#: src/lib/TvControls.svelte
+msgid "Sending…"
+msgstr "Verzenden…"
+
+#. beside one of the TV's controls after it is pressed: how telling the TV went
+#: src/lib/TvControls.svelte
+msgid "Sent"
+msgstr "Verzonden"
+
+#. beside one of the TV's controls after it is pressed: how telling the TV went
+#: src/lib/TvControls.svelte
+msgid "Didn't work"
+msgstr "Niet gelukt"
+
+#: src/lib/TvControls.svelte
+msgid "TV controls"
+msgstr "Tv-bediening"
+
+#: src/lib/TvControls.svelte
+msgid "Turn the TV on or off and switch its input."
+msgstr "Zet de tv aan of uit en wissel van ingang."
+
+#: src/lib/TvControls.svelte
+msgid "Volume and playback are on the remote, and work without it."
+msgstr "Volume en afspelen staan op de afstandsbediening en werken ook zonder."
+
+#: src/lib/TvControls.svelte
+msgid "Lounge asks the TV through its HDMI cable; the TV decides what it does."
+msgstr "Lounge vraagt het de tv via de HDMI-kabel; de tv bepaalt wat die ermee doet."
+
+#. in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls
+#: src/lib/TvControls.svelte
+msgid "The TV isn't answering. Check it is on, then open this again."
+msgstr "De tv reageert niet. Controleer of hij aanstaat en open dit dan opnieuw."
+
+#. in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls
+#: src/lib/TvControls.svelte
+msgid "Reading them from the TV…"
+msgstr "Ophalen van de tv…"
+
+#: src/lib/api.ts
+msgid "Lounge on the TV isn't answering. Check the TV is on and this phone is on the same Wi-Fi."
+msgstr "Lounge op de tv reageert niet. Controleer of de tv aanstaat en deze telefoon op dezelfde wifi zit."
+
+#: src/lib/api.ts
+msgid "The TV took too long to answer. Check it is on, then try again."
+msgstr "De tv deed er te lang over om te reageren. Controleer of hij aanstaat en probeer het dan opnieuw."
+
+#: src/lib/api.ts
+msgid "Pair this phone with the TV first."
+msgstr "Koppel deze telefoon eerst met de tv."
+
+#: src/lib/api.ts
+msgid "That is too much to send to the TV at once."
+msgstr "Dat is te veel om in één keer naar de tv te sturen."
+
+#: src/lib/api.ts
+msgid "Lounge on the TV ran into a problem. Try again in a moment."
+msgstr "Lounge op de tv liep tegen een probleem aan. Probeer het zo opnieuw."
+
+#: src/lib/api.ts
+msgid "The TV couldn't do that. Try again."
+msgstr "De tv kon dat niet doen. Probeer het opnieuw."
+
+#: src/lib/api.ts
+msgid "That didn't work. Try again."
+msgstr "Dat is niet gelukt. Probeer het opnieuw."
+
+#: src/lib/giving.ts
+msgid "The source code"
+msgstr "De broncode"
+
+#: src/lib/giving.ts
+msgid "Report a problem"
+msgstr "Een probleem melden"
+
+#: src/lib/giving.ts
+msgid "What's new"
+msgstr "Wat is er nieuw"
+
+#: src/lib/giving.ts
+msgid "Gingerbreadfork on X"
+msgstr "Gingerbreadfork op X"
+
+#: src/lib/state.svelte.ts src/pages/Remote.svelte
+msgid "Opened on the TV"
+msgstr "Geopend op de tv"
+
+#. {device} is the TV's name
+#: src/lib/state.svelte.ts
+msgid "Paired with {device}"
+msgstr "Gekoppeld met {device}"
+
+#: src/lib/state.svelte.ts
+msgid "Connected"
+msgstr "Verbonden"
+
+#: src/lib/state.svelte.ts
+msgid "Reconnecting…"
+msgstr "Opnieuw verbinden…"
+
+#: src/lib/state.svelte.ts
+msgid "Connecting…"
+msgstr "Verbinden…"
+
+#: src/lib/state.svelte.ts
+msgid "The TV has forgotten this phone. Pair it again to carry on."
+msgstr "De tv is deze telefoon vergeten. Koppel hem opnieuw om verder te gaan."
+
+#. {title} is the name of an app, a film or anything else on the home screen
+#: src/lib/state.svelte.ts
+msgid "Opening {title} on the TV"
+msgstr "{title} wordt geopend op de tv"
+
+#: src/lib/words.ts
+msgid "Pin to the front of Your apps"
+msgstr "Vooraan in Je apps vastmaken"
+
+#. under "Pin to the front of Your apps": what the app does once pinned
+#: src/lib/words.ts
+msgid "Stays put ahead of recent apps"
+msgstr "Blijft vooraan staan, vóór recente apps"
+
+#: src/lib/words.ts
+msgid "Unpin from Your apps"
+msgstr "Losmaken uit Je apps"
+
+#. under "Unpin from Your apps": the app moves with the ones opened lately
+#: src/lib/words.ts
+msgid "Follows what you open again"
+msgstr "Volgt weer wat je opent"
+
+#: src/lib/words.ts
+msgid "Pin to the Stage"
+msgstr "Op het Podium vastmaken"
+
+#. under "Pin to the Stage": where the pinned thing stays
+#: src/lib/words.ts
+msgid "Stays in the big pictures up top"
+msgstr "Blijft bij de grote beelden bovenaan"
+
+#: src/lib/words.ts
+msgid "Unpin from the Stage"
+msgstr "Van het Podium losmaken"
+
+#. under "Unpin from the Stage": what follows for the place it held
+#: src/lib/words.ts
+msgid "What you watch takes its place"
+msgstr "Wat je kijkt neemt de plek in"
+
+#. a menu choice; {title} is the name of the tile or row it hides
+#. a button; {title} is the title of a home screen row
+#. a button; {title} is the name of an app or plugin
+#: src/lib/words.ts src/pages/Layout.svelte
+msgid "Hide {title}"
+msgstr "{title} verbergen"
+
+#. under "Hide {title}": the tile is left out of every row
+#: src/lib/words.ts
+msgid "Off every row until you show it"
+msgstr "Uit elke rij tot je het weer toont"
+
+#. under "Hide everything from {source}": the app or plugin is left out of the Continue watching row
+#: src/lib/words.ts
+msgid "Off Continue watching until you show it"
+msgstr "Uit Verder kijken tot je het weer toont"
+
+#: src/lib/words.ts
+msgid "Hide this row"
+msgstr "Deze rij verbergen"
+
+#. under "Hide this row": the phone's Layout tab shows the row again
+#: src/lib/words.ts
+msgid "The Layout tab brings it back"
+msgstr "Terughalen kan via het tabblad Indeling"
+
+#. a menu choice that opens a control's own settings
+#: src/lib/words.ts
+msgid "Adjust"
+msgstr "Aanpassen"
+
+#. under "Adjust": what the choice opens
+#: src/lib/words.ts
+msgid "Its own settings, here on the phone"
+msgstr "De eigen instellingen, hier op de telefoon"
+
+#. two items of a list that goes on
+#: src/lib/words.ts
+msgid "{first}, {next}"
+msgstr "{first}, {next}"
+
+#. the end of a list
+#: src/lib/words.ts
+msgid "{first} and {last}"
+msgstr "{first} en {last}"
+
+#. the mark between a whole number and its decimals, a comma in many languages
+#: src/lib/words.ts
+msgctxt "decimal mark"
+msgid "."
+msgstr ","
+
+#: src/lib/words.ts
+msgid "under a minute"
+msgstr "minder dan een minuut"
+
+#: src/lib/words.ts
+msgid "{n} minute"
+msgid_plural "{n} minutes"
+msgstr[0] "{n} minuut"
+msgstr[1] "{n} minuten"
+
+#: src/lib/words.ts
+msgid "{n} hour"
+msgid_plural "{n} hours"
+msgstr[0] "{n} uur"
+msgstr[1] "{n} uur"
+
+#. a length of time; {minutes} is a count of minutes such as "5 minutes"
+#: src/lib/words.ts
+msgid "{n} hour {minutes}"
+msgid_plural "{n} hours {minutes}"
+msgstr[0] "{n} uur en {minutes}"
+msgstr[1] "{n} uur en {minutes}"
+
+#: src/lib/words.ts
+msgid "{n} day"
+msgid_plural "{n} days"
+msgstr[0] "{n} dag"
+msgstr[1] "{n} dagen"
+
+#: src/lib/words.ts
+msgid "just now"
+msgstr "zojuist"
+
+#: src/lib/words.ts
+msgid "{n} minute ago"
+msgid_plural "{n} minutes ago"
+msgstr[0] "{n} minuut geleden"
+msgstr[1] "{n} minuten geleden"
+
+#: src/lib/words.ts
+msgid "{n} hour ago"
+msgid_plural "{n} hours ago"
+msgstr[0] "{n} uur geleden"
+msgstr[1] "{n} uur geleden"
+
+#: src/lib/words.ts
+msgid "{n} day ago"
+msgid_plural "{n} days ago"
+msgstr[0] "{n} dag geleden"
+msgstr[1] "{n} dagen geleden"
+
+#: src/pages/Apps.svelte src/pages/Home.svelte
+msgid "All apps"
+msgstr "Alle apps"
+
+#: src/pages/Apps.svelte src/pages/Home.svelte src/pages/More.svelte src/pages/Plugins.svelte src/pages/Remote.svelte
+msgid "Your TV"
+msgstr "Je tv"
+
+#: src/pages/Apps.svelte
+msgid "Find an app"
+msgstr "Een app zoeken"
+
+#: src/pages/Apps.svelte
+msgid "Open {title} on the TV"
+msgstr "{title} openen op de tv"
+
+#: src/pages/Apps.svelte
+msgid "No app is called “{query}”."
+msgstr "Er is geen app met de naam “{query}”."
+
+#: src/pages/Apps.svelte
+msgid "The TV has no apps to open yet."
+msgstr "De tv heeft nog geen apps om te openen."
+
+#: src/pages/Apps.svelte
+msgid "The TV isn't answering, so its apps can't be listed yet."
+msgstr "De tv reageert niet, dus de apps kunnen nog niet worden getoond."
+
+#: src/pages/Apps.svelte
+msgid "Reading the apps from the TV…"
+msgstr "Apps ophalen van de tv…"
+
+#. read out after a tile's title, for a control such as a light that is on or off
+#: src/pages/Home.svelte
+msgid "on"
+msgstr "aan"
+
+#. read out after a tile's title, for a control such as a light that is on or off
+#: src/pages/Home.svelte
+msgid "off"
+msgstr "uit"
+
+#. read out after a tile's title, for something broadcast live
+#: src/pages/Home.svelte
+msgid "live"
+msgstr "live"
+
+#. read out after a tile's title, for something pinned to the Stage
+#: src/pages/Home.svelte
+msgid "pinned to the Stage"
+msgstr "vastgemaakt op het Podium"
+
+#. read out after a tile's title, for an app pinned to the front of Your apps
+#: src/pages/Home.svelte
+msgid "pinned"
+msgstr "vastgemaakt"
+
+#: src/pages/Home.svelte
+msgid "What's on"
+msgstr "Nu te zien"
+
+#. above a link another app shared with Lounge, which can then be opened on the TV
+#: src/pages/Home.svelte
+msgid "Shared with Lounge"
+msgstr "Gedeeld met Lounge"
+
+#: src/pages/Home.svelte src/pages/More.svelte
+msgid "Not now"
+msgstr "Niet nu"
+
+#. a button for what is playing on the TV: skips back to the track or episode before
+#: src/pages/Home.svelte
+msgid "Previous"
+msgstr "Vorige"
+
+#. a button for what is playing on the TV: pauses it, or plays it again
+#: src/pages/Home.svelte
+msgid "Pause"
+msgstr "Pauzeren"
+
+#. a button for what is playing on the TV: pauses it, or plays it again
+#: src/pages/Home.svelte
+msgid "Play"
+msgstr "Afspelen"
+
+#. a button for what is playing on the TV: skips to the next track or episode
+#: src/pages/Home.svelte
+msgid "Next"
+msgstr "Volgende"
+
+#. said after a button is pressed; {action} is the button's own label, such as "Play" or "Resume"
+#: src/pages/Home.svelte
+msgid "{action} on the TV"
+msgstr "{action} op de tv"
+
+#: src/pages/Home.svelte
+msgid "Hold a tile to pin it to the Stage or the front of Your apps, or to hide it."
+msgstr "Houd een tegel ingedrukt om die op het Podium of vooraan in Je apps vast te maken, of om die te verbergen."
+
+#. Lounge's name for the big pictures at the top of the TV's home screen
+#: src/pages/Home.svelte
+msgid "Stage"
+msgstr "Podium"
+
+#. a small label on something broadcast live
+#: src/pages/Home.svelte
+msgid "Live"
+msgstr "Live"
+
+#: src/pages/Home.svelte
+msgid "Open any app on the TV"
+msgstr "Een app op de tv openen"
+
+#: src/pages/Home.svelte src/pages/More.svelte
+msgid "Waiting for the TV…"
+msgstr "Wachten op de tv…"
+
+#: src/pages/Layout.svelte
+msgid "Saved to the TV"
+msgstr "Opgeslagen op de tv"
+
+#: src/pages/Layout.svelte
+msgid "Rows reordered"
+msgstr "Volgorde van de rijen gewijzigd"
+
+#. {name} is the title of a home screen row
+#: src/pages/Layout.svelte
+msgid "{name} hidden on the TV"
+msgstr "{name} verborgen op de tv"
+
+#: src/pages/Layout.svelte
+msgid "Rows back to their usual order"
+msgstr "Rijen staan weer in de gewone volgorde"
+
+#. "Your apps" is the row's name: its pinned apps are in a new order
+#: src/pages/Layout.svelte
+msgid "Your apps reordered"
+msgstr "Volgorde van Je apps gewijzigd"
+
+#: src/pages/Layout.svelte
+msgid "{app} pinned to the front of Your apps"
+msgstr "{app} vooraan in Je apps vastgemaakt"
+
+#: src/pages/Layout.svelte
+msgid "{app} unpinned from Your apps"
+msgstr "{app} losgemaakt uit Je apps"
+
+#. "Your apps" is the row's name; {n} is how many recently opened apps follow the pinned ones
+#: src/pages/Layout.svelte
+msgid "Your apps shows pinned apps only"
+msgstr "Je apps toont alleen vastgemaakte apps"
+
+#. "Your apps" is the row's name; {n} is how many recently opened apps follow the pinned ones
+#: src/pages/Layout.svelte
+msgid "Your apps shows {n} recent app"
+msgid_plural "Your apps shows {n} recent apps"
+msgstr[0] "Je apps toont {n} recente app"
+msgstr[1] "Je apps toont {n} recente apps"
+
+#. {source} is an app or plugin that brings titles to the Continue watching row
+#: src/pages/Layout.svelte
+msgid "{source} is back in Continue watching"
+msgstr "{source} staat weer in Verder kijken"
+
+#. {source} is an app or plugin that brings titles to the Continue watching row
+#: src/pages/Layout.svelte
+msgid "{source} hidden from Continue watching"
+msgstr "{source} verborgen in Verder kijken"
+
+#. {name} is the title of a row, an app, a film or anything else that was hidden
+#: src/pages/Layout.svelte
+msgid "{name} is back on the TV"
+msgstr "{name} staat weer op de tv"
+
+#. how many titles an app or plugin brings to Continue watching just now
+#: src/pages/Layout.svelte
+msgid "Nothing to continue now"
+msgstr "Nu niets om verder te kijken"
+
+#. how many titles an app or plugin brings to Continue watching just now
+#: src/pages/Layout.svelte
+msgid "{n} title"
+msgid_plural "{n} titles"
+msgstr[0] "{n} titel"
+msgstr[1] "{n} titels"
+
+#. for an app or plugin hidden from Continue watching: how many titles it would bring
+#: src/pages/Layout.svelte
+msgid "Hidden, nothing to continue now"
+msgstr "Verborgen, nu niets om verder te kijken"
+
+#. for an app or plugin hidden from Continue watching: how many titles it would bring
+#: src/pages/Layout.svelte
+msgid "Hidden, {n} title"
+msgid_plural "Hidden, {n} titles"
+msgstr[0] "Verborgen, {n} titel"
+msgstr[1] "Verborgen, {n} titels"
+
+#: src/pages/Layout.svelte
+msgid "Home screen"
+msgstr "Startscherm"
+
+#: src/pages/Layout.svelte
+msgid "Saving…"
+msgstr "Opslaan…"
+
+#. the heading over the home screen's rows, and beside it how many of them are hidden
+#: src/pages/Layout.svelte
+msgid "Rows, top to bottom"
+msgstr "Rijen, van boven naar beneden"
+
+#. the heading over the home screen's rows, and beside it how many of them are hidden
+#: src/pages/Layout.svelte
+msgid "{n} hidden"
+msgid_plural "{n} hidden"
+msgstr[0] "{n} verborgen"
+msgstr[1] "{n} verborgen"
+
+#. the heading over the home screen's rows, and beside it how many of them are hidden
+#: src/pages/Layout.svelte
+msgid "All shown"
+msgstr "Alle zichtbaar"
+
+#: src/pages/Layout.svelte
+msgid "Drag the dots to reorder. A row with nothing in it stays off the screen until it has something to show."
+msgstr "Sleep aan de stippen om de volgorde te wijzigen. Een lege rij verschijnt pas op het scherm als er iets te tonen is."
+
+#. under a hidden row's title; {detail} is a line on what the row holds
+#: src/pages/Layout.svelte
+msgid "Hidden, {detail}"
+msgstr "Verborgen, {detail}"
+
+#. under a hidden row's title; {detail} is a line on what the row holds
+#: src/pages/Layout.svelte
+msgid "Hidden"
+msgstr "Verborgen"
+
+#. a button; {title} is the title of a home screen row
+#. a button; {title} is the name of an app or plugin
+#: src/pages/Layout.svelte
+msgid "Show {title}"
+msgstr "{title} tonen"
+
+#: src/pages/Layout.svelte
+msgid "Put the rows back in their usual order"
+msgstr "Rijen terugzetten in de gewone volgorde"
+
+#. under the button "Put the rows back in their usual order": hidden rows stay hidden
+#: src/pages/Layout.svelte
+msgid "Keeps what you have hidden."
+msgstr "Wat je hebt verborgen blijft verborgen."
+
+#. the heading over the things pinned to the Stage
+#: src/pages/Layout.svelte
+msgid "On the Stage"
+msgstr "Op het Podium"
+
+#. "What's on" is the phone's first page; {choice} is the menu choice "Pin to the Stage"
+#: src/pages/Layout.svelte
+msgid "Pinned things stay among the big pictures at the top. Hold a tile on What's on and choose “{choice}”."
+msgstr "Wat je vastmaakt blijft bij de grote beelden bovenaan. Houd een tegel ingedrukt bij Nu te zien en kies “{choice}”."
+
+#: src/pages/Layout.svelte
+msgid "Unpin"
+msgstr "Losmaken"
+
+#: src/pages/Layout.svelte
+msgid "Your apps"
+msgstr "Je apps"
+
+#: src/pages/Layout.svelte
+msgid "Pinned apps stay at the front in this order, then the apps you opened last. Everything else is in All apps on the TV, where holding OK on an app pins it."
+msgstr "Vastgemaakte apps blijven in deze volgorde vooraan staan, daarna volgen de apps die je het laatst hebt geopend. Al het andere staat in Alle apps op de tv; houd daar OK ingedrukt op een app om die vast te maken."
+
+#: src/pages/Layout.svelte
+msgid "Recent apps shown after the pins"
+msgstr "Recente apps na de vastgemaakte"
+
+#. a choice of how many recently opened apps follow the pinned ones in Your apps
+#: src/pages/Layout.svelte
+msgid "Pinned only"
+msgstr "Alleen vastgemaakte"
+
+#. a choice of how many recently opened apps follow the pinned ones in Your apps
+#: src/pages/Layout.svelte
+msgid "{n} recent"
+msgid_plural "{n} recent"
+msgstr[0] "{n} recente"
+msgstr[1] "{n} recente"
+
+#. under the name of an app that is pinned to the front of Your apps
+#: src/pages/Layout.svelte
+msgid "Pinned"
+msgstr "Vastgemaakt"
+
+#: src/pages/Layout.svelte
+msgid "Find an app to pin"
+msgstr "Een app zoeken om vast te maken"
+
+#. a button that pins the app to the front of Your apps
+#: src/pages/Layout.svelte
+msgid "Pin"
+msgstr "Vastmaken"
+
+#: src/pages/Layout.svelte
+msgid "No app called “{query}”."
+msgstr "Er is geen app met de naam “{query}”."
+
+#. the heading over the list of things hidden from every row
+#: src/pages/Layout.svelte
+msgctxt "heading"
+msgid "Hidden from every row"
+msgstr "Verborgen in elke rij"
+
+#. "What's on" is the phone's first page, OK is the remote's button and Hide is the menu choice
+#: src/pages/Layout.svelte
+msgid "Nothing is hidden. Hold a tile on What's on, or OK on the TV, and choose Hide."
+msgstr "Er is niets verborgen. Houd een tegel ingedrukt bij Nu te zien, of OK op de tv, en kies Verbergen."
+
+#. a button that puts a hidden thing back on the home screen
+#: src/pages/Layout.svelte
+msgid "Show"
+msgstr "Tonen"
+
+#. the heading over the apps and plugins that bring titles to the Continue watching row
+#: src/pages/Layout.svelte
+msgid "Continue watching comes from"
+msgstr "Verder kijken komt van"
+
+#: src/pages/Layout.svelte
+msgid "Nothing to continue yet. Apps and plugins are listed here once they bring something."
+msgstr "Nog niets om verder te kijken. Apps en plug-ins staan hier zodra ze iets aanleveren."
+
+#: src/pages/Layout.svelte
+msgid "Everything is shown unless you hide it here, or hold a tile and hide everything from its app."
+msgstr "Alles wordt getoond, tenzij je het hier verbergt, of een tegel ingedrukt houdt en alles van de bijbehorende app verbergt."
+
+#: src/pages/Layout.svelte
+msgid "Loading the layout…"
+msgstr "Indeling laden…"
+
+#: src/pages/More.svelte
+msgid "Layout and settings restored on the TV"
+msgstr "Indeling en instellingen teruggezet op de tv"
+
+#. said once the TV has forgotten a paired phone; {name} is that phone's name
+#: src/pages/More.svelte
+msgid "The TV has forgotten this phone"
+msgstr "De tv is deze telefoon vergeten"
+
+#. said once the TV has forgotten a paired phone; {name} is that phone's name
+#: src/pages/More.svelte
+msgid "{name} forgotten"
+msgstr "{name} vergeten"
+
+#. {coin} is a currency's name, such as Bitcoin; "it" is the address to send that currency to
+#: src/pages/More.svelte
+msgid "{coin} address copied"
+msgstr "Adres voor {coin} gekopieerd"
+
+#. {coin} is a currency's name, such as Bitcoin; "it" is the address to send that currency to
+#: src/pages/More.svelte
+msgid "Couldn't copy it. Press and hold the address to copy it."
+msgstr "Kopiëren is niet gelukt. Houd het adres ingedrukt om het te kopiëren."
+
+#. a size in megabytes or kilobytes
+#: src/pages/More.svelte
+msgid "{size} MB"
+msgstr "{size} MB"
+
+#. a size in megabytes or kilobytes
+#: src/pages/More.svelte
+msgid "{size} KB"
+msgstr "{size} kB"
+
+#. {version} is a number such as 0.9.1 and {model} is the TV's make and model
+#: src/pages/More.svelte
+msgid "Lounge {version} on this TV."
+msgstr "Lounge {version} op deze tv."
+
+#. {version} is a number such as 0.9.1 and {model} is the TV's make and model
+#: src/pages/More.svelte
+msgid "Lounge {version} on {model}."
+msgstr "Lounge {version} op {model}."
+
+#. how many plugins are installed and how many of those are turned on
+#: src/pages/More.svelte
+msgid "{installed} installed, {on} on"
+msgstr "{installed} geïnstalleerd, {on} aan"
+
+#. diagnostics: how many films, apps and other things the TV holds
+#: src/pages/More.svelte
+msgid "Things Lounge knows about"
+msgstr "Items die Lounge kent"
+
+#. diagnostics: how long building the home screen last took, in milliseconds
+#: src/pages/More.svelte
+msgid "Last rebuild took"
+msgstr "Laatste opbouw duurde"
+
+#. diagnostics: how long building the home screen last took, in milliseconds
+#: src/pages/More.svelte
+msgid "{n} ms"
+msgstr "{n} ms"
+
+#. diagnostics: when the TV last took in something new, such as "3 minutes ago", or that it never has
+#: src/pages/More.svelte
+msgid "Last change arrived"
+msgstr "Laatste wijziging kwam binnen"
+
+#. diagnostics: when the TV last took in something new, such as "3 minutes ago", or that it never has
+#: src/pages/More.svelte
+msgid "never"
+msgstr "nooit"
+
+#. diagnostics: the size of what Lounge keeps on the TV
+#: src/pages/More.svelte
+msgid "Saved data"
+msgstr "Opgeslagen gegevens"
+
+#. diagnostics: how many jobs are queued on the TV, or that none is
+#: src/pages/More.svelte
+msgid "Work waiting"
+msgstr "Werk in de wachtrij"
+
+#. diagnostics: how many jobs are queued on the TV, or that none is
+#: src/pages/More.svelte
+msgid "none"
+msgstr "geen"
+
+#. diagnostics: how many requests the TV app has made of Lounge's core
+#: src/pages/More.svelte
+msgid "Requests answered"
+msgstr "Beantwoorde verzoeken"
+
+#. diagnostics: how long Lounge has been running, such as "2 hours 5 minutes"
+#: src/pages/More.svelte
+msgid "Running for"
+msgstr "Draait al"
+
+#. diagnostics: a number that goes up each time the home screen changes
+#: src/pages/More.svelte
+msgid "Home screen version"
+msgstr "Versie van het startscherm"
+
+#. diagnostics: how capable the TV's hardware is
+#: src/pages/More.svelte
+msgid "Device tier"
+msgstr "Apparaatklasse"
+
+#: src/pages/More.svelte
+msgid "Back up"
+msgstr "Back-up"
+
+#: src/pages/More.svelte
+msgid "Your layout, hidden items, pins, plugin settings and the TV's theme, background and sounds as one JSON file. Passwords and private addresses are not included."
+msgstr "Je indeling, verborgen en vastgemaakte items, plug-in-instellingen en het thema, de achtergrond en de geluiden van de tv in één JSON-bestand. Wachtwoorden en privéadressen zitten er niet in."
+
+#: src/pages/More.svelte
+msgid "Download backup"
+msgstr "Back-up downloaden"
+
+#. the button that restores a backup, and the question it asks first; {file} is the name of the file chosen
+#: src/pages/More.svelte
+msgid "Restoring…"
+msgstr "Terugzetten…"
+
+#. the button that restores a backup, and the question it asks first; {file} is the name of the file chosen
+#: src/pages/More.svelte
+msgid "Restore {file}"
+msgstr "{file} terugzetten"
+
+#. the button that restores a backup, and the question it asks first; {file} is the name of the file chosen
+#: src/pages/More.svelte
+msgid "Yes, replace the TV's layout and settings"
+msgstr "Ja, indeling en instellingen van de tv vervangen"
+
+#: src/pages/More.svelte
+msgid "Restore from file"
+msgstr "Terugzetten uit bestand"
+
+#: src/pages/More.svelte
+msgid "Restoring replaces the TV's rows, pins and hidden items with the ones in the file, and its theme, background and sounds where the file has them."
+msgstr "Terugzetten vervangt de rijen en de vastgemaakte en verborgen items van de tv door die uit het bestand, en ook het thema, de achtergrond en de geluiden als het bestand die bevat."
+
+#: src/pages/More.svelte
+msgid "Paired phones"
+msgstr "Gekoppelde telefoons"
+
+#. under a paired phone's name; {when} is how long ago the TV heard from it, such as "3 minutes ago" or "just now"
+#: src/pages/More.svelte
+msgid "This phone"
+msgstr "Deze telefoon"
+
+#. under a paired phone's name; {when} is how long ago the TV heard from it, such as "3 minutes ago" or "just now"
+#: src/pages/More.svelte
+msgid "Seen {when}"
+msgstr "Laatst gezien: {when}"
+
+#. a button that makes the TV forget a paired phone, and the question it asks first
+#: src/pages/More.svelte
+msgid "Forget"
+msgstr "Vergeten"
+
+#. a button that makes the TV forget a paired phone, and the question it asks first
+#: src/pages/More.svelte
+msgid "Yes, forget it"
+msgstr "Ja, vergeten"
+
+#: src/pages/More.svelte
+msgid "Diagnostics"
+msgstr "Diagnose"
+
+#: src/pages/More.svelte
+msgid "updates every 5 seconds"
+msgstr "wordt elke 5 seconden bijgewerkt"
+
+#: src/pages/More.svelte
+msgid "Support Lounge"
+msgstr "Lounge steunen"
+
+#: src/pages/More.svelte
+msgid "No adverts. No tracking. No price."
+msgstr "Geen reclame. Geen tracking. Geen prijskaartje."
+
+#: src/pages/More.svelte
+msgid "This is the one thing Lounge asks for."
+msgstr "Dit is het enige wat Lounge vraagt."
+
+#: src/pages/More.svelte
+msgid "If it has earned its place on your TV, give what it has been worth to you. Even the price of a coffee keeps it going, and absolutely anything helps."
+msgstr "Als het zijn plek op je tv heeft verdiend, geef dan wat het je waard is geweest. Zelfs de prijs van een kop koffie houdt het draaiend, en echt alle beetjes helpen."
+
+#: src/pages/More.svelte
+msgid "Give with PayPal"
+msgstr "Geven met PayPal"
+
+#: src/pages/More.svelte
+msgid "You choose the amount. All of it goes straight to its maker, and Lounge stays just the same whether you give or not."
+msgstr "Jij kiest het bedrag. Alles gaat rechtstreeks naar de maker, en Lounge blijft precies hetzelfde, of je nu geeft of niet."
+
+#: src/pages/More.svelte
+msgid "Copy address"
+msgstr "Adres kopiëren"
+
+#. {coin} is a currency's name, such as Bitcoin; the link opens the address in a wallet app
+#: src/pages/More.svelte
+msgid "Send only {coin} to this address."
+msgstr "Stuur alleen {coin} naar dit adres."
+
+#. {coin} is a currency's name, such as Bitcoin; the link opens the address in a wallet app
+#: src/pages/More.svelte
+msgid "Open it in a wallet"
+msgstr "Openen in een wallet"
+
+#: src/pages/More.svelte
+msgid "About"
+msgstr "Over"
+
+#: src/pages/More.svelte
+msgid "A home screen for your TV, laid out around what you're watching. Free and open source under the MIT licence."
+msgstr "Een startscherm voor je tv, ingericht rond wat je kijkt. Gratis en open source onder de MIT-licentie."
+
+#: src/pages/More.svelte
+msgid "Everything these pages show goes between this phone and the TV over your own network. The links below and the ways to give open on the internet."
+msgstr "Alles wat deze pagina's tonen gaat tussen deze telefoon en de tv via je eigen netwerk. De links hieronder en de manieren om te geven openen op internet."
+
+#. a label above the name of the person who makes Lounge
+#: src/pages/More.svelte
+msgid "Made by"
+msgstr "Gemaakt door"
+
+#: src/pages/More.svelte
+msgid "Forget this phone"
+msgstr "Deze telefoon vergeten"
+
+#: src/pages/More.svelte
+msgid "Yes, forget this phone"
+msgstr "Ja, deze telefoon vergeten"
+
+#. {screen} is where "Phone companion" goes, the name of a screen in the TV's Settings
+#: src/pages/Pair.svelte
+msgid "In Settings on the TV, open {screen}. Scan the QR code, or type the six digits it shows."
+msgstr "Open op de tv in Instellingen {screen}. Scan de QR-code, of typ de zes cijfers die je daar ziet."
+
+#: src/pages/Pair.svelte
+msgid "Pair with your TV"
+msgstr "Koppelen met je tv"
+
+#: src/pages/Pair.svelte
+msgid "Phone companion"
+msgstr "Lounge op je telefoon"
+
+#: src/pages/Pair.svelte
+msgid "Pairing code"
+msgstr "Koppelcode"
+
+#. the button that pairs this phone with the TV, and what it says while it does
+#: src/pages/Pair.svelte
+msgid "Pairing…"
+msgstr "Koppelen…"
+
+#. the button that pairs this phone with the TV, and what it says while it does
+#: src/pages/Pair.svelte
+msgid "Pair"
+msgstr "Koppelen"
+
+#: src/pages/Pair.svelte
+msgid "Everything stays on your network. The TV remembers this phone until you forget it, from the TV or from More here."
+msgstr "Alles blijft binnen je netwerk. De tv onthoudt deze telefoon tot je hem laat vergeten, op de tv of hier bij Meer."
+
+#. {ending} is where the file ending .lgp goes
+#: src/pages/Plugins.svelte
+msgid "A signed {ending} bundle, from a file on this phone or a link."
+msgstr "Een ondertekend {ending}-bestand, vanaf deze telefoon of via een link."
+
+#: src/pages/Plugins.svelte
+msgid "{plugin} is on"
+msgstr "{plugin} staat aan"
+
+#: src/pages/Plugins.svelte
+msgid "{plugin} is off"
+msgstr "{plugin} staat uit"
+
+#: src/pages/Plugins.svelte
+msgid "Refreshing…"
+msgstr "Vernieuwen…"
+
+#: src/pages/Plugins.svelte
+msgid "{plugin} removed"
+msgstr "{plugin} verwijderd"
+
+#: src/pages/Plugins.svelte
+msgid "Saved"
+msgstr "Opgeslagen"
+
+#: src/pages/Plugins.svelte
+msgid "{plugin} installed"
+msgstr "{plugin} geïnstalleerd"
+
+#. stands in a password field that already has a value saved
+#: src/pages/Plugins.svelte
+msgid "•••••••• (saved)"
+msgstr "•••••••• (opgeslagen)"
+
+#. a plugin's state, in a small label beside its name: it waits for a sign-in, or for its settings
+#: src/pages/Plugins.svelte
+msgid "Sign in"
+msgstr "Inloggen"
+
+#. a plugin's state, in a small label beside its name: it waits for a sign-in, or for its settings
+#: src/pages/Plugins.svelte
+msgid "Needs setup"
+msgstr "Instellen nodig"
+
+#. a plugin's state, in a small label beside its name: its last try failed
+#: src/pages/Plugins.svelte
+msgid "Problem"
+msgstr "Probleem"
+
+#. the state of a plugin or of one of its settings: turned on
+#. a plugin's state in the list: it is turned on.
+#: src/pages/Plugins.svelte
+msgctxt "a plugin"
+msgid "On"
+msgstr "Aan"
+
+#: src/pages/Plugins.svelte
+msgid "Turned off by its update"
+msgstr "Uitgezet door de update"
+
+#. the state of a plugin or of one of its settings: turned off
+#. a plugin's state in the list: it is turned off.
+#: src/pages/Plugins.svelte
+msgctxt "a plugin"
+msgid "Off"
+msgstr "Uit"
+
+#. a place a plugin may connect to, listed in "It can reach {places}."; {setting} is the label of one of its settings
+#: src/pages/Plugins.svelte
+msgid "what you enter in {setting}"
+msgstr "wat je invult bij {setting}"
+
+#. a place a plugin may connect to, listed in "It can reach {places}."
+#: src/pages/Plugins.svelte
+msgid "any public site"
+msgstr "elke openbare site"
+
+#. a place a plugin may connect to, listed in "It can reach {places}."
+#: src/pages/Plugins.svelte
+msgid "devices on your home network"
+msgstr "apparaten in je thuisnetwerk"
+
+#. a place a plugin may connect to, listed in "It can reach {places}."
+#: src/pages/Plugins.svelte
+msgid "this TV"
+msgstr "deze tv"
+
+#: src/pages/Plugins.svelte
+msgid "It can reach nothing."
+msgstr "De plug-in kan nergens verbinding mee maken."
+
+#. {places} lists where a plugin may connect, such as "example.com and devices on your home network"
+#: src/pages/Plugins.svelte
+msgid "It can reach {places}, accepting a home server's own certificate."
+msgstr "De plug-in kan verbinding maken met {places} en accepteert het eigen certificaat van een thuisserver."
+
+#. {places} lists where a plugin may connect, such as "example.com and devices on your home network"
+#: src/pages/Plugins.svelte
+msgid "It can reach {places}."
+msgstr "De plug-in kan verbinding maken met {places}."
+
+#: src/pages/Plugins.svelte
+msgid "It refreshes every {n} second while Lounge is on the TV's screen."
+msgid_plural "It refreshes every {n} seconds while Lounge is on the TV's screen."
+msgstr[0] "De plug-in vernieuwt elke seconde zolang Lounge op het scherm van de tv staat."
+msgstr[1] "De plug-in vernieuwt elke {n} seconden zolang Lounge op het scherm van de tv staat."
+
+#: src/pages/Plugins.svelte
+msgid "It refreshes every {n} minute while the TV is on."
+msgid_plural "It refreshes every {n} minutes while the TV is on."
+msgstr[0] "De plug-in vernieuwt elke minuut zolang de tv aanstaat."
+msgstr[1] "De plug-in vernieuwt elke {n} minuten zolang de tv aanstaat."
+
+#: src/pages/Plugins.svelte
+msgid "That plugin isn't installed on the TV any more."
+msgstr "Die plug-in is niet meer op de tv geïnstalleerd."
+
+#: src/pages/Plugins.svelte
+msgid "The TV isn't answering, so this plugin can't be shown yet."
+msgstr "De tv reageert niet, dus deze plug-in kan nog niet worden getoond."
+
+#: src/pages/Plugins.svelte
+msgid "Reading the plugin from the TV…"
+msgstr "Plug-in ophalen van de tv…"
+
+#. {version} is a plugin's version number and {publisher} is who made it
+#: src/pages/Plugins.svelte
+msgid "Version {version}, by {publisher}"
+msgstr "Versie {version}, door {publisher}"
+
+#. {version} is a plugin's version number and {publisher} is who made it
+#: src/pages/Plugins.svelte
+msgid "Version {version}"
+msgstr "Versie {version}"
+
+#. a button; {page} is the name or address of a sign-in page
+#: src/pages/Plugins.svelte
+msgid "Open {page}"
+msgstr "{page} openen"
+
+#. between the button "Open {page}" and a sign-in code set large below: open the page and enter the code
+#: src/pages/Plugins.svelte
+msgid "and enter"
+msgstr "en voer deze code in"
+
+#. how many items a plugin brought; {when} is how long ago, such as "3 minutes ago" or "just now"
+#: src/pages/Plugins.svelte
+msgid "{n} item, refreshed {when}"
+msgid_plural "{n} items, refreshed {when}"
+msgstr[0] "{n} item, {when} vernieuwd"
+msgstr[1] "{n} items, {when} vernieuwd"
+
+#: src/pages/Plugins.svelte
+msgid "Fetching for the first time…"
+msgstr "Voor het eerst ophalen…"
+
+#. {places} lists the sites a plugin's update wants to connect to
+#: src/pages/Plugins.svelte
+msgid "Turned off by its update, which also asks to reach {places}."
+msgstr "Uitgezet door de update, die ook verbinding wil maken met {places}."
+
+#: src/pages/Plugins.svelte
+msgid "Fill in the settings, then turn it on."
+msgstr "Vul de instellingen in en zet de plug-in dan aan."
+
+#. buttons that turn a plugin off or on; "Allow" lets its update connect to what it asks for
+#: src/pages/Plugins.svelte
+msgid "Turn off"
+msgstr "Uitzetten"
+
+#. buttons that turn a plugin off or on; "Allow" lets its update connect to what it asks for
+#: src/pages/Plugins.svelte
+msgid "Allow and turn on"
+msgstr "Toestaan en aanzetten"
+
+#. buttons that turn a plugin off or on; "Allow" lets its update connect to what it asks for
+#: src/pages/Plugins.svelte
+msgid "Turn on"
+msgstr "Aanzetten"
+
+#: src/pages/Plugins.svelte
+msgid "Refresh now"
+msgstr "Nu vernieuwen"
+
+#: src/pages/Plugins.svelte
+msgid "Settings"
+msgstr "Instellingen"
+
+#. {label} is the label of a setting that may be left empty
+#: src/pages/Plugins.svelte
+msgid "{label} (optional)"
+msgstr "{label} (optioneel)"
+
+#: src/pages/Plugins.svelte
+msgid "On"
+msgstr "Aan"
+
+#: src/pages/Plugins.svelte
+msgid "Off"
+msgstr "Uit"
+
+#. the heading over what a plugin has written down while working, and the button that hides or shows it
+#: src/pages/Plugins.svelte
+msgid "Log"
+msgstr "Logboek"
+
+#. the heading over what a plugin has written down while working, and the button that hides or shows it
+#: src/pages/Plugins.svelte
+msgctxt "log"
+msgid "Hide"
+msgstr "Verbergen"
+
+#. the heading over what a plugin has written down while working, and the button that hides or shows it
+#: src/pages/Plugins.svelte
+msgctxt "log"
+msgid "Show"
+msgstr "Tonen"
+
+#: src/pages/Plugins.svelte
+msgid "Nothing logged yet."
+msgstr "Nog niets vastgelegd."
+
+#. {key} is the first eight characters of the key the plugin's publisher signs with
+#: src/pages/Plugins.svelte
+msgid "Updates are taken only from its publisher, whose key starts {key}."
+msgstr "Updates worden alleen geaccepteerd van de uitgever, wiens sleutel begint met {key}."
+
+#: src/pages/Plugins.svelte
+msgid "Remove plugin"
+msgstr "Plug-in verwijderen"
+
+#: src/pages/Plugins.svelte
+msgid "Yes, remove it and its settings"
+msgstr "Ja, verwijderen met alle instellingen"
+
+#: src/pages/Plugins.svelte
+msgid "They add rows, channels and guide data from your services. Each plugin can reach only the places it names, and sees only its own settings."
+msgstr "Ze voegen rijen, zenders en gidsgegevens van je diensten toe. Elke plug-in kan alleen verbinding maken met de plekken die hij noemt, en ziet alleen zijn eigen instellingen."
+
+#. under a plugin's name: how many items it brings and its version number
+#: src/pages/Plugins.svelte
+msgid "{n} item, version {version}"
+msgid_plural "{n} items, version {version}"
+msgstr[0] "{n} item, versie {version}"
+msgstr[1] "{n} items, versie {version}"
+
+#. under a plugin's name: how many items it brings and its version number
+#: src/pages/Plugins.svelte
+msgid "version {version}"
+msgstr "versie {version}"
+
+#: src/pages/Plugins.svelte
+msgid "The TV isn't answering, so its plugins can't be listed yet."
+msgstr "De tv reageert niet, dus de plug-ins kunnen nog niet worden getoond."
+
+#: src/pages/Plugins.svelte
+msgid "Reading the plugins on the TV…"
+msgstr "Plug-ins ophalen van de tv…"
+
+#: src/pages/Plugins.svelte
+msgid "No plugins yet. Install one below."
+msgstr "Nog geen plug-ins. Installeer er hieronder een."
+
+#: src/pages/Plugins.svelte
+msgid "Install a plugin"
+msgstr "Een plug-in installeren"
+
+#: src/pages/Plugins.svelte
+msgid "Installing…"
+msgstr "Installeren…"
+
+#: src/pages/Plugins.svelte
+msgid "Choose file"
+msgstr "Bestand kiezen"
+
+#: src/pages/Plugins.svelte
+msgid "Link to a plugin"
+msgstr "Link naar een plug-in"
+
+#: src/pages/Plugins.svelte
+msgid "Install"
+msgstr "Installeren"
+
+#: src/pages/Remote.svelte
+msgid "Sent to Lounge on the TV"
+msgstr "Verzonden naar Lounge op de tv"
+
+#: src/pages/Remote.svelte
+msgid "Searching the TV for “{query}”"
+msgstr "Zoeken op de tv naar “{query}”"
+
+#: src/pages/Remote.svelte
+msgid "Nothing was heard. Press the microphone and speak."
+msgstr "Er is niets gehoord. Druk op de microfoon en spreek."
+
+#: src/pages/Remote.svelte
+msgid "The browser did not allow the microphone. The keyboard's own dictation works in the field."
+msgstr "De browser stond de microfoon niet toe. De dicteerfunctie van het toetsenbord werkt wel in het veld."
+
+#: src/pages/Remote.svelte
+msgid "Voice did not work this time. Try again, or use the keyboard."
+msgstr "Spraak werkte deze keer niet. Probeer het opnieuw, of gebruik het toetsenbord."
+
+#: src/pages/Remote.svelte
+msgid "TV power and input"
+msgstr "Tv aan/uit en ingang"
+
+#: src/pages/Remote.svelte
+msgid "Direction pad"
+msgstr "Richtingstoetsen"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Up"
+msgstr "Omhoog"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Left"
+msgstr "Links"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "OK"
+msgstr "OK"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Right"
+msgstr "Rechts"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Down"
+msgstr "Omlaag"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Back"
+msgstr "Terug"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Home"
+msgstr "Home"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Menu"
+msgstr "Menu"
+
+#: src/pages/Remote.svelte
+msgid "Playback and volume"
+msgstr "Afspelen en volume"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Rewind"
+msgstr "Terugspoelen"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Play or pause"
+msgstr "Afspelen of pauzeren"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Fast forward"
+msgstr "Vooruitspoelen"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Volume down"
+msgstr "Volume omlaag"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Mute"
+msgstr "Dempen"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Volume up"
+msgstr "Volume omhoog"
+
+#: src/pages/Remote.svelte
+msgid "Type on the TV"
+msgstr "Typen op de tv"
+
+#: src/pages/Remote.svelte
+msgid "Types into the field open in Lounge"
+msgstr "Typt in het veld dat open is in Lounge"
+
+#: src/pages/Remote.svelte
+msgid "Stop listening"
+msgstr "Stoppen met luisteren"
+
+#: src/pages/Remote.svelte
+msgid "Speak"
+msgstr "Spreken"
+
+#. a button that types the text into the field open on the TV
+#: src/pages/Remote.svelte
+msgid "Type"
+msgstr "Typen"
+
+#: src/pages/Remote.svelte
+msgid "Search the TV"
+msgstr "Zoeken op de tv"
+
+#: src/pages/Remote.svelte
+msgid "Paste a link to open it on the TV."
+msgstr "Plak een link om die op de tv te openen."

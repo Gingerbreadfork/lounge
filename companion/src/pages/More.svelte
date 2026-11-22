@@ -2,8 +2,9 @@
   import { api, type Device, type Diagnostics } from '../lib/api';
   import Confirm from '../lib/Confirm.svelte';
   import { aboutLinks, coins, copyText, paypal, spaced, type Coin } from '../lib/giving';
+  import { t, tr } from '../lib/lang.svelte';
   import { act, app, done, quiet, toast, unpair } from '../lib/state.svelte';
-  import { ago, span } from '../lib/words';
+  import { ago, decimal, span } from '../lib/words';
 
   let diag = $state<Diagnostics | null>(null);
   let devices = $state<Device[]>([]);
@@ -14,8 +15,8 @@
 
   $effect(() => {
     load();
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
   });
   async function load() {
     diag = (await quiet(() => api.diagnostics())) ?? diag;
@@ -30,11 +31,12 @@
     const file = chosen;
     if (!file) return;
     restoring = true;
-    if (await done('Layout and settings restored on the TV', async () => api.restore(await file.text()))) chosen = null;
+    if (await done(t('Layout and settings restored on the TV'), async () => api.restore(await file.text()))) chosen = null;
     restoring = false;
   }
   async function forget(d: Device) {
-    const forgotten = await done(d.current ? 'The TV has forgotten this phone' : `${d.name} forgotten`, () => api.revokeDevice(d.id));
+    // Translators: said once the TV has forgotten a paired phone; {name} is that phone's name
+    const forgotten = await done(d.current ? t('The TV has forgotten this phone') : t('{name} forgotten', { name: d.name }), () => api.revokeDevice(d.id));
     if (!forgotten) return;
     if (d.current) unpair(null);
     else load();
@@ -48,63 +50,86 @@
     else if (list) unpair(null);
   }
   async function copy(coin: Coin) {
-    toast((await copyText(coin.address)) ? `${coin.name} address copied` : `Couldn't copy it. Press and hold the address to copy it.`);
+    // Translators: {coin} is a currency's name, such as Bitcoin; "it" is the address to send that currency to
+    toast((await copyText(coin.address)) ? t('{coin} address copied', { coin: coin.name }) : t("Couldn't copy it. Press and hold the address to copy it."));
   }
   function bytes(n: number) {
-    return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
+    // Translators: a size in megabytes or kilobytes
+    return n >= 1048576 ? t('{size} MB', { size: decimal(n / 1048576, 1) }) : t('{size} KB', { size: Math.round(n / 1024) });
+  }
+  /** Which Lounge runs on which TV, as a sentence. */
+  function running() {
+    const version = app.state?.device.version ?? '';
+    const model = app.state?.device.model;
+    // Translators: {version} is a number such as 0.9.1 and {model} is the TV's make and model
+    return model == null ? t('Lounge {version} on this TV.', { version }) : t('Lounge {version} on {model}.', { version, model });
   }
   let rows = $derived.by(() => {
     const d = diag;
     if (!d) return [] as [string, string][];
     const n = (k: string) => Number(d[k] ?? 0);
+    // Translators: how many plugins are installed and how many of those are turned on
+    const plugins = t('{installed} installed, {on} on', { installed: n('plugins'), on: n('pluginsEnabled') });
     return [
-      ['Things Lounge knows about', String(n('items'))],
-      ['Plugins', `${n('plugins')} installed, ${n('pluginsEnabled')} on`],
-      ['Last rebuild took', `${n('lastBuildMs')} ms`],
-      ['Last change arrived', n('lastIngestMs') ? ago(n('lastIngestMs')) : 'never'],
-      ['Saved data', bytes(n('databaseBytes'))],
-      ['Work waiting', n('queueDepth') === 0 ? 'none' : String(n('queueDepth'))],
-      ['Requests answered', String(n('ffiCalls'))],
-      ['Running for', span(n('uptimeMs'))],
-      ['Home screen version', String(n('revision'))],
-      ['Device tier', String(d['tier'] ?? '')],
+      // Translators: diagnostics: how many films, apps and other things the TV holds
+      [t('Things Lounge knows about'), String(n('items'))],
+      [t('Plugins'), plugins],
+      // Translators: diagnostics: how long building the home screen last took, in milliseconds
+      [t('Last rebuild took'), t('{n} ms', { n: n('lastBuildMs') })],
+      // Translators: diagnostics: when the TV last took in something new, such as "3 minutes ago", or that it never has
+      [t('Last change arrived'), n('lastIngestMs') ? ago(n('lastIngestMs')) : t('never')],
+      // Translators: diagnostics: the size of what Lounge keeps on the TV
+      [t('Saved data'), bytes(n('databaseBytes'))],
+      // Translators: diagnostics: how many jobs are queued on the TV, or that none is
+      [t('Work waiting'), n('queueDepth') === 0 ? t('none') : String(n('queueDepth'))],
+      // Translators: diagnostics: how many requests the TV app has made of Lounge's core
+      [t('Requests answered'), String(n('ffiCalls'))],
+      // Translators: diagnostics: how long Lounge has been running, such as "2 hours 5 minutes"
+      [t('Running for'), span(n('uptimeMs'))],
+      // Translators: diagnostics: a number that goes up each time the home screen changes
+      [t('Home screen version'), String(n('revision'))],
+      // Translators: diagnostics: how capable the TV's hardware is
+      [t('Device tier'), String(d['tier'] ?? '')],
     ] as [string, string][];
   });
 </script>
 
 <main class="page">
-  <header class="page-head"><div><p class="meta">{app.state?.device.name ?? 'Your TV'}</p><h1>More</h1></div></header>
+  <header class="page-head"><div><p class="meta">{app.state?.device.name ?? t('Your TV')}</p><h1>{t('More')}</h1></div></header>
 
   <section class="section">
-    <div class="section-head"><h3>Back up</h3></div>
-    <p class="caption">Your layout, hidden items, pins, plugin settings and the TV's theme, background and sounds as one JSON file. Passwords and private addresses are not included.</p>
+    <div class="section-head"><h3>{t('Back up')}</h3></div>
+    <p class="caption">{t("Your layout, hidden items, pins, plugin settings and the TV's theme, background and sounds as one JSON file. Passwords and private addresses are not included.")}</p>
     <div class="actions">
-      <a class="btn" href={api.backupUrl()} download="lounge-backup.json">Download backup</a>
+      <a class="btn" href={api.backupUrl()} download="lounge-backup.json">{t('Download backup')}</a>
       {#if chosen}
-        <Confirm label={restoring ? 'Restoring…' : `Restore ${chosen.name}`} confirm="Yes, replace the TV's layout and settings" disabled={restoring} onconfirm={restore} />
-        <button class="btn ghost" disabled={restoring} onclick={() => (chosen = null)}>Not now</button>
+        <!-- Translators: the button that restores a backup, and the question it asks first; {file} is the name of the file chosen -->
+        <Confirm label={restoring ? t('Restoring…') : t('Restore {file}', { file: chosen.name })} confirm={t("Yes, replace the TV's layout and settings")} disabled={restoring} onconfirm={restore} />
+        <button class="btn ghost" disabled={restoring} onclick={() => (chosen = null)}>{t('Not now')}</button>
       {:else}
-        <button class="btn" onclick={() => picker?.click()}>Restore from file</button>
+        <button class="btn" onclick={() => picker?.click()}>{t('Restore from file')}</button>
       {/if}
       <input type="file" accept="application/json,.json" onchange={choose} hidden bind:this={picker} />
     </div>
-    {#if chosen}<p class="caption" role="status">Restoring replaces the TV's rows, pins and hidden items with the ones in the file, and its theme, background and sounds where the file has them.</p>{/if}
+    {#if chosen}<p class="caption" role="status">{t("Restoring replaces the TV's rows, pins and hidden items with the ones in the file, and its theme, background and sounds where the file has them.")}</p>{/if}
   </section>
 
   <section class="section">
-    <div class="section-head"><h3>Paired phones</h3></div>
+    <div class="section-head"><h3>{t('Paired phones')}</h3></div>
     <div class="list">
       {#each devices as d (d.id)}
         <div class="list-row">
-          <div class="grow"><div class="title">{d.name}</div><div class="caption">{d.current ? 'This phone' : `Seen ${ago(d.lastSeenMs)}`}</div></div>
-          {#if !d.current}<Confirm quiet label="Forget" confirm="Yes, forget it" onconfirm={() => forget(d)} />{/if}
+          <!-- Translators: under a paired phone's name; {when} is how long ago the TV heard from it, such as "3 minutes ago" or "just now" -->
+          <div class="grow"><div class="title">{d.name}</div><div class="caption">{d.current ? t('This phone') : t('Seen {when}', { when: ago(d.lastSeenMs) })}</div></div>
+          <!-- Translators: a button that makes the TV forget a paired phone, and the question it asks first -->
+          {#if !d.current}<Confirm quiet label={t('Forget')} confirm={t('Yes, forget it')} onconfirm={() => forget(d)} />{/if}
         </div>
       {/each}
     </div>
   </section>
 
   <section class="section">
-    <div class="section-head"><h3>Diagnostics</h3><span class="caption">updates every 5 seconds</span></div>
+    <div class="section-head"><h3>{t('Diagnostics')}</h3><span class="caption">{t('updates every 5 seconds')}</span></div>
     {#if diag}
       <div class="card diag">
         {#each rows as [k, v] (k)}
@@ -112,49 +137,51 @@
         {/each}
       </div>
     {:else}
-      <p class="caption">Waiting for the TV…</p>
+      <p class="caption">{t('Waiting for the TV…')}</p>
     {/if}
   </section>
 
   <section class="section">
-    <div class="section-head"><h3>Support Lounge</h3></div>
+    <div class="section-head"><h3>{t('Support Lounge')}</h3></div>
     <div class="card give">
-      <p class="pitch">No adverts. No tracking. No price.</p>
-      <p class="only">This is the one thing Lounge asks for.</p>
-      <p>If it has earned its place on your TV, give what it has been worth to you. Even the price of a coffee keeps it going, and absolutely anything helps.</p>
-      <a class="btn primary" href={paypal.href} target="_blank" rel="noopener">Give with PayPal</a>
-      <p class="caption">You choose the amount. All of it goes straight to its maker, and Lounge stays just the same whether you give or not.</p>
+      <p class="pitch">{t('No adverts. No tracking. No price.')}</p>
+      <p class="only">{t('This is the one thing Lounge asks for.')}</p>
+      <p>{t('If it has earned its place on your TV, give what it has been worth to you. Even the price of a coffee keeps it going, and absolutely anything helps.')}</p>
+      <a class="btn primary" href={paypal.href} target="_blank" rel="noopener">{t('Give with PayPal')}</a>
+      <p class="caption">{t('You choose the amount. All of it goes straight to its maker, and Lounge stays just the same whether you give or not.')}</p>
     </div>
     <div class="list">
       {#each coins as coin (coin.name)}
         <div class="card coin">
           <div class="coin-head">
             <span class="title">{coin.name}</span>
-            <button class="btn small" onclick={() => copy(coin)}>Copy address</button>
+            <button class="btn small" onclick={() => copy(coin)}>{t('Copy address')}</button>
           </div>
           <p class="address">{spaced(coin.address)}</p>
-          <p class="caption">Send only {coin.name} to this address. <a href={coin.href}>Open it in a wallet</a></p>
+          <!-- Translators: {coin} is a currency's name, such as Bitcoin; the link opens the address in a wallet app -->
+          <p class="caption">{t('Send only {coin} to this address.', { coin: coin.name })} <a href={coin.href}>{t('Open it in a wallet')}</a></p>
         </div>
       {/each}
     </div>
   </section>
 
   <section class="section">
-    <div class="section-head"><h3>About</h3></div>
+    <div class="section-head"><h3>{t('About')}</h3></div>
     <div class="card about">
       <div class="lockup"><img src="/mark.png" alt="" width="66" height="36" /><span class="name">Lounge</span></div>
-      <p>A home screen for your TV, laid out around what you're watching. Free and open source under the MIT licence.</p>
-      <p class="caption">Lounge {app.state?.device.version ?? ''} on {app.state?.device.model ?? 'this TV'}. Everything these pages show goes between this phone and the TV over your own network. The links below and the ways to give open on the internet.</p>
+      <p>{t("A home screen for your TV, laid out around what you're watching. Free and open source under the MIT licence.")}</p>
+      <p class="caption">{running()} {t('Everything these pages show goes between this phone and the TV over your own network. The links below and the ways to give open on the internet.')}</p>
     </div>
     <div class="list">
       {#each aboutLinks as link (link.href)}
         <a class="list-row" href={link.href} target="_blank" rel="noopener">
-          <span class="grow"><span class="title">{link.name}</span><span class="caption">{link.shown}</span></span>
+          <span class="grow"><span class="title">{tr(link.name)}</span><span class="caption">{link.shown}</span></span>
         </a>
       {/each}
     </div>
-    <div class="maker"><img src="/maker.png" alt="" width="32" height="32" /><span><span class="caption">Made by</span><span class="title">Gingerbreadfork</span></span></div>
-    <Confirm quiet label="Forget this phone" confirm="Yes, forget this phone" onconfirm={forgetThisPhone} />
+    <!-- Translators: a label above the name of the person who makes Lounge -->
+    <div class="maker"><img src="/maker.png" alt="" width="32" height="32" /><span><span class="caption">{t('Made by')}</span><span class="title">Gingerbreadfork</span></span></div>
+    <Confirm quiet label={t('Forget this phone')} confirm={t('Yes, forget this phone')} onconfirm={forgetThisPhone} />
   </section>
 </main>
 

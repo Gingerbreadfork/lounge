@@ -1,5 +1,6 @@
 // Shared, reactive app state: the live snapshot, connection, the current route and toasts.
 import { api, contact, explain, liveState, setToken, token, type Live, type State } from './api';
+import { speak, t } from './lang.svelte';
 
 export const app = $state({
   route: parseRoute(location.hash),
@@ -123,7 +124,7 @@ function handleShare() {
 export async function openShare() {
   const link = app.share;
   app.share = null;
-  if (link) await act('Opened on the TV', () => api.open(`url:${link}`));
+  if (link) await act(t('Opened on the TV'), () => api.open(`url:${link}`));
 }
 
 export function dismissShare() {
@@ -160,7 +161,8 @@ export function paired(device: string) {
   app.pairNote = null;
   go('home', undefined, { replace: true });
   connect();
-  toast(`Paired with ${device}`);
+  // Translators: {device} is the TV's name
+  toast(t('Paired with {device}', { device }));
 }
 
 /** A phone that is already paired ignores the link and keeps its token, so a stray link cannot
@@ -212,7 +214,7 @@ export async function connect() {
   try { pending = sessionStorage.getItem('lounge.pendingShare'); sessionStorage.removeItem('lounge.pendingShare'); } catch { /* ignore */ }
   if (pending) app.share = pending;
   stopLive = liveState(
-    (s) => { app.state = s; app.error = null; },
+    (s) => { heard(s); app.error = null; },
     (c) => {
       app.connected = c;
       if (c) { app.everConnected = true; contact.heard(); }
@@ -221,21 +223,25 @@ export async function connect() {
     unpair,
   );
   // The socket may already have delivered a newer snapshot than this first read.
-  api.state().then((s) => { if (!app.state?.snapshot || (s.snapshot && s.snapshot.revision >= app.state.snapshot.revision)) app.state = s; }).catch((e) => {
+  api.state().then((s) => { if (!app.state?.snapshot || (s.snapshot && s.snapshot.revision >= app.state.snapshot.revision)) heard(s); }).catch((e) => {
     if (e?.status === 401) unpair();
     else app.error = explain(e);
   });
 }
 
-/** What the connection pill says: connected, or honest about which way it is heading. */
-export function connectionLabel(): string {
-  return app.connected ? 'Connected' : app.everConnected ? 'Reconnecting…' : 'Connecting…';
+/** Takes the TV's state, and its language when that has changed. */
+function heard(s: State) {
+  app.state = s;
+  void speak(s.device.lang);
 }
 
-const FORGOTTEN = 'The TV has forgotten this phone. Pair it again to carry on.';
+/** What the connection pill says: connected, or honest about which way it is heading. */
+export function connectionLabel(): string {
+  return app.connected ? t('Connected') : app.everConnected ? t('Reconnecting…') : t('Connecting…');
+}
 
 /** Lets go of this phone's token and shows the Pair page, saying why when `note` is given. */
-export function unpair(note: string | null = FORGOTTEN) {
+export function unpair(note: string | null = t('The TV has forgotten this phone. Pair it again to carry on.')) {
   stopLive?.();
   stopLive = null;
   setToken(null);
@@ -279,8 +285,8 @@ export async function act<T>(label: string, f: () => Promise<T>): Promise<T | un
 }
 
 /** Whether a tap on a tile does its work where the tile sits, as a light or a scene does. */
-export function isControl(t: { glyph?: string | null; action: string }): boolean {
-  return !!t.glyph && !t.action.startsWith('control:');
+export function isControl(tile: { glyph?: string | null; action: string }): boolean {
+  return !!tile.glyph && !tile.action.startsWith('control:');
 }
 
 /** Shows what a press handed back for the phone's own screen. True when there was something. */
@@ -301,20 +307,26 @@ export function panelOf(more: string | null | undefined): { plugin: string; id: 
  * says is shown; a control that says nothing shows the change on its own tile, and anything
  * else is said to be opening on the TV.
  */
-export async function press(t: { title: string; action: string; glyph?: string | null }) {
+export async function press(tile: { title: string; action: string; glyph?: string | null }) {
   let failed = false;
-  const pressed = await act('', () => api.press(t.action).catch((e) => { failed = true; throw e; }));
+  const pressed = await act('', () => api.press(tile.action).catch((e) => { failed = true; throw e; }));
   if (failed) return;
   const shown = show(pressed);
-  const words = pressed?.say ?? (shown || isControl(t) ? '' : `Opening ${t.title} on the TV`);
+  const words = pressed?.say ?? (shown || isControl(tile) ? '' : openingOnTv(tile.title));
   if (words) toast(words);
 }
 
+/** What a toast says while the TV opens something. */
+export function openingOnTv(title: string): string {
+  // Translators: {title} is the name of an app, a film or anything else on the home screen
+  return t('Opening {title} on the TV', { title });
+}
+
 /** Opens a tile on the TV itself, whatever a tap on it would show on the phone. */
-export async function openOnTv(t: { title: string; action: string }) {
+export async function openOnTv(tile: { title: string; action: string }) {
   let failed = false;
-  const said = await act('', () => api.open(t.action).catch((e) => { failed = true; throw e; }));
-  if (!failed) toast(said?.say ?? `Opening ${t.title} on the TV`);
+  const said = await act('', () => api.open(tile.action).catch((e) => { failed = true; throw e; }));
+  if (!failed) toast(said?.say ?? openingOnTv(tile.title));
 }
 
 /** Like `act`, for a request that answers nothing: true when it worked. */

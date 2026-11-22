@@ -2,6 +2,7 @@
   import { api, art, light, lit, tag, type Tile } from '../lib/api';
   import { hold } from '../lib/hold';
   import Icon, { drawn } from '../lib/Icon.svelte';
+  import { t } from '../lib/lang.svelte';
   import { act, app, connectionLabel, dismissShare, go, openShare, press } from '../lib/state.svelte';
   import TileSheet from '../lib/TileSheet.svelte';
 
@@ -16,18 +17,18 @@
   function read(key: string) {
     try { return localStorage.getItem(key) === '1'; } catch { return false; }
   }
-  function open(t: Tile) {
+  function open(tile: Tile) {
     // A tile to read opens nothing on the TV, so a tap is not passed on.
-    if (!t.action) return;
+    if (!tile.action) return;
     // The TV's controls and its apps have a place of their own on the phone.
-    if (t.action === 'control:tv:open') return void (app.tvControls = true);
-    if (t.action === 'control:allapps') return go('home', 'apps');
+    if (tile.action === 'control:tv:open') return void (app.tvControls = true);
+    if (tile.action === 'control:allapps') return go('home', 'apps');
     // A suggested plugin is set up here on the phone, where its settings are easy to type.
-    if (t.action.startsWith('control:plugin:')) return go('plugins', t.action.slice('control:plugin:'.length));
-    press(t);
+    if (tile.action.startsWith('control:plugin:')) return go('plugins', tile.action.slice('control:plugin:'.length));
+    press(tile);
   }
-  function menu(t: Tile, rowId: string | null, rowTitle: string | null) {
-    sheet = { tile: t, rowId, rowTitle };
+  function menu(tile: Tile, rowId: string | null, rowTitle: string | null) {
+    sheet = { tile, rowId, rowTitle };
     if (!hintSeen) {
       hintSeen = true;
       try { localStorage.setItem('lounge.heldTile', '1'); } catch { /* private mode */ }
@@ -37,20 +38,24 @@
   $effect(() => {
     if (!sheet || !snapshot) return;
     const all = [...snapshot.stage.strip, ...snapshot.rows.flatMap((r) => r.tiles)];
-    if (!all.some((t) => t.id === sheet!.tile.id)) sheet = null;
+    if (!all.some((tile) => tile.id === sheet!.tile.id)) sheet = null;
   });
   function media(cmd: string) {
     if (!np) return;
     act('', () => api.open(`media:${np!.package}:${cmd}`));
   }
   /** What a screen reader says for a tile: the title, then what the eye would see on it. */
-  function describe(t: Tile) {
-    const parts = [t.title];
-    if (t.subtitle) parts.push(t.subtitle);
-    else if (t.on != null) parts.push(t.on ? 'on' : 'off');
-    if (tag(t.badge) === 'LIVE') parts.push('live');
-    if (t.stagePinned) parts.push('pinned to the Stage');
-    else if (t.pinned) parts.push('pinned');
+  function describe(tile: Tile) {
+    const parts = [tile.title];
+    if (tile.subtitle) parts.push(tile.subtitle);
+    // Translators: read out after a tile's title, for a control such as a light that is on or off
+    else if (tile.on != null) parts.push(tile.on ? t('on') : t('off'));
+    // Translators: read out after a tile's title, for something broadcast live
+    if (tag(tile.badge) === 'LIVE') parts.push(t('live'));
+    // Translators: read out after a tile's title, for something pinned to the Stage
+    if (tile.stagePinned) parts.push(t('pinned to the Stage'));
+    // Translators: read out after a tile's title, for an app pinned to the front of Your apps
+    else if (tile.pinned) parts.push(t('pinned'));
     return parts.join(', ');
   }
   function progressPct(p: number | null | undefined) {
@@ -61,8 +66,8 @@
 <main class="page">
   <header class="page-head">
     <div>
-      <p class="meta">{app.state?.device.name ?? 'Your TV'}</p>
-      <h1>What's on</h1>
+      <p class="meta">{app.state?.device.name ?? t('Your TV')}</p>
+      <h1>{t("What's on")}</h1>
     </div>
     <span class="pill" class:on={app.connected}>{connectionLabel()}</span>
   </header>
@@ -73,11 +78,12 @@
 
   {#if app.share}
     <section class="card share" aria-live="polite">
-      <p class="caption">Shared with Lounge</p>
+      <!-- Translators: above a link another app shared with Lounge, which can then be opened on the TV -->
+      <p class="caption">{t('Shared with Lounge')}</p>
       <p class="share-link">{app.share}</p>
       <div class="share-actions">
-        <button class="btn primary" onclick={openShare}>Open on the TV</button>
-        <button class="btn ghost" onclick={dismissShare}>Not now</button>
+        <button class="btn primary" onclick={openShare}>{t('Open on the TV')}</button>
+        <button class="btn ghost" onclick={dismissShare}>{t('Not now')}</button>
       </div>
     </section>
   {/if}
@@ -90,9 +96,12 @@
         <p class="np-title">{np.title}</p>
         {#if np.subtitle}<p class="meta">{np.subtitle}</p>{/if}
         <div class="np-controls">
-          <button class="round" disabled={!np.canSkipPrevious} onclick={() => media('previous')} aria-label="Previous"><Icon name="skip_previous" size={20} /></button>
-          <button class="round big" onclick={() => media('play-pause')} aria-label={tag(np.status) === 'PLAYING' ? 'Pause' : 'Play'}><Icon name={tag(np.status) === 'PLAYING' ? 'pause' : 'play'} size={24} /></button>
-          <button class="round" disabled={!np.canSkipNext} onclick={() => media('next')} aria-label="Next"><Icon name="skip_next" size={20} /></button>
+          <!-- Translators: a button for what is playing on the TV: skips back to the track or episode before -->
+          <button class="round" disabled={!np.canSkipPrevious} onclick={() => media('previous')} aria-label={t('Previous')}><Icon name="skip_previous" size={20} /></button>
+          <!-- Translators: a button for what is playing on the TV: pauses it, or plays it again -->
+          <button class="round big" onclick={() => media('play-pause')} aria-label={tag(np.status) === 'PLAYING' ? t('Pause') : t('Play')}><Icon name={tag(np.status) === 'PLAYING' ? 'pause' : 'play'} size={24} /></button>
+          <!-- Translators: a button for what is playing on the TV: skips to the next track or episode -->
+          <button class="round" disabled={!np.canSkipNext} onclick={() => media('next')} aria-label={t('Next')}><Icon name="skip_next" size={20} /></button>
         </div>
       </div>
     </section>
@@ -111,7 +120,8 @@
           <div class="progress"><i style="width: {progressPct(spotlight.progress)}%"></i></div>
         {/if}
         <div class="actions">
-          <button class="btn primary" onclick={() => act(`${spotlight!.primary.label} on the TV`, () => api.open(spotlight!.primary.action))}>{spotlight.primary.label}</button>
+          <!-- Translators: said after a button is pressed; {action} is the button's own label, such as "Play" or "Resume" -->
+          <button class="btn primary" onclick={() => act(t('{action} on the TV', { action: spotlight!.primary.label }), () => api.open(spotlight!.primary.action))}>{spotlight.primary.label}</button>
           {#if spotlight.secondary}<button class="btn" onclick={() => act('', () => api.open(spotlight!.secondary!.action))}>{spotlight.secondary.label}</button>{/if}
         </div>
         {#if spotlight.explanation}<p class="caption">{spotlight.explanation}</p>{/if}
@@ -121,18 +131,19 @@
 
   {#if snapshot}
     {#if !hintSeen && (snapshot.stage.strip.length || snapshot.rows.length)}
-      <p class="caption hint">Hold a tile to pin it to the Stage or the front of Your apps, or to hide it.</p>
+      <p class="caption hint">{t('Hold a tile to pin it to the Stage or the front of Your apps, or to hide it.')}</p>
     {/if}
     {#if snapshot.stage.strip.length}
       <section class="section">
-        <div class="section-head"><h3>Stage</h3></div>
+        <!-- Translators: Lounge's name for the big pictures at the top of the TV's home screen -->
+        <div class="section-head"><h3>{t('Stage')}</h3></div>
         <div class="row-scroller">
-          {#each snapshot.stage.strip as t (t.id)}
-            <button class="tile landscape" class:borrowed={t.borrowedArt} style={lit(t.lightArgb)} aria-label={describe(t)} onclick={() => open(t)} use:hold={() => menu(t, null, null)}>
-              {#if t.artworkPath}<img src={art(t.artworkPath)} alt="" loading="lazy" />{/if}
-              {#if tag(t.kind) !== 'APP_BANNER' || !t.artworkPath}<div class="scrim"><div class="t">{t.title}</div>{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
-              {#if t.stagePinned}<span class="pinmark" aria-hidden="true"><Icon name="pin" size={13} /></span>{/if}
-              {#if t.progress != null}<div class="bar"><i style="width: {progressPct(t.progress)}%"></i></div>{/if}
+          {#each snapshot.stage.strip as tile (tile.id)}
+            <button class="tile landscape" class:borrowed={tile.borrowedArt} style={lit(tile.lightArgb)} aria-label={describe(tile)} onclick={() => open(tile)} use:hold={() => menu(tile, null, null)}>
+              {#if tile.artworkPath}<img src={art(tile.artworkPath)} alt="" loading="lazy" />{/if}
+              {#if tag(tile.kind) !== 'APP_BANNER' || !tile.artworkPath}<div class="scrim"><div class="t">{tile.title}</div>{#if tile.subtitle}<div class="s">{tile.subtitle}</div>{/if}</div>{/if}
+              {#if tile.stagePinned}<span class="pinmark" aria-hidden="true"><Icon name="pin" size={13} /></span>{/if}
+              {#if tile.progress != null}<div class="bar"><i style="width: {progressPct(tile.progress)}%"></i></div>{/if}
             </button>
           {/each}
         </div>
@@ -142,28 +153,30 @@
       <section class="section">
         <div class="section-head">
           <h3>{row.title}</h3>
-          {#if tag(row.badge) === 'LIVE'}<span class="pill bad"><span class="dot"></span>Live</span>{/if}
-          {#if row.id === 'apps'}<button class="all" onclick={() => go('home', 'apps')}>All apps<Icon name="chevron" size={16} /></button>{/if}
+          <!-- Translators: a small label on something broadcast live -->
+          {#if tag(row.badge) === 'LIVE'}<span class="pill bad"><span class="dot"></span>{t('Live')}</span>{/if}
+          {#if row.id === 'apps'}<button class="all" onclick={() => go('home', 'apps')}>{t('All apps')}<Icon name="chevron" size={16} /></button>{/if}
         </div>
         {#if row.note}<p class="caption dust">{row.note}</p>{/if}
         <div class="row-scroller">
-          {#each row.tiles.filter((t) => !t.id.startsWith('control:')) as t (t.id)}
-            <button class="tile {tag(row.kind).toLowerCase()}" class:borrowed={t.borrowedArt} style={lit(t.lightArgb)} aria-label={describe(t)} onclick={() => open(t)} use:hold={t.id.startsWith('control:') ? null : () => menu(t, row.id, row.title)}>
+          {#each row.tiles.filter((tile) => !tile.id.startsWith('control:')) as tile (tile.id)}
+            <button class="tile {tag(row.kind).toLowerCase()}" class:borrowed={tile.borrowedArt} style={lit(tile.lightArgb)} aria-label={describe(tile)} onclick={() => open(tile)} use:hold={tile.id.startsWith('control:') ? null : () => menu(tile, row.id, row.title)}>
               {#if tag(row.kind) === 'COMPACT'}
-                {#if drawn(t.glyph) || (t.glyph && !t.iconPath)}
-                  <span class="glyph" class:on={t.on === true} class:off={t.on === false} aria-hidden="true"><Icon name={drawn(t.glyph) ? t.glyph : 'thing'} size={26} /></span>
-                {:else if t.iconPath}<img class="icon" src={art(t.iconPath)} alt="" loading="lazy" />{/if}
+                {#if drawn(tile.glyph) || (tile.glyph && !tile.iconPath)}
+                  <span class="glyph" class:on={tile.on === true} class:off={tile.on === false} aria-hidden="true"><Icon name={drawn(tile.glyph) ? tile.glyph : 'thing'} size={26} /></span>
+                {:else if tile.iconPath}<img class="icon" src={art(tile.iconPath)} alt="" loading="lazy" />{/if}
                 <span class="lines">
-                  <span class="t">{t.title}</span>
-                  {#if t.subtitle}<span class="s">{t.subtitle}</span>{/if}
+                  <span class="t">{tile.title}</span>
+                  {#if tile.subtitle}<span class="s">{tile.subtitle}</span>{/if}
                 </span>
-                {#if t.pinned || t.stagePinned}<span class="pin-inline" aria-hidden="true"><Icon name="pin" size={14} /></span>{/if}
+                {#if tile.pinned || tile.stagePinned}<span class="pin-inline" aria-hidden="true"><Icon name="pin" size={14} /></span>{/if}
               {:else}
-                {#if t.artworkPath}<img src={art(t.artworkPath)} alt="" loading="lazy" />{:else}<div class="fill" style="background: color-mix(in srgb, {light(t.lightArgb)} 35%, var(--curtain))"></div>{/if}
-                {#if tag(t.badge) === 'LIVE' && tag(row.badge) !== 'LIVE'}<span class="badge"><span class="dot"></span>Live</span>{/if}
-                {#if (tag(row.kind) !== 'APP_BANNER' && tag(row.kind) !== 'POSTER') || !t.artworkPath}<div class="scrim">{#if (t.artTitle ?? t.title)}<div class="t">{t.artTitle ?? t.title}</div>{/if}{#if t.subtitle}<div class="s">{t.subtitle}</div>{/if}</div>{/if}
-                {#if t.pinned || t.stagePinned}<span class="pinmark" aria-hidden="true"><Icon name="pin" size={13} /></span>{/if}
-                {#if t.progress != null}<div class="bar"><i style="width: {progressPct(t.progress)}%"></i></div>{/if}
+                {#if tile.artworkPath}<img src={art(tile.artworkPath)} alt="" loading="lazy" />{:else}<div class="fill" style="background: color-mix(in srgb, {light(tile.lightArgb)} 35%, var(--curtain))"></div>{/if}
+                <!-- Translators: a small label on something broadcast live -->
+                {#if tag(tile.badge) === 'LIVE' && tag(row.badge) !== 'LIVE'}<span class="badge"><span class="dot"></span>{t('Live')}</span>{/if}
+                {#if (tag(row.kind) !== 'APP_BANNER' && tag(row.kind) !== 'POSTER') || !tile.artworkPath}<div class="scrim">{#if (tile.artTitle ?? tile.title)}<div class="t">{tile.artTitle ?? tile.title}</div>{/if}{#if tile.subtitle}<div class="s">{tile.subtitle}</div>{/if}</div>{/if}
+                {#if tile.pinned || tile.stagePinned}<span class="pinmark" aria-hidden="true"><Icon name="pin" size={13} /></span>{/if}
+                {#if tile.progress != null}<div class="bar"><i style="width: {progressPct(tile.progress)}%"></i></div>{/if}
               {/if}
             </button>
           {/each}
@@ -173,12 +186,12 @@
     {#if !snapshot.rows.some((r) => r.id === 'apps')}
       <button class="list-row" onclick={() => go('home', 'apps')}>
         <span class="glyph"><Icon name="apps" size={24} /></span>
-        <span class="grow"><span class="title">All apps</span><span class="caption">Open any app on the TV</span></span>
+        <span class="grow"><span class="title">{t('All apps')}</span><span class="caption">{t('Open any app on the TV')}</span></span>
         <Icon name="chevron" size={20} />
       </button>
     {/if}
   {:else if !app.error}
-    <p class="empty">Waiting for the TV…</p>
+    <p class="empty">{t('Waiting for the TV…')}</p>
   {/if}
 </main>
 

@@ -2,7 +2,8 @@
   // Every app on the TV, to open from the phone. The home shows only the pinned and the recent.
   import { api, art, type AppRef } from '../lib/api';
   import Icon from '../lib/Icon.svelte';
-  import { act, app, goBack, quiet } from '../lib/state.svelte';
+  import { language, t } from '../lib/lang.svelte';
+  import { act, app, goBack, openingOnTv, quiet } from '../lib/state.svelte';
 
   let apps = $state<AppRef[] | null>(null);
   let unread = $state(false);
@@ -10,7 +11,7 @@
   let opening = $state<string | null>(null);
 
   quiet(() => api.layout()).then((l) => {
-    if (l) apps = [...l.apps].sort((a, b) => a.title.localeCompare(b.title));
+    if (l) apps = [...l.apps].sort((a, b) => a.title.localeCompare(b.title, language()));
     else unread = true;
   });
 
@@ -22,7 +23,7 @@
   async function open(a: AppRef) {
     if (opening) return;
     opening = a.package;
-    await act(`Opening ${a.title} on the TV`, () => api.launch(a.package));
+    await act(openingOnTv(a.title), () => api.launch(a.package));
     opening = null;
   }
 </script>
@@ -30,31 +31,31 @@
 <main class="page">
   <header class="page-head">
     <div>
-      <button class="btn ghost back" onclick={() => goBack('home')}>← Home</button>
-      <h1>All apps</h1>
-      <p class="meta">{app.state?.device.name ?? 'Your TV'}</p>
+      <button class="btn ghost back" onclick={() => goBack('home')}>← {t('Home')}</button>
+      <h1>{t('All apps')}</h1>
+      <p class="meta">{app.state?.device.name ?? t('Your TV')}</p>
     </div>
   </header>
 
   {#if apps}
     <div class="find">
       <Icon name="search" size={20} />
-      <input type="search" placeholder="Find an app" bind:value={query} aria-label="Find an app" autocomplete="off" autocapitalize="off" enterkeyhint="search" />
+      <input type="search" placeholder={t('Find an app')} bind:value={query} aria-label={t('Find an app')} autocomplete="off" autocapitalize="off" enterkeyhint="search" />
     </div>
     {#if found.length}
       <div class="grid">
         {#each found as a (a.package)}
-          <button class="app" class:opening={opening === a.package} onclick={() => open(a)} aria-label="Open {a.title} on the TV">
+          <button class="app" class:opening={opening === a.package} onclick={() => open(a)} aria-label={t('Open {title} on the TV', { title: a.title })}>
             {#if a.iconPath}<img src={art(a.iconPath)} alt="" loading="lazy" />{:else}<span class="blank" aria-hidden="true"><Icon name="apps" size={26} /></span>{/if}
             <span class="name">{a.title}</span>
           </button>
         {/each}
       </div>
     {:else}
-      <p class="empty">{apps.length ? `No app is called “${query.trim()}”.` : 'The TV has no apps to open yet.'}</p>
+      <p class="empty">{apps.length ? t('No app is called “{query}”.', { query: query.trim() }) : t('The TV has no apps to open yet.')}</p>
     {/if}
   {:else}
-    <p class="empty">{unread ? "The TV isn't answering, so its apps can't be listed yet." : 'Reading the apps from the TV…'}</p>
+    <p class="empty">{unread ? t("The TV isn't answering, so its apps can't be listed yet.") : t('Reading the apps from the TV…')}</p>
   {/if}
 </main>
 

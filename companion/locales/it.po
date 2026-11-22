@@ -1,0 +1,1439 @@
+# Lounge, phone: it
+#
+msgid ""
+msgstr ""
+"Language: it\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. the first tab, which shows what is on the TV's home screen
+#: src/App.svelte src/pages/Apps.svelte
+msgid "Home"
+msgstr "Home"
+
+#. the tab with the remote control for the TV
+#: src/App.svelte src/pages/Remote.svelte
+msgid "Remote"
+msgstr "Telecomando"
+
+#. the tab that arranges the TV's home screen
+#: src/App.svelte src/pages/Layout.svelte
+msgid "Layout"
+msgstr "Disposizione"
+
+#: src/App.svelte src/pages/More.svelte src/pages/Plugins.svelte
+msgid "Plugins"
+msgstr "Plugin"
+
+#. the last tab, for backups, paired phones, diagnostics and about
+#: src/App.svelte src/pages/More.svelte
+msgid "More"
+msgstr "Altro"
+
+#: src/App.svelte
+msgid "Sections"
+msgstr "Sezioni"
+
+#: src/lib/BottomSheet.svelte src/lib/LiveView.svelte
+msgid "Close"
+msgstr "Chiudi"
+
+#: src/lib/LiveView.svelte
+msgid "Resting. Tap to carry on."
+msgstr "In pausa. Tocca per riprendere."
+
+#: src/lib/LiveView.svelte
+msgid "The picture has stopped arriving. Still trying."
+msgstr "L'immagine non arriva più. Altri tentativi in corso."
+
+#: src/lib/LiveView.svelte
+msgid "The picture isn't arriving. Still trying."
+msgstr "L'immagine non arriva. Altri tentativi in corso."
+
+#: src/lib/LiveView.svelte src/lib/PluginPanel.svelte
+msgid "One moment"
+msgstr "Un momento"
+
+#. {title} is the name of a live picture, such as a camera
+#: src/lib/LiveView.svelte
+msgid "{title} is on the TV"
+msgstr "{title} è sulla TV"
+
+#. a button that puts this live picture on the TV's screen
+#: src/lib/LiveView.svelte
+msgid "On the TV"
+msgstr "Sulla TV"
+
+#. a button that goes back to the panel this one was opened from
+#: src/lib/PluginPanel.svelte
+msgid "Back"
+msgstr "Indietro"
+
+#. "this" and "it" are a plugin's panel, such as a room or a thermostat
+#: src/lib/PluginPanel.svelte
+msgid "The TV couldn't read this from the plugin. Close it and try again."
+msgstr "La TV non è riuscita a leggerlo dal plugin. Chiudi e riprova."
+
+#. a button that turns down what {title} names, such as a light's brightness
+#: src/lib/PluginPanel.svelte
+msgid "{title}, less"
+msgstr "{title}, meno"
+
+#. a button that turns up what {title} names, such as a light's brightness
+#: src/lib/PluginPanel.svelte
+msgid "{title}, more"
+msgstr "{title}, più"
+
+#. "it" is a plugin's panel, such as a room or a thermostat
+#: src/lib/PluginPanel.svelte
+msgid "Reading it from the TV…"
+msgstr "Lettura dalla TV…"
+
+#. read out after a row is moved; {place} is its new place in a list of {count} rows
+#: src/lib/Reorder.svelte
+msgid "{name} is now {place} of {count}"
+msgstr "{name} è ora in posizione {place} di {count}"
+
+#: src/lib/Reorder.svelte
+msgid "Drag to move {name}, or use the arrow keys"
+msgstr "Trascina per spostare {name}, oppure usa i tasti freccia"
+
+#: src/lib/Reorder.svelte
+msgid "Move {name} up"
+msgstr "Sposta {name} su"
+
+#: src/lib/Reorder.svelte
+msgid "Move {name} down"
+msgstr "Sposta {name} giù"
+
+#: src/lib/TileSheet.svelte src/pages/Layout.svelte
+msgid "Unpinned from the Stage"
+msgstr "Staccato dal Palco"
+
+#: src/lib/TileSheet.svelte
+msgid "Pinned to the Stage"
+msgstr "Fissato sul Palco"
+
+#: src/lib/TileSheet.svelte
+msgid "Unpinned from Your apps"
+msgstr "Staccata da Le tue app"
+
+#: src/lib/TileSheet.svelte
+msgid "Pinned to the front of Your apps"
+msgstr "Fissata in cima a Le tue app"
+
+#: src/lib/TileSheet.svelte
+msgid "Hidden from every row"
+msgstr "Nascosto da tutte le righe"
+
+#. {source} is the app or plugin whose titles are hidden from Continue watching
+#: src/lib/TileSheet.svelte
+msgid "Everything from {source} hidden"
+msgstr "Contenuti di {source} nascosti"
+
+#: src/lib/TileSheet.svelte
+msgid "It will not be shown again"
+msgstr "Non verrà più mostrato"
+
+#. {row} is a home screen row's title, such as "Continue watching"
+#: src/lib/TileSheet.svelte
+msgid "{row} row hidden"
+msgstr "Riga nascosta: {row}"
+
+#: src/lib/TileSheet.svelte
+msgid "Don't show this again"
+msgstr "Non mostrare più"
+
+#. menu choices; "Press" works a control such as a light switch, as a tap on it does
+#: src/lib/TileSheet.svelte
+msgid "Press"
+msgstr "Premi"
+
+#. menu choices; "Press" works a control such as a light switch, as a tap on it does
+#: src/lib/TileSheet.svelte src/pages/Home.svelte src/pages/Remote.svelte
+msgid "Open on the TV"
+msgstr "Apri sulla TV"
+
+#. a menu choice; {source} is the app or plugin a title comes from
+#: src/lib/TileSheet.svelte
+msgid "Hide everything from {source}"
+msgstr "Nascondi tutto di {source}"
+
+#. beside one of the TV's controls after it is pressed: how telling the TV went
+#: src/lib/TvControls.svelte
+msgid "Sending…"
+msgstr "Invio…"
+
+#. beside one of the TV's controls after it is pressed: how telling the TV went
+#: src/lib/TvControls.svelte
+msgid "Sent"
+msgstr "Inviato"
+
+#. beside one of the TV's controls after it is pressed: how telling the TV went
+#: src/lib/TvControls.svelte
+msgid "Didn't work"
+msgstr "Non ha funzionato"
+
+#: src/lib/TvControls.svelte
+msgid "TV controls"
+msgstr "Controlli TV"
+
+#: src/lib/TvControls.svelte
+msgid "Turn the TV on or off and switch its input."
+msgstr "Accendi o spegni la TV e cambia ingresso."
+
+#: src/lib/TvControls.svelte
+msgid "Volume and playback are on the remote, and work without it."
+msgstr "Volume e riproduzione sono nel telecomando, e funzionano anche senza."
+
+#: src/lib/TvControls.svelte
+msgid "Lounge asks the TV through its HDMI cable; the TV decides what it does."
+msgstr "Lounge lo chiede alla TV tramite il cavo HDMI; è la TV a decidere cosa fare."
+
+#. in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls
+#: src/lib/TvControls.svelte
+msgid "The TV isn't answering. Check it is on, then open this again."
+msgstr "La TV non risponde. Controlla che sia accesa, poi riapri questa scheda."
+
+#. in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls
+#: src/lib/TvControls.svelte
+msgid "Reading them from the TV…"
+msgstr "Lettura dalla TV…"
+
+#: src/lib/api.ts
+msgid "Lounge on the TV isn't answering. Check the TV is on and this phone is on the same Wi-Fi."
+msgstr "Lounge sulla TV non risponde. Controlla che la TV sia accesa e che questo telefono sia sullo stesso Wi-Fi."
+
+#: src/lib/api.ts
+msgid "The TV took too long to answer. Check it is on, then try again."
+msgstr "La TV ha impiegato troppo a rispondere. Controlla che sia accesa, poi riprova."
+
+#: src/lib/api.ts
+msgid "Pair this phone with the TV first."
+msgstr "Prima abbina questo telefono alla TV."
+
+#: src/lib/api.ts
+msgid "That is too much to send to the TV at once."
+msgstr "È troppo da inviare alla TV in una volta sola."
+
+#: src/lib/api.ts
+msgid "Lounge on the TV ran into a problem. Try again in a moment."
+msgstr "Lounge sulla TV ha avuto un problema. Riprova tra poco."
+
+#: src/lib/api.ts
+msgid "The TV couldn't do that. Try again."
+msgstr "La TV non è riuscita a farlo. Riprova."
+
+#: src/lib/api.ts
+msgid "That didn't work. Try again."
+msgstr "Non ha funzionato. Riprova."
+
+#: src/lib/giving.ts
+msgid "The source code"
+msgstr "Il codice sorgente"
+
+#: src/lib/giving.ts
+msgid "Report a problem"
+msgstr "Segnala un problema"
+
+#: src/lib/giving.ts
+msgid "What's new"
+msgstr "Novità"
+
+#: src/lib/giving.ts
+msgid "Gingerbreadfork on X"
+msgstr "Gingerbreadfork su X"
+
+#: src/lib/state.svelte.ts src/pages/Remote.svelte
+msgid "Opened on the TV"
+msgstr "Aperto sulla TV"
+
+#. {device} is the TV's name
+#: src/lib/state.svelte.ts
+msgid "Paired with {device}"
+msgstr "Abbinato a {device}"
+
+#: src/lib/state.svelte.ts
+msgid "Connected"
+msgstr "Connesso"
+
+#: src/lib/state.svelte.ts
+msgid "Reconnecting…"
+msgstr "Riconnessione…"
+
+#: src/lib/state.svelte.ts
+msgid "Connecting…"
+msgstr "Connessione…"
+
+#: src/lib/state.svelte.ts
+msgid "The TV has forgotten this phone. Pair it again to carry on."
+msgstr "La TV ha dimenticato questo telefono. Abbinalo di nuovo per continuare."
+
+#. {title} is the name of an app, a film or anything else on the home screen
+#: src/lib/state.svelte.ts
+msgid "Opening {title} on the TV"
+msgstr "Apertura di {title} sulla TV"
+
+#: src/lib/words.ts
+msgid "Pin to the front of Your apps"
+msgstr "Fissa in cima a Le tue app"
+
+#. under "Pin to the front of Your apps": what the app does once pinned
+#: src/lib/words.ts
+msgid "Stays put ahead of recent apps"
+msgstr "Resta ferma davanti alle app recenti"
+
+#: src/lib/words.ts
+msgid "Unpin from Your apps"
+msgstr "Stacca da Le tue app"
+
+#. under "Unpin from Your apps": the app moves with the ones opened lately
+#: src/lib/words.ts
+msgid "Follows what you open again"
+msgstr "Torna a seguire quello che apri"
+
+#: src/lib/words.ts
+msgid "Pin to the Stage"
+msgstr "Fissa sul Palco"
+
+#. under "Pin to the Stage": where the pinned thing stays
+#: src/lib/words.ts
+msgid "Stays in the big pictures up top"
+msgstr "Resta tra le grandi immagini in alto"
+
+#: src/lib/words.ts
+msgid "Unpin from the Stage"
+msgstr "Stacca dal Palco"
+
+#. under "Unpin from the Stage": what follows for the place it held
+#: src/lib/words.ts
+msgid "What you watch takes its place"
+msgstr "Quello che guardi prende il suo posto"
+
+#. a menu choice; {title} is the name of the tile or row it hides
+#. a button; {title} is the title of a home screen row
+#. a button; {title} is the name of an app or plugin
+#: src/lib/words.ts src/pages/Layout.svelte
+msgid "Hide {title}"
+msgstr "Nascondi {title}"
+
+#. under "Hide {title}": the tile is left out of every row
+#: src/lib/words.ts
+msgid "Off every row until you show it"
+msgstr "Fuori da tutte le righe finché non lo mostri"
+
+#. under "Hide everything from {source}": the app or plugin is left out of the Continue watching row
+#: src/lib/words.ts
+msgid "Off Continue watching until you show it"
+msgstr "Fuori da Continua a guardare finché non lo mostri"
+
+#: src/lib/words.ts
+msgid "Hide this row"
+msgstr "Nascondi questa riga"
+
+#. under "Hide this row": the phone's Layout tab shows the row again
+#: src/lib/words.ts
+msgid "The Layout tab brings it back"
+msgstr "Per riaverla: scheda Disposizione"
+
+#. a menu choice that opens a control's own settings
+#: src/lib/words.ts
+msgid "Adjust"
+msgstr "Regola"
+
+#. under "Adjust": what the choice opens
+#: src/lib/words.ts
+msgid "Its own settings, here on the phone"
+msgstr "Le sue impostazioni, qui sul telefono"
+
+#. two items of a list that goes on
+#: src/lib/words.ts
+msgid "{first}, {next}"
+msgstr "{first}, {next}"
+
+#. the end of a list
+#: src/lib/words.ts
+msgid "{first} and {last}"
+msgstr "{first} e {last}"
+
+#. the mark between a whole number and its decimals, a comma in many languages
+#: src/lib/words.ts
+msgctxt "decimal mark"
+msgid "."
+msgstr ","
+
+#: src/lib/words.ts
+msgid "under a minute"
+msgstr "meno di un minuto"
+
+#: src/lib/words.ts
+msgid "{n} minute"
+msgid_plural "{n} minutes"
+msgstr[0] "{n} minuto"
+msgstr[1] "{n} minuti"
+
+#: src/lib/words.ts
+msgid "{n} hour"
+msgid_plural "{n} hours"
+msgstr[0] "{n} ora"
+msgstr[1] "{n} ore"
+
+#. a length of time; {minutes} is a count of minutes such as "5 minutes"
+#: src/lib/words.ts
+msgid "{n} hour {minutes}"
+msgid_plural "{n} hours {minutes}"
+msgstr[0] "{n} ora e {minutes}"
+msgstr[1] "{n} ore e {minutes}"
+
+#: src/lib/words.ts
+msgid "{n} day"
+msgid_plural "{n} days"
+msgstr[0] "{n} giorno"
+msgstr[1] "{n} giorni"
+
+#: src/lib/words.ts
+msgid "just now"
+msgstr "adesso"
+
+#: src/lib/words.ts
+msgid "{n} minute ago"
+msgid_plural "{n} minutes ago"
+msgstr[0] "{n} minuto fa"
+msgstr[1] "{n} minuti fa"
+
+#: src/lib/words.ts
+msgid "{n} hour ago"
+msgid_plural "{n} hours ago"
+msgstr[0] "{n} ora fa"
+msgstr[1] "{n} ore fa"
+
+#: src/lib/words.ts
+msgid "{n} day ago"
+msgid_plural "{n} days ago"
+msgstr[0] "{n} giorno fa"
+msgstr[1] "{n} giorni fa"
+
+#: src/pages/Apps.svelte src/pages/Home.svelte
+msgid "All apps"
+msgstr "Tutte le app"
+
+#: src/pages/Apps.svelte src/pages/Home.svelte src/pages/More.svelte src/pages/Plugins.svelte src/pages/Remote.svelte
+msgid "Your TV"
+msgstr "La tua TV"
+
+#: src/pages/Apps.svelte
+msgid "Find an app"
+msgstr "Cerca un'app"
+
+#: src/pages/Apps.svelte
+msgid "Open {title} on the TV"
+msgstr "Apri {title} sulla TV"
+
+#: src/pages/Apps.svelte
+msgid "No app is called “{query}”."
+msgstr "Nessuna app si chiama “{query}”."
+
+#: src/pages/Apps.svelte
+msgid "The TV has no apps to open yet."
+msgstr "La TV non ha ancora app da aprire."
+
+#: src/pages/Apps.svelte
+msgid "The TV isn't answering, so its apps can't be listed yet."
+msgstr "La TV non risponde, quindi le sue app non si possono ancora elencare."
+
+#: src/pages/Apps.svelte
+msgid "Reading the apps from the TV…"
+msgstr "Lettura delle app dalla TV…"
+
+#. read out after a tile's title, for a control such as a light that is on or off
+#: src/pages/Home.svelte
+msgid "on"
+msgstr "acceso"
+
+#. read out after a tile's title, for a control such as a light that is on or off
+#: src/pages/Home.svelte
+msgid "off"
+msgstr "spento"
+
+#. read out after a tile's title, for something broadcast live
+#: src/pages/Home.svelte
+msgid "live"
+msgstr "in diretta"
+
+#. read out after a tile's title, for something pinned to the Stage
+#: src/pages/Home.svelte
+msgid "pinned to the Stage"
+msgstr "fissato sul Palco"
+
+#. read out after a tile's title, for an app pinned to the front of Your apps
+#: src/pages/Home.svelte
+msgid "pinned"
+msgstr "fissata"
+
+#: src/pages/Home.svelte
+msgid "What's on"
+msgstr "Cosa c'è"
+
+#. above a link another app shared with Lounge, which can then be opened on the TV
+#: src/pages/Home.svelte
+msgid "Shared with Lounge"
+msgstr "Condiviso con Lounge"
+
+#: src/pages/Home.svelte src/pages/More.svelte
+msgid "Not now"
+msgstr "Non ora"
+
+#. a button for what is playing on the TV: skips back to the track or episode before
+#: src/pages/Home.svelte
+msgid "Previous"
+msgstr "Precedente"
+
+#. a button for what is playing on the TV: pauses it, or plays it again
+#: src/pages/Home.svelte
+msgid "Pause"
+msgstr "Pausa"
+
+#. a button for what is playing on the TV: pauses it, or plays it again
+#: src/pages/Home.svelte
+msgid "Play"
+msgstr "Riproduci"
+
+#. a button for what is playing on the TV: skips to the next track or episode
+#: src/pages/Home.svelte
+msgid "Next"
+msgstr "Successivo"
+
+#. said after a button is pressed; {action} is the button's own label, such as "Play" or "Resume"
+#: src/pages/Home.svelte
+msgid "{action} on the TV"
+msgstr "{action} sulla TV"
+
+#: src/pages/Home.svelte
+msgid "Hold a tile to pin it to the Stage or the front of Your apps, or to hide it."
+msgstr "Tieni premuto un riquadro per fissarlo sul Palco o in cima a Le tue app, oppure per nasconderlo."
+
+#. Lounge's name for the big pictures at the top of the TV's home screen
+#: src/pages/Home.svelte
+msgid "Stage"
+msgstr "Palco"
+
+#. a small label on something broadcast live
+#: src/pages/Home.svelte
+msgid "Live"
+msgstr "In diretta"
+
+#: src/pages/Home.svelte
+msgid "Open any app on the TV"
+msgstr "Apri qualsiasi app sulla TV"
+
+#: src/pages/Home.svelte src/pages/More.svelte
+msgid "Waiting for the TV…"
+msgstr "In attesa della TV…"
+
+#: src/pages/Layout.svelte
+msgid "Saved to the TV"
+msgstr "Salvato sulla TV"
+
+#: src/pages/Layout.svelte
+msgid "Rows reordered"
+msgstr "Righe riordinate"
+
+#. {name} is the title of a home screen row
+#: src/pages/Layout.svelte
+msgid "{name} hidden on the TV"
+msgstr "Riga nascosta sulla TV: {name}"
+
+#: src/pages/Layout.svelte
+msgid "Rows back to their usual order"
+msgstr "Righe di nuovo nell'ordine abituale"
+
+#. "Your apps" is the row's name: its pinned apps are in a new order
+#: src/pages/Layout.svelte
+msgid "Your apps reordered"
+msgstr "Le tue app riordinate"
+
+#: src/pages/Layout.svelte
+msgid "{app} pinned to the front of Your apps"
+msgstr "{app} fissata in cima a Le tue app"
+
+#: src/pages/Layout.svelte
+msgid "{app} unpinned from Your apps"
+msgstr "{app} staccata da Le tue app"
+
+#. "Your apps" is the row's name; {n} is how many recently opened apps follow the pinned ones
+#: src/pages/Layout.svelte
+msgid "Your apps shows pinned apps only"
+msgstr "Le tue app mostra solo le app fissate"
+
+#. "Your apps" is the row's name; {n} is how many recently opened apps follow the pinned ones
+#: src/pages/Layout.svelte
+msgid "Your apps shows {n} recent app"
+msgid_plural "Your apps shows {n} recent apps"
+msgstr[0] "Le tue app mostra {n} app recente"
+msgstr[1] "Le tue app mostra {n} app recenti"
+
+#. {source} is an app or plugin that brings titles to the Continue watching row
+#: src/pages/Layout.svelte
+msgid "{source} is back in Continue watching"
+msgstr "{source} è di nuovo in Continua a guardare"
+
+#. {source} is an app or plugin that brings titles to the Continue watching row
+#: src/pages/Layout.svelte
+msgid "{source} hidden from Continue watching"
+msgstr "{source} non compare più in Continua a guardare"
+
+#. {name} is the title of a row, an app, a film or anything else that was hidden
+#: src/pages/Layout.svelte
+msgid "{name} is back on the TV"
+msgstr "{name} è di nuovo sulla TV"
+
+#. how many titles an app or plugin brings to Continue watching just now
+#: src/pages/Layout.svelte
+msgid "Nothing to continue now"
+msgstr "Niente da continuare ora"
+
+#. how many titles an app or plugin brings to Continue watching just now
+#: src/pages/Layout.svelte
+msgid "{n} title"
+msgid_plural "{n} titles"
+msgstr[0] "{n} titolo"
+msgstr[1] "{n} titoli"
+
+#. for an app or plugin hidden from Continue watching: how many titles it would bring
+#: src/pages/Layout.svelte
+msgid "Hidden, nothing to continue now"
+msgstr "Nascosto, niente da continuare ora"
+
+#. for an app or plugin hidden from Continue watching: how many titles it would bring
+#: src/pages/Layout.svelte
+msgid "Hidden, {n} title"
+msgid_plural "Hidden, {n} titles"
+msgstr[0] "Nascosto, {n} titolo"
+msgstr[1] "Nascosto, {n} titoli"
+
+#: src/pages/Layout.svelte
+msgid "Home screen"
+msgstr "Schermata Home"
+
+#: src/pages/Layout.svelte
+msgid "Saving…"
+msgstr "Salvataggio…"
+
+#. the heading over the home screen's rows, and beside it how many of them are hidden
+#: src/pages/Layout.svelte
+msgid "Rows, top to bottom"
+msgstr "Righe, dall'alto in basso"
+
+#. the heading over the home screen's rows, and beside it how many of them are hidden
+#: src/pages/Layout.svelte
+msgid "{n} hidden"
+msgid_plural "{n} hidden"
+msgstr[0] "{n} nascosta"
+msgstr[1] "{n} nascoste"
+
+#. the heading over the home screen's rows, and beside it how many of them are hidden
+#: src/pages/Layout.svelte
+msgid "All shown"
+msgstr "Tutte visibili"
+
+#: src/pages/Layout.svelte
+msgid "Drag the dots to reorder. A row with nothing in it stays off the screen until it has something to show."
+msgstr "Trascina i puntini per riordinare. Una riga vuota resta fuori dallo schermo finché non ha qualcosa da mostrare."
+
+#. under a hidden row's title; {detail} is a line on what the row holds
+#: src/pages/Layout.svelte
+msgid "Hidden, {detail}"
+msgstr "Nascosto, {detail}"
+
+#. under a hidden row's title; {detail} is a line on what the row holds
+#: src/pages/Layout.svelte
+msgid "Hidden"
+msgstr "Nascosto"
+
+#. a button; {title} is the title of a home screen row
+#. a button; {title} is the name of an app or plugin
+#: src/pages/Layout.svelte
+msgid "Show {title}"
+msgstr "Mostra {title}"
+
+#: src/pages/Layout.svelte
+msgid "Put the rows back in their usual order"
+msgstr "Rimetti le righe nell'ordine abituale"
+
+#. under the button "Put the rows back in their usual order": hidden rows stay hidden
+#: src/pages/Layout.svelte
+msgid "Keeps what you have hidden."
+msgstr "Mantiene ciò che hai nascosto."
+
+#. the heading over the things pinned to the Stage
+#: src/pages/Layout.svelte
+msgid "On the Stage"
+msgstr "Sul Palco"
+
+#. "What's on" is the phone's first page; {choice} is the menu choice "Pin to the Stage"
+#: src/pages/Layout.svelte
+msgid "Pinned things stay among the big pictures at the top. Hold a tile on What's on and choose “{choice}”."
+msgstr "Ciò che fissi resta tra le grandi immagini in alto. Tieni premuto un riquadro in “Cosa c'è” e scegli “{choice}”."
+
+#: src/pages/Layout.svelte
+msgid "Unpin"
+msgstr "Stacca"
+
+#: src/pages/Layout.svelte
+msgid "Your apps"
+msgstr "Le tue app"
+
+#: src/pages/Layout.svelte
+msgid "Pinned apps stay at the front in this order, then the apps you opened last. Everything else is in All apps on the TV, where holding OK on an app pins it."
+msgstr "Le app fissate restano in cima in quest'ordine, seguite dalle ultime che hai aperto. Tutto il resto è in Tutte le app sulla TV, dove tenendo premuto OK su un'app la fissi."
+
+#: src/pages/Layout.svelte
+msgid "Recent apps shown after the pins"
+msgstr "App recenti mostrate dopo quelle fissate"
+
+#. a choice of how many recently opened apps follow the pinned ones in Your apps
+#: src/pages/Layout.svelte
+msgid "Pinned only"
+msgstr "Solo fissate"
+
+#. a choice of how many recently opened apps follow the pinned ones in Your apps
+#: src/pages/Layout.svelte
+msgid "{n} recent"
+msgid_plural "{n} recent"
+msgstr[0] "{n} recente"
+msgstr[1] "{n} recenti"
+
+#. under the name of an app that is pinned to the front of Your apps
+#: src/pages/Layout.svelte
+msgid "Pinned"
+msgstr "Fissata"
+
+#: src/pages/Layout.svelte
+msgid "Find an app to pin"
+msgstr "Cerca un'app da fissare"
+
+#. a button that pins the app to the front of Your apps
+#: src/pages/Layout.svelte
+msgid "Pin"
+msgstr "Fissa"
+
+#: src/pages/Layout.svelte
+msgid "No app called “{query}”."
+msgstr "Nessuna app chiamata “{query}”."
+
+#. the heading over the list of things hidden from every row
+#: src/pages/Layout.svelte
+msgctxt "heading"
+msgid "Hidden from every row"
+msgstr "Nascosti da tutte le righe"
+
+#. "What's on" is the phone's first page, OK is the remote's button and Hide is the menu choice
+#: src/pages/Layout.svelte
+msgid "Nothing is hidden. Hold a tile on What's on, or OK on the TV, and choose Hide."
+msgstr "Non c'è niente di nascosto. Tieni premuto un riquadro in “Cosa c'è”, oppure OK sulla TV, e scegli Nascondi."
+
+#. a button that puts a hidden thing back on the home screen
+#: src/pages/Layout.svelte
+msgid "Show"
+msgstr "Mostra"
+
+#. the heading over the apps and plugins that bring titles to the Continue watching row
+#: src/pages/Layout.svelte
+msgid "Continue watching comes from"
+msgstr "Le sorgenti di Continua a guardare"
+
+#: src/pages/Layout.svelte
+msgid "Nothing to continue yet. Apps and plugins are listed here once they bring something."
+msgstr "Ancora niente da continuare. App e plugin compaiono qui quando portano qualcosa."
+
+#: src/pages/Layout.svelte
+msgid "Everything is shown unless you hide it here, or hold a tile and hide everything from its app."
+msgstr "Tutto è visibile, a meno che tu non lo nasconda qui o non tenga premuto un riquadro per nascondere tutto della sua app."
+
+#: src/pages/Layout.svelte
+msgid "Loading the layout…"
+msgstr "Caricamento della disposizione…"
+
+#: src/pages/More.svelte
+msgid "Layout and settings restored on the TV"
+msgstr "Disposizione e impostazioni ripristinate sulla TV"
+
+#. said once the TV has forgotten a paired phone; {name} is that phone's name
+#: src/pages/More.svelte
+msgid "The TV has forgotten this phone"
+msgstr "La TV ha dimenticato questo telefono"
+
+#. said once the TV has forgotten a paired phone; {name} is that phone's name
+#: src/pages/More.svelte
+msgid "{name} forgotten"
+msgstr "{name} dimenticato"
+
+#. {coin} is a currency's name, such as Bitcoin; "it" is the address to send that currency to
+#: src/pages/More.svelte
+msgid "{coin} address copied"
+msgstr "Indirizzo {coin} copiato"
+
+#. {coin} is a currency's name, such as Bitcoin; "it" is the address to send that currency to
+#: src/pages/More.svelte
+msgid "Couldn't copy it. Press and hold the address to copy it."
+msgstr "Impossibile copiarlo. Tieni premuto l'indirizzo per copiarlo."
+
+#. a size in megabytes or kilobytes
+#: src/pages/More.svelte
+msgid "{size} MB"
+msgstr "{size} MB"
+
+#. a size in megabytes or kilobytes
+#: src/pages/More.svelte
+msgid "{size} KB"
+msgstr "{size} KB"
+
+#. {version} is a number such as 0.9.1 and {model} is the TV's make and model
+#: src/pages/More.svelte
+msgid "Lounge {version} on this TV."
+msgstr "Lounge {version} su questa TV."
+
+#. {version} is a number such as 0.9.1 and {model} is the TV's make and model
+#: src/pages/More.svelte
+msgid "Lounge {version} on {model}."
+msgstr "Lounge {version} su {model}."
+
+#. how many plugins are installed and how many of those are turned on
+#: src/pages/More.svelte
+msgid "{installed} installed, {on} on"
+msgstr "{installed} installati, {on} attivi"
+
+#. diagnostics: how many films, apps and other things the TV holds
+#: src/pages/More.svelte
+msgid "Things Lounge knows about"
+msgstr "Elementi noti a Lounge"
+
+#. diagnostics: how long building the home screen last took, in milliseconds
+#: src/pages/More.svelte
+msgid "Last rebuild took"
+msgstr "Ultima ricostruzione"
+
+#. diagnostics: how long building the home screen last took, in milliseconds
+#: src/pages/More.svelte
+msgid "{n} ms"
+msgstr "{n} ms"
+
+#. diagnostics: when the TV last took in something new, such as "3 minutes ago", or that it never has
+#: src/pages/More.svelte
+msgid "Last change arrived"
+msgstr "Ultima modifica ricevuta"
+
+#. diagnostics: when the TV last took in something new, such as "3 minutes ago", or that it never has
+#: src/pages/More.svelte
+msgid "never"
+msgstr "mai"
+
+#. diagnostics: the size of what Lounge keeps on the TV
+#: src/pages/More.svelte
+msgid "Saved data"
+msgstr "Dati salvati"
+
+#. diagnostics: how many jobs are queued on the TV, or that none is
+#: src/pages/More.svelte
+msgid "Work waiting"
+msgstr "Lavori in attesa"
+
+#. diagnostics: how many jobs are queued on the TV, or that none is
+#: src/pages/More.svelte
+msgid "none"
+msgstr "nessuno"
+
+#. diagnostics: how many requests the TV app has made of Lounge's core
+#: src/pages/More.svelte
+msgid "Requests answered"
+msgstr "Richieste servite"
+
+#. diagnostics: how long Lounge has been running, such as "2 hours 5 minutes"
+#: src/pages/More.svelte
+msgid "Running for"
+msgstr "In esecuzione da"
+
+#. diagnostics: a number that goes up each time the home screen changes
+#: src/pages/More.svelte
+msgid "Home screen version"
+msgstr "Versione della schermata Home"
+
+#. diagnostics: how capable the TV's hardware is
+#: src/pages/More.svelte
+msgid "Device tier"
+msgstr "Fascia del dispositivo"
+
+#: src/pages/More.svelte
+msgid "Back up"
+msgstr "Backup"
+
+#: src/pages/More.svelte
+msgid "Your layout, hidden items, pins, plugin settings and the TV's theme, background and sounds as one JSON file. Passwords and private addresses are not included."
+msgstr "La disposizione, gli elementi nascosti, quelli fissati, le impostazioni dei plugin e tema, sfondo e suoni della TV in un unico file JSON. Password e indirizzi privati non sono inclusi."
+
+#: src/pages/More.svelte
+msgid "Download backup"
+msgstr "Scarica backup"
+
+#. the button that restores a backup, and the question it asks first; {file} is the name of the file chosen
+#: src/pages/More.svelte
+msgid "Restoring…"
+msgstr "Ripristino…"
+
+#. the button that restores a backup, and the question it asks first; {file} is the name of the file chosen
+#: src/pages/More.svelte
+msgid "Restore {file}"
+msgstr "Ripristina {file}"
+
+#. the button that restores a backup, and the question it asks first; {file} is the name of the file chosen
+#: src/pages/More.svelte
+msgid "Yes, replace the TV's layout and settings"
+msgstr "Sì, sostituisci disposizione e impostazioni della TV"
+
+#: src/pages/More.svelte
+msgid "Restore from file"
+msgstr "Ripristina da file"
+
+#: src/pages/More.svelte
+msgid "Restoring replaces the TV's rows, pins and hidden items with the ones in the file, and its theme, background and sounds where the file has them."
+msgstr "Il ripristino sostituisce le righe, gli elementi fissati e quelli nascosti della TV con quelli del file, e tema, sfondo e suoni se il file li contiene."
+
+#: src/pages/More.svelte
+msgid "Paired phones"
+msgstr "Telefoni abbinati"
+
+#. under a paired phone's name; {when} is how long ago the TV heard from it, such as "3 minutes ago" or "just now"
+#: src/pages/More.svelte
+msgid "This phone"
+msgstr "Questo telefono"
+
+#. under a paired phone's name; {when} is how long ago the TV heard from it, such as "3 minutes ago" or "just now"
+#: src/pages/More.svelte
+msgid "Seen {when}"
+msgstr "Visto {when}"
+
+#. a button that makes the TV forget a paired phone, and the question it asks first
+#: src/pages/More.svelte
+msgid "Forget"
+msgstr "Dimentica"
+
+#. a button that makes the TV forget a paired phone, and the question it asks first
+#: src/pages/More.svelte
+msgid "Yes, forget it"
+msgstr "Sì, dimenticalo"
+
+#: src/pages/More.svelte
+msgid "Diagnostics"
+msgstr "Diagnostica"
+
+#: src/pages/More.svelte
+msgid "updates every 5 seconds"
+msgstr "si aggiorna ogni 5 secondi"
+
+#: src/pages/More.svelte
+msgid "Support Lounge"
+msgstr "Sostieni Lounge"
+
+#: src/pages/More.svelte
+msgid "No adverts. No tracking. No price."
+msgstr "Niente pubblicità. Niente tracciamento. Nessun prezzo."
+
+#: src/pages/More.svelte
+msgid "This is the one thing Lounge asks for."
+msgstr "È l'unica cosa che Lounge chiede."
+
+#: src/pages/More.svelte
+msgid "If it has earned its place on your TV, give what it has been worth to you. Even the price of a coffee keeps it going, and absolutely anything helps."
+msgstr "Se si è guadagnato il suo posto sulla tua TV, dona quello che per te è valso. Anche il prezzo di un caffè lo fa andare avanti, e qualsiasi cifra aiuta davvero."
+
+#: src/pages/More.svelte
+msgid "Give with PayPal"
+msgstr "Dona con PayPal"
+
+#: src/pages/More.svelte
+msgid "You choose the amount. All of it goes straight to its maker, and Lounge stays just the same whether you give or not."
+msgstr "L'importo lo scegli tu. Tutto va direttamente a chi lo ha creato, e Lounge resta identico, che tu doni o no."
+
+#: src/pages/More.svelte
+msgid "Copy address"
+msgstr "Copia indirizzo"
+
+#. {coin} is a currency's name, such as Bitcoin; the link opens the address in a wallet app
+#: src/pages/More.svelte
+msgid "Send only {coin} to this address."
+msgstr "Invia solo {coin} a questo indirizzo."
+
+#. {coin} is a currency's name, such as Bitcoin; the link opens the address in a wallet app
+#: src/pages/More.svelte
+msgid "Open it in a wallet"
+msgstr "Aprilo in un wallet"
+
+#: src/pages/More.svelte
+msgid "About"
+msgstr "Informazioni"
+
+#: src/pages/More.svelte
+msgid "A home screen for your TV, laid out around what you're watching. Free and open source under the MIT licence."
+msgstr "Una schermata Home per la tua TV, costruita attorno a quello che stai guardando. Gratuito e open source, con licenza MIT."
+
+#: src/pages/More.svelte
+msgid "Everything these pages show goes between this phone and the TV over your own network. The links below and the ways to give open on the internet."
+msgstr "Tutto ciò che queste pagine mostrano viaggia tra questo telefono e la TV sulla tua rete. I link qui sotto e i modi per donare si aprono su Internet."
+
+#. a label above the name of the person who makes Lounge
+#: src/pages/More.svelte
+msgid "Made by"
+msgstr "Realizzato da"
+
+#: src/pages/More.svelte
+msgid "Forget this phone"
+msgstr "Dimentica questo telefono"
+
+#: src/pages/More.svelte
+msgid "Yes, forget this phone"
+msgstr "Sì, dimentica questo telefono"
+
+#. {screen} is where "Phone companion" goes, the name of a screen in the TV's Settings
+#: src/pages/Pair.svelte
+msgid "In Settings on the TV, open {screen}. Scan the QR code, or type the six digits it shows."
+msgstr "In Impostazioni sulla TV, apri {screen}. Inquadra il codice QR, oppure digita le sei cifre che mostra."
+
+#: src/pages/Pair.svelte
+msgid "Pair with your TV"
+msgstr "Abbina alla tua TV"
+
+#: src/pages/Pair.svelte
+msgid "Phone companion"
+msgstr "Lounge sul telefono"
+
+#: src/pages/Pair.svelte
+msgid "Pairing code"
+msgstr "Codice di abbinamento"
+
+#. the button that pairs this phone with the TV, and what it says while it does
+#: src/pages/Pair.svelte
+msgid "Pairing…"
+msgstr "Abbinamento…"
+
+#. the button that pairs this phone with the TV, and what it says while it does
+#: src/pages/Pair.svelte
+msgid "Pair"
+msgstr "Abbina"
+
+#: src/pages/Pair.svelte
+msgid "Everything stays on your network. The TV remembers this phone until you forget it, from the TV or from More here."
+msgstr "Tutto resta nella tua rete. La TV ricorda questo telefono finché non lo dimentichi, dalla TV o qui da Altro."
+
+#. {ending} is where the file ending .lgp goes
+#: src/pages/Plugins.svelte
+msgid "A signed {ending} bundle, from a file on this phone or a link."
+msgstr "Un pacchetto {ending} firmato, da un file su questo telefono o da un link."
+
+#: src/pages/Plugins.svelte
+msgid "{plugin} is on"
+msgstr "{plugin} è attivo"
+
+#: src/pages/Plugins.svelte
+msgid "{plugin} is off"
+msgstr "{plugin} è disattivato"
+
+#: src/pages/Plugins.svelte
+msgid "Refreshing…"
+msgstr "Aggiornamento…"
+
+#: src/pages/Plugins.svelte
+msgid "{plugin} removed"
+msgstr "{plugin} rimosso"
+
+#: src/pages/Plugins.svelte
+msgid "Saved"
+msgstr "Salvato"
+
+#: src/pages/Plugins.svelte
+msgid "{plugin} installed"
+msgstr "{plugin} installato"
+
+#. stands in a password field that already has a value saved
+#: src/pages/Plugins.svelte
+msgid "•••••••• (saved)"
+msgstr "•••••••• (salvato)"
+
+#. a plugin's state, in a small label beside its name: it waits for a sign-in, or for its settings
+#: src/pages/Plugins.svelte
+msgid "Sign in"
+msgstr "Accedi"
+
+#. a plugin's state, in a small label beside its name: it waits for a sign-in, or for its settings
+#: src/pages/Plugins.svelte
+msgid "Needs setup"
+msgstr "Da configurare"
+
+#. a plugin's state, in a small label beside its name: its last try failed
+#: src/pages/Plugins.svelte
+msgid "Problem"
+msgstr "Problema"
+
+#. the state of a plugin or of one of its settings: turned on
+#. a plugin's state in the list: it is turned on.
+#: src/pages/Plugins.svelte
+msgctxt "a plugin"
+msgid "On"
+msgstr "Attivo"
+
+#: src/pages/Plugins.svelte
+msgid "Turned off by its update"
+msgstr "Disattivato dall'aggiornamento"
+
+#. the state of a plugin or of one of its settings: turned off
+#. a plugin's state in the list: it is turned off.
+#: src/pages/Plugins.svelte
+msgctxt "a plugin"
+msgid "Off"
+msgstr "Non attivo"
+
+#. a place a plugin may connect to, listed in "It can reach {places}."; {setting} is the label of one of its settings
+#: src/pages/Plugins.svelte
+msgid "what you enter in {setting}"
+msgstr "ciò che inserisci in \"{setting}\""
+
+#. a place a plugin may connect to, listed in "It can reach {places}."
+#: src/pages/Plugins.svelte
+msgid "any public site"
+msgstr "qualsiasi sito pubblico"
+
+#. a place a plugin may connect to, listed in "It can reach {places}."
+#: src/pages/Plugins.svelte
+msgid "devices on your home network"
+msgstr "i dispositivi della tua rete di casa"
+
+#. a place a plugin may connect to, listed in "It can reach {places}."
+#: src/pages/Plugins.svelte
+msgid "this TV"
+msgstr "questa TV"
+
+#: src/pages/Plugins.svelte
+msgid "It can reach nothing."
+msgstr "Non può raggiungere niente."
+
+#. {places} lists where a plugin may connect, such as "example.com and devices on your home network"
+#: src/pages/Plugins.svelte
+msgid "It can reach {places}, accepting a home server's own certificate."
+msgstr "Può raggiungere {places}, accettando il certificato autofirmato di un server di casa."
+
+#. {places} lists where a plugin may connect, such as "example.com and devices on your home network"
+#: src/pages/Plugins.svelte
+msgid "It can reach {places}."
+msgstr "Può raggiungere {places}."
+
+#: src/pages/Plugins.svelte
+msgid "It refreshes every {n} second while Lounge is on the TV's screen."
+msgid_plural "It refreshes every {n} seconds while Lounge is on the TV's screen."
+msgstr[0] "Si aggiorna ogni secondo mentre Lounge è sullo schermo della TV."
+msgstr[1] "Si aggiorna ogni {n} secondi mentre Lounge è sullo schermo della TV."
+
+#: src/pages/Plugins.svelte
+msgid "It refreshes every {n} minute while the TV is on."
+msgid_plural "It refreshes every {n} minutes while the TV is on."
+msgstr[0] "Si aggiorna ogni minuto mentre la TV è accesa."
+msgstr[1] "Si aggiorna ogni {n} minuti mentre la TV è accesa."
+
+#: src/pages/Plugins.svelte
+msgid "That plugin isn't installed on the TV any more."
+msgstr "Quel plugin non è più installato sulla TV."
+
+#: src/pages/Plugins.svelte
+msgid "The TV isn't answering, so this plugin can't be shown yet."
+msgstr "La TV non risponde, quindi questo plugin non si può ancora mostrare."
+
+#: src/pages/Plugins.svelte
+msgid "Reading the plugin from the TV…"
+msgstr "Lettura del plugin dalla TV…"
+
+#. {version} is a plugin's version number and {publisher} is who made it
+#: src/pages/Plugins.svelte
+msgid "Version {version}, by {publisher}"
+msgstr "Versione {version}, di {publisher}"
+
+#. {version} is a plugin's version number and {publisher} is who made it
+#: src/pages/Plugins.svelte
+msgid "Version {version}"
+msgstr "Versione {version}"
+
+#. a button; {page} is the name or address of a sign-in page
+#: src/pages/Plugins.svelte
+msgid "Open {page}"
+msgstr "Apri {page}"
+
+#. between the button "Open {page}" and a sign-in code set large below: open the page and enter the code
+#: src/pages/Plugins.svelte
+msgid "and enter"
+msgstr "e inserisci"
+
+#. how many items a plugin brought; {when} is how long ago, such as "3 minutes ago" or "just now"
+#: src/pages/Plugins.svelte
+msgid "{n} item, refreshed {when}"
+msgid_plural "{n} items, refreshed {when}"
+msgstr[0] "{n} elemento, aggiornato {when}"
+msgstr[1] "{n} elementi, aggiornati {when}"
+
+#: src/pages/Plugins.svelte
+msgid "Fetching for the first time…"
+msgstr "Primo caricamento…"
+
+#. {places} lists the sites a plugin's update wants to connect to
+#: src/pages/Plugins.svelte
+msgid "Turned off by its update, which also asks to reach {places}."
+msgstr "Disattivato dall'aggiornamento, che chiede di raggiungere anche {places}."
+
+#: src/pages/Plugins.svelte
+msgid "Fill in the settings, then turn it on."
+msgstr "Compila le impostazioni, poi attivalo."
+
+#. buttons that turn a plugin off or on; "Allow" lets its update connect to what it asks for
+#: src/pages/Plugins.svelte
+msgid "Turn off"
+msgstr "Disattiva"
+
+#. buttons that turn a plugin off or on; "Allow" lets its update connect to what it asks for
+#: src/pages/Plugins.svelte
+msgid "Allow and turn on"
+msgstr "Consenti e attiva"
+
+#. buttons that turn a plugin off or on; "Allow" lets its update connect to what it asks for
+#: src/pages/Plugins.svelte
+msgid "Turn on"
+msgstr "Attiva"
+
+#: src/pages/Plugins.svelte
+msgid "Refresh now"
+msgstr "Aggiorna ora"
+
+#: src/pages/Plugins.svelte
+msgid "Settings"
+msgstr "Impostazioni"
+
+#. {label} is the label of a setting that may be left empty
+#: src/pages/Plugins.svelte
+msgid "{label} (optional)"
+msgstr "{label} (facoltativo)"
+
+#: src/pages/Plugins.svelte
+msgid "On"
+msgstr "Sì"
+
+#: src/pages/Plugins.svelte
+msgid "Off"
+msgstr "No"
+
+#. the heading over what a plugin has written down while working, and the button that hides or shows it
+#: src/pages/Plugins.svelte
+msgid "Log"
+msgstr "Registro"
+
+#. the heading over what a plugin has written down while working, and the button that hides or shows it
+#: src/pages/Plugins.svelte
+msgctxt "log"
+msgid "Hide"
+msgstr "Nascondi"
+
+#. the heading over what a plugin has written down while working, and the button that hides or shows it
+#: src/pages/Plugins.svelte
+msgctxt "log"
+msgid "Show"
+msgstr "Mostra"
+
+#: src/pages/Plugins.svelte
+msgid "Nothing logged yet."
+msgstr "Ancora niente nel registro."
+
+#. {key} is the first eight characters of the key the plugin's publisher signs with
+#: src/pages/Plugins.svelte
+msgid "Updates are taken only from its publisher, whose key starts {key}."
+msgstr "Gli aggiornamenti vengono accettati solo dal suo autore, la cui chiave inizia per {key}."
+
+#: src/pages/Plugins.svelte
+msgid "Remove plugin"
+msgstr "Rimuovi plugin"
+
+#: src/pages/Plugins.svelte
+msgid "Yes, remove it and its settings"
+msgstr "Sì, rimuovilo con le sue impostazioni"
+
+#: src/pages/Plugins.svelte
+msgid "They add rows, channels and guide data from your services. Each plugin can reach only the places it names, and sees only its own settings."
+msgstr "Aggiungono righe, canali e dati della guida dai tuoi servizi. Ogni plugin può raggiungere solo le destinazioni che dichiara e vede solo le proprie impostazioni."
+
+#. under a plugin's name: how many items it brings and its version number
+#: src/pages/Plugins.svelte
+msgid "{n} item, version {version}"
+msgid_plural "{n} items, version {version}"
+msgstr[0] "{n} elemento, versione {version}"
+msgstr[1] "{n} elementi, versione {version}"
+
+#. under a plugin's name: how many items it brings and its version number
+#: src/pages/Plugins.svelte
+msgid "version {version}"
+msgstr "versione {version}"
+
+#: src/pages/Plugins.svelte
+msgid "The TV isn't answering, so its plugins can't be listed yet."
+msgstr "La TV non risponde, quindi i suoi plugin non si possono ancora elencare."
+
+#: src/pages/Plugins.svelte
+msgid "Reading the plugins on the TV…"
+msgstr "Lettura dei plugin sulla TV…"
+
+#: src/pages/Plugins.svelte
+msgid "No plugins yet. Install one below."
+msgstr "Ancora nessun plugin. Installane uno qui sotto."
+
+#: src/pages/Plugins.svelte
+msgid "Install a plugin"
+msgstr "Installa un plugin"
+
+#: src/pages/Plugins.svelte
+msgid "Installing…"
+msgstr "Installazione…"
+
+#: src/pages/Plugins.svelte
+msgid "Choose file"
+msgstr "Scegli file"
+
+#: src/pages/Plugins.svelte
+msgid "Link to a plugin"
+msgstr "Link a un plugin"
+
+#: src/pages/Plugins.svelte
+msgid "Install"
+msgstr "Installa"
+
+#: src/pages/Remote.svelte
+msgid "Sent to Lounge on the TV"
+msgstr "Inviato a Lounge sulla TV"
+
+#: src/pages/Remote.svelte
+msgid "Searching the TV for “{query}”"
+msgstr "Ricerca di “{query}” sulla TV"
+
+#: src/pages/Remote.svelte
+msgid "Nothing was heard. Press the microphone and speak."
+msgstr "Non si è sentito niente. Premi il microfono e parla."
+
+#: src/pages/Remote.svelte
+msgid "The browser did not allow the microphone. The keyboard's own dictation works in the field."
+msgstr "Il browser non ha consentito il microfono. Nel campo funziona la dettatura della tastiera."
+
+#: src/pages/Remote.svelte
+msgid "Voice did not work this time. Try again, or use the keyboard."
+msgstr "Stavolta la voce non ha funzionato. Riprova, oppure usa la tastiera."
+
+#: src/pages/Remote.svelte
+msgid "TV power and input"
+msgstr "Accensione e ingresso TV"
+
+#: src/pages/Remote.svelte
+msgid "Direction pad"
+msgstr "Tasti direzionali"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Up"
+msgstr "Su"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Left"
+msgstr "Sinistra"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "OK"
+msgstr "OK"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Right"
+msgstr "Destra"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Down"
+msgstr "Giù"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Back"
+msgstr "Indietro"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Home"
+msgstr "Home"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Menu"
+msgstr "Menu"
+
+#: src/pages/Remote.svelte
+msgid "Playback and volume"
+msgstr "Riproduzione e volume"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Rewind"
+msgstr "Riavvolgi"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Play or pause"
+msgstr "Riproduci o pausa"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Fast forward"
+msgstr "Avanti veloce"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Volume down"
+msgstr "Abbassa il volume"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Mute"
+msgstr "Muto"
+
+#: src/pages/Remote.svelte
+msgctxt "remote key"
+msgid "Volume up"
+msgstr "Alza il volume"
+
+#: src/pages/Remote.svelte
+msgid "Type on the TV"
+msgstr "Scrivi sulla TV"
+
+#: src/pages/Remote.svelte
+msgid "Types into the field open in Lounge"
+msgstr "Scrive nel campo aperto in Lounge"
+
+#: src/pages/Remote.svelte
+msgid "Stop listening"
+msgstr "Interrompi ascolto"
+
+#: src/pages/Remote.svelte
+msgid "Speak"
+msgstr "Parla"
+
+#. a button that types the text into the field open on the TV
+#: src/pages/Remote.svelte
+msgid "Type"
+msgstr "Scrivi"
+
+#: src/pages/Remote.svelte
+msgid "Search the TV"
+msgstr "Cerca nella TV"
+
+#: src/pages/Remote.svelte
+msgid "Paste a link to open it on the TV."
+msgstr "Incolla un link per aprirlo sulla TV."
