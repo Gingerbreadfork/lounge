@@ -1069,6 +1069,7 @@ dependencies = [
  "hyper-util",
  "image",
  "libc",
+ "lounge-words",
  "mime_guess",
  "parking_lot",
  "qrcode",
@@ -1099,6 +1100,7 @@ dependencies = [
  "lounge-plugin-api",
  "lounge-plugins",
  "lounge-store",
+ "lounge-words",
  "parking_lot",
  "rayon",
  "rusqlite",
@@ -1118,6 +1120,7 @@ dependencies = [
 name = "lounge-graph"
 version = "0.9.1"
 dependencies = [
+ "lounge-words",
  "serde",
  "serde_json",
 ]
@@ -1126,6 +1129,7 @@ dependencies = [
 name = "lounge-plugin-api"
 version = "0.9.1"
 dependencies = [
+ "lounge-words",
  "serde",
  "serde_json",
 ]
@@ -1138,6 +1142,7 @@ dependencies = [
  "flate2",
  "hex",
  "lounge-plugin-api",
+ "lounge-words",
  "parking_lot",
  "rustls",
  "rustls-pki-types",
@@ -1165,6 +1170,10 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
 ]
+
+[[package]]
+name = "lounge-words"
+version = "0.9.1"
 
 [[package]]
 name = "matchit"

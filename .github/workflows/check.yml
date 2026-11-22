@@ -5,6 +5,14 @@ on:
   pull_request:
 
 jobs:
+  words:
+    name: Translations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Every text is in every catalog, translated, and fills the places its English does.
+      - run: tools/words.py check
+
   core:
     name: Rust core
     runs-on: ubuntu-latest

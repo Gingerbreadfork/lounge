@@ -1,0 +1,8 @@
+[package]
+name = "lounge-words"
+version.workspace = true
+edition.workspace = true
+license = "MIT"
+description = "Translations for Lounge's core and its plugins: catalogs, plural rules and the macros that mark text"
+
+[dependencies]
