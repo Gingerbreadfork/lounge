@@ -290,6 +290,7 @@ already downloaded cost nothing. Downloads a refresh no longer names are deleted
 | `homepage` | A link shown on the plugin's page. |
 | `self_signed_servers` | `true` when the servers the plugin reaches present a certificate of their own rather than one a public authority signed, as Sunshine's web interface and many home servers do. The TV then skips the certificate check for a server named through `$key`, an IP address or local name in `fetch_hosts`, or a `local-network` name, and only while the connection lands on a home-network address: a public name, and any name that resolves to the public internet, is always verified. The plugin's page tells the user. Set it only when the plugin needs it. |
 | `for_apps` | Packages of the apps whose watching the plugin brings to the home, such as `com.plexapp.android`. While one is installed and the plugin is off, the home shows a tile that opens the plugin's page, until the plugin is turned on or the tile dismissed. Leave it empty for a plugin that goes with no app. |
+| `locales` | The manifest's own text in other languages: `{"de": {"Weather": "Wetter", "Town or city": "Ort"}}` gives, for each language tag, the English of a name, description, row title, label or help and how that language says it. The SDK fills it from the plugin's catalogs. A text it does not list is shown in English, and the installer refuses a manifest that translates text it does not contain. |
 | `sent_to` | For a plugin with more than one server: which address setting each `password` is sent to, as `{"sonarr_key": "sonarr"}`. A password named here is forgotten only when that address moves to another host; one not named is forgotten when any address does. |
 
 The manifest ships as `manifest.json` in the bundle and is also returned by `lg_manifest`;
@@ -512,6 +513,60 @@ reason.
 Lounge's own scenes are in `android/feature/home/src/main/assets/screensavers` to read and
 borrow from.
 
+## Translations
+
+Lounge is shown in the TV's language, or the one chosen in its settings, and a plugin can be
+too. A plugin with no translations works as before and reads in English.
+
+Write text in English where it is used, inside `t!`, and it is looked up in the catalog of the
+language Lounge is in:
+
+```rust
+use lounge_plugin_sdk::{self as sdk, t, tc, tn};
+
+impl sdk::Plugin for Mine {
+    sdk::locales!("de", "fr");          // locales/de.po and locales/fr.po, beside Cargo.toml
+
+    fn manifest() -> Manifest {
+        Manifest { name: t!("Weather"), description: t!("Now and the week ahead."), ..Default::default() }
+    }
+    ...
+}
+
+t!("Recently added")                                    // a String
+t!("{service} couldn't find \"{asked}\".", service = SERVICE, asked = asked)
+tn!(left, "{n} episode left", "{n} episodes left")      // {n} is the count
+tc!("cover", "Open")                                    // a context, when a word means two things
+```
+
+- `sdk::locales!` with no tags ships the languages Lounge itself does: `de`, `es`, `fr`, `it`,
+  `nl`, `pt-BR` and `pt-PT`. Name tags to ship others; any language tag works, and one that
+  Lounge has no translation of its own for is used when the TV is set to it only once Lounge
+  offers that language.
+- The catalogs are gettext `.po` files. `tools/words.py sync path/to/plugin` writes one per
+  language from the `t!` calls in `src/`, keeping what is already translated, and
+  `tools/words.py check path/to/plugin` says what is missing or fills different places than
+  its English. Text with no translation is shown in English.
+- The manifest is written with `t!` like everything else. The SDK returns it in English from
+  `lg_manifest` together with what each language says for the name, description, row titles,
+  labels and help, so the plugin's page is translated before the plugin has ever run.
+- A sentence held in a constant or a table is named with `mark!("Sunny")` and said with
+  `sdk::tr(text)`. `sdk::words::list(&names)` writes "A, B and C" as the language does and
+  `sdk::words::decimal(7.5, 1)` uses its decimal mark.
+- `sdk::words::language()` is the tag of the language in use, such as `de` or `pt-BR`, for a
+  service that can answer in it: ask for titles and place names in that language rather than
+  translating them yourself. Keep anything cached that depends on it apart per language.
+- The SDK's own sentences (`didnt_answer`, `offline`, `not_set`, `sign_in` and the rest) are
+  already translated. The `label` given to `required_setting`, `server_setting` and `not_set`
+  is a phrase of yours, so pass it translated: `&t!("server address")`.
+- Log lines stay in English. They are for finding a fault, often by someone other than the
+  person who saw it.
+- When the language changes, the TV refreshes every plugin, so what a refresh wrote in the old
+  language is replaced.
+
+docs/TRANSLATING.md has the rules for writing text that translates well: whole sentences with
+named places, no sentences glued from parts, counts through `tn!`.
+
 ## The host
 
 Everything a plugin can do, as the SDK exposes it under `host`:
@@ -527,6 +582,7 @@ Everything a plugin can do, as the SDK exposes it under `host`:
 | `callback()` | The address of this plugin's sign-in page on the TV, or nothing while the phone companion is off. |
 | `take_callback()` | The query that page was last opened with, read once and then forgotten. |
 | `now_ms()` | Milliseconds since the epoch. |
+| `words::language()` | Not under `host`: the tag of the language Lounge is shown in, such as `de` or `pt-BR`, and `en` on a TV whose Lounge has no translations yet. |
 | `log(level, message)` | 0 debug, 1 info, 2 warn, 3 error. `sdk::info!`, `warn!` and `error!` format for you. Shown on the plugin's page on the TV and by `lgp-tool run`. |
 
 `RefreshContext` tells `refresh` the time, the UTC offset in minutes, the device tier (`a`, `b`
@@ -548,6 +604,7 @@ lgp-tool run mine.wasm --secret playlist_url=https://example.com/list.m3u --secr
 lgp-tool run mine.lgp --search "bear"
 lgp-tool run mine.lgp --resolve "play:his_girl_friday"
 lgp-tool run mine.wasm --fixtures ./fixtures --now 1767225600000
+lgp-tool run mine.wasm --lang de
 ```
 
 `--set` and `--secret` stand in for the fields the user would fill. Live fetches follow the
@@ -566,7 +623,7 @@ named `<sha256 of the URL>.body` in that directory. A request that is not a GET,
 first looks for `<sha256 of "METHOD url\nbody">.body`, so each step of a sign-in or each
 JSON-RPC call can have its own answer; when a fixture is missing, the error names both files.
 `--now` gives the refresh a fixed time in milliseconds, so with fixtures a test runs the same
-way every time and offline. A binary body reaches the plugin as `body_base64`, as
+way every time and offline. `--lang` runs the plugin in a language, as a TV set to it would. A binary body reaches the plugin as `body_base64`, as
 on the TV, and one over 8 MB fails the same way. An optional `<sha256>.head` beside it gives the
 status on its first line and headers on the lines after; without one the answer is 200 with no
 headers. Unit-test your parsing in ordinary Rust: the SDK's host functions are absent off wasm,
@@ -635,7 +692,7 @@ boundary as UTF-8 JSON in linear memory, and a `(ptr, len)` pair is packed into 
 | `now() -> i64` | | milliseconds since the epoch |
 | `log(level, ptr, len)` | | 0 debug, 1 info, 2 warn, 3 error |
 | `secret(k, kl) -> packed` | | a `password` setting's value |
-| `setting(k, kl) -> packed` | | any other setting's value, or its default; the key `$callback` is the address of the plugin's sign-in page on the TV, with its key |
+| `setting(k, kl) -> packed` | | any other setting's value, or its default; the key `$callback` is the address of the plugin's sign-in page on the TV, with its key, and the key `$locale` is the tag of the language Lounge is shown in, such as `de` or `pt-BR`, or nothing on a TV whose Lounge has no translations |
 
 Memory the host hands to the plugin (fetch responses, settings) is allocated with the plugin's
 `lg_alloc` and belongs to the plugin; memory the plugin returns is freed by the host with
@@ -663,7 +720,10 @@ one definition the host and the SDK share.
   shows only that one and leaves the rest to the phone.
 - Row titles say where they come from ("Watchlist on Trakt"), tile lines are in sentence case
   with commas between facts, and lengths and times are in words.
-- Items keep stable `id`s between refreshes, so pins and hidden tiles survive.
+- Items keep stable `id`s between refreshes, so pins and hidden tiles survive. An id never
+  holds translated text.
+- Text is inside `t!`, as whole sentences with named places, and `tools/words.py check` on the
+  plugin's directory is quiet for every language it ships.
 - A control says its state in words as well as with `on`, keeps its place in the row whatever
   its state, does one safe thing on a press, and asks first, in a sheet, before anything that
   is hard to take back.

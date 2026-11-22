@@ -285,6 +285,10 @@ The type is Bricolage Grotesque and Figtree, both bundled. Reduced motion follow
 setting or your own, and Lite mode turns off the shader and the colour spill for a TV that
 struggles with them. The whole design system is written down in [DESIGN.md](DESIGN.md).
 
+Lounge follows the TV's language, or the one you choose in Settings: English, German, Spanish,
+French, Italian, Dutch and Portuguese, Brazil's and Portugal's. The phone and the plugins follow
+the TV. To fix a translation or add a language, see [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
 <p align="center">
   <img src="docs/screenshots/onboarding.png" width="49%" alt="The first setup screen: themes in a grid with a live preview of the home screen beside them">
   <img src="docs/screenshots/settings.png" width="49%" alt="The Settings sheet over the home screen">
@@ -403,6 +407,7 @@ cd core && cargo test --workspace            # the core: graph, ranking, colour,
 cd plugins && cargo test --workspace         # the SDK and the built-in plugins
 cd android && ./gradlew testDebugUnitTest    # the shell: focus, words, updates, notifications
 cd companion && pnpm exec svelte-check
+tools/words.py check                         # every text is translated in every language
 cd companion && LOUNGE_TV=http://<tv>:8787 pnpm dev    # the phone app against a real TV
 ```
 
@@ -417,17 +422,18 @@ test app notification access and takes it away again.
 
 ```
 android/     Gradle project: app, core/{bindings,design,platform}, collector/*, feature/home, power, update
-core/        Rust workspace: lounge-core (UniFFI), -graph, -store, -artwork, -plugins, -plugin-api, -companion
+core/        Rust workspace: lounge-core (UniFFI), -graph, -store, -artwork, -plugins, -plugin-api, -companion, -words
 plugins/     Rust workspace: the plugin SDK, the built-in plugins, lgp-tool
 companion/   Svelte 5 phone app, embedded into the core at build time
 design/      fonts, the mark's sources and renderer, the sound renderer
-docs/        the pictures in this file, how to release, and TV listings troubleshooting
-tools/       device drives, frame timing, the baseline profile, builds, a test Home Assistant, the README's icons
+docs/        the pictures in this file, how to release, how to translate, and TV listings troubleshooting
+tools/       device drives, frame timing, the baseline profile, builds, a test Home Assistant, the README's icons, the translation check
 workdir/     ignored by git: your own notes, logs and measurements
 ```
 
 [DESIGN.md](DESIGN.md) is the design system every screen follows. [PLUGINS.md](PLUGINS.md) is
-for writing a plugin.
+for writing a plugin, and [docs/TRANSLATING.md](docs/TRANSLATING.md) for writing text that can
+be translated.
 
 ## License
 
