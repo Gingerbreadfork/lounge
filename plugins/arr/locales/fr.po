@@ -1,0 +1,392 @@
+# Lounge, arr: fr
+#
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/lib.rs
+msgid "Sonarr and Radarr"
+msgstr "Sonarr et Radarr"
+
+#: src/lib.rs
+msgid "What is coming up, downloading now and newly arrived, from your Sonarr and Radarr."
+msgstr "Ce qui arrive bientôt, ce qui se télécharge et ce qui vient d’arriver, depuis vos Sonarr et Radarr."
+
+#: src/lib.rs
+msgid "Coming up on Sonarr and Radarr"
+msgstr "Prochainement sur Sonarr et Radarr"
+
+#: src/lib.rs
+msgid "Downloading on Sonarr and Radarr"
+msgstr "Téléchargements sur Sonarr et Radarr"
+
+#: src/lib.rs
+msgid "New on Sonarr and Radarr"
+msgstr "Nouveautés sur Sonarr et Radarr"
+
+#. URL base is the name of a setting in Sonarr.
+#: src/lib.rs
+msgid "Sonarr address"
+msgstr "Adresse de Sonarr"
+
+#. URL base is the name of a setting in Sonarr.
+#: src/lib.rs
+msgid "Like http://192.168.0.10:8989, or …:8989/sonarr if you gave it a URL base. Leave empty if you only run Radarr."
+msgstr "Par exemple http://192.168.0.10:8989, ou …:8989/sonarr si vous lui avez donné une URL de base. Laissez vide si vous n’utilisez que Radarr."
+
+#. Settings, General and Security are names in Sonarr's own pages.
+#: src/lib.rs
+msgid "Sonarr API key"
+msgstr "Clé API de Sonarr"
+
+#. Settings, General and Security are names in Sonarr's own pages.
+#: src/lib.rs
+msgid "In Sonarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone companion."
+msgstr "Dans Sonarr, sous Paramètres, Général, Sécurité. Elle compte 32 caractères : le plus simple est de la coller depuis Lounge sur téléphone."
+
+#. URL base is the name of a setting in Radarr.
+#: src/lib.rs
+msgid "Radarr address"
+msgstr "Adresse de Radarr"
+
+#. URL base is the name of a setting in Radarr.
+#: src/lib.rs
+msgid "Like http://192.168.0.10:7878, or …:7878/radarr if you gave it a URL base. Leave empty if you only run Sonarr."
+msgstr "Par exemple http://192.168.0.10:7878, ou …:7878/radarr si vous lui avez donné une URL de base. Laissez vide si vous n’utilisez que Sonarr."
+
+#. Settings, General and Security are names in Radarr's own pages.
+#: src/lib.rs
+msgid "Radarr API key"
+msgstr "Clé API de Radarr"
+
+#. Settings, General and Security are names in Radarr's own pages.
+#: src/lib.rs
+msgid "In Radarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone companion."
+msgstr "Dans Radarr, sous Paramètres, Général, Sécurité. Elle compte 32 caractères : le plus simple est de la coller depuis Lounge sur téléphone."
+
+#. Coming up is this plugin's row of what airs or is released soon.
+#: src/lib.rs
+msgid "Days ahead"
+msgstr "Jours à venir"
+
+#. Coming up is this plugin's row of what airs or is released soon.
+#: src/lib.rs
+msgid "How many days ahead Coming up looks, from 1 to 60. Yesterday is always shown too."
+msgstr "Le nombre de jours que couvre « Prochainement », de 1 à 60. La veille est toujours affichée aussi."
+
+#: src/lib.rs
+msgid "Open with the TV's own search"
+msgstr "Ouvrir avec la recherche de la TV"
+
+#: src/lib.rs
+msgid "On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it, so a Jellyfin or Plex plugin that is on finds it."
+msgstr "Sur Oui, un titre s’ouvre dans la recherche de la TV, qui sur Google TV indique où le regarder en streaming. Sur Non, Lounge le cherche dans vos applis et vos plugins : un plugin Jellyfin ou Plex activé le trouve."
+
+#: src/lib.rs
+msgid "Nothing to show yet. Add a Sonarr or Radarr address and API key in the plugin's settings."
+msgstr "Rien à afficher pour l’instant. Ajoutez l’adresse et la clé API de Sonarr ou de Radarr dans les paramètres du plugin."
+
+#. names the setting inside "Add the {label} in the plugin's settings." {service} is Sonarr or Radarr.
+#: src/lib.rs
+msgid "{service} API key"
+msgstr "clé API de {service}"
+
+#: src/lib.rs
+msgid "{service} sent more than this plugin can read in one go. Try again later."
+msgstr "{service} a envoyé plus que ce plugin ne peut lire en une fois. Réessayez plus tard."
+
+#: src/lib.rs
+msgid "{service} rejected the API key. Check it in the plugin's settings."
+msgstr "{service} a refusé la clé API. Vérifiez-la dans les paramètres du plugin."
+
+#. {service} and {other} are each Sonarr or Radarr, or another program's name.
+#: src/lib.rs
+msgid "The {service} address answers as {other}. Check the addresses in the plugin's settings."
+msgstr "À l’adresse de {service}, c’est {other} qui répond. Vérifiez les adresses dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "Series finale"
+msgstr "Final de la série"
+
+#: src/lib.rs
+msgid "Season finale"
+msgstr "Final de saison"
+
+#: src/lib.rs
+msgid "Midseason finale"
+msgstr "Final de mi-saison"
+
+#: src/lib.rs
+msgid "Series premiere"
+msgstr "Début de la série"
+
+#: src/lib.rs
+msgid "Season premiere"
+msgstr "Début de saison"
+
+#. a download that has finished and is being added to the library.
+#: src/lib.rs
+msgid "Arriving"
+msgstr "Ajout en cours"
+
+#. a download someone paused.
+#: src/lib.rs
+msgid "Paused"
+msgstr "En pause"
+
+#. a download that has not started yet.
+#: src/lib.rs
+msgid "Waiting"
+msgstr "En attente"
+
+#. a download that failed or needs someone to look at it.
+#: src/lib.rs
+msgid "Stuck"
+msgstr "Bloqué"
+
+#. a download in progress.
+#: src/lib.rs
+msgid "Downloading"
+msgstr "Téléchargement"
+
+#: src/lib.rs
+msgid "Yesterday"
+msgstr "Hier"
+
+#: src/lib.rs
+msgid "Today"
+msgstr "Aujourd’hui"
+
+#: src/lib.rs
+msgid "Tomorrow"
+msgstr "Demain"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "January"
+msgstr "janvier"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "February"
+msgstr "février"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "March"
+msgstr "mars"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "April"
+msgstr "avril"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "May"
+msgstr "mai"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "June"
+msgstr "juin"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "July"
+msgstr "juillet"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "August"
+msgstr "août"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "September"
+msgstr "septembre"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "October"
+msgstr "octobre"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "November"
+msgstr "novembre"
+
+#. a month's name as written in a date such as 16 November.
+#: src/lib.rs
+msgid "December"
+msgstr "décembre"
+
+#. a weekday's name on its own, as at the start of a line.
+#: src/lib.rs
+msgid "Sunday"
+msgstr "Dimanche"
+
+#. a weekday's name on its own, as at the start of a line.
+#: src/lib.rs
+msgid "Monday"
+msgstr "Lundi"
+
+#. a weekday's name on its own, as at the start of a line.
+#: src/lib.rs
+msgid "Tuesday"
+msgstr "Mardi"
+
+#. a weekday's name on its own, as at the start of a line.
+#: src/lib.rs
+msgid "Wednesday"
+msgstr "Mercredi"
+
+#. a weekday's name on its own, as at the start of a line.
+#: src/lib.rs
+msgid "Thursday"
+msgstr "Jeudi"
+
+#. a weekday's name on its own, as at the start of a line.
+#: src/lib.rs
+msgid "Friday"
+msgstr "Vendredi"
+
+#. a weekday's name on its own, as at the start of a line.
+#: src/lib.rs
+msgid "Saturday"
+msgstr "Samedi"
+
+#: src/lib.rs
+msgctxt "inside a sentence"
+msgid "Sunday"
+msgstr "dimanche"
+
+#: src/lib.rs
+msgctxt "inside a sentence"
+msgid "Monday"
+msgstr "lundi"
+
+#: src/lib.rs
+msgctxt "inside a sentence"
+msgid "Tuesday"
+msgstr "mardi"
+
+#: src/lib.rs
+msgctxt "inside a sentence"
+msgid "Wednesday"
+msgstr "mercredi"
+
+#: src/lib.rs
+msgctxt "inside a sentence"
+msgid "Thursday"
+msgstr "jeudi"
+
+#: src/lib.rs
+msgctxt "inside a sentence"
+msgid "Friday"
+msgstr "vendredi"
+
+#: src/lib.rs
+msgctxt "inside a sentence"
+msgid "Saturday"
+msgstr "samedi"
+
+#. a date without its year, as in 16 November.
+#: src/lib.rs
+msgid "{day} {month}"
+msgstr "{day} {month}"
+
+#: src/lib.rs
+msgid "Out on digital yesterday"
+msgstr "Sortie numérique hier"
+
+#: src/lib.rs
+msgid "Out on digital today"
+msgstr "Sortie numérique aujourd’hui"
+
+#: src/lib.rs
+msgid "Out on digital tomorrow"
+msgstr "Sortie numérique demain"
+
+#: src/lib.rs
+msgid "Out on digital {weekday}"
+msgstr "Sortie numérique {weekday}"
+
+#. {date} is a day and month, such as 16 November.
+#: src/lib.rs
+msgid "Out on digital {date}"
+msgstr "Sortie numérique le {date}"
+
+#: src/lib.rs
+msgid "On disc yesterday"
+msgstr "En Blu-ray et DVD hier"
+
+#: src/lib.rs
+msgid "On disc today"
+msgstr "En Blu-ray et DVD aujourd’hui"
+
+#: src/lib.rs
+msgid "On disc tomorrow"
+msgstr "En Blu-ray et DVD demain"
+
+#: src/lib.rs
+msgid "On disc {weekday}"
+msgstr "En Blu-ray et DVD {weekday}"
+
+#. {date} is a day and month, such as 16 November.
+#: src/lib.rs
+msgid "On disc {date}"
+msgstr "En Blu-ray et DVD le {date}"
+
+#: src/lib.rs
+msgid "In cinemas yesterday"
+msgstr "Au cinéma hier"
+
+#: src/lib.rs
+msgid "In cinemas today"
+msgstr "Au cinéma aujourd’hui"
+
+#: src/lib.rs
+msgid "In cinemas tomorrow"
+msgstr "Au cinéma demain"
+
+#: src/lib.rs
+msgid "In cinemas {weekday}"
+msgstr "Au cinéma {weekday}"
+
+#. {date} is a day and month, such as 16 November.
+#: src/lib.rs
+msgid "In cinemas {date}"
+msgstr "Au cinéma le {date}"
+
+#: src/lib.rs
+msgid "Ready to watch"
+msgstr "Prêt à regarder"
+
+#: src/lib.rs
+msgid "Aired yesterday"
+msgstr "Diffusé hier"
+
+#. {when} is when an episode airs, such as Tomorrow, Wednesday or 16 November. {about} is the episode's title or its occasion, such as Season finale.
+#: src/lib.rs
+msgid "{when}, {about}"
+msgstr "{when}, {about}"
+
+#. {state} is where a download is, such as Downloading or Paused. {about} is the episode's title or a count such as 2 episodes.
+#: src/lib.rs
+msgid "{state}, {about}"
+msgstr "{state}, {about}"
+
+#: src/lib.rs
+msgid "{n} episode"
+msgid_plural "{n} episodes"
+msgstr[0] "{n} épisode"
+msgstr[1] "{n} épisodes"
+
+#: src/lib.rs
+msgid "{n} new episode"
+msgid_plural "{n} new episodes"
+msgstr[0] "{n} nouvel épisode"
+msgstr[1] "{n} nouveaux épisodes"

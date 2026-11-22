@@ -1,0 +1,61 @@
+# Lounge, radio: es
+#
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Radio Browser no longer lists that station."
+msgstr "Radio Browser ya no incluye esa emisora."
+
+#: src/lib.rs
+msgid "Internet radio"
+msgstr "Radio por internet"
+
+#: src/lib.rs
+msgid "Stations you name and the most popular ones from the radio-browser.info directory, played in a player app such as VLC."
+msgstr "Las emisoras que indiques y las más populares del directorio radio-browser.info, en una app de reproducción como VLC."
+
+#: src/lib.rs
+msgid "Your radio stations"
+msgstr "Tus emisoras de radio"
+
+#: src/lib.rs
+msgid "Popular radio"
+msgstr "Emisoras populares"
+
+#: src/lib.rs
+msgid "Your stations"
+msgstr "Tus emisoras"
+
+#: src/lib.rs
+msgid "Station names, links to stations on radio-browser.info or stream addresses, one per line or separated by commas. Lounge's search finds stations too."
+msgstr "Emisoras por nombre, enlace de radio-browser.info o dirección de transmisión, una por línea o separadas por comas. La búsqueda de Lounge también las encuentra."
+
+#: src/lib.rs
+msgid "Country for popular stations"
+msgstr "País de las emisoras populares"
+
+#: src/lib.rs
+msgid "A name or two letters, like Australia or AU. Left empty, the row shows the most popular stations anywhere."
+msgstr "Un nombre o dos letras, como Australia o AU. Si lo dejas vacío, la fila muestra las emisoras más populares de todo el mundo."
+
+#. {country} is the country as typed into the plugin's settings.
+#: src/lib.rs
+msgid "Radio Browser has no country called {country}. Check the country in the plugin's settings."
+msgstr "Radio Browser no tiene ningún país llamado {country}. Comprueba el país en los ajustes del plugin."
+
+#. {country} is the country as typed into the plugin's settings.
+#: src/lib.rs
+msgid "Radio Browser lists no stations for {country}. Check the country in the plugin's settings."
+msgstr "Radio Browser no tiene emisoras para {country}. Comprueba el país en los ajustes del plugin."
+
+#: src/lib.rs
+msgid "{service} sent a reply this plugin can't read."
+msgstr "{service} envió una respuesta que este plugin no puede leer."
+
+#: src/lib.rs
+msgid "A stream you added"
+msgstr "Una transmisión que añadiste"

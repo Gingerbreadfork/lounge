@@ -1,0 +1,169 @@
+# Lounge, podcasts: de
+#
+msgid ""
+msgstr ""
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Diese Kachel ist veraltet. Aktualisiere das Plugin und versuche es dann erneut."
+
+#: src/lib.rs
+msgid "Podcasts"
+msgstr "Podcasts"
+
+#: src/lib.rs
+msgid "New episodes of the podcasts you follow, from their feeds, played in a player app such as VLC."
+msgstr "Neue Folgen der Podcasts, denen du folgst, direkt aus ihren Feeds, abgespielt in einer Player-App wie VLC."
+
+#: src/lib.rs
+msgid "New podcast episodes"
+msgstr "Neue Podcast-Folgen"
+
+#: src/lib.rs
+msgid "Your podcasts"
+msgstr "Deine Podcasts"
+
+#: src/lib.rs
+msgid "Podcasts you follow"
+msgstr "Podcasts, denen du folgst"
+
+#: src/lib.rs
+msgid "Feed links, Apple Podcasts links or a link to an OPML export, one per line or separated by commas. An OPML file from another podcast app can be pasted in whole. Lounge's search finds podcasts too, and plays their latest episode."
+msgstr "Feed-Links, Links zu Apple Podcasts oder ein Link zu einem OPML-Export, einer pro Zeile oder durch Kommas getrennt. Eine OPML-Datei aus einer anderen Podcast-App kannst du auch komplett einfügen. Die Suche von Lounge findet ebenfalls Podcasts und spielt ihre neueste Folge ab."
+
+#: src/lib.rs
+msgid "Episodes per podcast"
+msgstr "Folgen pro Podcast"
+
+#: src/lib.rs
+msgid "From 1 to 10."
+msgstr "Von 1 bis 10."
+
+#. the label of a field that takes a number, which stands where the … is.
+#: src/lib.rs
+msgid "Only the last … days"
+msgstr "Nur die letzten … Tage"
+
+#: src/lib.rs
+msgid "0 shows each feed's newest episodes whatever their age."
+msgstr "Bei 0 siehst du die neuesten Folgen jedes Feeds, egal wie alt sie sind."
+
+#: src/lib.rs
+msgid "Your podcasts row"
+msgstr "Reihe „Deine Podcasts“"
+
+#: src/lib.rs
+msgid "A tile per podcast that plays its latest episode."
+msgstr "Eine Kachel pro Podcast, die seine neueste Folge abspielt."
+
+#: src/lib.rs
+msgid "Country for search"
+msgstr "Land für die Suche"
+
+#: src/lib.rs
+msgid "Two letters, like au or gb, so search finds the podcasts of your country first. Left empty, it follows your Apple links."
+msgstr "Zwei Buchstaben, zum Beispiel au oder gb, damit die Suche zuerst die Podcasts deines Landes findet. Bleibt das Feld leer, richtet sie sich nach deinen Apple-Links."
+
+#: src/lib.rs
+msgid "No podcasts yet. Add a feed link, an Apple Podcasts link or an OPML export in the plugin's settings."
+msgstr "Noch keine Podcasts. Trage in den Plugin-Einstellungen einen Feed-Link, einen Link zu Apple Podcasts oder einen OPML-Export ein."
+
+#: src/lib.rs
+msgid "There is no feed at {address} any more."
+msgstr "Unter {address} gibt es keinen Feed mehr."
+
+#: src/lib.rs
+msgid "This podcast has no episodes to play yet."
+msgstr "Dieser Podcast hat noch keine abspielbaren Folgen."
+
+#. {title} is a podcast's name.
+#: src/lib.rs
+msgid "{title} has no episodes to play yet."
+msgstr "{title} hat noch keine abspielbaren Folgen."
+
+#: src/lib.rs
+msgid "The feed at {address} is too big to read, even in part. Only its newest episodes are needed; the publisher's other links may give a smaller feed."
+msgstr "Der Feed unter {address} ist zu groß zum Lesen, selbst in Teilen. Gebraucht werden nur seine neuesten Folgen; vielleicht führt ein anderer Link des Anbieters zu einem kleineren Feed."
+
+#: src/lib.rs
+msgid "The feed at {address} didn't answer. Check the link in the plugin's settings and the TV's connection."
+msgstr "Der Feed unter {address} hat nicht geantwortet. Prüfe den Link in den Plugin-Einstellungen und die Verbindung des Fernsehers."
+
+#: src/lib.rs
+msgid "There is no feed at {address} any more. Check the link in the plugin's settings."
+msgstr "Unter {address} gibt es keinen Feed mehr. Prüfe den Link in den Plugin-Einstellungen."
+
+#: src/lib.rs
+msgid "The feed at {address} answered with error {status}. Try again later."
+msgstr "Der Feed unter {address} hat mit Fehler {status} geantwortet. Versuche es später erneut."
+
+#. {piece} is a link typed into the plugin's settings.
+#: src/lib.rs
+msgid "\"{piece}\" is an Apple link without a podcast id. Open the podcast's own page and copy that link."
+msgstr "„{piece}“ ist ein Apple-Link ohne Podcast-ID. Öffne die Seite des Podcasts selbst und kopiere deren Link."
+
+#. {piece} is a link typed into the plugin's settings.
+#: src/lib.rs
+msgid "\"{piece}\" is not a link Lounge can fetch. Check the podcasts in the plugin's settings."
+msgstr "„{piece}“ ist kein Link, den Lounge abrufen kann. Prüfe die Podcasts in den Plugin-Einstellungen."
+
+#. {piece} is what was typed into the plugin's settings.
+#: src/lib.rs
+msgid "\"{piece}\" is not a feed link or an Apple Podcasts link. Check the podcasts in the plugin's settings."
+msgstr "„{piece}“ ist weder ein Feed-Link noch ein Link zu Apple Podcasts. Prüfe die Podcasts in den Plugin-Einstellungen."
+
+#: src/lib.rs
+msgid "A podcast you listed is only on Apple Podcasts, with no feed to read."
+msgstr "Einen der eingetragenen Podcasts gibt es nur bei Apple Podcasts, ohne lesbaren Feed."
+
+#. {title} is a podcast's name.
+#: src/lib.rs
+msgid "{title} is only on Apple Podcasts, with no feed to read."
+msgstr "{title} gibt es nur bei Apple Podcasts, ohne lesbaren Feed."
+
+#: src/lib.rs
+msgid "Apple has no podcast with the id {id}. Check the link in the plugin's settings."
+msgstr "Apple hat keinen Podcast mit der ID {id}. Prüfe den Link in den Plugin-Einstellungen."
+
+#: src/lib.rs
+msgid "The list at {address} holds no podcast feeds. Check the link in the plugin's settings."
+msgstr "Die Liste unter {address} enthält keine Podcast-Feeds. Prüfe den Link in den Plugin-Einstellungen."
+
+#: src/lib.rs
+msgid "The link {address} is not a podcast feed. Check it in the plugin's settings."
+msgstr "Der Link {address} ist kein Podcast-Feed. Prüfe ihn in den Plugin-Einstellungen."
+
+#. {title} is a podcast's name.
+#: src/lib.rs
+msgid "{title} has no episodes with a file to play."
+msgstr "{title} hat keine Folgen mit einer abspielbaren Datei."
+
+#: src/lib.rs
+msgid "{n} hour"
+msgid_plural "{n} hours"
+msgstr[0] "{n} Stunde"
+msgstr[1] "{n} Stunden"
+
+#: src/lib.rs
+msgid "{n} minute"
+msgid_plural "{n} minutes"
+msgstr[0] "{n} Minute"
+msgstr[1] "{n} Minuten"
+
+#. a length of time. {hours} is a count of hours, such as "2 hours", and {minutes} a count of minutes, such as "25 minutes".
+#: src/lib.rs
+msgid "{hours} {minutes}"
+msgstr "{hours} {minutes}"
+
+#. {show} is a podcast's name and {length} how long the episode runs, such as "48 minutes".
+#: src/lib.rs
+msgid "{show}, {length}"
+msgstr "{show}, {length}"
+
+#. {title} is the title of a podcast's newest episode.
+#: src/lib.rs
+msgid "Latest: {title}"
+msgstr "Neueste Folge: {title}"

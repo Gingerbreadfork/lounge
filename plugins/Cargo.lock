@@ -357,6 +357,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 name = "lounge-plugin-api"
 version = "0.9.1"
 dependencies = [
+ "lounge-words",
  "serde",
  "serde_json",
 ]
@@ -539,6 +540,7 @@ name = "lounge-plugin-sdk"
 version = "0.9.1"
 dependencies = [
  "lounge-plugin-api",
+ "lounge-words",
  "serde",
  "serde_json",
 ]
@@ -634,6 +636,7 @@ dependencies = [
  "ed25519-dalek",
  "hex",
  "lounge-plugin-api",
+ "lounge-words",
  "parking_lot",
  "serde",
  "serde_json",
@@ -644,6 +647,10 @@ dependencies = [
  "wasmi",
  "zip",
 ]
+
+[[package]]
+name = "lounge-words"
+version = "0.9.1"
 
 [[package]]
 name = "md-5"

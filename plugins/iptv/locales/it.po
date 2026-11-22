@@ -1,0 +1,69 @@
+# Lounge, iptv: it
+#
+msgid ""
+msgstr ""
+"Language: it\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "IPTV playlist"
+msgstr "Playlist IPTV"
+
+#: src/lib.rs
+msgid "Channels from an M3U playlist, with programme information from an XMLTV guide."
+msgstr "Canali da una playlist M3U, con le informazioni sui programmi da una guida XMLTV."
+
+#: src/lib.rs
+msgid "Playlist address (M3U)"
+msgstr "Indirizzo della playlist (M3U)"
+
+#: src/lib.rs
+msgid "The .m3u or .m3u8 playlist your provider gave you."
+msgstr "La playlist .m3u o .m3u8 che ti ha dato il tuo fornitore."
+
+#: src/lib.rs
+msgid "Guide address (XMLTV)"
+msgstr "Indirizzo della guida (XMLTV)"
+
+#: src/lib.rs
+msgid "Leave it empty to use the guide the playlist names, or an Xtream provider's own. Plain or .gz XMLTV both work."
+msgstr "Lascialo vuoto per usare la guida indicata dalla playlist, o quella di un fornitore Xtream. Va bene sia l'XMLTV semplice sia quello .gz."
+
+#: src/lib.rs
+msgid "Only this group"
+msgstr "Solo questo gruppo"
+
+#: src/lib.rs
+msgid "Shows only the channels in this group, for very large playlists."
+msgstr "Mostra solo i canali di questo gruppo, utile per le playlist molto grandi."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "playlist address"
+msgstr "indirizzo della playlist"
+
+#: src/lib.rs
+msgid "The playlist has no channels in the group \"{group}\". Check the group's name in the plugin's settings."
+msgstr "La playlist non ha canali nel gruppo \"{group}\". Controlla il nome del gruppo nelle impostazioni del plugin."
+
+#: src/lib.rs
+msgid "The playlist has no channels. Check the playlist address in the plugin's settings."
+msgstr "La playlist non ha canali. Controlla l'indirizzo della playlist nelle impostazioni del plugin."
+
+#: src/lib.rs
+msgid "The playlist is larger than the 8 MB a plugin may read. Ask your provider for a smaller one, such as live channels only."
+msgstr "La playlist supera gli 8 MB che un plugin può leggere. Chiedine al tuo fornitore una più piccola, ad esempio con i soli canali in diretta."
+
+#: src/lib.rs
+msgid "The playlist server at {host} answered with error {status}. Check the playlist address, then try again."
+msgstr "Il server della playlist su {host} ha risposto con l'errore {status}. Controlla l'indirizzo della playlist, poi riprova."
+
+#: src/lib.rs
+msgid "The playlist server didn't answer at {host}. Check the playlist address, then try again."
+msgstr "Il server della playlist su {host} non ha risposto. Controlla l'indirizzo della playlist, poi riprova."
+
+#. the name shown for a playlist channel that has none. {number} is its place in the playlist.
+#: src/lib.rs
+msgid "Channel {number}"
+msgstr "Canale {number}"

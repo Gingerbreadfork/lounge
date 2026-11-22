@@ -2,19 +2,21 @@
 //! straight from the tuner in the TV's player. The tuner is found through HDHomeRun's discovery
 //! service unless an address is given; the guide comes from their guide service with the
 //! device's own key, which costs nothing and needs no account.
-use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, t, Action, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::HashSet;
 
 pub struct HdHomeRun;
 
 impl sdk::Plugin for HdHomeRun {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.hdhomerun".into(),
             name: "HDHomeRun".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Over-the-air channels and a guide from an HDHomeRun tuner on your network.".into(),
+            description: t!("Over-the-air channels and a guide from an HDHomeRun tuner on your network."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
             // Tuners are found by discovery, so any on the home network may be reached. Discovery,
@@ -24,13 +26,14 @@ impl sdk::Plugin for HdHomeRun {
             refresh_seconds: 0,
             rows: vec![],
             settings: vec![
-                SettingSpec { key: "device".into(), label: "Tuner address".into(), kind: SettingKind::Url, required: false, help: Some("Leave it empty and the tuner is found automatically. Otherwise use its address, like http://192.168.0.20.".into()), default: None },
-                SettingSpec { key: "skip_drm".into(), label: "Hide channels marked DRM".into(), kind: SettingKind::Toggle, required: false, help: Some("They cannot play outside HDHomeRun's own app.".into()), default: Some("true".into()) },
+                SettingSpec { key: "device".into(), label: t!("Tuner address"), kind: SettingKind::Url, required: false, help: Some(t!("Leave it empty and the tuner is found automatically. Otherwise use its address, like http://192.168.0.20.")), default: None },
+                SettingSpec { key: "skip_drm".into(), label: t!("Hide channels marked DRM"), kind: SettingKind::Toggle, required: false, help: Some(t!("They cannot play outside HDHomeRun's own app.")), default: Some("true".into()) },
             ],
             homepage: Some("https://www.hdhomerun.com".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -41,17 +44,21 @@ impl sdk::Plugin for HdHomeRun {
         };
         let device: Discover = get_json(&format!("{base}/discover.json")).map_err(|e| {
             sdk::warn!("{e}");
-            format!("No HDHomeRun answered at {}. Check the tuner and its address, then try again.", sdk::address(&base))
+            t!("No HDHomeRun answered at {address}. Check the tuner and its address, then try again.", address = sdk::address(&base))
         })?;
         let lineup: Vec<LineupEntry> = get_json(&device.lineup_url.clone().unwrap_or_else(|| format!("{base}/lineup.json"))).map_err(|e| {
             sdk::warn!("{e}");
-            format!("The HDHomeRun at {} didn't send its channels. Check the tuner, then try again.", sdk::address(&base))
+            t!("The HDHomeRun at {address} didn't send its channels. Check the tuner, then try again.", address = sdk::address(&base))
         })?;
         let skip_drm = host::setting("skip_drm").map(|v| v != "false").unwrap_or(true);
         let mut numbers = HashSet::new();
         let mut channels: Vec<&LineupEntry> = lineup.iter().filter(|c| (!skip_drm || c.drm != Some(1)) && !c.url.is_empty() && numbers.insert(c.guide_number.as_str())).collect();
         if channels.is_empty() {
-            return Err(format!("{} has no channels yet. Run a channel scan in the HDHomeRun app first.", device.friendly_name.as_deref().unwrap_or("The tuner")));
+            return Err(match device.friendly_name.as_deref() {
+                // Translators: {tuner} is the name the tuner gives itself, such as HDHomeRun FLEX 4K.
+                Some(tuner) => t!("{tuner} has no channels yet. Run a channel scan in the HDHomeRun app first.", tuner = tuner),
+                None => t!("The tuner has no channels yet. Run a channel scan in the HDHomeRun app first."),
+            });
         }
         channels.truncate(sdk::MAX_ITEMS);
         let guide: Vec<GuideChannel> = match &device.device_auth {
@@ -163,13 +170,13 @@ fn discover() -> Result<String, String> {
     }
     let found: Vec<Found> = get_json("https://ipv4-api.hdhomerun.com/discover").map_err(|e| {
         sdk::warn!("{e}");
-        "Could not look for tuners. Check the TV's internet connection, or enter the tuner's address in the plugin's settings.".to_string()
+        t!("Could not look for tuners. Check the TV's internet connection, or enter the tuner's address in the plugin's settings.")
     })?;
     found
         .into_iter()
         .filter(|f| f.lineup_url.is_some())
         .find_map(|f| f.base_url.or_else(|| f.local_ip.map(|ip| format!("http://{ip}"))))
-        .ok_or_else(|| "No HDHomeRun tuner was found on this network. Enter its address in the plugin's settings.".into())
+        .ok_or_else(|| t!("No HDHomeRun tuner was found on this network. Enter its address in the plugin's settings."))
 }
 
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {

@@ -1,0 +1,179 @@
+# Lounge, weather: de
+#
+msgid ""
+msgstr ""
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Weather"
+msgstr "Wetter"
+
+#: src/lib.rs
+msgid "Now and the week ahead for the town you name, with weather data by Open-Meteo.com."
+msgstr "Jetzt und die kommende Woche für den Ort deiner Wahl, mit Wetterdaten von Open-Meteo.com."
+
+#: src/lib.rs
+msgid "Town or city"
+msgstr "Ort"
+
+#: src/lib.rs
+msgid "Add the region after a comma when the name is shared, as in Portland, Maine. Coordinates work too, as in 45.76, 4.84."
+msgstr "Gibt es den Namen mehrmals, hänge nach einem Komma die Region an, zum Beispiel Portland, Maine. Koordinaten gehen auch, zum Beispiel 45.76, 4.84."
+
+#: src/lib.rs
+msgid "Temperatures in Fahrenheit"
+msgstr "Temperaturen in Fahrenheit"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "town or city"
+msgstr "Ort"
+
+#: src/lib.rs
+msgid "{service} couldn't find \"{asked}\". Check the spelling, try the name in English, or put a comma before the region, as in Portland, Maine."
+msgstr "{service} hat „{asked}“ nicht gefunden. Prüfe die Schreibweise, versuche es mit dem englischen Namen oder setze ein Komma vor die Region, zum Beispiel Portland, Maine."
+
+#: src/lib.rs
+msgid "Sunny"
+msgstr "Sonnig"
+
+#: src/lib.rs
+msgid "Clear"
+msgstr "Klar"
+
+#: src/lib.rs
+msgid "Mostly sunny"
+msgstr "Überwiegend sonnig"
+
+#: src/lib.rs
+msgid "Mostly clear"
+msgstr "Überwiegend klar"
+
+#: src/lib.rs
+msgid "Partly cloudy"
+msgstr "Teilweise bewölkt"
+
+#: src/lib.rs
+msgid "Cloudy"
+msgstr "Bewölkt"
+
+#: src/lib.rs
+msgid "Fog"
+msgstr "Nebel"
+
+#: src/lib.rs
+msgid "Light drizzle"
+msgstr "Leichter Nieselregen"
+
+#: src/lib.rs
+msgid "Drizzle"
+msgstr "Nieselregen"
+
+#: src/lib.rs
+msgid "Freezing drizzle"
+msgstr "Gefrierender Nieselregen"
+
+#: src/lib.rs
+msgid "Light rain"
+msgstr "Leichter Regen"
+
+#: src/lib.rs
+msgid "Rain"
+msgstr "Regen"
+
+#: src/lib.rs
+msgid "Heavy rain"
+msgstr "Starker Regen"
+
+#: src/lib.rs
+msgid "Freezing rain"
+msgstr "Gefrierender Regen"
+
+#: src/lib.rs
+msgid "Light snow"
+msgstr "Leichter Schneefall"
+
+#: src/lib.rs
+msgid "Snow"
+msgstr "Schneefall"
+
+#: src/lib.rs
+msgid "Heavy snow"
+msgstr "Starker Schneefall"
+
+#: src/lib.rs
+msgid "Light showers"
+msgstr "Leichte Schauer"
+
+#: src/lib.rs
+msgid "Showers"
+msgstr "Schauer"
+
+#: src/lib.rs
+msgid "Heavy showers"
+msgstr "Starke Schauer"
+
+#: src/lib.rs
+msgid "Light snow showers"
+msgstr "Leichte Schneeschauer"
+
+#: src/lib.rs
+msgid "Heavy snow showers"
+msgstr "Starke Schneeschauer"
+
+#: src/lib.rs
+msgid "Thunderstorm"
+msgstr "Gewitter"
+
+#: src/lib.rs
+msgid "Thunder and hail"
+msgstr "Gewitter mit Hagel"
+
+#. {reading} is a temperature with its scale, such as 3°C.
+#: src/lib.rs
+msgid "{reading} now"
+msgstr "Jetzt {reading}"
+
+#: src/lib.rs
+msgid "Thursday"
+msgstr "Donnerstag"
+
+#: src/lib.rs
+msgid "Friday"
+msgstr "Freitag"
+
+#: src/lib.rs
+msgid "Saturday"
+msgstr "Samstag"
+
+#: src/lib.rs
+msgid "Sunday"
+msgstr "Sonntag"
+
+#: src/lib.rs
+msgid "Monday"
+msgstr "Montag"
+
+#: src/lib.rs
+msgid "Tuesday"
+msgstr "Dienstag"
+
+#: src/lib.rs
+msgid "Wednesday"
+msgstr "Mittwoch"
+
+#. {degrees} is a day's high, such as 5°.
+#: src/lib.rs
+msgid "{degrees} today"
+msgstr "Heute {degrees}"
+
+#: src/lib.rs
+msgid "{degrees} tomorrow"
+msgstr "Morgen {degrees}"
+
+#. {day} is a weekday's name, as in "6° Thursday".
+#: src/lib.rs
+msgid "{degrees} {day}"
+msgstr "{day} {degrees}"

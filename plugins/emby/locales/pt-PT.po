@@ -1,0 +1,49 @@
+# Lounge, emby: pt-PT
+#
+msgid ""
+msgstr ""
+"Language: pt-PT\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Continue watching, recently added and favourites from your Emby server."
+msgstr "Continuar a ver, adicionados recentemente e favoritos do seu servidor Emby."
+
+#: src/lib.rs
+msgid "Recently added on Emby"
+msgstr "Adicionados recentemente no Emby"
+
+#: src/lib.rs
+msgid "Favourites on Emby"
+msgstr "Favoritos no Emby"
+
+#: src/lib.rs
+msgid "Server address"
+msgstr "Endereço do servidor"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.10:8096"
+msgstr "Por exemplo, http://192.168.0.10:8096"
+
+#: src/lib.rs
+msgid "Username"
+msgstr "Nome de utilizador"
+
+#: src/lib.rs
+msgid "Password"
+msgstr "Palavra-passe"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "server address"
+msgstr "endereço do servidor"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "username"
+msgstr "nome de utilizador"
+
+#: src/lib.rs
+msgid "Emby rejected the username or password. Check them in the plugin's settings."
+msgstr "O Emby rejeitou o nome de utilizador ou a palavra-passe. Verifique-os nas definições do plugin."

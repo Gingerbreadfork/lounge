@@ -1,0 +1,87 @@
+# Lounge, twitch: pt-BR
+#
+msgid ""
+msgstr ""
+"Language: pt-BR\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/lib.rs
+msgid "The channels you follow that are live now, in Live now and the guide, opening in the Twitch app."
+msgstr "Os canais que você segue e que estão ao vivo, em Ao vivo agora e no Guia de TV, abertos no app da Twitch."
+
+#: src/lib.rs
+msgid "Client ID"
+msgstr "Client ID"
+
+#. "Other" and "Public" are choices on Twitch's developer console.
+#: src/lib.rs
+msgid "At dev.twitch.tv/console register an application (category Other, type Public, redirect http://localhost) and copy its Client ID."
+msgstr "Em dev.twitch.tv/console, registre um aplicativo (categoria Other, tipo Public, redirect http://localhost) e copie o Client ID dele."
+
+#: src/lib.rs
+msgid "Twitch app"
+msgstr "App da Twitch"
+
+#: src/lib.rs
+msgid "The package that opens streams."
+msgstr "O pacote que abre as transmissões."
+
+#: src/lib.rs
+msgid "Could not renew the Twitch sign-in. It tries again on the next refresh."
+msgstr "Não foi possível renovar o login da Twitch. Vai tentar de novo na próxima atualização."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "client ID"
+msgstr "Client ID"
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Twitch no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now."
+msgstr "A Twitch não aceita mais este login; ele é renovado na próxima atualização, ou pressione Atualizar agora."
+
+#: src/lib.rs
+msgid "Twitch did not say who is signed in. It tries again on the next refresh."
+msgstr "A Twitch não disse de quem é o login. Vai tentar de novo na próxima atualização."
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "The sign-in was declined on twitch.tv. Press Refresh now for a new code."
+msgstr "O login foi recusado em twitch.tv. Pressione Atualizar agora para receber um novo código."
+
+#: src/lib.rs
+msgid "Twitch does not know this Client ID. Check it against your application at dev.twitch.tv/console."
+msgstr "A Twitch não reconhece este Client ID. Compare-o com o do seu aplicativo em dev.twitch.tv/console."
+
+#: src/lib.rs
+msgid "Nobody watching yet"
+msgstr "Ninguém assistindo ainda"
+
+#: src/lib.rs
+msgid "{n} watching"
+msgid_plural "{n} watching"
+msgstr[0] "{n} assistindo"
+msgstr[1] "{n} assistindo"
+
+#. {thousands} is a count of viewers in thousands, such as 2.7.
+#: src/lib.rs
+msgid "{thousands}k watching"
+msgstr "{thousands} mil assistindo"
+
+#. {game} is the name of the game being streamed.
+#: src/lib.rs
+msgid "{game}, nobody watching yet"
+msgstr "{game}, ninguém assistindo ainda"
+
+#. {game} is the name of the game being streamed.
+#: src/lib.rs
+msgid "{game}, {n} watching"
+msgid_plural "{game}, {n} watching"
+msgstr[0] "{game}, {n} assistindo"
+msgstr[1] "{game}, {n} assistindo"
+
+#. {game} is the name of the game being streamed and {thousands} a count of viewers in thousands, such as 2.7.
+#: src/lib.rs
+msgid "{game}, {thousands}k watching"
+msgstr "{game}, {thousands} mil assistindo"

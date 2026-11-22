@@ -1,0 +1,83 @@
+# Lounge, trakt: fr
+#
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Trakt no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now."
+msgstr "Trakt n’accepte plus cette connexion ; elle sera renouvelée à la prochaine actualisation, ou appuyez sur « Actualiser maintenant »."
+
+#: src/lib.rs
+msgid "Trakt is asking for a pause between requests. It tries again on the next refresh."
+msgstr "Trakt demande une pause entre les requêtes. Nouvel essai à la prochaine actualisation."
+
+#: src/lib.rs
+msgid "Continue watching, up next and your watchlist from Trakt, across every service."
+msgstr "« Reprendre la lecture », « À suivre » et votre liste de suivi depuis Trakt, tous services confondus."
+
+#: src/lib.rs
+msgid "Up next on Trakt"
+msgstr "À suivre sur Trakt"
+
+#: src/lib.rs
+msgid "Watchlist on Trakt"
+msgstr "Liste de suivi sur Trakt"
+
+#: src/lib.rs
+msgid "Client ID"
+msgstr "Client ID"
+
+#: src/lib.rs
+msgid "At trakt.tv/oauth/applications create an app (any name, redirect urn:ietf:wg:oauth:2.0:oob) and copy its Client ID and Client Secret."
+msgstr "Sur trakt.tv/oauth/applications, créez une appli (nom au choix, redirection urn:ietf:wg:oauth:2.0:oob) et copiez son Client ID et son Client Secret."
+
+#: src/lib.rs
+msgid "Client secret"
+msgstr "Client secret"
+
+#: src/lib.rs
+msgid "Up next row"
+msgstr "Rangée « À suivre »"
+
+#: src/lib.rs
+msgid "The next episode of each show you are part-way through."
+msgstr "Le prochain épisode de chaque série que vous avez commencée."
+
+#: src/lib.rs
+msgid "Watchlist row"
+msgstr "Rangée « Liste de suivi »"
+
+#: src/lib.rs
+msgid "Open with the TV's own search"
+msgstr "Ouvrir avec la recherche de la TV"
+
+#: src/lib.rs
+msgid "On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it."
+msgstr "Sur Oui, un titre s’ouvre dans la recherche de la TV, qui sur Google TV indique où le regarder en streaming. Sur Non, Lounge le cherche dans vos applis et vos plugins."
+
+#: src/lib.rs
+msgid "Could not renew the Trakt sign-in. It tries again on the next refresh."
+msgstr "Impossible de renouveler la connexion à Trakt. Nouvel essai à la prochaine actualisation."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "client ID"
+msgstr "Client ID"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "client secret"
+msgstr "Client secret"
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "The sign-in was declined on trakt.tv. Press Refresh now for a new code."
+msgstr "La connexion a été refusée sur trakt.tv. Appuyez sur « Actualiser maintenant » pour obtenir un nouveau code."
+
+#: src/lib.rs
+msgid "Trakt does not know this Client ID. Check it against your app at trakt.tv/oauth/applications."
+msgstr "Trakt ne connaît pas ce Client ID. Comparez-le à celui de votre appli sur trakt.tv/oauth/applications."

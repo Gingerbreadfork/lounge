@@ -1,0 +1,122 @@
+# Lounge, moonlight: nl
+#
+msgid ""
+msgstr ""
+"Language: nl\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Your gaming PCs and the games on them, streamed with Moonlight; a game left running comes back in Continue watching."
+msgstr "Je game-pc's en de games die erop staan, gestreamd met Moonlight; een game die nog draait, komt terug in Verder kijken."
+
+#: src/lib.rs
+msgid "Games on Moonlight"
+msgstr "Games op Moonlight"
+
+#: src/lib.rs
+msgid "Gaming PCs on Moonlight"
+msgstr "Game-pc's op Moonlight"
+
+#: src/lib.rs
+msgid "Gaming PCs"
+msgstr "Game-pc's"
+
+#: src/lib.rs
+msgid "Names or addresses of the PCs running Sunshine, like gaming-pc or 192.168.0.50, each paired in Moonlight first. Separate several with spaces or commas, and add :port if Sunshine's port was changed from 47989. Pair each PC in Moonlight and open it there once, so Moonlight knows its games."
+msgstr "Namen of adressen van de pc's waarop Sunshine draait, zoals gaming-pc of 192.168.0.50, elk eerst gekoppeld in Moonlight. Scheid er meerdere met spaties of komma's, en voeg :poort toe als de poort van Sunshine niet meer 47989 is. Koppel elke pc in Moonlight en open hem daar één keer, zodat Moonlight zijn games kent."
+
+#: src/lib.rs
+msgid "Sunshine username"
+msgstr "Gebruikersnaam voor Sunshine"
+
+#: src/lib.rs
+msgid "The sign-in for Sunshine's web page, which lets Lounge list each PC's games. The same one is used on every PC, and the page is at https://192.168.0.50:47990 for a PC at 192.168.0.50. Without it only the PCs are shown. Apollo's page has no sign-in a plugin can use, so an Apollo PC is shown without its games."
+msgstr "De inloggegevens voor de webpagina van Sunshine, waarmee Lounge de games van elke pc kan tonen. Voor elke pc worden dezelfde gebruikt; voor een pc op 192.168.0.50 staat de pagina op https://192.168.0.50:47990. Zonder deze gegevens zie je alleen de pc's. De pagina van Apollo laat een plug-in niet inloggen, dus een Apollo-pc verschijnt zonder zijn games."
+
+#: src/lib.rs
+msgid "Sunshine password"
+msgstr "Wachtwoord voor Sunshine"
+
+#: src/lib.rs
+msgid "Moonlight app"
+msgstr "Moonlight-app"
+
+#: src/lib.rs
+msgid "The app the tiles open: com.limelight for Moonlight, com.limelight.noir for Artemis."
+msgstr "De app die de tegels openen: com.limelight voor Moonlight, com.limelight.noir voor Artemis."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "addresses of your gaming PCs"
+msgstr "adressen van je game-pc's"
+
+#. the setting is the one labelled "Gaming PCs".
+#: src/lib.rs
+msgid "The gaming PCs setting holds no name or address. Add one in the plugin's settings, like gaming-pc or 192.168.0.50."
+msgstr "In de instelling Game-pc's staat geen naam of adres. Voeg er een toe in de instellingen van de plug-in, zoals gaming-pc of 192.168.0.50."
+
+#: src/lib.rs
+msgid "Sunshine refused the username or password. Check them in the plugin's settings."
+msgstr "Sunshine heeft de gebruikersnaam of het wachtwoord geweigerd. Controleer ze in de instellingen van de plug-in."
+
+#: src/lib.rs
+msgid "The PC at {address} can't be reached by that name. Use its IP address, or a name ending in .local or .lan."
+msgstr "De pc op {address} is onder die naam niet te bereiken. Gebruik het IP-adres, of een naam die eindigt op .local of .lan."
+
+#: src/lib.rs
+msgid "The PC at {address} didn't answer. Check that it is on and Sunshine is running, then try again."
+msgstr "De pc op {address} reageerde niet. Controleer of hij aan staat en Sunshine draait, en probeer het dan opnieuw."
+
+#: src/lib.rs
+msgid "Game in progress"
+msgstr "Game bezig"
+
+#. {pc} is a gaming PC's name.
+#: src/lib.rs
+msgid "Running on {pc}"
+msgstr "Draait op {pc}"
+
+#. {game} is the name of the game a PC is running.
+#: src/lib.rs
+msgid "{game} running"
+msgstr "{game} draait"
+
+#: src/lib.rs
+msgid "Game running"
+msgstr "Game draait"
+
+#: src/lib.rs
+msgid "Online, sign-in refused"
+msgstr "Online, inloggen geweigerd"
+
+#: src/lib.rs
+msgid "Online, Apollo lists no games"
+msgstr "Online, Apollo toont geen games"
+
+#: src/lib.rs
+msgid "Online, web page refused this TV"
+msgstr "Online, webpagina weigert deze tv"
+
+#: src/lib.rs
+msgid "Online, Sunshine has no sign-in yet"
+msgstr "Online, Sunshine heeft nog geen inloggegevens"
+
+#: src/lib.rs
+msgid "Online, {n} game"
+msgid_plural "Online, {n} games"
+msgstr[0] "Online, {n} game"
+msgstr[1] "Online, {n} games"
+
+#. a gaming PC that is on and answering.
+#: src/lib.rs
+msgid "Online"
+msgstr "Online"
+
+#: src/lib.rs
+msgid "Not reachable by this name"
+msgstr "Niet bereikbaar onder deze naam"
+
+#: src/lib.rs
+msgid "Not answering"
+msgstr "Reageert niet"

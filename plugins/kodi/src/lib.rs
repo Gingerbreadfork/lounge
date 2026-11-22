@@ -1,7 +1,7 @@
 //! Kodi: what is part-way through, the next episode of each show, what was added lately and
 //! Live TV, read from Kodi's library over JSON-RPC. Selecting something tells Kodi to play it,
 //! and then brings Kodi to the front on this TV, or leaves it be if Kodi is a box across the room.
-use lounge_plugin_sdk::{self as sdk, host, redact_url, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, redact_url, t, tc, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -14,17 +14,24 @@ const RECENT: usize = 20;
 const IN_PROGRESS: usize = 30;
 
 /// The error for a call Kodi answers with an error of its own.
-const TURNED_DOWN: &str = "Kodi turned down the plugin's request. Check that Kodi is up to date, then try again.";
+fn turned_down() -> String {
+    t!("Kodi turned down the plugin's request. Check that Kodi is up to date, then try again.")
+}
+
 /// The error for a tile whose action this version of the plugin does not know.
-const OUT_OF_DATE: &str = "This tile is out of date. Refresh the plugin, then try again.";
+fn out_of_date() -> String {
+    t!("This tile is out of date. Refresh the plugin, then try again.")
+}
 
 impl sdk::Plugin for Kodi {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.kodi".into(),
             name: "Kodi".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue watching, up next, recently added and Live TV from your Kodi library; Kodi plays them.".into(),
+            description: t!("Continue watching, up next, recently added and Live TV from your Kodi library; Kodi plays them."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg, Kind::Search],
             // Loopback is refused unless named, and Kodi often runs on the TV itself.
@@ -32,35 +39,38 @@ impl sdk::Plugin for Kodi {
             refresh_minutes: 10,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "upnext".into(), title: "Up next on Kodi".into(), style: RowStyle::Landscape },
-                RowSpec { id: "recent".into(), title: "New on Kodi".into(), style: RowStyle::Poster },
+                RowSpec { id: "upnext".into(), title: t!("Up next on Kodi"), style: RowStyle::Landscape },
+                RowSpec { id: "recent".into(), title: t!("New on Kodi"), style: RowStyle::Poster },
             ],
             settings: vec![
                 SettingSpec {
                     key: "server".into(),
-                    label: "Kodi address".into(),
+                    label: t!("Kodi address"),
                     kind: SettingKind::Url,
                     required: true,
-                    help: Some("Like http://192.168.0.20:8080, or http://localhost:8080 for Kodi on this TV. In Kodi's Settings, Services, Control, turn on Allow remote control via HTTP.".into()),
+                    // Translators: Settings, Services, Control and Allow remote control via HTTP are names in Kodi's own menus.
+                    help: Some(t!("Like http://192.168.0.20:8080, or http://localhost:8080 for Kodi on this TV. In Kodi's Settings, Services, Control, turn on Allow remote control via HTTP.")),
                     default: None,
                 },
-                SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: false, help: Some("Kodi's default is kodi.".into()), default: Some("kodi".into()) },
-                SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
-                SettingSpec { key: "app".into(), label: "Kodi app".into(), kind: SettingKind::Text, required: false, help: Some("The package brought to the front after Kodi starts playing.".into()), default: Some(DEFAULT_APP.into()) },
+                // Translators: a setting and its help. The second kodi is the username itself, kept as it is.
+                SettingSpec { key: "username".into(), label: t!("Username"), kind: SettingKind::Text, required: false, help: Some(t!("Kodi's default is kodi.")), default: Some("kodi".into()) },
+                SettingSpec { key: "password".into(), label: t!("Password"), kind: SettingKind::Password, required: false, help: None, default: None },
+                SettingSpec { key: "app".into(), label: t!("Kodi app"), kind: SettingKind::Text, required: false, help: Some(t!("The package brought to the front after Kodi starts playing.")), default: Some(DEFAULT_APP.into()) },
                 SettingSpec {
                     key: "front".into(),
-                    label: "Bring Kodi to the front".into(),
+                    label: t!("Bring Kodi to the front"),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("On when Kodi runs on this TV. Off when it is another box: it starts playing and this TV stays where it is.".into()),
+                    help: Some(t!("On when Kodi runs on this TV. Off when it is another box: it starts playing and this TV stays where it is.")),
                     default: Some("true".into()),
                 },
-                SettingSpec { key: "pvr".into(), label: "Live TV channels".into(), kind: SettingKind::Toggle, required: false, help: Some("Kodi's PVR channels in Live now and the guide.".into()), default: Some("true".into()) },
+                SettingSpec { key: "pvr".into(), label: t!("Live TV channels"), kind: SettingKind::Toggle, required: false, help: Some(t!("Kodi's PVR channels in Live now and the guide.")), default: Some("true".into()) },
             ],
             homepage: Some("https://kodi.tv".into()),
             self_signed_servers: false,
             for_apps: vec![DEFAULT_APP.into()],
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -119,7 +129,7 @@ impl sdk::Plugin for Kodi {
                     }
                 }
                 // Kodi without a PVR client answers with an error, which is not a problem here.
-                Err(e) if e == TURNED_DOWN => sdk::info!("no Live TV"),
+                Err(e) if e == turned_down() => sdk::info!("no Live TV"),
                 Err(e) => sdk::info!("no Live TV: {e}"),
             }
         }
@@ -154,7 +164,7 @@ impl sdk::Plugin for Kodi {
         }
         let unknown = || {
             sdk::warn!("unknown action {action}");
-            OUT_OF_DATE.to_string()
+            out_of_date()
         };
         let (what, id) = action.split_once(':').ok_or_else(unknown)?;
         let id: u64 = id.parse().map_err(|_| unknown())?;
@@ -163,14 +173,14 @@ impl sdk::Plugin for Kodi {
             "episode" => json!({"episodeid": id}),
             "channel" => json!({"channelid": id}),
             "show" => {
-                let next = kodi.next_episode(id)?.or_else(|| kodi.first_episode(id).ok().flatten()).ok_or("Kodi has no episodes of this show. Update Kodi's library, then try again.")?;
+                let next = kodi.next_episode(id)?.or_else(|| kodi.first_episode(id).ok().flatten()).ok_or_else(|| t!("Kodi has no episodes of this show. Update Kodi's library, then try again."))?;
                 json!({"episodeid": next.episodeid})
             }
             _ => return Err(unknown()),
         };
         let resume = what != "channel";
         kodi.call::<Value>("Player.Open", json!({"item": item, "options": {"resume": resume}}))
-            .map_err(|e| if e == TURNED_DOWN { "Kodi would not play it. Refresh the plugin, then try again.".into() } else { e })?;
+            .map_err(|e| if e == turned_down() { t!("Kodi would not play it. Refresh the plugin, then try again.") } else { e })?;
         Ok(if front { Action { launch: Some(app()), ..Default::default() } } else { Action::default() })
     }
 }
@@ -362,7 +372,8 @@ pub struct Server {
 
 impl Server {
     fn connect() -> Result<Server, String> {
-        let base = host::server_setting("server", "Kodi address")?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let base = host::server_setting("server", &tc!("in a sentence", "Kodi address"))?;
         let username = host::setting("username").map(|u| u.trim().to_string()).filter(|u| !u.is_empty());
         let password = host::secret("password").unwrap_or_default();
         Ok(Server::new(&base, username.as_deref(), &password))
@@ -406,13 +417,14 @@ impl Server {
             }
             sdk::warn!("{e}");
             if e.contains("leads to this device itself") {
-                format!("The address {} is this TV's own, which a plugin may not use. For Kodi on this TV, set the address to {}.", redact_url(&self.base), on_localhost(&self.base))
+                // Translators: {address} is the address in the settings and {local} the one to use, such as http://localhost:8080.
+                t!("The address {address} is this TV's own, which a plugin may not use. For Kodi on this TV, set the address to {local}.", address = redact_url(&self.base), local = on_localhost(&self.base))
             } else {
-                format!("Kodi didn't answer at {}. Check that it is running and allows remote control over HTTP, then try again.", sdk::address(&self.base))
+                t!("Kodi didn't answer at {address}. Check that it is running and allows remote control over HTTP, then try again.", address = sdk::address(&self.base))
             }
         })?;
         match r.status {
-            401 => return Err("Kodi refused the username or password. Check them in the plugin's settings.".into()),
+            401 => return Err(t!("Kodi refused the username or password. Check them in the plugin's settings.")),
             s if !(200..300).contains(&s) => {
                 sdk::warn!("HTTP {s} for {method}");
                 return Err(sdk::answered_error("Kodi", &self.base, s));
@@ -427,7 +439,7 @@ impl Server {
         if let Some(e) = reply.error {
             // Kodi without a PVR client turns down the PVR calls, which is no cause for a warning.
             sdk::info!("{method}: {} ({})", e.message, e.code);
-            return Err(TURNED_DOWN.into());
+            return Err(turned_down());
         }
         reply.result.ok_or_else(|| unreadable("no result"))
     }

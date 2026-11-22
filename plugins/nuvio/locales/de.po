@@ -1,0 +1,102 @@
+# Lounge, nuvio: de
+#
+msgid ""
+msgstr ""
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Nuvio rejected the email or password. Check them in the plugin's settings."
+msgstr "Nuvio hat E-Mail oder Passwort abgelehnt. Prüfe beides in den Plugin-Einstellungen."
+
+#: src/lib.rs
+msgid "Continue watching, up next and your library from your Nuvio account's sync, opened in Nuvio."
+msgstr "Weiterschauen, Als Nächstes und deine Bibliothek aus der Synchronisierung deines Nuvio-Kontos, geöffnet in Nuvio."
+
+#: src/lib.rs
+msgid "Library on Nuvio"
+msgstr "Bibliothek auf Nuvio"
+
+#: src/lib.rs
+msgid "Email"
+msgstr "E-Mail"
+
+#. a position is how far into a film or an episode someone stopped.
+#: src/lib.rs
+msgid "The email of your Nuvio account. Positions come from Nuvio's own sync: a profile that follows Trakt, Simkl or MDBList for its progress keeps none there, so use the Trakt plugin for that one."
+msgstr "Die E-Mail-Adresse deines Nuvio-Kontos. Die Positionen kommen aus Nuvios eigener Synchronisierung: Ein Profil, das seinen Fortschritt über Trakt, Simkl oder MDBList führt, speichert dort keine. Nimm dafür das Trakt-Plugin."
+
+#: src/lib.rs
+msgid "Password"
+msgstr "Passwort"
+
+#. one of the profiles of a Nuvio account, each a person with their own lists.
+#: src/lib.rs
+msgid "Profile"
+msgstr "Profil"
+
+#: src/lib.rs
+msgid "Leave empty for the first profile, or type another profile's name as Nuvio shows it."
+msgstr "Lass das Feld leer für das erste Profil oder gib den Namen eines anderen Profils so ein, wie Nuvio ihn zeigt."
+
+#: src/lib.rs
+msgid "Library row"
+msgstr "Reihe „Bibliothek“"
+
+#: src/lib.rs
+msgid "The movies and shows saved in your Nuvio library, newest first."
+msgstr "Die Filme und Serien in deiner Nuvio-Bibliothek, die neuesten zuerst."
+
+#: src/lib.rs
+msgid "TMDB API key"
+msgstr "TMDB-API-Schlüssel"
+
+#. "API Key (v3)" and "Read Access Token" are what TMDB's settings page calls them.
+#: src/lib.rs
+msgid "Fill this in when tiles show a code like tmdb:1234 instead of a name. Use the API Key (v3) from themoviedb.org/settings/api, not the Read Access Token."
+msgstr "Fülle das aus, wenn Kacheln statt eines Namens einen Code wie tmdb:1234 zeigen. Nimm den „API Key (v3)“ von themoviedb.org/settings/api, nicht den „Read Access Token“."
+
+#: src/lib.rs
+msgid "Self-hosted server address"
+msgstr "Adresse des eigenen Servers"
+
+#: src/lib.rs
+msgid "Leave empty for Nuvio's own. For a self-hosted backend, its address, like https://nuvio.example.com."
+msgstr "Lass das Feld leer für Nuvios eigenen Server. Für ein selbst gehostetes Backend trägst du dessen Adresse ein, zum Beispiel https://nuvio.example.com."
+
+#: src/lib.rs
+msgid "Installed from Google Play"
+msgstr "Über Google Play installiert"
+
+#: src/lib.rs
+msgid "On if you installed Nuvio from Google Play, off if from GitHub or a downloaded APK."
+msgstr "An, wenn du Nuvio über Google Play installiert hast; aus, wenn es von GitHub oder aus einer heruntergeladenen APK stammt."
+
+#. {name} is the profile name typed in the plugin's settings.
+#: src/lib.rs
+msgid "Nuvio has no profile called {name}. Leave the field empty for the first profile."
+msgstr "Nuvio hat kein Profil namens {name}. Lass das Feld leer für das erste Profil."
+
+#. {name} is the profile name typed in the plugin's settings, and {names} the account's profiles with commas between them.
+#: src/lib.rs
+msgid "Nuvio has no profile called {name}. Besides the first, it has: {names}."
+msgstr "Nuvio hat kein Profil namens {name}. Neben dem ersten gibt es: {names}."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "email"
+msgstr "E-Mail"
+
+#: src/lib.rs
+msgid "This Nuvio server doesn't allow signing in with an email and password, which is the only way this plugin can."
+msgstr "Dieser Nuvio-Server erlaubt keine Anmeldung mit E-Mail und Passwort, und nur so kann sich dieses Plugin anmelden."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "password"
+msgstr "Passwort"
+
+#: src/lib.rs
+msgid "The Nuvio server turned the sign-in away. Lounge checks the server's settings again on the next refresh."
+msgstr "Der Nuvio-Server hat die Anmeldung abgewiesen. Beim nächsten Aktualisieren prüft Lounge die Einstellungen des Servers erneut."

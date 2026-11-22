@@ -1,7 +1,7 @@
 //! Twitch: the channels you follow that are live right now become channels in Live now and the
 //! guide, each with what is being streamed and since when, and open in the Twitch app. Sign-in is
 //! Twitch's device code, shown on the plugin's page until it has been entered at twitch.tv/activate.
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, t, tn, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -19,12 +19,14 @@ const DEFAULT_APP: &str = "tv.twitch.android.app";
 const PREVIEW_MS: i64 = 10 * 60_000;
 
 impl sdk::Plugin for Twitch {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.twitch".into(),
             name: "Twitch".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "The channels you follow that are live now, in Live now and the guide, opening in the Twitch app.".into(),
+            description: t!("The channels you follow that are live now, in Live now and the guide, opening in the Twitch app."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
             fetch_hosts: vec!["id.twitch.tv".into(), "api.twitch.tv".into(), "static-cdn.jtvnw.net".into()],
@@ -34,18 +36,20 @@ impl sdk::Plugin for Twitch {
             settings: vec![
                 SettingSpec {
                     key: "client_id".into(),
-                    label: "Client ID".into(),
+                    label: t!("Client ID"),
                     kind: SettingKind::Text,
                     required: true,
-                    help: Some("At dev.twitch.tv/console register an application (category Other, type Public, redirect http://localhost) and copy its Client ID.".into()),
+                    // Translators: "Other" and "Public" are choices on Twitch's developer console.
+                    help: Some(t!("At dev.twitch.tv/console register an application (category Other, type Public, redirect http://localhost) and copy its Client ID.")),
                     default: None,
                 },
-                SettingSpec { key: "app".into(), label: "Twitch app".into(), kind: SettingKind::Text, required: false, help: Some("The package that opens streams.".into()), default: Some(DEFAULT_APP.into()) },
+                SettingSpec { key: "app".into(), label: t!("Twitch app"), kind: SettingKind::Text, required: false, help: Some(t!("The package that opens streams.")), default: Some(DEFAULT_APP.into()) },
             ],
             homepage: Some("https://www.twitch.tv".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -115,7 +119,7 @@ fn after_renewal(current: Token, outcome: Result<Token, RenewError>, now_ms: i64
         }
         Err(RenewError::Failed(e)) => {
             sdk::warn!("could not renew the sign-in ({e})");
-            Renewed::TryLater("Could not renew the Twitch sign-in. It tries again on the next refresh.".into())
+            Renewed::TryLater(t!("Could not renew the Twitch sign-in. It tries again on the next refresh."))
         }
     }
 }
@@ -166,7 +170,8 @@ struct Client {
 
 impl Client {
     fn connect(now_ms: i64) -> Result<Client, String> {
-        let client_id = host::required_setting("client_id", "client ID")?.trim().to_string();
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let client_id = host::required_setting("client_id", &t!("client ID"))?.trim().to_string();
         let saved: Option<Token> = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice(&v).ok());
         let token = match saved {
             Some(t) if t.expires_ms > now_ms + 10 * 60_000 => t,
@@ -194,7 +199,8 @@ impl Client {
         match r.status {
             401 => {
                 expire_token();
-                return Err("Twitch no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now.".into());
+                // Translators: "Refresh now" is the button on the plugin's page on the TV.
+                return Err(t!("Twitch no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now."));
             }
             s if !(200..300).contains(&s) => {
                 let why = serde_json::from_str::<Failure>(&r.body).map(|f| f.message).unwrap_or_default();
@@ -215,7 +221,7 @@ impl Client {
             return Ok(id);
         }
         let me: Page<User> = self.get_json("/users")?;
-        let id = me.data.first().map(|u| u.id.clone()).filter(|s| !s.is_empty()).ok_or("Twitch did not say who is signed in. It tries again on the next refresh.")?;
+        let id = me.data.first().map(|u| u.id.clone()).filter(|s| !s.is_empty()).ok_or_else(|| t!("Twitch did not say who is signed in. It tries again on the next refresh."))?;
         host::kv_set(USER_KEY, id.as_bytes());
         Ok(id)
     }
@@ -258,14 +264,15 @@ fn device_step(client_id: &str, now_ms: i64) -> Result<Token, String> {
         }
         host::kv_delete(DEVICE_KEY);
         if why.contains("access_denied") {
-            return Err("The sign-in was declined on twitch.tv. Press Refresh now for a new code.".into());
+            // Translators: "Refresh now" is the button on the plugin's page on the TV.
+            return Err(t!("The sign-in was declined on twitch.tv. Press Refresh now for a new code."));
         }
     }
     let (status, body) = post_form(&format!("{ID}/device"), &[("client_id", client_id), ("scopes", SCOPES)])?;
     if !(200..300).contains(&status) {
         let why = serde_json::from_str::<Failure>(&body).map(|f| f.message).unwrap_or_default();
         if status == 400 && why.contains("client") {
-            return Err("Twitch does not know this Client ID. Check it against your application at dev.twitch.tv/console.".into());
+            return Err(t!("Twitch does not know this Client ID. Check it against your application at dev.twitch.tv/console."));
         }
         sdk::warn!("HTTP {status} when asked for a sign-in code: {why}");
         return Err(sdk::online_error("Twitch", status));
@@ -402,10 +409,9 @@ pub fn stream_items(s: &Stream, avatar: Option<&str>, app: &str, now_ms: i64) ->
         action: action.clone(),
         ..Default::default()
     };
-    // A game's name is written as its makers write it; the count leads only when it stands alone.
     let facts = match s.game_name.trim() {
-        "" => sentence_case(&watching(s.viewer_count)),
-        game => format!("{game}, {}", watching(s.viewer_count)),
+        "" => watching(s.viewer_count),
+        game => playing(game, s.viewer_count),
     };
     let live = Item {
         id: format!("live:{}", if s.id.is_empty() { s.user_login.clone() } else { s.id.clone() }),
@@ -422,19 +428,30 @@ pub fn stream_items(s: &Stream, avatar: Option<&str>, app: &str, now_ms: i64) ->
     vec![channel, live]
 }
 
+/// How many are watching a stream that names no game.
 fn watching(n: u64) -> String {
     match n {
-        0 => "nobody watching yet".into(),
-        1 => "1 watching".into(),
-        n if n < 1000 => format!("{n} watching"),
-        n => format!("{:.1}k watching", n as f64 / 1000.0),
+        0 => t!("Nobody watching yet"),
+        n if n < 1000 => tn!(n, "{n} watching", "{n} watching"),
+        // Translators: {thousands} is a count of viewers in thousands, such as 2.7.
+        n => t!("{thousands}k watching", thousands = thousands(n)),
     }
 }
 
-/// A line of facts as a tile shows it: the first word capitalised, the rest as written.
-fn sentence_case(line: &str) -> String {
-    let mut chars = line.chars();
-    chars.next().map(|first| first.to_uppercase().chain(chars).collect()).unwrap_or_default()
+/// The game being played and how many are watching. A game's name is written as its makers write it.
+fn playing(game: &str, n: u64) -> String {
+    match n {
+        // Translators: {game} is the name of the game being streamed.
+        0 => t!("{game}, nobody watching yet", game = game),
+        // Translators: {game} is the name of the game being streamed.
+        n if n < 1000 => tn!(n, "{game}, {n} watching", "{game}, {n} watching", game = game),
+        // Translators: {game} is the name of the game being streamed and {thousands} a count of viewers in thousands, such as 2.7.
+        n => t!("{game}, {thousands}k watching", game = game, thousands = thousands(n)),
+    }
+}
+
+fn thousands(n: u64) -> String {
+    sdk::words::decimal(n as f64 / 1000.0, 1)
 }
 
 fn clip(s: &str, max: usize) -> String {
@@ -484,7 +501,7 @@ mod tests {
 
     #[test]
     fn viewer_counts_read_well() {
-        assert_eq!(watching(0), "nobody watching yet");
+        assert_eq!(watching(0), "Nobody watching yet");
         assert_eq!(watching(1), "1 watching");
         assert_eq!(watching(42), "42 watching");
         assert_eq!(watching(12_345), "12.3k watching");

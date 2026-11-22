@@ -2,7 +2,7 @@
 //! into Continue watching and the rest fill a row of recordings. The server wants a session
 //! signed in with its PIN; the session is kept between refreshes, and play addresses are
 //! worked out when something is selected so they always carry a live session.
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, t, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -25,27 +25,32 @@ const MOVE_DELETES: usize = 500;
 const GUIDE_KEY_BYTES: usize = 240 * 1024;
 
 impl sdk::Plugin for NextPvr {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.nextpvr".into(),
             name: "NextPVR".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Live channels, the guide and your recordings from a NextPVR server.".into(),
+            description: t!("Live channels, the guide and your recordings from a NextPVR server."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
             fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
-            rows: vec![RowSpec { id: "recordings".into(), title: "Recordings on NextPVR".into(), style: RowStyle::Landscape }],
+            rows: vec![RowSpec { id: "recordings".into(), title: t!("Recordings on NextPVR"), style: RowStyle::Landscape }],
             settings: vec![
-                SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8866".into()), default: None },
-                SettingSpec { key: "pin".into(), label: "PIN".into(), kind: SettingKind::Password, required: false, help: Some("The server's PIN from Settings, General. New installs use 0000.".into()), default: Some("0000".into()) },
-                SettingSpec { key: "recordings".into(), label: "Recordings to show".into(), kind: SettingKind::Number, required: false, help: Some("The newest ones.".into()), default: Some("30".into()) },
+                SettingSpec { key: "server".into(), label: t!("Server address"), kind: SettingKind::Url, required: true, help: Some(t!("Like http://192.168.0.10:8866")), default: None },
+                // Translators: a setting and its help. Settings and General are names in NextPVR's own menus.
+                SettingSpec { key: "pin".into(), label: t!("PIN"), kind: SettingKind::Password, required: false, help: Some(t!("The server's PIN from Settings, General. New installs use 0000.")), default: Some("0000".into()) },
+                // Translators: a setting that takes a number, and its help, which says which recordings are kept.
+                SettingSpec { key: "recordings".into(), label: t!("Recordings to show"), kind: SettingKind::Number, required: false, help: Some(t!("The newest ones.")), default: Some("30".into()) },
             ],
             homepage: Some("https://nextpvr.com".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -54,7 +59,7 @@ impl sdk::Plugin for NextPvr {
         let channels: ChannelList = s.call("channel.list", "")?;
         let mut channels: Vec<Channel> = channels.channels.into_iter().filter(|c| !c.channel_name.is_empty()).collect();
         if channels.is_empty() {
-            return Err("NextPVR has no channels yet. Scan for channels in its settings first.".into());
+            return Err(t!("NextPVR has no channels yet. Scan for channels in its settings first."));
         }
         if channels.len() > sdk::MAX_ITEMS {
             sdk::warn!("{} channels, of which the TV shows the first {}", channels.len(), sdk::MAX_ITEMS);
@@ -94,7 +99,7 @@ impl sdk::Plugin for NextPvr {
         let s = Server::connect()?;
         let unknown = || {
             sdk::warn!("unknown action {action}");
-            "This tile is out of date. Refresh the plugin, then try again.".to_string()
+            t!("This tile is out of date. Refresh the plugin, then try again.")
         };
         let (what, rest) = action.split_once(':').ok_or_else(unknown)?;
         let (id, title) = rest.split_once('|').unwrap_or((rest, rest));
@@ -252,7 +257,8 @@ pub fn ms_from_any(t: i64) -> i64 {
 impl Server {
     /// Reuses the saved session when the server still accepts it, otherwise signs in with the PIN.
     fn connect() -> Result<Server, String> {
-        let base = host::server_setting("server", "server address")?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let base = host::server_setting("server", &t!("server address"))?;
         if let Some(saved) = host::kv_get_string(SESSION_KEY).and_then(|s| serde_json::from_str::<SavedSession>(&s).ok()).filter(|s| s.base == base) {
             let s = Server { base: base.clone(), sid: saved.sid };
             if s.call::<Status>("session.verify", "").map(|st| st.stat == "ok").unwrap_or(false) {
@@ -263,7 +269,7 @@ impl Server {
         let init: Status = get_json(&base, "session.initiate", "&ver=1.0&device=lounge")?;
         let (sid, salt) = match (init.sid, init.salt) {
             (Some(sid), Some(salt)) => (sid, salt),
-            _ => return Err(format!("NextPVR at {} didn't start a session. Check the server, then try again.", sdk::address(&base))),
+            _ => return Err(t!("NextPVR at {address} didn't start a session. Check the server, then try again.", address = sdk::address(&base))),
         };
         let digest = md5_hex(&format!(":{}:{salt}", md5_hex(&pin)));
         let login: Status = get_json(&base, "session.login", &format!("&sid={sid}&md5={digest}"))?;
@@ -271,7 +277,7 @@ impl Server {
             if let Some(m) = login.msg {
                 sdk::warn!("session.login: {m}");
             }
-            return Err("NextPVR rejected the PIN. Check it in the plugin's settings.".into());
+            return Err(t!("NextPVR rejected the PIN. Check it in the plugin's settings."));
         }
         host::kv_set(SESSION_KEY, serde_json::to_string(&SavedSession { base: base.clone(), sid: sid.clone() }).unwrap_or_default().as_bytes());
         Ok(Server { base, sid })

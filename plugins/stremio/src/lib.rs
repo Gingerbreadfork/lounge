@@ -3,7 +3,7 @@
 //! their page in the Stremio app; search asks Cinemeta, so a title found here opens there too.
 //! Sign-in is a code entered on the phone at link.stremio.com, or an email and password.
 
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, parse_iso8601, t, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
@@ -32,46 +32,52 @@ const LOOKUPS: usize = 20;
 const CACHE_BYTES: usize = 200 * 1024;
 /// The owner of a sign-in made with a code rather than an email.
 const LINKED: &str = "link";
-const REJECTED: &str = "Stremio rejected the email or password. Check them in the plugin's settings.";
-const SIGNED_OUT: &str = "Stremio no longer knows this sign-in. Press Refresh now to sign in again.";
+const REJECTED: &str = mark!("Stremio rejected the email or password. Check them in the plugin's settings.");
+// Translators: "Refresh now" is the button on the plugin's page on the TV.
+const SIGNED_OUT: &str = mark!("Stremio no longer knows this sign-in. Press Refresh now to sign in again.");
 
 impl sdk::Plugin for Stremio {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.stremio".into(),
             name: "Stremio".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue watching, new episodes and your library from your Stremio account, opened in Stremio.".into(),
+            description: t!("Continue watching, new episodes and your library from your Stremio account, opened in Stremio."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["api.strem.io".into(), "link.stremio.com".into(), "v3-cinemeta.strem.io".into(), "*".into()],
             refresh_minutes: 15,
             refresh_seconds: 0,
-            rows: vec![RowSpec { id: "library".into(), title: "Library on Stremio".into(), style: RowStyle::Poster }],
+            rows: vec![RowSpec { id: "library".into(), title: t!("Library on Stremio"), style: RowStyle::Poster }],
             settings: vec![
                 SettingSpec {
                     key: "email".into(),
-                    label: "Email".into(),
+                    label: t!("Email"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("Leave both empty to sign in with a code on your phone instead; this page shows the code. Accounts made with Facebook or Apple have no password, so they sign in that way.".into()),
+                    // Translators: "both" are the email and the password, the two settings this sits between.
+                    help: Some(t!("Leave both empty to sign in with a code on your phone instead; this page shows the code. Accounts made with Facebook or Apple have no password, so they sign in that way.")),
                     default: None,
                 },
-                SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: Some("Only with an email above.".into()), default: None },
+                SettingSpec { key: "password".into(), label: t!("Password"), kind: SettingKind::Password, required: false, help: Some(t!("Only with an email above.")), default: None },
                 SettingSpec {
                     key: "new_episodes".into(),
-                    label: "New episodes".into(),
+                    label: t!("New episodes"),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("A show in your library with an episode out since you last watched it joins Continue watching as up next.".into()),
+                    // Translators: "Continue watching" is the row on Lounge's home screen.
+                    help: Some(t!("A show in your library with an episode out since you last watched it joins Continue watching as up next.")),
                     default: Some("true".into()),
                 },
-                SettingSpec { key: "library".into(), label: "Library row".into(), kind: SettingKind::Toggle, required: false, help: Some("The movies and shows in your Stremio library, most recently watched first.".into()), default: Some("true".into()) },
+                SettingSpec { key: "library".into(), label: t!("Library row"), kind: SettingKind::Toggle, required: false, help: Some(t!("The movies and shows in your Stremio library, most recently watched first.")), default: Some("true".into()) },
             ],
             homepage: Some("https://www.stremio.com".into()),
             self_signed_servers: false,
             for_apps: vec![APP_PACKAGE.into()],
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -341,7 +347,7 @@ fn sign_in(method: &SignIn, now_ms: i64) -> Result<String, String> {
 }
 
 fn sign_in_with_password(email: &str) -> Result<String, String> {
-    let password = host::secret("password").filter(|p| !p.is_empty()).ok_or_else(|| format!("{} To sign in with a code instead, leave the email empty too.", sdk::not_set("password")))?;
+    let password = host::secret("password").filter(|p| !p.is_empty()).ok_or_else(|| t!("Add the password in the plugin's settings. To sign in with a code instead, leave the email empty too."))?;
     let body = post("login", serde_json::json!({ "type": "Login", "email": email, "password": password, "facebook": false }))?;
     match answer::<AuthResult>(&body, "login")? {
         Ok(auth) => {
@@ -350,7 +356,7 @@ fn sign_in_with_password(email: &str) -> Result<String, String> {
         }
         Err(e) => {
             sdk::warn!("sign-in refused: {} (code {})", e.message, e.code);
-            Err(REJECTED.into())
+            Err(sdk::tr(REJECTED))
         }
     }
 }
@@ -396,10 +402,12 @@ fn link_step(now_ms: i64) -> Result<String, String> {
 /// Stremio's link carries the code, so there is none to enter: the person signs in on the page.
 fn instruction(code: &str) -> String {
     sdk::ask(sdk::Ask {
-        say: format!("Sign in: on your phone open link.stremio.com/{code} and sign in to Stremio, then press Refresh now here."),
+        // Translators: {code} ends the web address. "Refresh now" is the button on the plugin's page on the TV.
+        say: t!("Sign in: on your phone open link.stremio.com/{code} and sign in to Stremio, then press Refresh now here.", code = code),
         link: Some(format!("https://link.stremio.com/{code}")),
         code: None,
-        after: Some("Sign in to Stremio on that page.".into()),
+        // Translators: the step to take once link.stremio.com is open on the phone.
+        after: Some(t!("Sign in to Stremio on that page.")),
         watch: true,
     })
 }
@@ -419,14 +427,14 @@ fn fetch_library(now_ms: i64) -> Result<Vec<LibraryItem>, String> {
                 host::kv_delete(OWNER_KEY);
                 key = sign_in(&method, now_ms)?;
             }
-            Err(e) if e.code == 1 => return Err(SIGNED_OUT.into()),
+            Err(e) if e.code == 1 => return Err(sdk::tr(SIGNED_OUT)),
             Err(e) => {
                 sdk::warn!("datastoreGet refused: {} (code {})", e.message, e.code);
                 return Err(sdk::online_error("Stremio", 400));
             }
         }
     }
-    Err(SIGNED_OUT.into())
+    Err(sdk::tr(SIGNED_OUT))
 }
 
 /// Items one at a time, so one entry this plugin cannot read costs only itself.

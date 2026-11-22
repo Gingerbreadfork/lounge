@@ -1,0 +1,82 @@
+# Lounge, plugin SDK: pt-PT
+#
+msgid ""
+msgstr ""
+"Language: pt-PT\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: core/lounge-words/src/lib.rs
+msgid "{first}, {next}"
+msgstr "{first}, {next}"
+
+#: core/lounge-words/src/lib.rs
+msgid "{first} and {last}"
+msgstr "{first} e {last}"
+
+#: core/lounge-words/src/lib.rs
+msgctxt "decimal mark"
+msgid "."
+msgstr ","
+
+#: plugins/sdk/src/lib.rs
+msgid "This plugin can't open that."
+msgstr "Este plugin não consegue abrir isso."
+
+#: plugins/sdk/src/lib.rs
+msgid "This plugin has nothing more to show here."
+msgstr "Este plugin não tem mais nada para mostrar aqui."
+
+#. {shown} is a web address and {code} a short code. "Refresh now" is the button on the plugin's page on the TV.
+#: plugins/sdk/src/lib.rs
+msgid "Sign in: on your phone open {shown} and enter {code}, then press Refresh now here."
+msgstr "Iniciar sessão: no telemóvel, abra {shown} e introduza {code}; depois, prima Atualizar agora aqui."
+
+#: plugins/sdk/src/lib.rs
+msgid "The answer is larger than the 8 MB a plugin may read."
+msgstr "A resposta é maior do que os 8 MB que um plugin pode ler."
+
+#: plugins/sdk/src/lib.rs
+msgid "The plugin reached the most it may fetch in one refresh, so it stopped early. It tries again in a few minutes."
+msgstr "O plugin atingiu o máximo que pode obter numa atualização, por isso parou mais cedo. Volta a tentar dentro de alguns minutos."
+
+#: plugins/sdk/src/lib.rs
+msgid "The server at {address} answered with error {status}. Check the address, then try again."
+msgstr "O servidor em {address} respondeu com o erro {status}. Verifique o endereço e tente novamente."
+
+#: plugins/sdk/src/lib.rs
+msgid "The guide didn't come through, so the TV is showing the last one it had. It tries again in a few minutes."
+msgstr "O guia não chegou, por isso a TV mostra o último que tinha. Volta a tentar dentro de alguns minutos."
+
+#: plugins/sdk/src/lib.rs
+msgid "{service} didn't answer at {address}. Check the server, then try again."
+msgstr "{service} não respondeu em {address}. Verifique o servidor e tente novamente."
+
+#: plugins/sdk/src/lib.rs
+msgid "{service} at {address} answered with error {status}. Check the server, then try again."
+msgstr "{service} em {address} respondeu com o erro {status}. Verifique o servidor e tente novamente."
+
+#: plugins/sdk/src/lib.rs
+msgid "The server at {address} didn't answer like an {service} server. Check the server address in the plugin's settings."
+msgstr "O servidor em {address} não respondeu como um servidor {service}. Verifique o endereço do servidor nas definições do plugin."
+
+#: plugins/sdk/src/lib.rs
+msgid "The server at {address} didn't answer like a {service} server. Check the server address in the plugin's settings."
+msgstr "O servidor em {address} não respondeu como um servidor {service}. Verifique o endereço do servidor nas definições do plugin."
+
+#: plugins/sdk/src/lib.rs
+msgid "{service} at {address} sent a reply this plugin can't read."
+msgstr "{service} em {address} enviou uma resposta que este plugin não consegue ler."
+
+#: plugins/sdk/src/lib.rs
+msgid "{service} didn't answer. Check the TV's internet connection, then try again."
+msgstr "{service} não respondeu. Verifique a ligação da TV à Internet e tente novamente."
+
+#: plugins/sdk/src/lib.rs
+msgid "{service} answered with error {status}. Try again later."
+msgstr "{service} respondeu com o erro {status}. Tente novamente mais tarde."
+
+#. {label} names a setting, already translated, such as "server address". Word the sentence so the name can stand as it is, for example after a colon.
+#: plugins/sdk/src/lib.rs
+msgid "Add the {label} in the plugin's settings."
+msgstr "Preencha nas definições do plugin: {label}."

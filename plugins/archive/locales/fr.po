@@ -1,0 +1,60 @@
+# Lounge, archive: fr
+#
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#. names the service where a sentence starts with it, as in "The Internet Archive didn't answer."
+#: src/lib.rs
+msgid "The Internet Archive"
+msgstr "Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films on the Internet Archive"
+msgstr "Longs métrages sur Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films collection"
+msgstr "Collection de longs métrages"
+
+#: src/lib.rs
+msgid "Classic cartoons on the Internet Archive"
+msgstr "Dessins animés classiques sur Internet Archive"
+
+#: src/lib.rs
+msgid "Classic cartoons collection"
+msgstr "Collection de dessins animés"
+
+#: src/lib.rs
+msgid "Classic television on the Internet Archive"
+msgstr "Télévision classique sur Internet Archive"
+
+#: src/lib.rs
+msgid "Classic television collection"
+msgstr "Collection de télévision classique"
+
+#: src/lib.rs
+msgid "Free films, cartoons and television from archive.org, played on the TV."
+msgstr "Des films, des dessins animés et des émissions de télévision gratuits d’archive.org, lus sur la TV."
+
+#: src/lib.rs
+msgid "An archive.org collection id, the last part of its address, such as feature_films."
+msgstr "L’identifiant d’une collection archive.org, la dernière partie de son adresse, par exemple feature_films."
+
+#: src/lib.rs
+msgid "Items per row"
+msgstr "Éléments par rangée"
+
+#: src/lib.rs
+msgid "The Internet Archive has nothing in these collections. Check the collections in the plugin's settings."
+msgstr "Internet Archive n’a rien dans ces collections. Vérifiez les collections dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Cette vignette n’est plus à jour. Actualisez le plugin, puis réessayez."
+
+#: src/lib.rs
+msgid "This item has no video file the TV can play. Try another one."
+msgstr "Cet élément n’a aucun fichier vidéo que la TV peut lire. Essayez-en un autre."

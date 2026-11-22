@@ -1,7 +1,7 @@
 //! Home Assistant: the lights, scenes, blinds, heating and locks of the room this TV is in, the
 //! other rooms, the home's scenes and cameras, and a row that says how things stand around the
 //! home. A tile switches the thing it shows, and a sheet at the side adjusts it.
-use lounge_plugin_sdk::{self as sdk, host, Action, Ask, HttpRequest, HttpResponse, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec, Sheet, SheetRow};
+use lounge_plugin_sdk::{self as sdk, host, mark, t, tc, tn, Action, Ask, HttpRequest, HttpResponse, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec, Sheet, SheetRow};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{json, Value};
@@ -64,45 +64,45 @@ const SHEET_ROWS: usize = 60;
 /// A battery below this many percent is low.
 const LOW_BATTERY: f64 = 15.0;
 
-const REFUSED: &str = "Home Assistant didn't accept the access token. Check it in the plugin's settings, or make a new one.";
-const SIGNED_OUT: &str = "Home Assistant no longer accepts this TV's sign-in. Refresh the plugin to sign in again.";
-const SIGN_IN: &str = "Sign in to Home Assistant on your phone: scan the code on the plugin's page, or tap the link in the phone companion.";
-const SIGN_IN_AFTER: &str = "Sign in there as you do in Home Assistant. This TV carries on by itself.";
-const NO_COMPANION: &str = "To sign in on your phone, turn on Phone companion in Lounge's settings. Or paste an access token in this plugin's settings.";
-const BLOCKED: &str = "Home Assistant has blocked this TV after too many refused sign-ins. Remove the TV's address from ip_bans.yaml there, then restart Home Assistant.";
-const NOT_ALLOWED: &str = "Home Assistant lets this access token read the home but not control it. Use an administrator's token in the plugin's settings.";
-const TOO_LARGE: &str = "Home Assistant's list of devices is larger than the 8 MB a plugin may read, so this plugin can't show a home that large yet.";
-const NO_LABELS: &str = "Labels need Home Assistant 2024.4 or newer. Clear the label in the plugin's settings, or update Home Assistant.";
-const LABELS_NEED_ADMIN: &str = "Home Assistant lets only an administrator's access token read labels. Clear the label in the plugin's settings, or use an administrator's token.";
+const REFUSED: &str = mark!("Home Assistant didn't accept the access token. Check it in the plugin's settings, or make a new one.");
+const SIGNED_OUT: &str = mark!("Home Assistant no longer accepts this TV's sign-in. Refresh the plugin to sign in again.");
+const SIGN_IN: &str = mark!("Sign in to Home Assistant on your phone: scan the code on the plugin's page, or tap the link in the phone companion.");
+const SIGN_IN_AFTER: &str = mark!("Sign in there as you do in Home Assistant. This TV carries on by itself.");
+const NO_COMPANION: &str = mark!("To sign in on your phone, turn on Phone companion in Lounge's settings. Or paste an access token in this plugin's settings.");
+const BLOCKED: &str = mark!("Home Assistant has blocked this TV after too many refused sign-ins. Remove the TV's address from ip_bans.yaml there, then restart Home Assistant.");
+const NOT_ALLOWED: &str = mark!("Home Assistant lets this access token read the home but not control it. Use an administrator's token in the plugin's settings.");
+const TOO_LARGE: &str = mark!("Home Assistant's list of devices is larger than the 8 MB a plugin may read, so this plugin can't show a home that large yet.");
+const NO_LABELS: &str = mark!("Labels need Home Assistant 2024.4 or newer. Clear the label in the plugin's settings, or update Home Assistant.");
+const LABELS_NEED_ADMIN: &str = mark!("Home Assistant lets only an administrator's access token read labels. Clear the label in the plugin's settings, or use an administrator's token.");
 /// The error for a tile whose action this version of the plugin does not know.
-const OUT_OF_DATE: &str = "This tile is out of date. Refresh the plugin, then try again.";
+const OUT_OF_DATE: &str = mark!("This tile is out of date. Refresh the plugin, then try again.");
 
 fn no_label(label: &str) -> String {
-    format!("Home Assistant has no label called {}. Check the label in the plugin's settings.", brief(label))
+    t!("Home Assistant has no label called {label}. Check the label in the plugin's settings.", label = brief(label))
 }
 
 fn still_starting(base: &str) -> String {
-    format!("Home Assistant at {} is still starting. The tiles come back by themselves in a minute.", sdk::address(base))
+    t!("Home Assistant at {address} is still starting. The tiles come back by themselves in a minute.", address = sdk::address(base))
 }
 
 fn gone(name: &str) -> String {
-    format!("Home Assistant no longer has {}. If it was renamed there, its tile catches up in a few minutes.", brief(name))
+    t!("Home Assistant no longer has {name}. If it was renamed there, its tile catches up in a few minutes.", name = brief(name))
 }
 
 fn not_responding(name: &str) -> String {
-    format!("Home Assistant can't reach {}. Check its power and connection, then try again.", brief(name))
+    t!("Home Assistant can't reach {name}. Check its power and connection, then try again.", name = brief(name))
 }
 
 fn turned_down(name: &str) -> String {
-    format!("Home Assistant turned that down for {}. Check the device in Home Assistant.", brief(name))
+    t!("Home Assistant turned that down for {name}. Check the device in Home Assistant.", name = brief(name))
 }
 
 fn could_not(name: &str) -> String {
-    format!("Home Assistant couldn't get {} to do that. Check the device there, then try again.", brief(name))
+    t!("Home Assistant couldn't get {name} to do that. Check the device there, then try again.", name = brief(name))
 }
 
 fn still_working(name: &str) -> String {
-    format!("Home Assistant is still working on {}. Look at its tile in a moment.", brief(name))
+    t!("Home Assistant is still working on {name}. Look at its tile in a moment.", name = brief(name))
 }
 
 /// A name short enough to sit inside a sentence.
@@ -111,55 +111,57 @@ fn brief(name: &str) -> String {
 }
 
 impl sdk::Plugin for HomeAssistant {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.homeassistant".into(),
             name: "Home Assistant".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Lights, scenes, blinds, heating, locks and cameras from Home Assistant, starting with the room this TV is in.".into(),
+            description: t!("Lights, scenes, blinds, heating, locks and cameras from Home Assistant, starting with the room this TV is in."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into()],
             refresh_minutes: 5,
             refresh_seconds: 30,
             rows: vec![
-                RowSpec { id: HERE.into(), title: "This room".into(), style: RowStyle::Compact },
-                RowSpec { id: ROOMS.into(), title: "Rooms".into(), style: RowStyle::Compact },
-                RowSpec { id: SCENES.into(), title: "Scenes".into(), style: RowStyle::Compact },
-                RowSpec { id: CAMERAS.into(), title: "Cameras".into(), style: RowStyle::Landscape },
-                RowSpec { id: AROUND.into(), title: "Around the home".into(), style: RowStyle::Compact },
+                RowSpec { id: HERE.into(), title: t!("This room"), style: RowStyle::Compact },
+                RowSpec { id: ROOMS.into(), title: t!("Rooms"), style: RowStyle::Compact },
+                RowSpec { id: SCENES.into(), title: t!("Scenes"), style: RowStyle::Compact },
+                RowSpec { id: CAMERAS.into(), title: t!("Cameras"), style: RowStyle::Landscape },
+                RowSpec { id: AROUND.into(), title: t!("Around the home"), style: RowStyle::Compact },
             ],
             settings: vec![
                 SettingSpec {
                     key: "server".into(),
-                    label: "Home Assistant address".into(),
+                    label: t!("Home Assistant address"),
                     kind: SettingKind::Url,
                     required: true,
-                    help: Some("Like http://192.168.0.20:8123 or http://homeassistant.local:8123.".into()),
+                    help: Some(t!("Like http://192.168.0.20:8123 or http://homeassistant.local:8123.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "token".into(),
-                    label: "Access token".into(),
+                    label: t!("Access token"),
                     kind: SettingKind::Password,
                     required: false,
-                    help: Some("Leave it empty to sign in on your phone. Or make a long-lived access token in an administrator's Home Assistant profile, under Security, and paste it here.".into()),
+                    help: Some(t!("Leave it empty to sign in on your phone. Or make a long-lived access token in an administrator's Home Assistant profile, under Security, and paste it here.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "label".into(),
-                    label: "Label".into(),
+                    label: t!("Label"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("Shows only what carries this label in Home Assistant, on an entity, a device or a whole area. Left empty, everything shows.".into()),
+                    help: Some(t!("Shows only what carries this label in Home Assistant, on an entity, a device or a whole area. Left empty, everything shows.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "scripts".into(),
-                    label: "Scripts".into(),
+                    label: t!("Scripts"),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("Adds scripts to the Scenes row. Leave it off when most of yours are parts of automations.".into()),
+                    help: Some(t!("Adds scripts to the Scenes row. Leave it off when most of yours are parts of automations.")),
                     default: Some("false".into()),
                 },
             ],
@@ -167,6 +169,7 @@ impl sdk::Plugin for HomeAssistant {
             self_signed_servers: true,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -215,7 +218,7 @@ impl sdk::Plugin for HomeAssistant {
     fn resolve(action: &str) -> Result<Action, String> {
         let unknown = || {
             sdk::warn!("unknown action {action}");
-            OUT_OF_DATE.to_string()
+            sdk::tr(OUT_OF_DATE)
         };
         let press = Press::parse(action).ok_or_else(unknown)?;
         let now_ms = host::now_ms();
@@ -224,7 +227,7 @@ impl sdk::Plugin for HomeAssistant {
         }
         let server = Server::connect()?;
         if !matches!(press, Press::Camera(_)) && server.barred(host::kv_get_string(NO_CALLS_KEY).as_deref()) {
-            return Err(NOT_ALLOWED.into());
+            return Err(sdk::tr(NOT_ALLOWED));
         }
         let fresh = match press.entity().filter(|_| press.reads_first()) {
             Some(id) => {
@@ -247,8 +250,8 @@ impl sdk::Plugin for HomeAssistant {
             _ => plan(&press, fresh.as_ref()),
         }
         .ok_or_else(unknown)?;
-        let name = fresh.as_ref().map(Entity::name).or_else(|| press.entity().map(name_from_id)).unwrap_or_else(|| "the lights".into());
-        let changed = server.call(&call, &name, fresh.is_some())?;
+        let name = fresh.as_ref().map(Entity::name).or_else(|| press.entity().map(name_from_id));
+        let changed = server.call(&call, name.as_deref(), fresh.is_some())?;
         // A device that has not said what became of it is read again by the next sheet.
         let told = press.entity().is_some_and(|id| changed.iter().any(|e| e.id == id));
         Recent::note(fresh.into_iter().chain(changed).collect(), !told, now_ms);
@@ -261,7 +264,7 @@ impl sdk::Plugin for HomeAssistant {
     fn sheet(id: &str) -> Result<Sheet, String> {
         let unknown = || {
             sdk::warn!("unknown sheet {id}");
-            OUT_OF_DATE.to_string()
+            sdk::tr(OUT_OF_DATE)
         };
         let server = Server::connect()?;
         let now_ms = host::now_ms();
@@ -291,11 +294,11 @@ sdk::export_plugin!(HomeAssistant);
 fn choose_room(registry: &Registry, area: &str) -> Option<Action> {
     if area.is_empty() {
         host::kv_delete(HERE_KEY);
-        return Some(Action::default().said("This TV has no room"));
+        return Some(Action::default().said(t!("This TV has no room")));
     }
     let room = registry.areas.iter().find(|a| a.id == area)?;
     host::kv_set(HERE_KEY, area.as_bytes());
-    Some(Action::default().said(format!("This TV is in {}", room.shown_name())))
+    Some(Action::default().said(t!("This TV is in {room}", room = room.shown_name())))
 }
 
 /// What the person chose in the plugin's settings.
@@ -418,7 +421,7 @@ fn grant(base: &str, form: &[(&str, &str)]) -> Grant {
             sdk::warn!("HTTP {} for /auth/token: {}", response.status, said(&response.body));
             Grant::Ended
         }
-        403 => Grant::Failed(BLOCKED.into()),
+        403 => Grant::Failed(sdk::tr(BLOCKED)),
         404 => Grant::Failed(sdk::wrong_server(SERVICE, base)),
         status => Grant::Failed(sdk::answered_error(SERVICE, base, status)),
     }
@@ -485,11 +488,11 @@ impl Session {
             }
         }
         let Some(landing) = host::callback() else {
-            return Err(sdk::ask(Ask { say: NO_COMPANION.into(), ..Default::default() }));
+            return Err(sdk::ask(Ask { say: sdk::tr(NO_COMPANION), ..Default::default() }));
         };
         let started = Started::offer(kept, base, &landing, now_ms);
         host::kv_set(SIGN_IN_KEY, serde_json::to_string(&started).unwrap_or_default().as_bytes());
-        Err(sdk::ask(Ask { say: SIGN_IN.into(), link: Some(started.link()), code: None, after: Some(SIGN_IN_AFTER.into()), watch: true }))
+        Err(sdk::ask(Ask { say: sdk::tr(SIGN_IN), link: Some(started.link()), code: None, after: Some(sdk::tr(SIGN_IN_AFTER)), watch: true }))
     }
 }
 
@@ -545,7 +548,8 @@ impl Server {
     /// The server with the access token from the settings, or with a sign-in made on a phone
     /// when there is none.
     fn connect() -> Result<Server, String> {
-        let address = host::server_setting("server", "Home Assistant address")?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let address = host::server_setting("server", &tc!("in a sentence", "Home Assistant address"))?;
         let token = host::secret("token").filter(|token| !tidy_token(token).is_empty());
         if token.is_some() {
             return Server::open(&address, token.as_deref(), host::kv_get_string(REFUSED_KEY).as_deref());
@@ -559,10 +563,11 @@ impl Server {
     /// The server at `address` with the token as pasted. A sign-in Home Assistant has already
     /// refused is not sent again, since every refusal counts towards a ban of this TV.
     fn open(address: &str, token: Option<&str>, refused: Option<&str>) -> Result<Server, String> {
-        let token = token.map(tidy_token).filter(|t| !t.is_empty()).ok_or_else(|| sdk::not_set("access token"))?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let token = token.map(tidy_token).filter(|t| !t.is_empty()).ok_or_else(|| sdk::not_set(&t!("access token")))?;
         let server = Server { base: origin(address), auth: Auth::Token(token) };
         if server.barred(refused) {
-            return Err(REFUSED.into());
+            return Err(sdk::tr(REFUSED));
         }
         Ok(server)
     }
@@ -597,7 +602,7 @@ impl Server {
                 return Failure::Limit(e);
             }
             if e == host::TOO_LARGE {
-                return Failure::Limit(TOO_LARGE.into());
+                return Failure::Limit(sdk::tr(TOO_LARGE));
             }
             sdk::warn!("{e}");
             if e.contains("took too long") { Failure::Slow } else { Failure::Away }
@@ -616,13 +621,13 @@ impl Server {
             // A sign-in is renewed before the next request, and asked for again if that fails.
             Failure::Refused if matches!(self.auth, Auth::Session(..)) => {
                 Session::spend();
-                SIGNED_OUT.into()
+                sdk::tr(SIGNED_OUT)
             }
             Failure::Refused => {
                 host::kv_set(REFUSED_KEY, self.mark().as_bytes());
-                REFUSED.into()
+                sdk::tr(REFUSED)
             }
-            Failure::Blocked => BLOCKED.into(),
+            Failure::Blocked => sdk::tr(BLOCKED),
             Failure::Limit(why) => why,
         }
     }
@@ -678,12 +683,16 @@ impl Server {
         self.send(&self.request("POST", "/api/template", Some(body), 0))
     }
 
-    /// Makes the call and returns the states Home Assistant says it changed. `just_read` says
-    /// this sign-in read something a moment ago, so a refusal here is of the call alone.
-    fn call(&self, call: &Call, name: &str, just_read: bool) -> Result<Vec<Entity>, String> {
+    /// Makes the call and returns the states Home Assistant says it changed. `name` is the thing
+    /// it is made on, or nothing when it is made on many lights at once. `just_read` says this
+    /// sign-in read something a moment ago, so a refusal here is of the call alone.
+    fn call(&self, call: &Call, name: Option<&str>, just_read: bool) -> Result<Vec<Entity>, String> {
         let path = format!("/api/services/{}", call.service);
         let response = self.send(&self.request("POST", &path, Some(call.data.to_string()), PRESS_TIMEOUT_MS)).map_err(|failure| match failure {
-            Failure::Slow => still_working(name),
+            Failure::Slow => match name {
+                Some(name) => still_working(name),
+                None => t!("Home Assistant is still working on the lights. Look at its tile in a moment."),
+            },
             // A token that still reads may not make calls, which is remembered so it is not
             // refused again. One that reads nothing has been taken away. It is only asked which
             // when no read has just worked, since every refusal counts against this TV.
@@ -691,7 +700,7 @@ impl Server {
                 Some(Err(Failure::Refused)) => self.explain(Failure::Refused),
                 _ => {
                     host::kv_set(NO_CALLS_KEY, self.mark().as_bytes());
-                    NOT_ALLOWED.into()
+                    sdk::tr(NOT_ALLOWED)
                 }
             },
             other => self.explain(other),
@@ -700,11 +709,17 @@ impl Server {
             200 => Ok(read_states(&response.body).unwrap_or_default()),
             400..500 => {
                 sdk::warn!("HTTP {} for {path}: {}", response.status, said(&response.body));
-                Err(turned_down(name))
+                Err(match name {
+                    Some(name) => turned_down(name),
+                    None => t!("Home Assistant turned that down for the lights. Check the device in Home Assistant."),
+                })
             }
             status => {
                 sdk::warn!("HTTP {status} for {path}: {}", said(&response.body));
-                Err(could_not(name))
+                Err(match name {
+                    Some(name) => could_not(name),
+                    None => t!("Home Assistant couldn't get the lights to do that. Check the device there, then try again."),
+                })
             }
         }
     }
@@ -842,43 +857,43 @@ impl Domain {
     }
 
     /// What one is called when its own name says no more than its room's.
-    fn noun(self) -> &'static str {
+    fn noun(self) -> String {
         match self {
-            Domain::Scene => "Scene",
-            Domain::Script => "Script",
-            Domain::Light => "Light",
-            Domain::Cover => "Blind",
-            Domain::Climate => "Thermostat",
-            Domain::Fan => "Fan",
-            Domain::Media => "Speaker",
-            Domain::Switch | Domain::Toggle => "Switch",
-            Domain::Lock => "Lock",
-            Domain::Vacuum => "Vacuum",
-            Domain::Humidifier => "Humidifier",
-            Domain::WaterHeater => "Water heater",
-            Domain::Alarm => "Alarm",
-            Domain::Camera => "Camera",
-            Domain::Person => "Person",
-            Domain::Weather => "Weather",
-            Domain::BinarySensor | Domain::Sensor => "Sensor",
+            Domain::Scene => t!("Scene"),
+            Domain::Script => t!("Script"),
+            Domain::Light => tc!("device", "Light"),
+            Domain::Cover => tc!("device", "Blind"),
+            Domain::Climate => tc!("device", "Thermostat"),
+            Domain::Fan => tc!("device", "Fan"),
+            Domain::Media => tc!("device", "Speaker"),
+            Domain::Switch | Domain::Toggle => tc!("device", "Switch"),
+            Domain::Lock => tc!("device", "Lock"),
+            Domain::Vacuum => tc!("device", "Vacuum"),
+            Domain::Humidifier => tc!("device", "Humidifier"),
+            Domain::WaterHeater => tc!("device", "Water heater"),
+            Domain::Alarm => tc!("device", "Alarm"),
+            Domain::Camera => tc!("device", "Camera"),
+            Domain::Person => t!("Person"),
+            Domain::Weather => t!("Weather"),
+            Domain::BinarySensor | Domain::Sensor => tc!("device", "Sensor"),
         }
     }
 
-    /// The heading its rows sit under in a room's sheet.
+    /// The heading its rows sit under in a room's sheet, said with `sdk::tr` where it is shown.
     fn heading(self) -> &'static str {
         match self {
-            Domain::Scene | Domain::Script => "Scenes",
-            Domain::Light => "Lights",
-            Domain::Cover => "Blinds and doors",
-            Domain::Climate | Domain::Humidifier | Domain::WaterHeater => "Climate",
-            Domain::Fan => "Fans",
-            Domain::Media => "Speakers and TVs",
-            Domain::Switch | Domain::Toggle => "Switches",
-            Domain::Lock => "Locks",
-            Domain::Vacuum => "Vacuums",
-            Domain::Alarm => "Alarm",
-            Domain::Camera => "Cameras",
-            _ => "Sensors",
+            Domain::Scene | Domain::Script => mark!("Scenes"),
+            Domain::Light => mark!("Lights"),
+            Domain::Cover => mark!("Blinds and doors"),
+            Domain::Climate | Domain::Humidifier | Domain::WaterHeater => mark!("Climate"),
+            Domain::Fan => mark!("Fans"),
+            Domain::Media => mark!("Speakers and TVs"),
+            Domain::Switch | Domain::Toggle => mark!("Switches"),
+            Domain::Lock => mark!("Locks"),
+            Domain::Vacuum => mark!("Vacuums"),
+            Domain::Alarm => mark!("Alarm"),
+            Domain::Camera => mark!("Cameras"),
+            _ => mark!("Sensors"),
         }
     }
 }
@@ -1414,7 +1429,7 @@ impl Registry {
         let as_before = |registry: Registry| Ok((kept.clone().filter(|r| r.sig == sig).unwrap_or(registry), false));
         match rendered {
             Ok(response) if response.status == 200 => match serde_json::from_str::<Rendered>(&response.body) {
-                Ok(rendered) if !label.is_empty() && !rendered.labels => return Err(NO_LABELS.into()),
+                Ok(rendered) if !label.is_empty() && !rendered.labels => return Err(sdk::tr(NO_LABELS)),
                 Ok(rendered) if !label.is_empty() && !rendered.label_found => return Err(no_label(label)),
                 Ok(rendered) => registry.take(rendered),
                 Err(e) => {
@@ -1426,7 +1441,7 @@ impl Registry {
             Ok(response) if response.status == 400 => {
                 sdk::warn!("the plain rooms template was turned down: {}", said(&response.body));
                 if !label.is_empty() {
-                    return Err(NO_LABELS.into());
+                    return Err(sdk::tr(NO_LABELS));
                 }
             }
             Ok(response) => {
@@ -1440,11 +1455,11 @@ impl Registry {
                     host::kv_set(NO_ADMIN_KEY, server.mark().as_bytes());
                 }
                 if !label.is_empty() {
-                    return Err(LABELS_NEED_ADMIN.into());
+                    return Err(sdk::tr(LABELS_NEED_ADMIN));
                 }
                 registry.mode = Mode::NoAdmin;
             }
-            Err(Failure::Blocked) => return Err(BLOCKED.into()),
+            Err(Failure::Blocked) => return Err(sdk::tr(BLOCKED)),
             Err(_) => return as_before(registry),
         }
         if let Some(bytes) = registry.stored(&read.iter().map(|e| e.id.as_str()).collect()) {
@@ -1672,20 +1687,17 @@ impl Home {
     /// A room in a line: "2 lights on, 21°".
     fn summary(&self, room: Option<usize>) -> String {
         let lamps = self.lamps(self.within(room));
-        let mut facts = Vec::new();
-        if !lamps.is_empty() {
-            facts.push(match lamps.iter().filter(|t| t.e.is_on()).count() {
-                0 => "Lights off".to_string(),
-                on => format!("{} on", counted(on, "light")),
-            });
+        let lights = (!lamps.is_empty()).then(|| match lamps.iter().filter(|t| t.e.is_on()).count() {
+            0 => t!("Lights off"),
+            on => tn!(on, "{n} light on", "{n} lights on"),
+        });
+        let temperature = room.and_then(|i| self.rooms[i].temperature).map(|reading| degrees(reading, self.fahrenheit));
+        match (lights, temperature) {
+            // Translators: {lights} says how many lights are on, as in "2 lights on", and {temperature} how warm the room is, as in 21°.
+            (Some(lights), Some(temperature)) => t!("{lights}, {temperature}", lights = lights, temperature = temperature),
+            (Some(only), None) | (None, Some(only)) => only,
+            (None, None) => tn!(self.devices(room).count(), "{n} device", "{n} devices"),
         }
-        if let Some(reading) = room.and_then(|i| self.rooms[i].temperature) {
-            facts.push(degrees(reading, self.fahrenheit));
-        }
-        if facts.is_empty() {
-            facts.push(counted(self.devices(room).count(), "device"));
-        }
-        facts.join(", ")
     }
 
     /// The line for the plugin's log: "7 rooms, 41 devices, 5 lights on".
@@ -1769,13 +1781,13 @@ fn short_name(name: &str, room: Option<&str>, e: &Entity) -> String {
         return capitalised(rest);
     }
     match e.domain() {
-        Domain::Light if e.is_group() => "Lights".into(),
-        Domain::Media if e.class() == "tv" => "TV".into(),
-        domain => domain.noun().into(),
+        Domain::Light if e.is_group() => t!("Lights"),
+        Domain::Media if e.class() == "tv" => t!("TV"),
+        domain => domain.noun(),
     }
 }
 
-/// "1 light", "3 lights".
+/// "1 light", "3 lights", as the log counts them.
 fn counted(count: usize, noun: &str) -> String {
     format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
 }
@@ -1786,12 +1798,13 @@ fn degrees(temperature: f64, fahrenheit: bool) -> String {
     let tenths = if fahrenheit { temperature.round() * 10.0 } else { (temperature * 10.0).round() };
     let (whole, tenth) = ((tenths.abs() / 10.0).trunc() as i64, (tenths.abs() % 10.0).round() as i64);
     let sign = if tenths < 0.0 { "\u{2212}" } else { "" };
-    if tenth == 0 { format!("{sign}{whole}°") } else { format!("{sign}{whole}.{tenth}°") }
+    if tenth == 0 { format!("{sign}{whole}°") } else { format!("{sign}{}°", sdk::words::decimal(tenths.abs() / 10.0, 1)) }
 }
 
 /// A share of a whole as "60%".
 fn percent(value: f64) -> String {
-    format!("{}%", value.round() as i64)
+    // Translators: {share} is a whole number, as in 60%.
+    t!("{share}%", share = value.round() as i64)
 }
 
 /// A lamp's brightness, which Home Assistant counts to 255, as a share. A lit lamp is never at 0%.
@@ -1799,23 +1812,95 @@ fn level(brightness: f64) -> String {
     percent((brightness / 255.0 * 100.0).max(1.0))
 }
 
-/// A length of time in the largest unit that fits: "40 minutes", "1 hour", "3 days".
+/// How long a thing has stood as it does, in the largest unit that fits: "For 40 minutes",
+/// "For 1 hour", "For 3 days".
 fn span(ms: i64) -> String {
     let minutes = (ms / 60_000).max(1);
-    let (count, unit) = match minutes {
-        ..60 => (minutes, "minute"),
-        60..2_880 => (minutes / 60, "hour"),
-        _ => (minutes / 1_440, "day"),
-    };
-    format!("{count} {unit}{}", if count == 1 { "" } else { "s" })
+    match minutes {
+        // Translators: how long a door has been open or a lock unlocked.
+        ..60 => tn!(minutes, "For {n} minute", "For {n} minutes"),
+        // Translators: how long a door has been open or a lock unlocked.
+        60..2_880 => tn!(minutes / 60, "For {n} hour", "For {n} hours"),
+        // Translators: how long a door has been open or a lock unlocked.
+        _ => tn!(minutes / 1_440, "For {n} day", "For {n} days"),
+    }
 }
 
-/// One of Home Assistant's own words, such as "heat_cool" or "fan_only", as people read it.
+/// One of Home Assistant's own words for a state or a mode, such as "heat_cool" or "fan_only",
+/// as people read it. A word a device made up is shown as it came, tidied.
 fn worded(value: &str) -> String {
-    match value {
-        "heat_cool" => "Heat and cool".into(),
-        other => capitalised(&other.replace('_', " ")),
-    }
+    known(value, false).unwrap_or_else(|| plain(value))
+}
+
+/// The same word as it follows a comma: "heat" in "Kitchen, heat".
+fn worded_after(value: &str) -> String {
+    known(value, true).unwrap_or_else(|| uncapitalised(&plain(value)))
+}
+
+/// A word as it came, with spaces for its underscores and a capital first.
+fn plain(value: &str) -> String {
+    capitalised(&value.replace('_', " "))
+}
+
+/// The wording for a state or a mode Home Assistant itself names. `after` asks for the one that
+/// follows a comma.
+fn known(value: &str, after: bool) -> Option<String> {
+    Some(match value {
+        "on" => if after { tc!("state, after a comma", "on") } else { tc!("state", "On") },
+        "off" => if after { tc!("state, after a comma", "off") } else { tc!("state", "Off") },
+        "unknown" => if after { tc!("state, after a comma", "unknown") } else { tc!("state", "Unknown") },
+        "open" => if after { tc!("state, after a comma", "open") } else { tc!("state", "Open") },
+        "closed" => if after { tc!("state, after a comma", "closed") } else { tc!("state", "Closed") },
+        "opening" => if after { tc!("state, after a comma", "opening") } else { tc!("state", "Opening") },
+        "closing" => if after { tc!("state, after a comma", "closing") } else { tc!("state", "Closing") },
+        "locked" => if after { tc!("state, after a comma", "locked") } else { tc!("state", "Locked") },
+        "unlocked" => if after { tc!("state, after a comma", "unlocked") } else { tc!("state", "Unlocked") },
+        "locking" => if after { tc!("state, after a comma", "locking") } else { tc!("state", "Locking") },
+        "unlocking" => if after { tc!("state, after a comma", "unlocking") } else { tc!("state", "Unlocking") },
+        "jammed" => if after { tc!("state, after a comma", "jammed") } else { tc!("state", "Jammed") },
+        "playing" => if after { tc!("state, after a comma", "playing") } else { tc!("state", "Playing") },
+        "paused" => if after { tc!("state, after a comma", "paused") } else { tc!("state", "Paused") },
+        "idle" => if after { tc!("state, after a comma", "idle") } else { tc!("state", "Idle") },
+        "standby" => if after { tc!("state, after a comma", "standby") } else { tc!("state", "Standby") },
+        "buffering" => if after { tc!("state, after a comma", "buffering") } else { tc!("state", "Buffering") },
+        "cleaning" => if after { tc!("state, after a comma", "cleaning") } else { tc!("state", "Cleaning") },
+        "docked" => if after { tc!("state, after a comma", "docked") } else { tc!("state", "Docked") },
+        "disarmed" => if after { tc!("state, after a comma", "disarmed") } else { tc!("state", "Disarmed") },
+        "arming" => if after { tc!("state, after a comma", "arming") } else { tc!("state", "Arming") },
+        "disarming" => if after { tc!("state, after a comma", "disarming") } else { tc!("state", "Disarming") },
+        "triggered" => if after { tc!("state, after a comma", "triggered") } else { tc!("state", "Triggered") },
+        "recording" => if after { tc!("state, after a comma", "recording") } else { tc!("state", "Recording") },
+        "streaming" => if after { tc!("state, after a comma", "streaming") } else { tc!("state", "Streaming") },
+        "heat" => if after { tc!("mode, after a comma", "heat") } else { tc!("mode", "Heat") },
+        "cool" => if after { tc!("mode, after a comma", "cool") } else { tc!("mode", "Cool") },
+        "heat_cool" => if after { tc!("mode, after a comma", "heat and cool") } else { tc!("mode", "Heat and cool") },
+        "auto" => if after { tc!("mode, after a comma", "auto") } else { tc!("mode", "Auto") },
+        "dry" => if after { tc!("mode, after a comma", "dry") } else { tc!("mode", "Dry") },
+        "fan_only" => if after { tc!("mode, after a comma", "fan only") } else { tc!("mode", "Fan only") },
+        "none" => if after { tc!("mode, after a comma", "none") } else { tc!("mode", "None") },
+        "eco" => if after { tc!("mode, after a comma", "eco") } else { tc!("mode", "Eco") },
+        "away" => if after { tc!("mode, after a comma", "away") } else { tc!("mode", "Away") },
+        "boost" => if after { tc!("mode, after a comma", "boost") } else { tc!("mode", "Boost") },
+        "comfort" => if after { tc!("mode, after a comma", "comfort") } else { tc!("mode", "Comfort") },
+        "home" => if after { tc!("mode, after a comma", "home") } else { tc!("mode", "Home") },
+        "sleep" => if after { tc!("mode, after a comma", "sleep") } else { tc!("mode", "Sleep") },
+        "activity" => if after { tc!("mode, after a comma", "activity") } else { tc!("mode", "Activity") },
+        "low" => if after { tc!("mode, after a comma", "low") } else { tc!("mode", "Low") },
+        "medium" => if after { tc!("mode, after a comma", "medium") } else { tc!("mode", "Medium") },
+        "high" => if after { tc!("mode, after a comma", "high") } else { tc!("mode", "High") },
+        "top" => if after { tc!("mode, after a comma", "top") } else { tc!("mode", "Top") },
+        "middle" => if after { tc!("mode, after a comma", "middle") } else { tc!("mode", "Middle") },
+        "focus" => if after { tc!("mode, after a comma", "focus") } else { tc!("mode", "Focus") },
+        "diffuse" => if after { tc!("mode, after a comma", "diffuse") } else { tc!("mode", "Diffuse") },
+        "electric" => if after { tc!("mode, after a comma", "electric") } else { tc!("mode", "Electric") },
+        "performance" => if after { tc!("mode, after a comma", "performance") } else { tc!("mode", "Performance") },
+        "high_demand" => if after { tc!("mode, after a comma", "high demand") } else { tc!("mode", "High demand") },
+        "heat_pump" => if after { tc!("mode, after a comma", "heat pump") } else { tc!("mode", "Heat pump") },
+        "gas" => if after { tc!("mode, after a comma", "gas") } else { tc!("mode", "Gas") },
+        "normal" => if after { tc!("mode, after a comma", "normal") } else { tc!("mode", "Normal") },
+        "baby" => if after { tc!("mode, after a comma", "baby") } else { tc!("mode", "Baby") },
+        _ => return None,
+    })
 }
 
 /// The names once each, in the order they first come.
@@ -1832,90 +1917,152 @@ fn once_each(names: impl Iterator<Item = String>) -> Vec<String> {
 /// A list of names for a second line: "Ana and Ben", "Kitchen, Hall, Office".
 fn listed(names: &[String]) -> String {
     match names {
-        [one, two] => format!("{one} and {two}"),
-        _ => names.join(", "),
+        [_, _] => sdk::words::list(names),
+        _ => commas(names),
     }
+}
+
+/// Names with a comma between each: "Kitchen, Hall, Office".
+fn commas(names: &[String]) -> String {
+    let mut rest = names.iter();
+    let Some(first) = rest.next() else { return String::new() };
+    // Translators: two names in a list, as in "Kitchen, Hall, Office".
+    rest.fold(first.clone(), |said, next| t!("{first}, {next}", first = said, next = next))
 }
 
 /// How a thing stands, as a tile's second line. A device that does not answer says so whatever it is.
 fn line(e: &Entity, fahrenheit: bool) -> String {
+    stands(e, fahrenheit, false)
+}
+
+/// The same as it follows a room's name and a comma: "on, 60%" in "Kitchen, on, 60%".
+fn line_after(e: &Entity, fahrenheit: bool) -> String {
+    stands(e, fahrenheit, true)
+}
+
+/// How a thing stands, worded to stand alone or, with `after`, to follow a comma.
+fn stands(e: &Entity, fahrenheit: bool, after: bool) -> String {
     if e.unavailable() {
-        return "Not responding".into();
+        return if after { tc!("after a comma", "not responding") } else { t!("Not responding") };
     }
     let a = &e.a;
     let state = e.state.as_str();
+    let word = |value: &str| if after { worded_after(value) } else { worded(value) };
     let temperature = |t: f64| degrees(t, fahrenheit);
     match e.domain() {
         Domain::Light => match (state, a.brightness.filter(|_| e.dimmable())) {
-            ("on", Some(brightness)) => format!("On, {}", level(brightness)),
-            _ => worded(state),
+            ("on", Some(brightness)) => on_at(&level(brightness), after),
+            _ => word(state),
         },
         Domain::Fan => match (state, a.percentage, a.preset_mode.as_deref()) {
-            ("on", _, Some(preset)) => format!("On, {}", uncapitalised(&worded(preset))),
-            ("on", Some(speed), _) => format!("On, {}", percent(speed)),
-            _ => worded(state),
+            // Translators: {mode} is a fan's mode, such as "auto".
+            ("on", _, Some(preset)) => if after { tc!("after a comma", "on, {mode}", mode = worded_after(preset)) } else { t!("On, {mode}", mode = worded_after(preset)) },
+            ("on", Some(speed), _) => on_at(&percent(speed), after),
+            _ => word(state),
         },
         Domain::Cover => match (state, a.current_position) {
-            ("opening" | "closing", _) => worded(state),
-            ("open", Some(position)) if position > 0.0 && position < 100.0 => format!("{} open", percent(position)),
-            _ => worded(state),
+            ("opening" | "closing", _) => word(state),
+            // Translators: how far a blind is open, as in "40% open".
+            ("open", Some(position)) if position > 0.0 && position < 100.0 => if after { tc!("after a comma", "{position} open", position = percent(position)) } else { t!("{position} open", position = percent(position)) },
+            _ => word(state),
         },
-        Domain::Climate => {
-            let now = a.current_temperature.map(temperature);
-            let doing = match a.hvac_action.as_deref() {
-                Some("heating" | "preheating") => "heating to",
-                Some("cooling") => "cooling to",
-                _ => "set to",
-            };
-            let aim = match (a.target_temp_low, a.target_temp_high, a.temperature) {
-                (Some(low), Some(high), _) => Some(format!("{} to {}", temperature(low), temperature(high))),
-                (_, _, Some(target)) => Some(format!("{doing} {}", temperature(target))),
-                _ => None,
-            };
-            match (state, now, aim) {
-                ("off", Some(now), _) => format!("Off, {now}"),
-                ("off", None, _) => "Off".into(),
-                (_, Some(now), Some(aim)) => format!("{now}, {aim}"),
-                (_, Some(now), None) => now,
-                (_, None, Some(aim)) => capitalised(&aim),
-                _ => worded(state),
-            }
-        }
+        Domain::Climate => climate_line(e, fahrenheit, after),
         Domain::Media => match (state, a.media_title.as_deref().map(str::trim).filter(|title| !title.is_empty())) {
-            ("playing" | "paused", Some(title)) => format!("{}, {title}", worded(state)),
-            _ => worded(state),
+            // Translators: {title} is what a speaker or a TV is playing.
+            ("playing", Some(title)) => if after { tc!("after a comma", "playing, {title}", title = title) } else { t!("Playing, {title}", title = title) },
+            // Translators: {title} is what a speaker or a TV was playing when it was paused.
+            ("paused", Some(title)) => if after { tc!("after a comma", "paused, {title}", title = title) } else { t!("Paused, {title}", title = title) },
+            _ => word(state),
         },
         Domain::Vacuum => match state {
-            "returning" => "Going home".into(),
-            "error" => "Needs attention".into(),
-            _ => worded(state),
+            // Translators: a robot vacuum on its way back to its dock.
+            "returning" => if after { tc!("after a comma", "going home") } else { t!("Going home") },
+            "error" => if after { tc!("after a comma", "needs attention") } else { t!("Needs attention") },
+            _ => word(state),
         },
-        Domain::Scene => "Scene".into(),
-        Domain::Script => if state == "on" { "Running" } else { "Script" }.into(),
+        Domain::Scene => if after { tc!("after a comma", "scene") } else { t!("Scene") },
+        // Translators: a script that is running now.
+        Domain::Script if state == "on" => if after { tc!("after a comma", "running") } else { t!("Running") },
+        Domain::Script => if after { tc!("after a comma", "script") } else { t!("Script") },
         Domain::Humidifier => match (state, a.current_humidity, a.humidity) {
-            ("off", ..) => "Off".into(),
-            (_, Some(now), Some(target)) => format!("{}, set to {}", percent(now), percent(target)),
-            (_, None, Some(target)) => format!("Set to {}", percent(target)),
-            _ => worded(state),
+            ("off", ..) => word("off"),
+            (_, now, Some(target)) => set_to(now.map(percent), &percent(target), after),
+            _ => word(state),
         },
         Domain::WaterHeater => match (state, a.current_temperature, a.temperature) {
-            ("off", ..) => "Off".into(),
-            (_, Some(now), Some(target)) => format!("{}, set to {}", temperature(now), temperature(target)),
-            (_, None, Some(target)) => format!("Set to {}", temperature(target)),
-            _ => worded(state),
+            ("off", ..) => word("off"),
+            (_, now, Some(target)) => set_to(now.map(temperature), &temperature(target), after),
+            _ => word(state),
         },
         Domain::Alarm => match state {
-            "armed_home" | "armed_away" | "armed_night" | "armed_vacation" => format!("Armed, {}", &state[6..]),
-            "armed_custom_bypass" => "Armed".into(),
-            "pending" => "Entry delay".into(),
-            _ => worded(state),
+            // Translators: an alarm armed in its mode for when people are at home.
+            "armed_home" => if after { tc!("after a comma", "armed, home") } else { t!("Armed, home") },
+            // Translators: an alarm armed in its mode for when everyone is out.
+            "armed_away" => if after { tc!("after a comma", "armed, away") } else { t!("Armed, away") },
+            // Translators: an alarm armed in its mode for the night.
+            "armed_night" => if after { tc!("after a comma", "armed, night") } else { t!("Armed, night") },
+            // Translators: an alarm armed in its mode for when the home is left for days.
+            "armed_vacation" => if after { tc!("after a comma", "armed, vacation") } else { t!("Armed, vacation") },
+            "armed_custom_bypass" => if after { tc!("state, after a comma", "armed") } else { tc!("state", "Armed") },
+            // Translators: an alarm counting down before it sounds, so the person coming in can disarm it.
+            "pending" => if after { tc!("after a comma", "entry delay") } else { t!("Entry delay") },
+            _ => word(state),
         },
         Domain::Person => match state {
-            "home" => "Home".into(),
-            "not_home" => "Away".into(),
-            zone => worded(zone),
+            "home" => if after { tc!("presence, after a comma", "home") } else { tc!("presence", "Home") },
+            "not_home" => if after { tc!("presence, after a comma", "away") } else { tc!("presence", "Away") },
+            // Anywhere else is a zone, named as the home named it.
+            zone => if after { uncapitalised(&plain(zone)) } else { plain(zone) },
         },
-        _ => worded(state),
+        _ => word(state),
+    }
+}
+
+/// "On, 60%" for a lamp's brightness or a fan's speed.
+fn on_at(level: &str, after: bool) -> String {
+    // Translators: {level} is a lamp's brightness or a fan's speed, such as 60%.
+    if after { tc!("after a comma", "on, {level}", level = level) } else { t!("On, {level}", level = level) }
+}
+
+/// "45%, set to 50%", or "Set to 50%" where there is no reading.
+fn set_to(now: Option<String>, target: &str, after: bool) -> String {
+    match now {
+        // Translators: {now} is a reading and {target} what the device is set to: temperatures such as 21°, or humidities such as 50%.
+        Some(now) => if after { tc!("after a comma", "{now}, set to {target}", now = now, target = target) } else { t!("{now}, set to {target}", now = now, target = target) },
+        // Translators: {target} is what a device is set to: a temperature such as 21°, or a humidity such as 50%.
+        None => if after { tc!("after a comma", "set to {target}", target = target) } else { t!("Set to {target}", target = target) },
+    }
+}
+
+/// A thermostat's line: how warm it is, and what it is set to or is doing about it.
+fn climate_line(e: &Entity, fahrenheit: bool, after: bool) -> String {
+    let a = &e.a;
+    let temperature = |t: f64| degrees(t, fahrenheit);
+    let now = a.current_temperature.map(temperature);
+    let between = a.target_temp_low.zip(a.target_temp_high).map(|(low, high)| (temperature(low), temperature(high)));
+    let doing = a.hvac_action.as_deref();
+    match (e.state.as_str(), now, between, a.temperature.map(temperature)) {
+        // Translators: a thermostat that is off, and {now} is how warm the room is, such as 19°.
+        ("off", Some(now), ..) => if after { tc!("after a comma", "off, {now}", now = now) } else { t!("Off, {now}", now = now) },
+        ("off", None, ..) => if after { worded_after("off") } else { worded("off") },
+        // Translators: {now} is how warm the room is, and the thermostat keeps it between {low} and {high}.
+        (_, Some(now), Some((low, high)), _) => if after { tc!("after a comma", "{now}, {low} to {high}", now = now, low = low, high = high) } else { t!("{now}, {low} to {high}", now = now, low = low, high = high) },
+        (_, Some(now), None, Some(target)) => match doing {
+            // Translators: {now} is how warm the room is and {target} how warm the thermostat is making it.
+            Some("heating" | "preheating") => if after { tc!("after a comma", "{now}, heating to {target}", now = now, target = target) } else { t!("{now}, heating to {target}", now = now, target = target) },
+            // Translators: {now} is how warm the room is and {target} how cool the thermostat is making it.
+            Some("cooling") => if after { tc!("after a comma", "{now}, cooling to {target}", now = now, target = target) } else { t!("{now}, cooling to {target}", now = now, target = target) },
+            _ => set_to(Some(now), &target, after),
+        },
+        (_, Some(now), None, None) => now,
+        // Translators: the two temperatures a thermostat keeps the room between.
+        (_, None, Some((low, high)), _) => if after { tc!("after a comma", "{low} to {high}", low = low, high = high) } else { t!("{low} to {high}", low = low, high = high) },
+        (_, None, None, Some(target)) => match doing {
+            Some("heating" | "preheating") => if after { tc!("after a comma", "heating to {target}", target = target) } else { t!("Heating to {target}", target = target) },
+            Some("cooling") => if after { tc!("after a comma", "cooling to {target}", target = target) } else { t!("Cooling to {target}", target = target) },
+            _ => set_to(None, &target, after),
+        },
+        (state, None, None, None) => if after { worded_after(state) } else { worded(state) },
     }
 }
 
@@ -1954,22 +2101,23 @@ fn glyph(e: &Entity) -> &'static str {
     }
 }
 
-/// The weather in a couple of words, for the conditions Home Assistant names.
+/// The weather in a couple of words, for the conditions Home Assistant names, said with
+/// `sdk::tr` where it is shown.
 fn sky(condition: &str) -> Option<&'static str> {
     Some(match condition {
-        "clear-night" => "Clear",
-        "cloudy" => "Cloudy",
-        "fog" => "Fog",
-        "hail" => "Hail",
-        "lightning" => "Thunderstorm",
-        "lightning-rainy" => "Thunder and rain",
-        "partlycloudy" => "Partly cloudy",
-        "pouring" => "Heavy rain",
-        "rainy" => "Rain",
-        "snowy" => "Snow",
-        "snowy-rainy" => "Sleet",
-        "sunny" => "Sunny",
-        "windy" | "windy-variant" => "Windy",
+        "clear-night" => mark!("Clear"),
+        "cloudy" => mark!("Cloudy"),
+        "fog" => mark!("Fog"),
+        "hail" => mark!("Hail"),
+        "lightning" => mark!("Thunderstorm"),
+        "lightning-rainy" => mark!("Thunder and rain"),
+        "partlycloudy" => mark!("Partly cloudy"),
+        "pouring" => mark!("Heavy rain"),
+        "rainy" => mark!("Rain"),
+        "snowy" => mark!("Snow"),
+        "snowy-rainy" => mark!("Sleet"),
+        "sunny" => mark!("Sunny"),
+        "windy" | "windy-variant" => mark!("Windy"),
         _ => return None,
     })
 }
@@ -2063,17 +2211,18 @@ impl Home {
             (Mode::Rooms, Some(i)) => {
                 let room = &self.rooms[i];
                 let lit = self.lamps(self.within(Some(i))).iter().any(|t| t.e.is_on());
-                let whole = Item { action: Action::sheet(format!("room:{}", room.id)), row_title: Some(room.name.clone()), on: Some(lit), ..tile(HERE, "Whole room", Some(self.summary(Some(i))), "home") };
+                let whole = Item { action: Action::sheet(format!("room:{}", room.id)), row_title: Some(room.name.clone()), on: Some(lit), ..tile(HERE, t!("Whole room"), Some(self.summary(Some(i))), "home") };
                 let scenes = self.scenes(Some(i)).take(SCENES_FIRST);
                 let devices = self.devices(Some(i)).filter(|t| t.e.domain().tiled());
                 std::iter::once(whole).chain(scenes.chain(devices).map(|t| self.tile(t, &t.name))).collect()
             }
-            (Mode::Rooms, None) => vec![Item { action: Action::sheet(ROOMS), ..tile(HERE, "Choose this room", Some("See its lights here".into()), "home") }],
+            (Mode::Rooms, None) => vec![Item { action: Action::sheet(ROOMS), ..tile(HERE, t!("Choose this room"), Some(t!("See its lights here")), "home") }],
             (mode, _) => {
                 let mut row: Vec<Item> = self.things.iter().filter(|t| t.e.domain().tiled() && !t.extra).map(|t| self.tile(t, &t.name)).collect();
                 row.truncate(ROW_TILES - 1);
-                let (title, why) = if mode == Mode::NoAdmin { ("No rooms shown", "Needs an admin token") } else { ("No rooms yet", "Areas show as rooms") };
-                row.push(Item { row_title: Some("Home".into()), ..tile("norooms", title, Some(why.into()), "home") });
+                let (title, why) = if mode == Mode::NoAdmin { (t!("No rooms shown"), t!("Needs an admin token")) } else { (t!("No rooms yet"), t!("Areas show as rooms")) };
+                // Translators: the title of the row that shows the whole home when it has no rooms.
+                row.push(Item { row_title: Some(tc!("the whole home", "Home")), ..tile("norooms", title, Some(why), "home") });
                 row
             }
         }
@@ -2096,10 +2245,10 @@ impl Home {
         }
         let loose = self.devices(None).count();
         if loose > 0 {
-            row.push(Item { action: Action::sheet("room:"), ..tile("room:", "Not in a room", Some(counted(loose, "device")), "home") });
+            row.push(Item { action: Action::sheet("room:"), ..tile("room:", t!("Not in a room"), Some(tn!(loose, "{n} device", "{n} devices")), "home") });
         }
         if let (Some(first), Some(_)) = (row.first_mut(), self.here) {
-            first.row_title = Some("Other rooms".into());
+            first.row_title = Some(t!("Other rooms"));
         }
         row
     }
@@ -2131,7 +2280,7 @@ impl Home {
             .take(CAMERA_TILES)
             .map(|t| {
                 let (action, _) = press_of(&t.e);
-                let words = if t.e.unavailable() { Some("Not responding".to_string()) } else { self.room_name(t).map(str::to_string) };
+                let words = if t.e.unavailable() { Some(t!("Not responding")) } else { self.room_name(t).map(str::to_string) };
                 Item { id: format!("e:{}", t.e.id), title: t.e.name(), subtitle: words, thumbnail: camera_picture(base, &t.e, true).filter(|_| !t.e.unavailable()), action, ..Default::default() }
             })
             .collect()
@@ -2144,7 +2293,7 @@ impl Home {
 
     /// How long a thing has stood as it does: "For 12 minutes".
     fn how_long(&self, t: &Thing) -> Option<String> {
-        t.e.changed_ms.filter(|&since| since <= self.now_ms).map(|since| format!("For {}", span(self.now_ms - since)))
+        t.e.changed_ms.filter(|&since| since <= self.now_ms).map(|since| span(self.now_ms - since))
     }
 
     fn alerts(&self, classes: &[&str]) -> Vec<&Thing> {
@@ -2177,15 +2326,16 @@ impl Home {
         let smoke = self.alerts(&SMOKE);
         if let Some(first) = smoke.first() {
             let what = match first.e.class() {
-                "gas" => "Gas detected",
-                "carbon_monoxide" => "CO detected",
-                _ => "Smoke detected",
+                "gas" => t!("Gas detected"),
+                // Translators: CO is carbon monoxide.
+                "carbon_monoxide" => t!("CO detected"),
+                _ => t!("Smoke detected"),
             };
             row.push(Item { on: Some(true), ..tile("smoke", what, Some(places(&smoke)), "smoke") });
         }
         let leaks = self.alerts(&["moisture"]);
         if !leaks.is_empty() {
-            row.push(Item { on: Some(true), ..tile("leak", "Water leak", Some(places(&leaks)), "drop") });
+            row.push(Item { on: Some(true), ..tile("leak", t!("Water leak"), Some(places(&leaks)), "drop") });
         }
         row.extend(self.of(Domain::Alarm).map(|t| self.tile(t, &t.e.name())));
 
@@ -2193,9 +2343,10 @@ impl Home {
         if !locks.is_empty() {
             let undone: Vec<&Thing> = locks.iter().copied().filter(|t| t.e.state != "locked").collect();
             let (title, words) = match undone[..] {
-                [] => ("All locked".to_string(), Some(counted(locks.len(), "lock"))),
-                [one] => (format!("{} {}", one.e.name(), uncapitalised(&line(&one.e, false))), self.how_long(one)),
-                _ => (format!("{} unlocked", counted(undone.len(), "lock")), Some(listed(&undone.iter().map(|t| t.e.name()).collect::<Vec<_>>()))),
+                // Translators: every lock in the home is locked.
+                [] => (t!("All locked"), Some(tn!(locks.len(), "{n} lock", "{n} locks"))),
+                [one] => (unlocked_title(&one.e), self.how_long(one)),
+                _ => (tn!(undone.len(), "{n} lock unlocked", "{n} locks unlocked"), Some(listed(&undone.iter().map(|t| t.e.name()).collect::<Vec<_>>()))),
             };
             row.push(Item { on: Some(!undone.is_empty()), action: Action::sheet("locks"), ..tile("locks", title, words, "lock") });
         }
@@ -2204,9 +2355,12 @@ impl Home {
         if !openings.is_empty() {
             let open: Vec<&Thing> = openings.iter().copied().filter(|t| t.e.is_on()).collect();
             let (title, words) = match open[..] {
-                [] => ("All closed".to_string(), Some(if openings.len() == 1 { "1 door or window".to_string() } else { format!("{} doors and windows", openings.len()) })),
-                [one] => (format!("{} open", one.e.name()), self.how_long(one)),
-                _ => (format!("{} left open", open.len()), Some(listed(&open.iter().map(|t| t.e.name()).collect::<Vec<_>>()))),
+                // Translators: every door and window in the home is closed.
+                [] => (t!("All closed"), Some(tn!(openings.len(), "{n} door or window", "{n} doors and windows"))),
+                // Translators: {name} is a door, a window or a lock that stands open.
+                [one] => (t!("{name} open", name = one.e.name()), self.how_long(one)),
+                // Translators: how many doors and windows stand open.
+                _ => (tn!(open.len(), "{n} left open", "{n} left open"), Some(listed(&open.iter().map(|t| t.e.name()).collect::<Vec<_>>()))),
             };
             row.push(Item { on: Some(!open.is_empty()), action: Action::sheet("open"), ..tile("openings", title, words, "door") });
         }
@@ -2214,8 +2368,12 @@ impl Home {
         let low: Vec<(&Thing, f64)> = self.batteries().into_iter().filter(|(_, level)| *level < LOW_BATTERY).collect();
         if let Some((first, level)) = low.first() {
             let (title, words) = match low.len() {
-                1 => ("Battery low".to_string(), format!("{}, {}", battery_name(&first.e), percent(*level))),
-                count => (format!("{count} batteries low"), listed(&low.iter().map(|(t, _)| battery_name(&t.e)).collect::<Vec<_>>())),
+                1 => {
+                    // Translators: {name} is what a battery is in and {level} how full it is, such as 9%.
+                    let words = t!("{name}, {level}", name = battery_name(&first.e), level = percent(*level));
+                    (t!("Battery low"), words)
+                }
+                count => (tn!(count, "{n} battery low", "{n} batteries low"), listed(&low.iter().map(|(t, _)| battery_name(&t.e)).collect::<Vec<_>>())),
             };
             row.push(Item { on: Some(true), action: Action::sheet("batteries"), ..tile("batteries", title, Some(words), "battery") });
         }
@@ -2224,10 +2382,22 @@ impl Home {
         if !people.is_empty() {
             let names = |home: bool| people.iter().filter(|t| t.e.is_on() == home).map(|t| t.e.name()).collect::<Vec<_>>();
             let (home, away) = (names(true), names(false));
-            let (title, words) = match home.len() {
-                0 => ("Nobody home".to_string(), None),
-                1 | 2 => (format!("{} home", listed(&home)), (!away.is_empty()).then(|| if away.len() > 2 { format!("{} away", away.len()) } else { format!("{} away", listed(&away)) })),
-                count => (format!("{count} people home"), Some(listed(&home))),
+            let gone = || match &away[..] {
+                [] => None,
+                // Translators: {name} is a person who is out.
+                [one] => Some(t!("{name} away", name = one)),
+                // Translators: {first} and {second} are two people who are out.
+                [first, second] => Some(t!("{first} and {second} away", first = first, second = second)),
+                // Translators: how many people are out.
+                more => Some(tn!(more.len(), "{n} away", "{n} away")),
+            };
+            let (title, words) = match &home[..] {
+                [] => (t!("Nobody home"), None),
+                // Translators: {name} is a person who is at home.
+                [one] => (t!("{name} home", name = one), gone()),
+                // Translators: {first} and {second} are two people who are at home.
+                [first, second] => (t!("{first} and {second} home", first = first, second = second), gone()),
+                more => (tn!(more.len(), "{n} person home", "{n} people home"), Some(listed(&home))),
             };
             row.push(Item { on: Some(!home.is_empty()), action: Action::sheet("people"), ..tile("people", title, words, "person") });
         }
@@ -2236,7 +2406,8 @@ impl Home {
             && let Some(outside) = weather.e.a.temperature
         {
             let scale = if weather.e.a.temperature_unit.as_deref().map_or(self.fahrenheit, |unit| unit.contains('F')) { "F" } else { "C" };
-            row.push(tile("weather", format!("{}{scale} outside", degrees(outside.round(), false)), sky(&weather.e.state).map(str::to_string), "sun"));
+            // Translators: {reading} is a temperature with its scale, such as 12°C.
+            row.push(tile("weather", t!("{reading} outside", reading = format!("{}{scale}", degrees(outside.round(), false))), sky(&weather.e.state).map(sdk::tr), "sun"));
         }
 
         let lamps = self.lamps(self.things.iter());
@@ -2247,13 +2418,29 @@ impl Home {
             rooms.dedup();
             let rooms: Vec<String> = rooms.into_iter().map(|i| self.rooms[i].name.clone()).collect();
             let (title, words) = match lit.len() {
-                0 => ("All lights off".to_string(), None),
-                count => (format!("{} on", counted(count, "light")), Some(if rooms.is_empty() { listed(&lit.iter().take(3).map(|t| t.e.name()).collect::<Vec<_>>()) } else { rooms.join(", ") })),
+                // Translators: no light in the home is on.
+                0 => (tc!("state", "All lights off"), None),
+                count => (tn!(count, "{n} light on", "{n} lights on"), Some(if rooms.is_empty() { listed(&lit.iter().take(3).map(|t| t.e.name()).collect::<Vec<_>>()) } else { commas(&rooms) })),
             };
             let action = if lit.is_empty() { Action::default() } else { Action::sheet("lights") };
             row.push(Item { on: Some(!lit.is_empty()), action, ..tile("lights", title, words, "light") });
         }
         row
+    }
+}
+
+/// The title for a lock that is not locked: "Front door unlocked".
+fn unlocked_title(e: &Entity) -> String {
+    let name = e.name();
+    match e.state.as_str() {
+        "unlocked" => t!("{name} unlocked", name = name),
+        "unlocking" => t!("{name} unlocking", name = name),
+        "locking" => t!("{name} locking", name = name),
+        "jammed" => t!("{name} jammed", name = name),
+        "open" => t!("{name} open", name = name),
+        "opening" => t!("{name} opening", name = name),
+        // Translators: {name} is a lock and {state} how it stands, in a word this plugin has no wording for.
+        _ => t!("{name} {state}", name = name, state = line_after(e, false)),
     }
 }
 
@@ -2271,18 +2458,19 @@ fn battery_name(e: &Entity) -> String {
 // Sheets
 // ---------------------------------------------------------------------------
 
-const WARMTHS: [(&str, f64); 5] = [("Candlelight", 2200.0), ("Warm", 2700.0), ("Neutral", 4000.0), ("Cool", 5000.0), ("Daylight", 6500.0)];
+// Translators: how warm a lamp's white light is.
+const WARMTHS: [(&str, f64); 5] = [(mark!("Candlelight"), 2200.0), (mark!("Warm"), 2700.0), (mark!("Neutral"), 4000.0), (mark!("Cool"), 5000.0), (mark!("Daylight"), 6500.0)];
 /// Colours around the wheel, each with its hue in degrees.
 const COLOURS: [(&str, &str, f64); 9] = [
-    ("Red", "FF0000", 0.0),
-    ("Orange", "FF8000", 30.0),
-    ("Yellow", "FFFF00", 60.0),
-    ("Green", "00FF00", 120.0),
-    ("Turquoise", "00FFD5", 170.0),
-    ("Sky blue", "00AAFF", 200.0),
-    ("Blue", "0000FF", 240.0),
-    ("Purple", "8000FF", 270.0),
-    ("Pink", "FF00AA", 320.0),
+    (mark!("Red"), "FF0000", 0.0),
+    (mark!("Orange"), "FF8000", 30.0),
+    (mark!("Yellow"), "FFFF00", 60.0),
+    (mark!("Green"), "00FF00", 120.0),
+    (mark!("Turquoise"), "00FFD5", 170.0),
+    (mark!("Sky blue"), "00AAFF", 200.0),
+    (mark!("Blue"), "0000FF", 240.0),
+    (mark!("Purple"), "8000FF", 270.0),
+    (mark!("Pink"), "FF00AA", 320.0),
 ];
 
 /// The hue of a colour, in degrees around the wheel, or nothing for a white or a grey.
@@ -2320,8 +2508,14 @@ fn cycle(id: &str, title: &str, entity: &str, what: &str, choices: &[String], cu
     })
 }
 
-fn on_off(on: bool) -> &'static str {
-    if on { "On" } else { "Off" }
+fn on_off(on: bool) -> String {
+    if on { tc!("state", "On") } else { tc!("state", "Off") }
+}
+
+/// The value of a row that switches a setting, which is not a device being on or off.
+fn switched(on: bool) -> String {
+    // Translators: the value beside a setting that is switched on or off, such as "Away mode" or "This TV is in this room".
+    if on { tc!("a setting's switch", "On") } else { tc!("a setting's switch", "Off") }
 }
 
 /// `row` with `words` at its end, when there are any.
@@ -2361,25 +2555,26 @@ impl Home {
         let lit = e.is_on();
         let row = match e.domain() {
             Domain::Scene => return SheetRow::press(id, title, format!("scene:{id}")).glyph(glyph(e)),
-            Domain::Script => valued(SheetRow::press(id, title, format!("script:{id}")), if lit { "Running" } else { "" }),
+            // Translators: a script that is running now.
+            Domain::Script => valued(SheetRow::press(id, title, format!("script:{id}")), &if lit { t!("Running") } else { String::new() }),
             Domain::Light if e.dimmable() && !e.unavailable() => {
-                let shown = e.a.brightness.filter(|_| lit).map_or("Off".to_string(), level);
+                let shown = e.a.brightness.filter(|_| lit).map_or_else(|| on_off(false), level);
                 SheetRow::step(id, title, format!("step:{id}:brightness:-10"), format!("step:{id}:brightness:+10")).pressing(format!("toggle:{id}")).value(shown)
             }
             Domain::Fan if e.a.percentage_step.is_some() && !e.unavailable() => {
-                let speed = e.a.percentage.filter(|_| lit).map_or(on_off(lit).to_string(), percent);
+                let speed = e.a.percentage.filter(|_| lit).map_or_else(|| on_off(lit), percent);
                 SheetRow::step(id, title, format!("step:{id}:speed:-1"), format!("step:{id}:speed:+1")).pressing(format!("toggle:{id}")).value(speed)
             }
             Domain::Light | Domain::Switch | Domain::Toggle | Domain::Fan => SheetRow::press(id, title, format!("toggle:{id}")).value(words),
             Domain::Cover if e.garage_like() => SheetRow::open(id, title, device_sheet(e)).value(words),
             Domain::Cover if e.a.current_position.is_some() && !e.unavailable() => SheetRow::step(id, title, format!("step:{id}:position:-10"), format!("step:{id}:position:+10")).pressing(format!("cover:{id}:toggle")).value(words),
             Domain::Cover => SheetRow::press(id, title, format!("cover:{id}:toggle")).value(words),
-            Domain::Lock if e.needs_code() => SheetRow::text(id, title).value(words).subtitle("Needs its code, so use it in Home Assistant"),
-            Domain::Lock if e.state == "locked" => SheetRow::confirm(id, title, format!("Yes, unlock {}", brief(&e.name())), format!("unlock:{id}")).value(words),
+            Domain::Lock if e.needs_code() => SheetRow::text(id, title).value(words).subtitle(t!("Needs its code, so use it in Home Assistant")),
+            Domain::Lock if e.state == "locked" => SheetRow::confirm(id, title, t!("Yes, unlock {name}", name = brief(&e.name())), format!("unlock:{id}")).value(words),
             Domain::Lock => SheetRow::press(id, title, format!("lock:{id}")).value(words),
             Domain::Camera => valued(SheetRow::press(id, title, format!("camera:{id}")), if e.unavailable() { &words } else { "" }),
             Domain::Media => {
-                let state = words.split(", ").next().unwrap_or_default().to_string();
+                let state = if e.unavailable() { words } else { worded(&e.state) };
                 let row = SheetRow::open(id, title, device_sheet(e)).value(state);
                 match e.a.media_title.as_deref().filter(|_| matches!(e.state.as_str(), "playing" | "paused")) {
                     Some(playing) => row.subtitle(playing),
@@ -2400,15 +2595,15 @@ impl Home {
             .enumerate()
             .map(|(i, room)| {
                 let chosen = Some(i) == self.here;
-                valued(SheetRow::press(format!("room:{}", room.id), &room.name, format!("here:{}", room.id)), if chosen { "This TV" } else { "" }).glyph("home").on(chosen)
+                valued(SheetRow::press(format!("room:{}", room.id), &room.name, format!("here:{}", room.id)), &if chosen { t!("This TV") } else { String::new() }).glyph("home").on(chosen)
             })
             .collect();
         rows.truncate(SHEET_ROWS - 1);
         if self.here.is_some() {
-            rows.push(SheetRow::press("none", "None of these", "here:"));
+            rows.push(SheetRow::press("none", t!("None of these"), "here:"));
         }
-        let footnote = if self.rooms.is_empty() { "Home Assistant has no areas yet. Add some there and they show here as rooms." } else { "The first row of the home shows this room's lights and scenes." };
-        Sheet { title: "This TV's room".into(), subtitle: Some("Choose the room this TV is in".into()), footnote: Some(footnote.into()), rows }
+        let footnote = if self.rooms.is_empty() { t!("Home Assistant has no areas yet. Add some there and they show here as rooms.") } else { t!("The first row of the home shows this room's lights and scenes.") };
+        Sheet { title: t!("This TV's room"), subtitle: Some(t!("Choose the room this TV is in")), footnote: Some(footnote), rows }
     }
 
     /// Everything in a room, kind by kind, with what its row cannot fit. No room at all lists
@@ -2419,28 +2614,30 @@ impl Home {
         let lamps = self.lamps(self.within(room));
         if !lamps.is_empty() && room.is_some() {
             let on = lamps.iter().filter(|t| t.e.is_on()).count();
-            let (does, value) = if on > 0 { ("all_off", format!("{on} on")) } else { ("all_on", "Off".to_string()) };
-            rows.push(SheetRow::press("all", "All lights", format!("{does}:{area}")).glyph("light").on(on > 0).value(value));
+            // Translators: how many of a room's lights are on, beside "All lights".
+            let (does, value) = if on > 0 { ("all_off", tn!(on, "{n} on", "{n} on")) } else { ("all_on", on_off(false)) };
+            rows.push(SheetRow::press("all", t!("All lights"), format!("{does}:{area}")).glyph("light").on(on > 0).value(value));
         }
         let mut heading = "";
         let scenes = self.scenes(room).filter(|_| room.is_some());
         let more = self.within(room).filter(|t| t.extra);
-        for (t, under) in scenes.chain(self.devices(room)).map(|t| (t, t.e.domain().heading())).chain(more.map(|t| (t, "More"))) {
+        // Translators: the heading over a room's lesser switches.
+        for (t, under) in scenes.chain(self.devices(room)).map(|t| (t, t.e.domain().heading())).chain(more.map(|t| (t, mark!("More")))) {
             if under != heading {
                 heading = under;
-                rows.push(SheetRow::group(format!("g:{}", under.to_lowercase()), under));
+                rows.push(SheetRow::group(format!("g:{}", under.to_lowercase()), sdk::tr(under)));
             }
             rows.push(self.row(t, &t.name));
         }
         if let Some(i) = room {
             let here = Some(i) == self.here;
             rows.truncate(SHEET_ROWS - 2);
-            rows.push(SheetRow::group("g:tv", "This TV"));
-            rows.push(SheetRow::press("here", "This TV is in this room", format!("here:{}", if here { "" } else { area })).glyph("tv").on(here).value(on_off(here)));
+            rows.push(SheetRow::group("g:tv", t!("This TV")));
+            rows.push(SheetRow::press("here", t!("This TV is in this room"), format!("here:{}", if here { "" } else { area })).glyph("tv").on(here).value(switched(here)));
         }
         let (title, footnote) = match room {
             Some(i) => (self.rooms[i].name.clone(), None),
-            None => ("Not in a room".to_string(), Some("Give these an area in Home Assistant and they move to its room.".to_string())),
+            None => (t!("Not in a room"), Some(t!("Give these an area in Home Assistant and they move to its room."))),
         };
         Some(Sheet { title, subtitle: Some(self.summary(room)), footnote, rows })
     }
@@ -2453,20 +2650,28 @@ impl Home {
         rooms.dedup();
         let mut rows = Vec::new();
         if !lit.is_empty() {
-            rows.push(SheetRow::confirm("all", "All lights off", format!("Yes, turn off {}", counted(lit.len(), "light")), "all_off:").glyph("light"));
+            // Translators: a button that turns off every light that is on.
+            let all_off = tc!("button", "All lights off");
+            rows.push(SheetRow::confirm("all", all_off, tn!(lit.len(), "Yes, turn off {n} light", "Yes, turn off {n} lights"), "all_off:").glyph("light"));
         }
         for room in &rooms {
-            let name = room.map_or("Not in a room", |i| self.rooms[i].name.as_str());
+            let name = room.map_or_else(|| t!("Not in a room"), |i| self.rooms[i].name.clone());
             rows.push(SheetRow::group(format!("g:{}", room.map_or("", |i| self.rooms[i].id.as_str())), name));
             rows.extend(lit.iter().filter(|t| t.room == *room).map(|t| self.row(t, &t.name)));
         }
         let placed = rooms.iter().flatten().count();
         let subtitle = match (lit.len(), placed) {
-            (0, _) => "All lights are off".to_string(),
-            (count, 0) => counted(count, "light"),
-            (count, rooms) => format!("{} in {}", counted(count, "light"), counted(rooms, "room")),
+            (0, _) => t!("All lights are off"),
+            (count, 0) => tn!(count, "{n} light", "{n} lights"),
+            (count, rooms) => {
+                // Translators: ends "3 lights in 2 rooms".
+                let spread = tn!(rooms, "in {n} room", "in {n} rooms");
+                // Translators: {spread} is the rest of the line, such as "in 2 rooms".
+                tn!(count, "{n} light {spread}", "{n} lights {spread}", spread = spread)
+            }
         };
-        Sheet { title: "Lights on".into(), subtitle: Some(subtitle), footnote: None, rows }
+        // Translators: the title of the list of lights that are on.
+        Sheet { title: t!("Lights on"), subtitle: Some(subtitle), footnote: None, rows }
     }
 
     /// Doors and windows, the open ones first with how long they have been.
@@ -2477,27 +2682,27 @@ impl Home {
             .iter()
             .map(|t| {
                 let open = t.e.is_on();
-                let row = SheetRow::text(&t.e.id, t.e.name()).glyph(glyph(&t.e)).on(open).value(if open { "Open" } else { "Closed" });
+                let row = SheetRow::text(&t.e.id, t.e.name()).glyph(glyph(&t.e)).on(open).value(if open { tc!("state", "Open") } else { tc!("state", "Closed") });
                 match self.how_long(t).filter(|_| open) {
                     Some(long) => row.subtitle(long),
                     None => row,
                 }
             })
             .collect();
-        Sheet { title: "Doors and windows".into(), subtitle: None, footnote: None, rows }
+        Sheet { title: t!("Doors and windows"), subtitle: None, footnote: None, rows }
     }
 
     fn locks_sheet(&self) -> Sheet {
-        Sheet { title: "Locks".into(), subtitle: None, footnote: None, rows: self.of(Domain::Lock).map(|t| self.row(t, &t.e.name())).collect() }
+        Sheet { title: t!("Locks"), subtitle: None, footnote: None, rows: self.of(Domain::Lock).map(|t| self.row(t, &t.e.name())).collect() }
     }
 
     fn people_sheet(&self) -> Sheet {
-        Sheet { title: "Who is home".into(), subtitle: None, footnote: None, rows: self.of(Domain::Person).filter(|t| t.e.known()).map(|t| self.row(t, &t.e.name())).collect() }
+        Sheet { title: t!("Who is home"), subtitle: None, footnote: None, rows: self.of(Domain::Person).filter(|t| t.e.known()).map(|t| self.row(t, &t.e.name())).collect() }
     }
 
     fn batteries_sheet(&self) -> Sheet {
         let rows = self.batteries().into_iter().map(|(t, level)| SheetRow::text(&t.e.id, battery_name(&t.e)).glyph("battery").on(level < LOW_BATTERY).value(percent(level))).collect();
-        Sheet { title: "Batteries".into(), subtitle: None, footnote: None, rows }
+        Sheet { title: t!("Batteries"), subtitle: None, footnote: None, rows }
     }
 
     /// A speaker's or a TV's sources, for a list too long to step through.
@@ -2505,7 +2710,8 @@ impl Home {
         let e = &t.e;
         let sources = e.a.source_list.as_deref().unwrap_or(&[]);
         let rows = sources.iter().enumerate().map(|(n, source)| SheetRow::press(format!("s{n}"), source, format!("set:{}:source:{source}", e.id)).on(e.a.source.as_ref() == Some(source))).collect();
-        Sheet { title: "Source".into(), subtitle: Some(e.name()), footnote: None, rows }
+        // Translators: what a speaker or a TV plays from, such as an input or an app.
+        Sheet { title: t!("Source"), subtitle: Some(e.name()), footnote: None, rows }
     }
 
     /// All that can be done with one thing. A row is there only for what the thing can do.
@@ -2516,22 +2722,26 @@ impl Home {
         let name = e.name();
         let lit = e.is_on();
         let state = e.state.as_str();
-        let press = |row: &str, title: &str, action: String| SheetRow::press(row, title, action);
+        let press = |row: &str, title: String, action: String| SheetRow::press(row, title, action);
+        // Translators: the row that turns a device on or off.
+        let power = || tc!("on or off", "Power");
+        let mode = || t!("Mode");
         let mut rows: Vec<SheetRow> = Vec::new();
         let mut footnote = None;
         if e.unavailable() {
-            rows.push(SheetRow::text("state", "Not responding").subtitle("Check its power and connection"));
+            rows.push(SheetRow::text("state", t!("Not responding")).subtitle(t!("Check its power and connection")));
         } else {
             match e.domain() {
                 Domain::Light => {
-                    rows.push(if e.dimmable() { SheetRow { id: "brightness".into(), title: "Brightness".into(), ..self.row(t, "") } } else { press("power", "Power", format!("toggle:{id}")).value(on_off(lit)).on(lit) });
+                    rows.push(if e.dimmable() { SheetRow { id: "brightness".into(), title: t!("Brightness"), ..self.row(t, "") } } else { press("power", power(), format!("toggle:{id}")).value(on_off(lit)).on(lit) });
                     if e.takes_warmth() {
                         let (low, high) = (a.min_color_temp_kelvin.unwrap_or(2000.0), a.max_color_temp_kelvin.unwrap_or(6500.0));
                         let reach = |n: usize| WARMTHS[n].1.clamp(low, high).round() as i64;
                         let at = a.color_temp_kelvin.map(|kelvin| nearest(WARMTHS.len(), |n| (WARMTHS[n].1 - kelvin).abs()));
                         let (down, up) = at.map_or((1, 3), |at| (at.saturating_sub(1), (at + 1).min(WARMTHS.len() - 1)));
-                        let row = SheetRow::step("warmth", "Warmth", format!("set:{id}:kelvin:{}", reach(down)), format!("set:{id}:kelvin:{}", reach(up)));
-                        rows.push(at.filter(|_| lit).map_or(row.clone(), |at| row.value(WARMTHS[at].0)));
+                        // Translators: how warm a lamp's white light is.
+                        let row = SheetRow::step("warmth", t!("Warmth"), format!("set:{id}:kelvin:{}", reach(down)), format!("set:{id}:kelvin:{}", reach(up)));
+                        rows.push(at.filter(|_| lit).map_or(row.clone(), |at| row.value(sdk::tr(WARMTHS[at].0))));
                     }
                     if e.takes_colour() {
                         // A lamp set to a white says its warmth, and its colour only stands in for that.
@@ -2539,160 +2749,182 @@ impl Home {
                         let at = shown.map(|hue| nearest(COLOURS.len(), |n| ((COLOURS[n].2 - hue).abs()).min(360.0 - (COLOURS[n].2 - hue).abs())));
                         let count = COLOURS.len();
                         let (down, up) = at.map_or((count - 1, 0), |at| ((at + count - 1) % count, (at + 1) % count));
-                        let row = SheetRow::step("colour", "Colour", format!("set:{id}:colour:{}", COLOURS[down].1), format!("set:{id}:colour:{}", COLOURS[up].1));
-                        rows.push(at.map_or(row.clone(), |at| row.value(COLOURS[at].0)));
+                        let row = SheetRow::step("colour", t!("Colour"), format!("set:{id}:colour:{}", COLOURS[down].1), format!("set:{id}:colour:{}", COLOURS[up].1));
+                        rows.push(at.map_or(row.clone(), |at| row.value(sdk::tr(COLOURS[at].0))));
                     }
                     let members: Vec<&Thing> = a.entity_id.iter().flatten().filter_map(|member| self.find(member)).collect();
                     if !members.is_empty() {
-                        rows.push(SheetRow::group("g:members", "In this group"));
+                        rows.push(SheetRow::group("g:members", t!("In this group")));
                         rows.extend(members.into_iter().map(|member| self.row(member, &member.e.name())));
                     }
                 }
                 Domain::Fan => {
-                    rows.push(if a.percentage_step.is_some() { SheetRow { id: "speed".into(), title: "Speed".into(), ..self.row(t, "") } } else { press("power", "Power", format!("toggle:{id}")).value(on_off(lit)).on(lit) });
+                    rows.push(if a.percentage_step.is_some() { SheetRow { id: "speed".into(), title: t!("Speed"), ..self.row(t, "") } } else { press("power", power(), format!("toggle:{id}")).value(on_off(lit)).on(lit) });
                     if let Some(turning) = a.oscillating {
-                        rows.push(press("oscillating", "Oscillate", format!("set:{id}:oscillating:{}", if turning { "off" } else { "on" })).value(on_off(turning)).on(turning));
+                        // Translators: whether a fan turns from side to side.
+                        rows.push(press("oscillating", t!("Oscillate"), format!("set:{id}:oscillating:{}", if turning { "off" } else { "on" })).value(switched(turning)).on(turning));
                     }
-                    rows.extend(cycle("preset", "Mode", id, "preset", a.preset_modes.as_deref().unwrap_or(&[]), a.preset_mode.as_deref()));
+                    rows.extend(cycle("preset", &mode(), id, "preset", a.preset_modes.as_deref().unwrap_or(&[]), a.preset_mode.as_deref()));
                 }
                 Domain::Cover if e.garage_like() => {
                     match state {
-                        "opening" | "closing" => rows.push(press("stop", "Stop", format!("cover:{id}:stop")).value(worded(state))),
-                        "closed" => rows.push(SheetRow::confirm("open", "Open", format!("Yes, open {}", brief(&name)), format!("cover:{id}:open"))),
-                        _ => rows.push(SheetRow::confirm("close", "Close", format!("Yes, close {}", brief(&name)), format!("cover:{id}:close"))),
+                        "opening" | "closing" => rows.push(press("stop", tc!("button", "Stop"), format!("cover:{id}:stop")).value(worded(state))),
+                        "closed" => rows.push(SheetRow::confirm("open", tc!("button", "Open"), t!("Yes, open {name}", name = brief(&name)), format!("cover:{id}:open"))),
+                        _ => rows.push(SheetRow::confirm("close", tc!("button", "Close"), t!("Yes, close {name}", name = brief(&name)), format!("cover:{id}:close"))),
                     }
-                    footnote = Some("Check that nothing is in its way first.".to_string());
+                    // Translators: shown before a garage door or a gate is moved.
+                    footnote = Some(t!("Check that nothing is in its way first."));
                 }
                 Domain::Cover => {
                     if let Some(position) = a.current_position {
-                        rows.push(SheetRow::step("position", "Position", format!("step:{id}:position:-10"), format!("step:{id}:position:+10")).pressing(format!("cover:{id}:toggle")).value(percent(position)).on(lit));
+                        // Translators: how far a blind is open.
+                        rows.push(SheetRow::step("position", t!("Position"), format!("step:{id}:position:-10"), format!("step:{id}:position:+10")).pressing(format!("cover:{id}:toggle")).value(percent(position)).on(lit));
                     }
                     if e.supports(1) && e.supports(2) {
-                        rows.push(press("open", "Open", format!("cover:{id}:open")));
-                        rows.push(press("close", "Close", format!("cover:{id}:close")));
+                        rows.push(press("open", tc!("button", "Open"), format!("cover:{id}:open")));
+                        rows.push(press("close", tc!("button", "Close"), format!("cover:{id}:close")));
                     }
                     if e.supports(8) {
-                        rows.push(press("stop", "Stop", format!("cover:{id}:stop")));
+                        rows.push(press("stop", tc!("button", "Stop"), format!("cover:{id}:stop")));
                     }
                     if let Some(tilt) = a.current_tilt_position {
-                        rows.push(SheetRow::step("tilt", "Tilt", format!("step:{id}:tilt:-10"), format!("step:{id}:tilt:+10")).value(percent(tilt)));
+                        // Translators: the angle of a blind's slats.
+                        rows.push(SheetRow::step("tilt", t!("Tilt"), format!("step:{id}:tilt:-10"), format!("step:{id}:tilt:+10")).value(percent(tilt)));
                     }
                 }
-                Domain::Lock if e.needs_code() => rows.push(SheetRow::text("code", format!("Needs its code, so {} it in Home Assistant", if state == "locked" { "unlock" } else { "lock" }))),
+                Domain::Lock if e.needs_code() => rows.push(SheetRow::text("code", if state == "locked" { t!("Needs its code, so unlock it in Home Assistant") } else { t!("Needs its code, so lock it in Home Assistant") })),
                 Domain::Lock => {
                     if state != "locked" {
-                        rows.push(press("lock", "Lock", format!("lock:{id}")).glyph("lock"));
+                        rows.push(press("lock", tc!("button", "Lock"), format!("lock:{id}")).glyph("lock"));
                     }
                     if matches!(state, "locked" | "jammed") {
-                        rows.push(SheetRow::confirm("unlock", "Unlock", format!("Yes, unlock {}", brief(&name)), format!("unlock:{id}")).glyph("lock"));
+                        rows.push(SheetRow::confirm("unlock", tc!("button", "Unlock"), t!("Yes, unlock {name}", name = brief(&name)), format!("unlock:{id}")).glyph("lock"));
                     }
                 }
                 Domain::Climate | Domain::WaterHeater => {
                     let step = a.target_temp_step.filter(|step| *step > 0.0).unwrap_or(if self.fahrenheit { 1.0 } else { 0.5 });
                     let (low, high) = (a.min_temp.unwrap_or(f64::MIN), a.max_temp.unwrap_or(f64::MAX));
-                    let stepper = |row: &str, title: &str, what: &str, at: f64| {
+                    let stepper = |row: &str, title: String, what: &str, at: f64| {
                         let to = |target: f64| format!("set:{id}:{what}:{:.1}", target.clamp(low, high));
                         SheetRow::step(row, title, to(at - step), to(at + step)).value(degrees(at, self.fahrenheit))
                     };
                     if let Some(now) = a.current_temperature {
                         let now = degrees(now, self.fahrenheit);
-                        rows.push(SheetRow::text("now", "Now").value(a.current_humidity.map_or(now.clone(), |humidity| format!("{now}, {}", percent(humidity)))));
+                        // Translators: how warm and how humid it is now, as in "21°, 45%".
+                        let reading = a.current_humidity.map(|humidity| t!("{temperature}, {humidity}", temperature = now, humidity = percent(humidity)));
+                        // Translators: the row that shows the reading as it is now.
+                        rows.push(SheetRow::text("now", t!("Now")).value(reading.unwrap_or(now)));
                     }
                     match (a.target_temp_low, a.target_temp_high, a.temperature) {
                         (Some(heat), Some(cool), _) => {
-                            rows.push(stepper("low", "Heat to", "low", heat));
-                            rows.push(stepper("high", "Cool to", "high", cool));
+                            // Translators: the temperature below which the heating comes on.
+                            rows.push(stepper("low", t!("Heat to"), "low", heat));
+                            // Translators: the temperature above which the cooling comes on.
+                            rows.push(stepper("high", t!("Cool to"), "high", cool));
                         }
-                        (_, _, Some(target)) => rows.push(stepper("temperature", "Temperature", "temperature", target)),
+                        (_, _, Some(target)) => rows.push(stepper("temperature", t!("Temperature"), "temperature", target)),
                         _ => {}
                     }
                     if e.domain() == Domain::Climate {
-                        rows.extend(cycle("mode", "Mode", id, "mode", a.hvac_modes.as_deref().unwrap_or(&[]), Some(state)));
-                        rows.extend(cycle("preset", "Preset", id, "preset", a.preset_modes.as_deref().unwrap_or(&[]), a.preset_mode.as_deref()));
-                        rows.extend(cycle("fan", "Fan", id, "fan", a.fan_modes.as_deref().unwrap_or(&[]), a.fan_mode.as_deref()));
+                        rows.extend(cycle("mode", &mode(), id, "mode", a.hvac_modes.as_deref().unwrap_or(&[]), Some(state)));
+                        // Translators: a thermostat's ready-made setting, such as Eco or Away.
+                        rows.extend(cycle("preset", &t!("Preset"), id, "preset", a.preset_modes.as_deref().unwrap_or(&[]), a.preset_mode.as_deref()));
+                        // Translators: how hard a thermostat's own fan blows.
+                        rows.extend(cycle("fan", &tc!("setting", "Fan"), id, "fan", a.fan_modes.as_deref().unwrap_or(&[]), a.fan_mode.as_deref()));
                     } else {
-                        rows.extend(cycle("mode", "Mode", id, "mode", a.operation_list.as_deref().unwrap_or(&[]), a.operation_mode.as_deref().or(Some(state))));
+                        rows.extend(cycle("mode", &mode(), id, "mode", a.operation_list.as_deref().unwrap_or(&[]), a.operation_mode.as_deref().or(Some(state))));
                         if let Some(away) = a.away_mode.as_deref().map(|mode| mode == "on") {
-                            rows.push(press("away", "Away mode", format!("set:{id}:away:{}", if away { "off" } else { "on" })).value(on_off(away)).on(away));
+                            // Translators: a water heater's setting for when nobody is home.
+                            rows.push(press("away", t!("Away mode"), format!("set:{id}:away:{}", if away { "off" } else { "on" })).value(switched(away)).on(away));
                         }
                     }
                 }
                 Domain::Humidifier => {
                     let (low, high) = (a.min_humidity.unwrap_or(0.0), a.max_humidity.unwrap_or(100.0));
                     if let Some(now) = a.current_humidity {
-                        rows.push(SheetRow::text("now", "Now").value(percent(now)));
+                        // Translators: the row that shows the reading as it is now.
+                        rows.push(SheetRow::text("now", t!("Now")).value(percent(now)));
                     }
                     let toggle = format!("toggle:{id}");
                     rows.push(match a.humidity {
                         Some(target) => {
                             let to = |humidity: f64| format!("set:{id}:humidity:{}", humidity.clamp(low, high).round() as i64);
-                            SheetRow::step("humidity", "Humidity", to(target - 5.0), to(target + 5.0)).pressing(toggle).value(if lit { percent(target) } else { "Off".into() }).on(lit)
+                            SheetRow::step("humidity", t!("Humidity"), to(target - 5.0), to(target + 5.0)).pressing(toggle).value(if lit { percent(target) } else { on_off(false) }).on(lit)
                         }
-                        None => press("power", "Power", toggle).value(on_off(lit)).on(lit),
+                        None => press("power", power(), toggle).value(on_off(lit)).on(lit),
                     });
-                    rows.extend(cycle("mode", "Mode", id, "mode", a.available_modes.as_deref().unwrap_or(&[]), a.mode.as_deref()));
+                    rows.extend(cycle("mode", &mode(), id, "mode", a.available_modes.as_deref().unwrap_or(&[]), a.mode.as_deref()));
                 }
                 Domain::Media => {
                     if matches!(state, "off" | "standby") {
-                        rows.push(press("on", "Turn on", format!("media:{id}:on")));
+                        rows.push(press("on", t!("Turn on"), format!("media:{id}:on")));
                     } else {
                         if e.supports(1) || e.supports(16_384) {
-                            rows.push(press("play", if lit { "Pause" } else { "Play" }, format!("media:{id}:play_pause")).value(worded(state)).on(lit));
+                            rows.push(press("play", if lit { tc!("button", "Pause") } else { tc!("button", "Play") }, format!("media:{id}:play_pause")).value(worded(state)).on(lit));
                         }
                         if let Some(volume) = a.volume_level {
                             let muted = a.is_volume_muted == Some(true);
-                            rows.push(SheetRow::step("volume", "Volume", format!("step:{id}:volume:-5"), format!("step:{id}:volume:+5")).pressing(format!("media:{id}:mute")).value(if muted { "Muted".into() } else { percent(volume * 100.0) }).on(!muted));
+                            rows.push(SheetRow::step("volume", t!("Volume"), format!("step:{id}:volume:-5"), format!("step:{id}:volume:+5")).pressing(format!("media:{id}:mute")).value(if muted { t!("Muted") } else { percent(volume * 100.0) }).on(!muted));
                         }
                         if a.supported_features.is_some_and(|features| features & 32 != 0) {
-                            rows.push(press("next", "Next", format!("media:{id}:next")));
+                            // Translators: a button that skips to the next track.
+                            rows.push(press("next", tc!("track", "Next"), format!("media:{id}:next")));
                         }
                         if a.supported_features.is_some_and(|features| features & 16 != 0) {
-                            rows.push(press("previous", "Previous", format!("media:{id}:previous")));
+                            // Translators: a button that goes back to the track before.
+                            rows.push(press("previous", tc!("track", "Previous"), format!("media:{id}:previous")));
                         }
                         let sources = a.source_list.as_deref().unwrap_or(&[]);
+                        // Translators: what a speaker or a TV plays from, such as an input or an app.
+                        let source = t!("Source");
                         if sources.len() > 8 {
-                            rows.push(valued(SheetRow::open("source", "Source", format!("src:{id}")), a.source.as_deref().unwrap_or("")));
-                        } else if let Some(row) = cycle("source", "Source", id, "source", sources, a.source.as_deref()) {
+                            rows.push(valued(SheetRow::open("source", source, format!("src:{id}")), a.source.as_deref().unwrap_or("")));
+                        } else if let Some(row) = cycle("source", &source, id, "source", sources, a.source.as_deref()) {
                             rows.push(SheetRow { value: a.source.clone(), ..row });
                         }
                         if a.supported_features.is_some_and(|features| features & 256 != 0) {
-                            rows.push(press("off", "Turn off", format!("media:{id}:off")));
+                            rows.push(press("off", t!("Turn off"), format!("media:{id}:off")));
                         }
                     }
                 }
                 Domain::Vacuum => {
                     let cleaning = state == "cleaning";
-                    rows.push(press("start", if cleaning { "Pause" } else { "Start" }, format!("vacuum:{id}:{}", if cleaning { "pause" } else { "start" })).value(line(e, false)).on(lit));
+                    rows.push(press("start", if cleaning { tc!("button", "Pause") } else { tc!("button", "Start") }, format!("vacuum:{id}:{}", if cleaning { "pause" } else { "start" })).value(line(e, false)).on(lit));
                     if e.supports(16) {
-                        rows.push(press("dock", "Send home", format!("vacuum:{id}:dock")));
+                        // Translators: a button that sends a robot vacuum back to its dock.
+                        rows.push(press("dock", t!("Send home"), format!("vacuum:{id}:dock")));
                     }
                     if a.supported_features.is_some_and(|features| features & 512 != 0) {
-                        rows.push(press("locate", "Find it", format!("vacuum:{id}:locate")));
+                        // Translators: a button that makes a robot vacuum sound, so it can be found.
+                        rows.push(press("locate", t!("Find it"), format!("vacuum:{id}:locate")));
                     }
-                    rows.extend(cycle("power", "Power", id, "fan", a.fan_speed_list.as_deref().unwrap_or(&[]), a.fan_speed.as_deref()));
+                    // Translators: how hard a robot vacuum sucks.
+                    rows.extend(cycle("power", &tc!("suction", "Power"), id, "fan", a.fan_speed_list.as_deref().unwrap_or(&[]), a.fan_speed.as_deref()));
                 }
                 Domain::Alarm => {
                     let code = e.needs_code();
                     if state == "disarmed" {
                         if code && a.code_arm_required != Some(false) {
-                            rows.push(SheetRow::text("code", "Needs its code, so arm it in Home Assistant"));
+                            rows.push(SheetRow::text("code", t!("Needs its code, so arm it in Home Assistant")));
                         } else {
-                            let ways = [("home", "Arm home", 1), ("away", "Arm away", 2), ("night", "Arm night", 4)];
-                            rows.extend(ways.into_iter().filter(|(_, _, bit)| e.supports(*bit)).map(|(way, title, _)| press(way, title, format!("alarm:{id}:{way}"))));
+                            // Translators: buttons that arm an alarm in its mode for people at home, for everyone out, and for the night.
+                            let ways = [("home", mark!("Arm home"), 1), ("away", mark!("Arm away"), 2), ("night", mark!("Arm night"), 4)];
+                            rows.extend(ways.into_iter().filter(|(_, _, bit)| e.supports(*bit)).map(|(way, title, _)| press(way, sdk::tr(title), format!("alarm:{id}:{way}"))));
                         }
                     } else if code {
-                        rows.push(SheetRow::text("code", "Needs its code, so disarm it in Home Assistant"));
+                        rows.push(SheetRow::text("code", t!("Needs its code, so disarm it in Home Assistant")));
                     } else {
-                        rows.push(SheetRow::confirm("disarm", "Disarm", format!("Yes, disarm {}", brief(&name)), format!("alarm:{id}:disarm")));
+                        rows.push(SheetRow::confirm("disarm", t!("Disarm"), t!("Yes, disarm {name}", name = brief(&name)), format!("alarm:{id}:disarm")));
                     }
                 }
-                _ => rows.push(self.row(t, "State")),
+                // Translators: the row that says how a device stands.
+                _ => rows.push(self.row(t, &t!("State"))),
             }
         }
-        let words = line(e, self.fahrenheit);
         let subtitle = match self.room_name(t) {
-            Some(room) => format!("{room}, {}", uncapitalised(&words)),
-            None => words,
+            // Translators: {room} is the room a device is in and {state} how it stands, worded to follow the comma, as in "Kitchen, on, 60%".
+            Some(room) => t!("{room}, {state}", room = room, state = line_after(e, self.fahrenheit)),
+            None => line(e, self.fahrenheit),
         };
         Sheet { title: name, subtitle: Some(subtitle), footnote, rows }
     }
@@ -2838,7 +3070,6 @@ fn plan(press: &Press, fresh: Option<&Entity>) -> Option<Call> {
     let a = &e.a;
     let name = e.name();
     let state = e.state.as_str();
-    let said = |call: Call, words: &str| call.saying(format!("{name} {words}"));
     let flag = |value: &str| match value {
         "on" => Some(true),
         "off" => Some(false),
@@ -2846,16 +3077,18 @@ fn plan(press: &Press, fresh: Option<&Entity>) -> Option<Call> {
     };
     Some(match *press {
         // A lock is only ever locked by a press that could go either way.
-        Press::Toggle(id) if e.domain() == Domain::Lock => said(on(id, "lock/lock"), "locked"),
+        Press::Toggle(id) if e.domain() == Domain::Lock => on(id, "lock/lock").saying(tc!("after a press", "{name} locked", name = name)),
         Press::Toggle(id) => {
             let domain = id.split_once('.')?.0;
-            if state == "on" { said(on(id, &format!("{domain}/turn_off")), "off") } else { said(on(id, &format!("{domain}/turn_on")), "on") }
+            if state == "on" { on(id, &format!("{domain}/turn_off")).saying(tc!("after a press", "{name} off", name = name)) } else { on(id, &format!("{domain}/turn_on")).saying(tc!("after a press", "{name} on", name = name)) }
         }
-        Press::Scene(id) => said(on(id, "scene/turn_on"), "set"),
+        // Translators: said once a scene has been set. {name} is the scene's name.
+        Press::Scene(id) => on(id, "scene/turn_on").saying(tc!("after a press", "{name} set", name = name)),
         // Calling a script by its own name waits for it to end, and turning it on does not.
-        Press::Script(id) => said(on(id, "script/turn_on"), "started"),
-        Press::Lock(id) => said(on(id, "lock/lock"), "locked"),
-        Press::Unlock(id) => said(on(id, "lock/unlock"), "unlocked"),
+        // Translators: said once a script has been started. {name} is the script's name.
+        Press::Script(id) => on(id, "script/turn_on").saying(tc!("after a press", "{name} started", name = name)),
+        Press::Lock(id) => on(id, "lock/lock").saying(tc!("after a press", "{name} locked", name = name)),
+        Press::Unlock(id) => on(id, "lock/unlock").saying(tc!("after a press", "{name} unlocked", name = name)),
         Press::Step { entity, what, by } => match (e.domain(), what) {
             (Domain::Media, "volume") => with(entity, "media_player/volume_set", "volume_level", json!(((a.volume_level? * 100.0 + by).clamp(0.0, 100.0)).round() / 100.0)),
             (Domain::Cover, "position") => with(entity, "cover/set_cover_position", "position", json!((a.current_position? + by).clamp(0.0, 100.0).round() as i64)),
@@ -2895,30 +3128,30 @@ fn plan(press: &Press, fresh: Option<&Entity>) -> Option<Call> {
             }
         }
         Press::Cover { entity, verb } => match (verb, state) {
-            ("stop", _) | ("toggle", "opening" | "closing") => said(on(entity, "cover/stop_cover"), "stopped"),
-            ("open", _) | ("toggle", "closed") => said(on(entity, "cover/open_cover"), "opening"),
-            _ => said(on(entity, "cover/close_cover"), "closing"),
+            ("stop", _) | ("toggle", "opening" | "closing") => on(entity, "cover/stop_cover").saying(tc!("after a press", "{name} stopped", name = name)),
+            ("open", _) | ("toggle", "closed") => on(entity, "cover/open_cover").saying(tc!("after a press", "{name} opening", name = name)),
+            _ => on(entity, "cover/close_cover").saying(tc!("after a press", "{name} closing", name = name)),
         },
         Press::Media { entity, verb } => match (verb, state) {
-            ("on", _) | ("play_pause", "off" | "standby") => said(on(entity, "media_player/turn_on"), "on"),
-            ("off", _) => said(on(entity, "media_player/turn_off"), "off"),
-            ("play_pause", "playing" | "buffering") => said(on(entity, "media_player/media_pause"), "paused"),
-            ("play_pause", _) => said(on(entity, "media_player/media_play"), "playing"),
+            ("on", _) | ("play_pause", "off" | "standby") => on(entity, "media_player/turn_on").saying(tc!("after a press", "{name} on", name = name)),
+            ("off", _) => on(entity, "media_player/turn_off").saying(tc!("after a press", "{name} off", name = name)),
+            ("play_pause", "playing" | "buffering") => on(entity, "media_player/media_pause").saying(tc!("after a press", "{name} paused", name = name)),
+            ("play_pause", _) => on(entity, "media_player/media_play").saying(tc!("after a press", "{name} playing", name = name)),
             ("next", _) => on(entity, "media_player/media_next_track"),
             ("previous", _) => on(entity, "media_player/media_previous_track"),
             _ => with(entity, "media_player/volume_mute", "is_volume_muted", json!(a.is_volume_muted != Some(true))),
         },
         Press::Vacuum { entity, verb } => match verb {
-            "start" => said(on(entity, "vacuum/start"), "cleaning"),
-            "pause" => said(on(entity, "vacuum/pause"), "paused"),
-            "dock" => said(on(entity, "vacuum/return_to_base"), "going home"),
+            "start" => on(entity, "vacuum/start").saying(tc!("after a press", "{name} cleaning", name = name)),
+            "pause" => on(entity, "vacuum/pause").saying(tc!("after a press", "{name} paused", name = name)),
+            "dock" => on(entity, "vacuum/return_to_base").saying(tc!("after a press", "{name} going home", name = name)),
             _ => on(entity, "vacuum/locate"),
         },
         Press::Alarm { entity, verb } => match verb {
-            "home" => said(on(entity, "alarm_control_panel/alarm_arm_home"), "armed"),
-            "away" => said(on(entity, "alarm_control_panel/alarm_arm_away"), "armed"),
-            "night" => said(on(entity, "alarm_control_panel/alarm_arm_night"), "armed"),
-            _ => said(on(entity, "alarm_control_panel/alarm_disarm"), "disarmed"),
+            "home" => on(entity, "alarm_control_panel/alarm_arm_home").saying(tc!("after a press", "{name} armed", name = name)),
+            "away" => on(entity, "alarm_control_panel/alarm_arm_away").saying(tc!("after a press", "{name} armed", name = name)),
+            "night" => on(entity, "alarm_control_panel/alarm_arm_night").saying(tc!("after a press", "{name} armed", name = name)),
+            _ => on(entity, "alarm_control_panel/alarm_disarm").saying(tc!("after a press", "{name} disarmed", name = name)),
         },
         Press::Camera(_) | Press::AllOff(_) | Press::AllOn(_) | Press::Here(_) => return None,
     })
@@ -2935,10 +3168,14 @@ impl Home {
         }
         let ids: Vec<&str> = lights.iter().map(|t| t.e.id.as_str()).collect();
         let say = match room {
-            Some(i) => format!("{} lights {}", self.rooms[i].name, if on { "on" } else { "off" }),
+            // Translators: said once a room's lights have been turned on. {room} is the room's name.
+            Some(i) if on => tc!("after a press", "{room} lights on", room = self.rooms[i].name),
+            // Translators: said once a room's lights have been turned off. {room} is the room's name.
+            Some(i) => tc!("after a press", "{room} lights off", room = self.rooms[i].name),
             None => match self.lamps(self.things.iter()).iter().filter(|t| t.e.is_on()).count() {
-                0 => "All lights off".to_string(),
-                lit => format!("{} off", counted(lit, "light")),
+                0 => tc!("after a press", "All lights off"),
+                // Translators: said once the lights that were on have been turned off.
+                lit => tn!(lit, "{n} light off", "{n} lights off"),
             },
         };
         Some(Call::new(if on { "light/turn_on" } else { "light/turn_off" }, json!({"entity_id": ids})).saying(say))
@@ -2979,9 +3216,10 @@ impl Home {
             let room = self.room_name(t).map(str::to_string);
             let words = item.subtitle.take().filter(|_| fresh && t.e.domain() != Domain::Scene);
             item.subtitle = match (room, words) {
-                (Some(room), Some(words)) => Some(format!("{room}, {}", uncapitalised(&words))),
+                // Translators: {room} is the room a device is in and {state} how it stands, worded to follow the comma, as in "Kitchen, on, 60%".
+                (Some(room), Some(_)) => Some(t!("{room}, {state}", room = room, state = line_after(&t.e, self.fahrenheit))),
                 (Some(only), None) | (None, Some(only)) => Some(only),
-                (None, None) => Some(t.e.domain().noun().to_string()),
+                (None, None) => Some(t.e.domain().noun()),
             };
             if !fresh {
                 item.on = None;
@@ -3829,7 +4067,7 @@ mod tests {
 
     #[test]
     fn lengths_of_time_are_words() {
-        assert_eq!((span(0), span(59_000), span(12 * 60_000), span(60 * 60_000), span(5 * 3_600_000), span(3 * 86_400_000)), ("1 minute".into(), "1 minute".into(), "12 minutes".into(), "1 hour".into(), "5 hours".into(), "3 days".into()));
+        assert_eq!((span(0), span(59_000), span(12 * 60_000), span(60 * 60_000), span(5 * 3_600_000), span(3 * 86_400_000)), ("For 1 minute".into(), "For 1 minute".into(), "For 12 minutes".into(), "For 1 hour".into(), "For 5 hours".into(), "For 3 days".into()));
         let home = home_in(None);
         assert_eq!(home.how_long(home.find("binary_sensor.front_door").unwrap()).as_deref(), Some("For 12 minutes"));
         assert_eq!(home.how_long(home.find("lock.kitchen_door").unwrap()).as_deref(), Some("For 2 hours"));
@@ -4452,7 +4690,7 @@ mod tests {
         assert_eq!(server.wrong_status(502, "/api/states"), "Home Assistant at 192.168.0.20:8123 answered with error 502. Check the server, then try again.");
         // A press on a server that is away says so too, and never the token.
         let call = Call::new("light/turn_on", json!({"entity_id": "light.bed_light"}));
-        assert_eq!(server.call(&call, "Bed Light", false).err().as_deref(), Some("Home Assistant didn't answer at 192.168.0.20:8123. Check the server, then try again."));
+        assert_eq!(server.call(&call, Some("Bed Light"), false).err().as_deref(), Some("Home Assistant didn't answer at 192.168.0.20:8123. Check the server, then try again."));
         // What Home Assistant says of a refusal goes to the log in its own words, cut short.
         assert_eq!(said(r#"{"message":"Entity cover.kitchen_window does not support action cover.set_cover_position"}"#), "Entity cover.kitchen_window does not support action cover.set_cover_position");
         assert_eq!(said("400: Bad Request"), "400: Bad Request");

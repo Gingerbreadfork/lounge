@@ -1,0 +1,195 @@
+# Lounge, simkl: pt-BR
+#
+msgid ""
+msgstr ""
+"Language: pt-BR\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/lib.rs
+msgid "Simkl is asking for a pause between requests. It tries again on the next refresh."
+msgstr "O Simkl está pedindo uma pausa entre os pedidos. Vai tentar de novo na próxima atualização."
+
+#: src/lib.rs
+msgid "Simkl does not know this Client ID, or has paused it. Check it against your app at simkl.com/settings/developer."
+msgstr "O Simkl não reconhece este Client ID ou o suspendeu. Compare-o com o do seu app em simkl.com/settings/developer."
+
+#. "TV, devices and command line" is a kind of app on Simkl's developer page, in Simkl's own words.
+#: src/lib.rs
+msgid "Simkl does not accept this Client ID for signing in. Apps made before Simkl's new sign-in do not work: at simkl.com/settings/developer create an app of the type TV, devices and command line, and use its Client ID."
+msgstr "O Simkl não aceita este Client ID para entrar. Apps criados antes do novo login do Simkl não funcionam: em simkl.com/settings/developer, crie um app do tipo TV, devices and command line e use o Client ID dele."
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Simkl no longer accepts this sign-in. Press Refresh now for a new code."
+msgstr "O Simkl não aceita mais este login. Pressione Atualizar agora para receber um novo código."
+
+#: src/lib.rs
+msgid "Could not renew the Simkl sign-in. It tries again on the next refresh."
+msgstr "Não foi possível renovar o login do Simkl. Vai tentar de novo na próxima atualização."
+
+#: src/lib.rs
+msgid "Continue watching, up next, plan to watch and the week's new episodes from Simkl, for shows, anime and films across every service."
+msgstr "Continuar assistindo, a seguir, quero assistir e os novos episódios da semana, do Simkl, para séries, animes e filmes de todos os serviços."
+
+#: src/lib.rs
+msgid "Up next on Simkl"
+msgstr "A seguir no Simkl"
+
+#: src/lib.rs
+msgid "Coming up on Simkl"
+msgstr "Em breve no Simkl"
+
+#: src/lib.rs
+msgid "Plan to watch on Simkl"
+msgstr "Quero assistir no Simkl"
+
+#: src/lib.rs
+msgid "Client ID"
+msgstr "Client ID"
+
+#. "TV, devices and command line" is a kind of app on Simkl's developer page, in Simkl's own words.
+#: src/lib.rs
+msgid "At simkl.com/settings/developer create an app of the type TV, devices and command line, any name, and copy its Client ID. Nothing else is needed; the sign-in code then appears on this page."
+msgstr "Em simkl.com/settings/developer, crie um app do tipo TV, devices and command line, com qualquer nome, e copie o Client ID dele. Não precisa de mais nada; o código para entrar aparece então nesta página."
+
+#: src/lib.rs
+msgid "Up next row"
+msgstr "Fileira A seguir"
+
+#: src/lib.rs
+msgid "The next episode of each show and anime you are watching."
+msgstr "O próximo episódio de cada série e anime que você está assistindo."
+
+#: src/lib.rs
+msgid "Coming up row"
+msgstr "Fileira Em breve"
+
+#: src/lib.rs
+msgid "Episodes airing in the next week of the shows and anime you watch or plan to watch."
+msgstr "Episódios que vão ao ar na próxima semana, das séries e animes que você assiste ou quer assistir."
+
+#: src/lib.rs
+msgid "Plan to watch row"
+msgstr "Fileira Quero assistir"
+
+#: src/lib.rs
+msgid "Open with the TV's own search"
+msgstr "Abrir com a pesquisa da própria TV"
+
+#: src/lib.rs
+msgid "On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it. A result of Lounge's search always opens the TV's search."
+msgstr "Sim: o título abre na pesquisa da própria TV, que no Google TV mostra onde ele está disponível. Não: o Lounge procura o título nos seus apps e plugins. Um resultado da pesquisa do Lounge sempre abre a pesquisa da TV."
+
+#: src/lib.rs
+msgid "Search all of Simkl"
+msgstr "Pesquisar em todo o Simkl"
+
+#: src/lib.rs
+msgid "On, Lounge's search asks Simkl's whole catalogue, which counts against your account's daily allowance. Off, it finds titles on your Simkl lists without asking Simkl."
+msgstr "Sim: a pesquisa do Lounge consulta o catálogo inteiro do Simkl, o que conta no limite diário da sua conta. Não: ela encontra títulos nas suas listas do Simkl sem consultar o Simkl."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "client ID"
+msgstr "Client ID"
+
+#: src/lib.rs
+msgid "Simkl's daily allowance for this account is used up. The rows stay as they are until it comes back."
+msgstr "O limite diário do Simkl para esta conta acabou. As fileiras ficam como estão até ele voltar."
+
+#. an anime episode by its number, among the facts under a title.
+#: src/lib.rs
+msgid "Episode {number}"
+msgstr "Episódio {number}"
+
+#: src/lib.rs
+msgid "Anime"
+msgstr "Anime"
+
+#: src/lib.rs
+msgid "Film"
+msgstr "Filme"
+
+#. a weekday that starts the line under a title, as in "Saturday, Episode 1101".
+#: src/lib.rs
+msgid "Thursday"
+msgstr "Quinta-feira"
+
+#. a weekday that starts the line under a title, as in "Saturday, Episode 1101".
+#: src/lib.rs
+msgid "Friday"
+msgstr "Sexta-feira"
+
+#. a weekday that starts the line under a title, as in "Saturday, Episode 1101".
+#: src/lib.rs
+msgid "Saturday"
+msgstr "Sábado"
+
+#. a weekday that starts the line under a title, as in "Saturday, Episode 1101".
+#: src/lib.rs
+msgid "Sunday"
+msgstr "Domingo"
+
+#. a weekday that starts the line under a title, as in "Saturday, Episode 1101".
+#: src/lib.rs
+msgid "Monday"
+msgstr "Segunda-feira"
+
+#. a weekday that starts the line under a title, as in "Saturday, Episode 1101".
+#: src/lib.rs
+msgid "Tuesday"
+msgstr "Terça-feira"
+
+#. a weekday that starts the line under a title, as in "Saturday, Episode 1101".
+#: src/lib.rs
+msgid "Wednesday"
+msgstr "Quarta-feira"
+
+#. that weekday a week or more ahead, at the start of the line under a title.
+#: src/lib.rs
+msgid "Next Thursday"
+msgstr "Próxima quinta-feira"
+
+#. that weekday a week or more ahead, at the start of the line under a title.
+#: src/lib.rs
+msgid "Next Friday"
+msgstr "Próxima sexta-feira"
+
+#. that weekday a week or more ahead, at the start of the line under a title.
+#: src/lib.rs
+msgid "Next Saturday"
+msgstr "Próximo sábado"
+
+#. that weekday a week or more ahead, at the start of the line under a title.
+#: src/lib.rs
+msgid "Next Sunday"
+msgstr "Próximo domingo"
+
+#. that weekday a week or more ahead, at the start of the line under a title.
+#: src/lib.rs
+msgid "Next Monday"
+msgstr "Próxima segunda-feira"
+
+#. that weekday a week or more ahead, at the start of the line under a title.
+#: src/lib.rs
+msgid "Next Tuesday"
+msgstr "Próxima terça-feira"
+
+#. that weekday a week or more ahead, at the start of the line under a title.
+#: src/lib.rs
+msgid "Next Wednesday"
+msgstr "Próxima quarta-feira"
+
+#. the day words start the line under a title, as in "Tomorrow, Honeydew, Hulu".
+#: src/lib.rs
+msgid "Today"
+msgstr "Hoje"
+
+#: src/lib.rs
+msgid "Tomorrow"
+msgstr "Amanhã"
+
+#: src/lib.rs
+msgid "Yesterday"
+msgstr "Ontem"

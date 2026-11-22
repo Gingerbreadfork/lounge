@@ -3,7 +3,7 @@
 //! talks to the server alone. Without one the person signs in with a code at plex.tv, which
 //! gives the token and says where the account's servers are; everything else still comes from
 //! the server.
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, t, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -21,41 +21,46 @@ const PIN_FOR_MS: i64 = 15 * 60_000;
 const SERVERS_NAMED: usize = 3;
 
 impl sdk::Plugin for Plex {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.plex".into(),
             name: "Plex".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "On Deck and recently added from your Plex Media Server.".into(),
+            // Translators: On Deck is Plex's own name for what to watch next.
+            description: t!("On Deck and recently added from your Plex Media Server."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into(), "plex.tv".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
-            rows: vec![RowSpec { id: "recent".into(), title: "Recently added on Plex".into(), style: RowStyle::Poster }],
+            rows: vec![RowSpec { id: "recent".into(), title: t!("Recently added on Plex"), style: RowStyle::Poster }],
             settings: vec![
                 SettingSpec {
                     key: "server".into(),
-                    label: "Server address".into(),
+                    label: t!("Server address"),
                     kind: SettingKind::Url,
                     required: false,
-                    help: Some("Turn the plugin on and sign in with the code it shows, and this page says which address to enter. It looks like http://192.168.0.10:32400.".into()),
+                    help: Some(t!("Turn the plugin on and sign in with the code it shows, and this page says which address to enter. It looks like http://192.168.0.10:32400.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "token".into(),
-                    label: "Plex token".into(),
+                    label: t!("Plex token"),
                     kind: SettingKind::Password,
                     required: false,
-                    help: Some("Leave it empty to sign in with a code instead. To skip plex.tv, or to use an address of your own, paste one: in Plex Web open any item, then Get Info, then View XML, and copy the value after X-Plex-Token= at the end of the address.".into()),
+                    // Translators: Get Info and View XML are names in Plex Web's menus.
+                    help: Some(t!("Leave it empty to sign in with a code instead. To skip plex.tv, or to use an address of your own, paste one: in Plex Web open any item, then Get Info, then View XML, and copy the value after X-Plex-Token= at the end of the address.")),
                     default: None,
                 },
-                SettingSpec { key: "libraries".into(), label: "Libraries for recently added".into(), kind: SettingKind::Text, required: false, help: Some("Library names separated by commas. Empty means all of them.".into()), default: None },
+                SettingSpec { key: "libraries".into(), label: t!("Libraries for recently added"), kind: SettingKind::Text, required: false, help: Some(t!("Library names separated by commas. Empty means all of them.")), default: None },
             ],
             homepage: Some("https://www.plex.tv".into()),
             self_signed_servers: false,
             for_apps: vec![APP_PACKAGE.into()],
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -267,7 +272,8 @@ impl Access {
     /// Without an address yet, the error says which one to enter.
     fn for_refresh(now_ms: i64) -> Result<Access, String> {
         if let Some(token) = pasted_token() {
-            return Ok(Access { base: host::server_setting("server", "server address")?, token, by_code: false });
+            // Translators: names the setting inside "Add the {label} in the plugin's settings."
+            return Ok(Access { base: host::server_setting("server", &t!("server address"))?, token, by_code: false });
         }
         // With no address yet, the page says which to enter; that is a step to take, not a failure.
         let Some(base) = typed_server() else {
@@ -489,24 +495,39 @@ pub fn address_to_enter(server: &Found) -> Option<String> {
 
 /// "Den is at http://192.168.0.10:32400, Cabin is at …" for the first few servers.
 fn named_addresses(servers: &[Found]) -> String {
-    let named: Vec<String> = servers.iter().filter_map(|s| Some(format!("{} is at {}", if s.name.is_empty() { "Your server" } else { &s.name }, address_to_enter(s)?))).take(SERVERS_NAMED).collect();
+    let named: Vec<String> = servers.iter().filter_map(|s| Some(named_address(&s.name, &address_to_enter(s)?))).take(SERVERS_NAMED).collect();
     named.join(", ")
+}
+
+fn named_address(server: &str, address: &str) -> String {
+    if server.is_empty() {
+        t!("Your server is at {address}", address = address)
+    } else {
+        // Translators: {server} is the name a Plex server was given, such as Den.
+        t!("{server} is at {address}", server = server, address = address)
+    }
 }
 
 /// What to do once signed in with no address entered yet.
 pub fn where_servers_are(servers: &[Found]) -> String {
     match named_addresses(servers) {
-        named if named.is_empty() => "Signed in to Plex, but this account has no server. Sign the server in to the same account, then press Refresh now.".into(),
-        named => format!("Signed in to Plex. Now enter your server's address in the plugin's settings: {named}."),
+        // Translators: "Refresh now" is the button on the plugin's page on the TV.
+        named if named.is_empty() => t!("Signed in to Plex, but this account has no server. Sign the server in to the same account, then press Refresh now."),
+        // Translators: {servers} lists servers and where they are, such as "Den is at http://192.168.0.10:32400, Cabin is at https://cabin.example:32400".
+        named => t!("Signed in to Plex. Now enter your server's address in the plugin's settings: {servers}.", servers = named),
     }
 }
 
 /// The error for an address that is none of the account's servers. A token from the sign-in
 /// only goes to an address plex.tv gives for the server it belongs to.
 fn unknown_address(servers: &[Found], base: &str) -> String {
-    let named = named_addresses(servers);
-    let yours = if named.is_empty() { String::new() } else { format!(" {named}.") };
-    format!("Plex knows no server of yours at {}. Check the server address in the plugin's settings, or paste a Plex token to use this one.{yours}", sdk::address(base))
+    let (named, address) = (named_addresses(servers), sdk::address(base));
+    if named.is_empty() {
+        t!("Plex knows no server of yours at {address}. Check the server address in the plugin's settings, or paste a Plex token to use this one.", address = address)
+    } else {
+        // Translators: {servers} lists servers and where they are, such as "Den is at http://192.168.0.10:32400, Cabin is at https://cabin.example:32400".
+        t!("Plex knows no server of yours at {address}. Check the server address in the plugin's settings, or paste a Plex token to use this one. {servers}.", address = address, servers = named)
+    }
 }
 
 /// The token for the server at `base`: that of the server plex.tv lists at the same host and
@@ -549,9 +570,10 @@ impl Server {
             // The server's token may have changed, so the account's servers are read again next time.
             401 if access.by_code => {
                 host::kv_delete(SERVERS_KEY);
-                return Err("Plex rejected the sign-in at this server. Press Refresh now to check it again.".into());
+                // Translators: "Refresh now" is the button on the plugin's page on the TV.
+                return Err(t!("Plex rejected the sign-in at this server. Press Refresh now to check it again."));
             }
-            401 => return Err("Plex rejected the token. Copy a fresh X-Plex-Token from Plex Web.".into()),
+            401 => return Err(t!("Plex rejected the token. Copy a fresh X-Plex-Token from Plex Web.")),
             404 => return Err(sdk::wrong_server("Plex", &probe.base)),
             _ if !r.ok() => return Err(sdk::answered_error("Plex", &probe.base, r.status)),
             _ => {}

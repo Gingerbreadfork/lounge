@@ -1,0 +1,68 @@
+# Lounge, jellyfin: fr
+#
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#. Quick Connect, Dashboard and General are names in Jellyfin's own pages.
+#: src/lib.rs
+msgid "Quick Connect is turned off on this Jellyfin server. Turn it on in the Dashboard under General, or enter a username and password in the plugin's settings."
+msgstr "« Connexion rapide » est désactivée sur ce serveur Jellyfin. Activez-la dans le Tableau de bord, sous Général, ou saisissez un nom d’utilisateur et un mot de passe dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "Continue watching, recently added and favourites from your Jellyfin server."
+msgstr "« Reprendre la lecture », les ajouts récents et les favoris de votre serveur Jellyfin."
+
+#: src/lib.rs
+msgid "Recently added on Jellyfin"
+msgstr "Ajouts récents sur Jellyfin"
+
+#: src/lib.rs
+msgid "Favourites on Jellyfin"
+msgstr "Favoris sur Jellyfin"
+
+#: src/lib.rs
+msgid "Server address"
+msgstr "Adresse du serveur"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.10:8096"
+msgstr "Par exemple http://192.168.0.10:8096"
+
+#: src/lib.rs
+msgid "Username"
+msgstr "Nom d’utilisateur"
+
+#: src/lib.rs
+msgid "Leave empty to sign in with Quick Connect: this page shows a code to enter in Jellyfin on a phone or computer that is already signed in."
+msgstr "Laissez vide pour vous connecter avec « Connexion rapide » : cette page affiche un code à saisir dans Jellyfin sur un téléphone ou un ordinateur déjà connecté."
+
+#: src/lib.rs
+msgid "Password"
+msgstr "Mot de passe"
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Jellyfin isn't signed in yet. Press Refresh now to sign in."
+msgstr "Jellyfin n’est pas encore connecté. Appuyez sur « Actualiser maintenant » pour vous connecter."
+
+#. {code} is a short code. Settings and Quick Connect are names in Jellyfin. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Sign in: on a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter {code}, then press Refresh now here."
+msgstr "Connexion : sur un téléphone ou un ordinateur connecté à Jellyfin, ouvrez Paramètres, puis Connexion rapide, et saisissez {code}, puis appuyez ici sur « Actualiser maintenant »."
+
+#. shown on the TV with the code.
+#: src/lib.rs
+msgid "On a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter this code."
+msgstr "Sur un téléphone ou un ordinateur connecté à Jellyfin, ouvrez Paramètres, puis Connexion rapide, et saisissez ce code."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "server address"
+msgstr "adresse du serveur"
+
+#: src/lib.rs
+msgid "Jellyfin rejected the username or password. Check them in the plugin's settings."
+msgstr "Jellyfin a refusé le nom d’utilisateur ou le mot de passe. Vérifiez-les dans les paramètres du plugin."

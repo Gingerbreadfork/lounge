@@ -13,6 +13,7 @@ license = "MIT"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 lounge-plugin-api = { path = "../core/lounge-plugin-api" }
+lounge-words = { path = "../core/lounge-words" }
 lounge-plugin-sdk = { path = "sdk" }
 quick-xml = "0.42"
 md-5 = "0.10"

@@ -1,0 +1,61 @@
+# Lounge, radio: nl
+#
+msgid ""
+msgstr ""
+"Language: nl\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Radio Browser no longer lists that station."
+msgstr "Die zender staat niet meer in Radio Browser."
+
+#: src/lib.rs
+msgid "Internet radio"
+msgstr "Internetradio"
+
+#: src/lib.rs
+msgid "Stations you name and the most popular ones from the radio-browser.info directory, played in a player app such as VLC."
+msgstr "Zenders die je zelf opgeeft en de populairste uit het overzicht van radio-browser.info, afgespeeld in een afspeel-app zoals VLC."
+
+#: src/lib.rs
+msgid "Your radio stations"
+msgstr "Je radiozenders"
+
+#: src/lib.rs
+msgid "Popular radio"
+msgstr "Populaire radio"
+
+#: src/lib.rs
+msgid "Your stations"
+msgstr "Je zenders"
+
+#: src/lib.rs
+msgid "Station names, links to stations on radio-browser.info or stream addresses, one per line or separated by commas. Lounge's search finds stations too."
+msgstr "Zendernamen, links naar zenders op radio-browser.info of streamadressen, één per regel of gescheiden door komma's. De zoekfunctie van Lounge vindt ook zenders."
+
+#: src/lib.rs
+msgid "Country for popular stations"
+msgstr "Land voor populaire zenders"
+
+#: src/lib.rs
+msgid "A name or two letters, like Australia or AU. Left empty, the row shows the most popular stations anywhere."
+msgstr "Een naam of twee letters, zoals Australia of AU. Laat je dit leeg, dan toont de rij de populairste zenders van overal."
+
+#. {country} is the country as typed into the plugin's settings.
+#: src/lib.rs
+msgid "Radio Browser has no country called {country}. Check the country in the plugin's settings."
+msgstr "Radio Browser kent geen land met de naam {country}. Controleer het land in de instellingen van de plug-in."
+
+#. {country} is the country as typed into the plugin's settings.
+#: src/lib.rs
+msgid "Radio Browser lists no stations for {country}. Check the country in the plugin's settings."
+msgstr "Radio Browser heeft geen zenders voor {country}. Controleer het land in de instellingen van de plug-in."
+
+#: src/lib.rs
+msgid "{service} sent a reply this plugin can't read."
+msgstr "{service} stuurde een antwoord dat deze plug-in niet kan lezen."
+
+#: src/lib.rs
+msgid "A stream you added"
+msgstr "Zelf toegevoegde stream"

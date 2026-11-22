@@ -1,0 +1,64 @@
+# Lounge, nextpvr: it
+#
+msgid ""
+msgstr ""
+"Language: it\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Live channels, the guide and your recordings from a NextPVR server."
+msgstr "Canali in diretta, guida TV e le tue registrazioni da un server NextPVR."
+
+#: src/lib.rs
+msgid "Recordings on NextPVR"
+msgstr "Registrazioni su NextPVR"
+
+#: src/lib.rs
+msgid "Server address"
+msgstr "Indirizzo del server"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.10:8866"
+msgstr "Ad esempio http://192.168.0.10:8866"
+
+#. a setting and its help. Settings and General are names in NextPVR's own menus.
+#: src/lib.rs
+msgid "PIN"
+msgstr "PIN"
+
+#. a setting and its help. Settings and General are names in NextPVR's own menus.
+#: src/lib.rs
+msgid "The server's PIN from Settings, General. New installs use 0000."
+msgstr "Il PIN del server, che trovi in Settings, General. Le nuove installazioni usano 0000."
+
+#. a setting that takes a number, and its help, which says which recordings are kept.
+#: src/lib.rs
+msgid "Recordings to show"
+msgstr "Registrazioni da mostrare"
+
+#. a setting that takes a number, and its help, which says which recordings are kept.
+#: src/lib.rs
+msgid "The newest ones."
+msgstr "Le più recenti."
+
+#: src/lib.rs
+msgid "NextPVR has no channels yet. Scan for channels in its settings first."
+msgstr "NextPVR non ha ancora canali. Esegui prima una scansione dei canali nelle sue impostazioni."
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Questo riquadro non è più aggiornato. Aggiorna il plugin, poi riprova."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "server address"
+msgstr "indirizzo del server"
+
+#: src/lib.rs
+msgid "NextPVR at {address} didn't start a session. Check the server, then try again."
+msgstr "NextPVR all'indirizzo {address} non ha avviato una sessione. Controlla il server, poi riprova."
+
+#: src/lib.rs
+msgid "NextPVR rejected the PIN. Check it in the plugin's settings."
+msgstr "NextPVR ha rifiutato il PIN. Controllalo nelle impostazioni del plugin."

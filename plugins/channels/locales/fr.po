@@ -1,0 +1,50 @@
+# Lounge, channels: fr
+#
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/lib.rs
+msgid "Live channels, the guide and your recordings from a Channels DVR server."
+msgstr "Les chaînes en direct, le guide et vos enregistrements depuis un serveur Channels DVR."
+
+#: src/lib.rs
+msgid "Recordings on Channels DVR"
+msgstr "Enregistrements sur Channels DVR"
+
+#: src/lib.rs
+msgid "Server address"
+msgstr "Adresse du serveur"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.10:8089"
+msgstr "Par exemple http://192.168.0.10:8089"
+
+#: src/lib.rs
+msgid "Only favourite channels"
+msgstr "Uniquement les chaînes favorites"
+
+#. a setting that takes a number, and its help, which says which recordings are kept.
+#: src/lib.rs
+msgid "Recordings to show"
+msgstr "Enregistrements à afficher"
+
+#. a setting that takes a number, and its help, which says which recordings are kept.
+#: src/lib.rs
+msgid "The newest ones."
+msgstr "Les plus récents."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "server address"
+msgstr "adresse du serveur"
+
+#: src/lib.rs
+msgid "No Channels DVR answered at {address}. Check the server and its address, then try again."
+msgstr "Aucun Channels DVR n’a répondu à l’adresse {address}. Vérifiez le serveur et son adresse, puis réessayez."
+
+#: src/lib.rs
+msgid "Channels DVR has no channels to show. Add a source in its settings, or turn off the favourites filter."
+msgstr "Channels DVR n’a aucune chaîne à afficher. Ajoutez une source dans ses paramètres, ou désactivez le filtre des favoris."

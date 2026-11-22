@@ -1,0 +1,45 @@
+# Lounge, art: nl
+#
+msgid ""
+msgstr ""
+"Language: nl\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Art mode"
+msgstr "Kunstmodus"
+
+#: src/lib.rs
+msgid "Paintings from the Met and the Cleveland Museum of Art, hung on the screensaver with the painter and the year."
+msgstr "Schilderijen uit The Met en het Cleveland Museum of Art, in de screensaver opgehangen met de schilder en het jaartal."
+
+#. The Met is the Metropolitan Museum of Art's own short name.
+#: src/lib.rs
+msgid "The Met, New York"
+msgstr "The Met, New York"
+
+#: src/lib.rs
+msgid "Paintings on the wall"
+msgstr "Schilderijen aan de muur"
+
+#: src/lib.rs
+msgid "The screensaver cycles through these; each refresh hangs some new ones."
+msgstr "De screensaver wisselt deze af; bij elke vernieuwing komen er een paar nieuwe te hangen."
+
+#: src/lib.rs
+msgid "Only paintings matching"
+msgstr "Alleen schilderijen die passen bij"
+
+#. the museums' catalogues are in English, so a subject is typed in English.
+#: src/lib.rs
+msgid "A painter or a subject, such as Monet or landscape. Empty shows the museums' highlights."
+msgstr "Een schilder of een onderwerp in het Engels, bijvoorbeeld Monet of landscape. Laat je dit leeg, dan zie je de topstukken van de musea."
+
+#: src/lib.rs
+msgid "Both museums are turned off. Turn on at least one in the plugin's settings."
+msgstr "Beide musea staan uit. Zet er minstens één aan in de instellingen van de plug-in."
+
+#: src/lib.rs
+msgid "No paintings match \"{query}\". Try a painter's surname or a subject."
+msgstr "Geen schilderijen gevonden voor “{query}”. Probeer de achternaam van een schilder of een onderwerp."

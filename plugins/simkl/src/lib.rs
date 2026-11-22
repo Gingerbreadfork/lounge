@@ -3,7 +3,7 @@
 //! title, not the app, so selecting an item searches for it: Lounge's own search, or the TV's.
 //! Sign-in is Simkl's device code, shown on the plugin's page until it has been entered at
 //! simkl.com/pin. Lists are read only when Simkl says they changed.
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, parse_iso8601, t, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -20,13 +20,15 @@ const PLAYBACK_KEY: &str = "playback";
 const ART_KEY: &str = "art";
 const CALENDAR_KEY: &str = "calendar";
 const PAUSE_KEY: &str = "pause_until";
-const PAUSE: &str = "Simkl is asking for a pause between requests. It tries again on the next refresh.";
-const UNKNOWN_CLIENT: &str = "Simkl does not know this Client ID, or has paused it. Check it against your app at simkl.com/settings/developer.";
+const PAUSE: &str = mark!("Simkl is asking for a pause between requests. It tries again on the next refresh.");
+const UNKNOWN_CLIENT: &str = mark!("Simkl does not know this Client ID, or has paused it. Check it against your app at simkl.com/settings/developer.");
 /// Simkl's device endpoint answers the same for an unknown id and for an app made under its
 /// older sign-in, which cannot be moved over.
-const NOT_A_TV_APP: &str = "Simkl does not accept this Client ID for signing in. Apps made before Simkl's new sign-in do not work: at simkl.com/settings/developer create an app of the type TV, devices and command line, and use its Client ID.";
-const SIGN_IN_AGAIN: &str = "Simkl no longer accepts this sign-in. Press Refresh now for a new code.";
-const RENEW_LATER: &str = "Could not renew the Simkl sign-in. It tries again on the next refresh.";
+// Translators: "TV, devices and command line" is a kind of app on Simkl's developer page, in Simkl's own words.
+const NOT_A_TV_APP: &str = mark!("Simkl does not accept this Client ID for signing in. Apps made before Simkl's new sign-in do not work: at simkl.com/settings/developer create an app of the type TV, devices and command line, and use its Client ID.");
+// Translators: "Refresh now" is the button on the plugin's page on the TV.
+const SIGN_IN_AGAIN: &str = mark!("Simkl no longer accepts this sign-in. Press Refresh now for a new code.");
+const RENEW_LATER: &str = mark!("Could not renew the Simkl sign-in. It tries again on the next refresh.");
 /// Most shows in Up next, and most paused items.
 const UP_NEXT: usize = 12;
 const PAUSED: usize = 20;
@@ -50,12 +52,14 @@ const HOUR_MS: i64 = 3_600_000;
 const FETCH_TIMEOUT_MS: u32 = 15_000;
 
 impl sdk::Plugin for Simkl {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.simkl".into(),
             name: "Simkl".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue watching, up next, plan to watch and the week's new episodes from Simkl, for shows, anime and films across every service.".into(),
+            description: t!("Continue watching, up next, plan to watch and the week's new episodes from Simkl, for shows, anime and films across every service."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["api.simkl.com".into(), "simkl.in".into(), "data.simkl.in".into()],
@@ -63,36 +67,37 @@ impl sdk::Plugin for Simkl {
             refresh_minutes: 20,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "upnext".into(), title: "Up next on Simkl".into(), style: RowStyle::Landscape },
-                RowSpec { id: "airing".into(), title: "Coming up on Simkl".into(), style: RowStyle::Landscape },
-                RowSpec { id: "planned".into(), title: "Plan to watch on Simkl".into(), style: RowStyle::Poster },
+                RowSpec { id: "upnext".into(), title: t!("Up next on Simkl"), style: RowStyle::Landscape },
+                RowSpec { id: "airing".into(), title: t!("Coming up on Simkl"), style: RowStyle::Landscape },
+                RowSpec { id: "planned".into(), title: t!("Plan to watch on Simkl"), style: RowStyle::Poster },
             ],
             settings: vec![
                 SettingSpec {
                     key: "client_id".into(),
-                    label: "Client ID".into(),
+                    label: t!("Client ID"),
                     kind: SettingKind::Text,
                     required: true,
-                    help: Some("At simkl.com/settings/developer create an app of the type TV, devices and command line, any name, and copy its Client ID. Nothing else is needed; the sign-in code then appears on this page.".into()),
+                    // Translators: "TV, devices and command line" is a kind of app on Simkl's developer page, in Simkl's own words.
+                    help: Some(t!("At simkl.com/settings/developer create an app of the type TV, devices and command line, any name, and copy its Client ID. Nothing else is needed; the sign-in code then appears on this page.")),
                     default: None,
                 },
-                SettingSpec { key: "upnext".into(), label: "Up next row".into(), kind: SettingKind::Toggle, required: false, help: Some("The next episode of each show and anime you are watching.".into()), default: Some("true".into()) },
-                SettingSpec { key: "airing".into(), label: "Coming up row".into(), kind: SettingKind::Toggle, required: false, help: Some("Episodes airing in the next week of the shows and anime you watch or plan to watch.".into()), default: Some("true".into()) },
-                SettingSpec { key: "planned".into(), label: "Plan to watch row".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
+                SettingSpec { key: "upnext".into(), label: t!("Up next row"), kind: SettingKind::Toggle, required: false, help: Some(t!("The next episode of each show and anime you are watching.")), default: Some("true".into()) },
+                SettingSpec { key: "airing".into(), label: t!("Coming up row"), kind: SettingKind::Toggle, required: false, help: Some(t!("Episodes airing in the next week of the shows and anime you watch or plan to watch.")), default: Some("true".into()) },
+                SettingSpec { key: "planned".into(), label: t!("Plan to watch row"), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
                 SettingSpec {
                     key: "tv_search".into(),
-                    label: "Open with the TV's own search".into(),
+                    label: t!("Open with the TV's own search"),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it. A result of Lounge's search always opens the TV's search.".into()),
+                    help: Some(t!("On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it. A result of Lounge's search always opens the TV's search.")),
                     default: Some("false".into()),
                 },
                 SettingSpec {
                     key: "catalogue".into(),
-                    label: "Search all of Simkl".into(),
+                    label: t!("Search all of Simkl"),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("On, Lounge's search asks Simkl's whole catalogue, which counts against your account's daily allowance. Off, it finds titles on your Simkl lists without asking Simkl.".into()),
+                    help: Some(t!("On, Lounge's search asks Simkl's whole catalogue, which counts against your account's daily allowance. Off, it finds titles on your Simkl lists without asking Simkl.")),
                     default: Some("false".into()),
                 },
             ],
@@ -100,6 +105,7 @@ impl sdk::Plugin for Simkl {
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -267,7 +273,7 @@ impl sdk::Plugin for Simkl {
             let Some(mut client) = Client::signed_in() else { return Ok(Vec::new()) };
             let found: Vec<Found> = match client.get_json("/search/all", &format!("&q={}&limit={limit}", uri_encode(query))) {
                 Ok(f) => f,
-                Err(e) if e == SIGN_IN_AGAIN || e == RENEW_LATER => return Ok(Vec::new()),
+                Err(e) if e == sdk::tr(SIGN_IN_AGAIN) || e == sdk::tr(RENEW_LATER) => return Ok(Vec::new()),
                 Err(e) => return Err(e),
             };
             return Ok(found.iter().filter_map(|f| found_item(f, &open)).take(limit).collect());
@@ -409,7 +415,8 @@ struct Client {
 impl Client {
     /// A signed-in client, or the one sentence the plugin's page should show to get there.
     fn connect(now_ms: i64) -> Result<Client, String> {
-        let client_id = host::required_setting("client_id", "client ID")?.trim().to_string();
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let client_id = host::required_setting("client_id", &t!("client ID"))?.trim().to_string();
         let token = match Token::load(&client_id) {
             Some(t) if !t.due(now_ms) => t,
             Some(t) => match renew(&client_id, &t, now_ms) {
@@ -425,7 +432,7 @@ impl Client {
                 }
                 Err(Renew::Failed(e)) => {
                     sdk::warn!("could not renew the sign-in ({e})");
-                    return Err(RENEW_LATER.into());
+                    return Err(sdk::tr(RENEW_LATER));
                 }
             },
             None => device_step(&client_id, now_ms)?,
@@ -465,12 +472,12 @@ impl Client {
                 }
                 Err(Renew::Refused) => {
                     forget_account();
-                    return Err(SIGN_IN_AGAIN.into());
+                    return Err(sdk::tr(SIGN_IN_AGAIN));
                 }
                 Err(Renew::Failed(e)) => {
                     sdk::warn!("could not renew the sign-in ({e})");
                     self.token.expire();
-                    return Err(RENEW_LATER.into());
+                    return Err(sdk::tr(RENEW_LATER));
                 }
             }
         }
@@ -478,7 +485,7 @@ impl Client {
             // Simkl no longer takes the token for some other reason; the next refresh renews it.
             sdk::warn!("HTTP 401 for {path}: {}", error_of(&r.body).error);
             self.token.expire();
-            return Err(RENEW_LATER.into());
+            return Err(sdk::tr(RENEW_LATER));
         }
         read_json(r, path)
     }
@@ -513,7 +520,7 @@ fn user_agent() -> String {
 
 fn read_json<T: serde::de::DeserializeOwned>(r: sdk::HttpResponse, path: &str) -> Result<T, String> {
     match r.status {
-        412 => return Err(UNKNOWN_CLIENT.into()),
+        412 => return Err(sdk::tr(UNKNOWN_CLIENT)),
         429 => {
             let e = error_of(&r.body);
             // The day's allowance, as opposed to the second's: nothing more is asked until it
@@ -521,9 +528,9 @@ fn read_json<T: serde::de::DeserializeOwned>(r: sdk::HttpResponse, path: &str) -
             if matches!(e.error.as_str(), "user_limit_exceeded" | "app_limit_exceeded") {
                 let wait_ms = r.headers.get("retry-after").and_then(|v| v.trim().parse::<i64>().ok()).map_or(HOUR_MS, |s| s * 1000).clamp(5 * 60_000, DAY_MS);
                 host::kv_set(PAUSE_KEY, (host::now_ms() + wait_ms).to_string().as_bytes());
-                return Err("Simkl's daily allowance for this account is used up. The rows stay as they are until it comes back.".into());
+                return Err(t!("Simkl's daily allowance for this account is used up. The rows stay as they are until it comes back."));
             }
-            return Err(PAUSE.into());
+            return Err(sdk::tr(PAUSE));
         }
         s if !(200..300).contains(&s) => {
             sdk::warn!("HTTP {s} for {path}: {}", error_of(&r.body).error);
@@ -566,7 +573,7 @@ fn device_step(client_id: &str, now_ms: i64) -> Result<Token, String> {
                 sdk::info!("sign-in code is no longer good ({}); asking for a new one", e.error);
                 host::kv_delete(DEVICE_KEY);
             }
-            "invalid_client" => return Err(NOT_A_TV_APP.into()),
+            "invalid_client" => return Err(sdk::tr(NOT_A_TV_APP)),
             // Pending, asked to slow down, or an answer that says nothing: the code stands.
             other => {
                 if !matches!(other, "authorization_pending" | "slow_down") {
@@ -580,9 +587,9 @@ fn device_step(client_id: &str, now_ms: i64) -> Result<Token, String> {
     if !(200..300).contains(&status) {
         let e = error_of(&body);
         return Err(match (status, e.error.as_str()) {
-            (401, _) | (_, "invalid_client") => NOT_A_TV_APP.into(),
-            (412, _) | (_, "client_id_failed") => UNKNOWN_CLIENT.into(),
-            (429, _) => PAUSE.into(),
+            (401, _) | (_, "invalid_client") => sdk::tr(NOT_A_TV_APP),
+            (412, _) | (_, "client_id_failed") => sdk::tr(UNKNOWN_CLIENT),
+            (429, _) => sdk::tr(PAUSE),
             _ => {
                 sdk::warn!("HTTP {status} when asked for a sign-in code: {} {}", e.error, e.error_description.or(e.message).unwrap_or_default());
                 sdk::online_error("Simkl", status)
@@ -1339,7 +1346,8 @@ pub fn tv_search_action(title: &str) -> Action {
 fn numbering(kind: TitleKind, season: Option<u32>, episode: u32, facts: &mut Vec<String>) -> (Option<String>, Option<String>) {
     match (kind, season) {
         (TitleKind::Anime, _) | (_, None) => {
-            facts.insert(0, format!("Episode {episode}"));
+            // Translators: an anime episode by its number, among the facts under a title.
+            facts.insert(0, t!("Episode {number}", number = episode));
             (None, Some(episode.to_string()))
         }
         (_, Some(s)) => (Some(s.to_string()), Some(episode.to_string())),
@@ -1415,7 +1423,7 @@ fn title_facts(t: &Title) -> Vec<String> {
         facts.push(y.to_string());
     }
     if t.kind == TitleKind::Anime {
-        facts.push("Anime".into());
+        facts.push(t!("Anime"));
     }
     facts
 }
@@ -1491,8 +1499,8 @@ pub fn found_item(f: &Found, open: &dyn Fn(&str) -> Action) -> Option<Item> {
         facts.push(y.to_string());
     }
     match f.endpoint_type.as_deref() {
-        Some("anime") => facts.push("Anime".into()),
-        Some("movies") => facts.push("Film".into()),
+        Some("anime") => facts.push(t!("Anime")),
+        Some("movies") => facts.push(t!("Film")),
         _ => {}
     }
     Some(Item {
@@ -1519,15 +1527,19 @@ pub fn episode_title(title: Option<&str>) -> Option<String> {
 /// "Today", "Tomorrow", "Yesterday" or the weekday, in the TV's own time; a week or more on,
 /// "next" and the weekday.
 pub fn day_word(at_ms: i64, now_ms: i64, utc_offset_minutes: i32) -> String {
-    const NAMES: [&str; 7] = ["Thursday", "Friday", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"];
+    // Translators: a weekday that starts the line under a title, as in "Saturday, Episode 1101".
+    const NAMES: [&str; 7] = [mark!("Thursday"), mark!("Friday"), mark!("Saturday"), mark!("Sunday"), mark!("Monday"), mark!("Tuesday"), mark!("Wednesday")];
+    // Translators: that weekday a week or more ahead, at the start of the line under a title.
+    const NEXT: [&str; 7] = [mark!("Next Thursday"), mark!("Next Friday"), mark!("Next Saturday"), mark!("Next Sunday"), mark!("Next Monday"), mark!("Next Tuesday"), mark!("Next Wednesday")];
     let day = |ms: i64| (ms + i64::from(utc_offset_minutes) * 60_000).div_euclid(DAY_MS);
-    let name = NAMES[day(at_ms).rem_euclid(7) as usize];
+    let weekday = day(at_ms).rem_euclid(7) as usize;
     match day(at_ms) - day(now_ms) {
-        0 => "Today".into(),
-        1 => "Tomorrow".into(),
-        -1 => "Yesterday".into(),
-        2..=6 => name.into(),
-        _ => format!("Next {name}"),
+        // Translators: the day words start the line under a title, as in "Tomorrow, Honeydew, Hulu".
+        0 => t!("Today"),
+        1 => t!("Tomorrow"),
+        -1 => t!("Yesterday"),
+        2..=6 => sdk::tr(NAMES[weekday]),
+        _ => sdk::tr(NEXT[weekday]),
     }
 }
 

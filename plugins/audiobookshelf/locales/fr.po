@@ -1,0 +1,101 @@
+# Lounge, audiobookshelf: fr
+#
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/lib.rs
+msgid "Add a username and password, or an API key, in the plugin's settings."
+msgstr "Ajoutez un nom d’utilisateur et un mot de passe, ou une clé API, dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "Audiobookshelf rejected the username or password. Check them in the plugin's settings."
+msgstr "Audiobookshelf a refusé le nom d’utilisateur ou le mot de passe. Vérifiez-les dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "Audiobookshelf didn't accept the API key. Check it in the plugin's settings, or make a new one."
+msgstr "Audiobookshelf n’a pas accepté la clé API. Vérifiez-la dans les paramètres du plugin, ou créez-en une nouvelle."
+
+#: src/lib.rs
+msgid "Audiobookshelf is turning sign-ins away after too many tries. Wait a few minutes, then try again."
+msgstr "Audiobookshelf refuse les connexions après trop de tentatives. Patientez quelques minutes, puis réessayez."
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Audiobookshelf no longer has that. Press Refresh now on the plugin's page to bring its rows up to date."
+msgstr "Audiobookshelf n’a plus cet élément. Appuyez sur « Actualiser maintenant » sur la page du plugin pour mettre ses rangées à jour."
+
+#: src/lib.rs
+msgid "Continue listening and what's new on your Audiobookshelf server, played in a player app such as VLC, though your place on the server doesn't move when you listen on the TV."
+msgstr "Vos écoutes en cours et les nouveautés de votre serveur Audiobookshelf, lues dans une appli de lecture comme VLC ; votre position sur le serveur ne bouge toutefois pas quand vous écoutez sur la TV."
+
+#: src/lib.rs
+msgid "Recently added on Audiobookshelf"
+msgstr "Ajouts récents sur Audiobookshelf"
+
+#: src/lib.rs
+msgid "New episodes on Audiobookshelf"
+msgstr "Nouveaux épisodes sur Audiobookshelf"
+
+#: src/lib.rs
+msgid "Server address"
+msgstr "Adresse du serveur"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.10:13378"
+msgstr "Par exemple http://192.168.0.10:13378"
+
+#: src/lib.rs
+msgid "Username"
+msgstr "Nom d’utilisateur"
+
+#: src/lib.rs
+msgid "Leave it empty when you use an API key instead."
+msgstr "Laissez vide si vous utilisez plutôt une clé API."
+
+#: src/lib.rs
+msgid "Password"
+msgstr "Mot de passe"
+
+#: src/lib.rs
+msgid "API key"
+msgstr "Clé API"
+
+#. "Settings" and "API Keys" are pages of Audiobookshelf's own website.
+#: src/lib.rs
+msgid "Instead of a username and password. An admin makes one in Audiobookshelf under Settings, then API Keys, and it is easiest pasted from the phone companion."
+msgstr "À la place du nom d’utilisateur et du mot de passe. Un administrateur en crée une dans Audiobookshelf, sous Paramètres puis Clés API ; le plus simple est de la coller depuis Lounge sur téléphone."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "server address"
+msgstr "adresse du serveur"
+
+#. {show} is a podcast's name and {length} how long the episode runs, such as "48 minutes".
+#: src/lib.rs
+msgid "{show}, {length}"
+msgstr "{show}, {length}"
+
+#: src/lib.rs
+msgid "{n} hour"
+msgid_plural "{n} hours"
+msgstr[0] "{n} heure"
+msgstr[1] "{n} heures"
+
+#: src/lib.rs
+msgid "{n} minute"
+msgid_plural "{n} minutes"
+msgstr[0] "{n} minute"
+msgstr[1] "{n} minutes"
+
+#. a length of time. {hours} is a count of hours, such as "2 hours", and {minutes} a count of minutes, such as "25 minutes".
+#: src/lib.rs
+msgid "{hours} {minutes}"
+msgstr "{hours} {minutes}"
+
+#. {series} is the name of a series of books and {number} this book's place in it, such as 2.
+#: src/lib.rs
+msgid "{series}, book {number}"
+msgstr "{series}, tome {number}"

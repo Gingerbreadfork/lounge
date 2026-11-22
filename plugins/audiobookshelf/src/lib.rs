@@ -3,7 +3,7 @@
 //! own. A press starts a stream on the server for a player app such as VLC, from the place the
 //! server keeps; the player never tells the server where it stopped.
 
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, t, tn, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 
@@ -15,38 +15,42 @@ const APP_PACKAGE: &str = "com.audiobookshelf.app";
 const LIMIT: u32 = 24;
 /// The id of the stream the last press started.
 const STREAM_KEY: &str = "stream";
-const NO_SIGN_IN: &str = "Add a username and password, or an API key, in the plugin's settings.";
-const REJECTED: &str = "Audiobookshelf rejected the username or password. Check them in the plugin's settings.";
-const KEY_REFUSED: &str = "Audiobookshelf didn't accept the API key. Check it in the plugin's settings, or make a new one.";
-const TOO_MANY: &str = "Audiobookshelf is turning sign-ins away after too many tries. Wait a few minutes, then try again.";
-const GONE: &str = "Audiobookshelf no longer has that. Press Refresh now on the plugin's page to bring its rows up to date.";
+const NO_SIGN_IN: &str = mark!("Add a username and password, or an API key, in the plugin's settings.");
+const REJECTED: &str = mark!("Audiobookshelf rejected the username or password. Check them in the plugin's settings.");
+const KEY_REFUSED: &str = mark!("Audiobookshelf didn't accept the API key. Check it in the plugin's settings, or make a new one.");
+const TOO_MANY: &str = mark!("Audiobookshelf is turning sign-ins away after too many tries. Wait a few minutes, then try again.");
+// Translators: "Refresh now" is the button on the plugin's page on the TV.
+const GONE: &str = mark!("Audiobookshelf no longer has that. Press Refresh now on the plugin's page to bring its rows up to date.");
 
 impl sdk::Plugin for Audiobookshelf {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.audiobookshelf".into(),
             name: "Audiobookshelf".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue listening and what's new on your Audiobookshelf server, played in a player app such as VLC, though your place on the server doesn't move when you listen on the TV.".into(),
+            description: t!("Continue listening and what's new on your Audiobookshelf server, played in a player app such as VLC, though your place on the server doesn't move when you listen on the TV."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "recent".into(), title: "Recently added on Audiobookshelf".into(), style: RowStyle::Landscape },
-                RowSpec { id: "episodes".into(), title: "New episodes on Audiobookshelf".into(), style: RowStyle::Landscape },
+                RowSpec { id: "recent".into(), title: t!("Recently added on Audiobookshelf"), style: RowStyle::Landscape },
+                RowSpec { id: "episodes".into(), title: t!("New episodes on Audiobookshelf"), style: RowStyle::Landscape },
             ],
             settings: vec![
-                SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:13378".into()), default: None },
-                SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: false, help: Some("Leave it empty when you use an API key instead.".into()), default: None },
-                SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
+                SettingSpec { key: "server".into(), label: t!("Server address"), kind: SettingKind::Url, required: true, help: Some(t!("Like http://192.168.0.10:13378")), default: None },
+                SettingSpec { key: "username".into(), label: t!("Username"), kind: SettingKind::Text, required: false, help: Some(t!("Leave it empty when you use an API key instead.")), default: None },
+                SettingSpec { key: "password".into(), label: t!("Password"), kind: SettingKind::Password, required: false, help: None, default: None },
                 SettingSpec {
                     key: "api_key".into(),
-                    label: "API key".into(),
+                    label: t!("API key"),
                     kind: SettingKind::Password,
                     required: false,
-                    help: Some("Instead of a username and password. An admin makes one in Audiobookshelf under Settings, then API Keys, and it is easiest pasted from the phone companion.".into()),
+                    // Translators: "Settings" and "API Keys" are pages of Audiobookshelf's own website.
+                    help: Some(t!("Instead of a username and password. An admin makes one in Audiobookshelf under Settings, then API Keys, and it is easiest pasted from the phone companion.")),
                     default: None,
                 },
             ],
@@ -54,11 +58,12 @@ impl sdk::Plugin for Audiobookshelf {
             self_signed_servers: false,
             for_apps: vec![APP_PACKAGE.into()],
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let mut s = Session::connect(true)?.ok_or_else(|| NO_SIGN_IN.to_string())?;
+        let mut s = Session::connect(true)?.ok_or_else(|| sdk::tr(NO_SIGN_IN))?;
         let me: Me = s.get_json("/api/me")?;
         let progress = Progresses::new(each(me.media_progress));
         let in_progress: InProgress = s.get_json(&format!("/api/me/items-in-progress?limit={LIMIT}"))?;
@@ -115,8 +120,8 @@ impl sdk::Plugin for Audiobookshelf {
     /// address plays a book of many files straight through, and it needs no sign-in, so no secret
     /// goes to the player.
     fn resolve(action: &str) -> Result<Action, String> {
-        let path = play_path(action).ok_or_else(|| GONE.to_string())?;
-        let mut s = Session::connect(true)?.ok_or_else(|| NO_SIGN_IN.to_string())?;
+        let path = play_path(action).ok_or_else(|| sdk::tr(GONE))?;
+        let mut s = Session::connect(true)?.ok_or_else(|| sdk::tr(NO_SIGN_IN))?;
         s.close_last_stream();
         let body = serde_json::json!({
             "deviceInfo": { "clientName": "Lounge", "clientVersion": env!("CARGO_PKG_VERSION"), "deviceId": device_id() },
@@ -125,7 +130,7 @@ impl sdk::Plugin for Audiobookshelf {
         });
         let r = s.call("POST", &path, Some(body.to_string()))?;
         match r.status {
-            404 => return Err(GONE.into()),
+            404 => return Err(sdk::tr(GONE)),
             _ if !r.ok() => return Err(sdk::answered_error(SERVICE, &s.server, r.status)),
             _ => {}
         }
@@ -194,7 +199,8 @@ impl Session {
     /// server and username; otherwise the plugin signs in when [may_sign_in] allows, and there is
     /// no session when it does not.
     fn connect(may_sign_in: bool) -> Result<Option<Session>, String> {
-        let server = host::server_setting("server", "server address")?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let server = host::server_setting("server", &t!("server address"))?;
         if let Some(key) = host::secret("api_key").map(|k| k.trim().to_string()).filter(|k| !k.is_empty()) {
             return Ok(Some(Session { server, bearer: key, auth: Auth::Key, may_sign_in }));
         }
@@ -212,16 +218,16 @@ impl Session {
     }
 
     fn sign_in(&mut self) -> Result<(), String> {
-        let Auth::User { username, owner } = &self.auth else { return Err(KEY_REFUSED.into()) };
+        let Auth::User { username, owner } = &self.auth else { return Err(sdk::tr(KEY_REFUSED)) };
         let owner = owner.clone();
         let body = serde_json::json!({ "username": username, "password": host::secret("password").unwrap_or_default() }).to_string();
         let mut req = request("POST", format!("{}/login", self.server), None, Some(body));
         req.headers.insert("x-return-tokens".into(), "true".into());
         let r = sdk::fetch_from(SERVICE, &self.server, &req)?;
         match r.status {
-            401 => return Err(REJECTED.into()),
+            401 => return Err(sdk::tr(REJECTED)),
             404 => return Err(sdk::wrong_server(SERVICE, &self.server)),
-            429 => return Err(TOO_MANY.into()),
+            429 => return Err(sdk::tr(TOO_MANY)),
             _ if !r.ok() => return Err(sdk::answered_error(SERVICE, &self.server, r.status)),
             _ => {}
         }
@@ -234,7 +240,7 @@ impl Session {
 
     /// A new access token from the refresh token, or failing that a fresh sign-in.
     fn renew(&mut self) -> Result<(), String> {
-        let Auth::User { owner, .. } = &self.auth else { return Err(KEY_REFUSED.into()) };
+        let Auth::User { owner, .. } = &self.auth else { return Err(sdk::tr(KEY_REFUSED)) };
         let owner = owner.clone();
         if let Some(refresh) = host::kv_get_string("refresh") {
             let mut req = request("POST", format!("{}/auth/refresh", self.server), None, None);
@@ -248,7 +254,7 @@ impl Session {
             sdk::warn!("the refresh token was turned away with HTTP {}", r.status);
         }
         if !self.may_sign_in {
-            return Err(REJECTED.into());
+            return Err(sdk::tr(REJECTED));
         }
         self.sign_in()
     }
@@ -277,7 +283,7 @@ impl Session {
             return Ok(r);
         }
         if matches!(self.auth, Auth::Key) {
-            return Err(KEY_REFUSED.into());
+            return Err(sdk::tr(KEY_REFUSED));
         }
         self.renew()?;
         let r = sdk::fetch_from(SERVICE, &self.server, &request(method, url, Some(&self.bearer), body))?;
@@ -399,7 +405,8 @@ impl Session {
         let play = format!("episode:{}:{}", it.id, e.id);
         let show = it.media.metadata.title.clone().filter(|s| !s.is_empty());
         let subtitle = match (show, e.length().map(seconds_ms).filter(|&d| d > 0)) {
-            (Some(show), Some(ms)) => Some(format!("{show}, {}", length_text(ms))),
+            // Translators: {show} is a podcast's name and {length} how long the episode runs, such as "48 minutes".
+            (Some(show), Some(ms)) => Some(t!("{show}, {length}", show = show, length = length_text(ms))),
             (show, ms) => show.or_else(|| ms.map(length_text)),
         };
         Some(Item {
@@ -459,11 +466,13 @@ fn seconds_ms(seconds: f64) -> i64 {
 /// A length in words, such as "1 hour 5 minutes".
 fn length_text(ms: i64) -> String {
     let minutes = (ms + 30_000) / 60_000;
-    let count = |n: i64, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let hours = |h: i64| tn!(h, "{n} hour", "{n} hours");
+    let minutes_of = |m: i64| tn!(m, "{n} minute", "{n} minutes");
     match (minutes / 60, minutes % 60) {
-        (0, m) => count(m.max(1), "minute", "minutes"),
-        (h, 0) => count(h, "hour", "hours"),
-        (h, m) => format!("{} {}", count(h, "hour", "hours"), count(m, "minute", "minutes")),
+        (0, m) => minutes_of(m.max(1)),
+        (h, 0) => hours(h),
+        // Translators: a length of time. {hours} is a count of hours, such as "2 hours", and {minutes} a count of minutes, such as "25 minutes".
+        (h, m) => t!("{hours} {minutes}", hours = hours(h), minutes = minutes_of(m)),
     }
 }
 
@@ -642,10 +651,10 @@ impl Metadata {
         let name = one.and_then(|s| s.get("name")).and_then(|n| n.as_str()).filter(|n| !n.is_empty());
         let place = one.and_then(|s| s.get("sequence")).and_then(|n| n.as_str()).filter(|n| !n.is_empty());
         match (name, place) {
-            (Some(name), Some(place)) => Some(format!("{name}, book {place}")),
+            (Some(name), Some(place)) => Some(in_series(name, place)),
             (Some(name), None) => Some(name.to_string()),
             _ => self.series_name.as_deref().filter(|s| !s.is_empty()).map(|s| match s.rsplit_once(" #") {
-                Some((name, place)) if !name.is_empty() && !place.is_empty() && !name.contains(',') => format!("{name}, book {place}"),
+                Some((name, place)) if !name.is_empty() && !place.is_empty() && !name.contains(',') => in_series(name, place),
                 _ => s.to_string(),
             }),
         }
@@ -655,6 +664,11 @@ impl Metadata {
         let joined = self.authors.iter().map(|a| a.name.as_str()).filter(|n| !n.is_empty()).collect::<Vec<_>>().join(", ");
         self.author_name.clone().filter(|a| !a.is_empty()).or_else(|| Some(joined).filter(|a| !a.is_empty()))
     }
+}
+
+fn in_series(series: &str, number: &str) -> String {
+    // Translators: {series} is the name of a series of books and {number} this book's place in it, such as 2.
+    t!("{series}, book {number}", series = series, number = number)
 }
 
 #[derive(Deserialize, Default, Clone)]

@@ -3,7 +3,7 @@
 //! the phone, the row takes in your subscriptions as well, and your playlists and liked videos
 //! get rows of their own. The feeds are the ones YouTube publishes for every channel, so the
 //! sign-in only ever asks the API which channels you follow.
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, t, tc, tn, Action, HttpRequest, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use quick_xml::events::Event;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -36,56 +36,85 @@ const MOST_ITEMS: usize = 200;
 /// The key-value store takes 256 KB a key; the cache stays well under it.
 const CACHE_BYTES: usize = 200 * 1024;
 const MINUTE_MS: i64 = 60_000;
-const SIGNED_OUT: &str = "Google no longer accepts this sign-in. Press Refresh now to sign in again.";
-const QUOTA: &str = "YouTube's daily allowance for this app is used up. It comes back at midnight, Pacific time.";
-const API_OFF: &str = "The YouTube Data API v3 is not enabled for this Google Cloud project. Enable it, then try again.";
+// Translators: "Refresh now" is the button on the plugin's page on the TV.
+const SIGNED_OUT: &str = mark!("Google no longer accepts this sign-in. Press Refresh now to sign in again.");
+const QUOTA: &str = mark!("YouTube's daily allowance for this app is used up. It comes back at midnight, Pacific time.");
+const API_OFF: &str = mark!("The YouTube Data API v3 is not enabled for this Google Cloud project. Enable it, then try again.");
 
 impl sdk::Plugin for YouTube {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.youtube".into(),
             name: "YouTube".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "New videos from the channels you follow, and with a Google sign-in your subscriptions, playlists and liked videos.".into(),
+            description: t!("New videos from the channels you follow, and with a Google sign-in your subscriptions, playlists and liked videos."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["www.youtube.com".into(), "m.youtube.com".into(), "*.ytimg.com".into(), "oauth2.googleapis.com".into(), "www.googleapis.com".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "new".into(), title: "New on YouTube".into(), style: RowStyle::Landscape },
-                RowSpec { id: "playlists".into(), title: "Your playlists on YouTube".into(), style: RowStyle::Landscape },
-                RowSpec { id: "liked".into(), title: "Liked on YouTube".into(), style: RowStyle::Landscape },
+                RowSpec { id: "new".into(), title: t!("New on YouTube"), style: RowStyle::Landscape },
+                RowSpec { id: "playlists".into(), title: t!("Your playlists on YouTube"), style: RowStyle::Landscape },
+                RowSpec { id: "liked".into(), title: t!("Liked on YouTube"), style: RowStyle::Landscape },
             ],
             settings: vec![
                 SettingSpec {
                     key: "channels".into(),
-                    label: "Channels".into(),
+                    label: t!("Channels"),
                     kind: SettingKind::List,
                     required: false,
-                    help: Some("The channels and playlists to follow, as links, @handles or ids, one per line or separated by commas. A channel's id starts with UC and a playlist's with PL. A Google Takeout export of your subscriptions, the CSV file, can be pasted in whole. Not needed with a sign-in below.".into()),
+                    help: Some(t!("The channels and playlists to follow, as links, @handles or ids, one per line or separated by commas. A channel's id starts with UC and a playlist's with PL. A Google Takeout export of your subscriptions, the CSV file, can be pasted in whole. Not needed with a sign-in below.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "client_id".into(),
-                    label: "Google Client ID".into(),
+                    label: t!("Google Client ID"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here. At console.cloud.google.com make a project, enable the YouTube Data API v3, set the OAuth consent screen to External and publish it, then make an OAuth client of the type TVs and Limited Input devices. This page then shows a code to enter on your phone.".into()),
+                    // Translators: "External" and "TVs and Limited Input devices" are choices in the Google Cloud console.
+                    help: Some(t!("To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here. At console.cloud.google.com make a project, enable the YouTube Data API v3, set the OAuth consent screen to External and publish it, then make an OAuth client of the type TVs and Limited Input devices. This page then shows a code to enter on your phone.")),
                     default: None,
                 },
-                SettingSpec { key: "client_secret".into(), label: "Google Client secret".into(), kind: SettingKind::Password, required: false, help: None, default: None },
-                SettingSpec { key: "subscriptions".into(), label: "Subscriptions".into(), kind: SettingKind::Toggle, required: false, help: Some("New videos from the channels you subscribe to, in New on YouTube.".into()), default: Some("true".into()) },
-                SettingSpec { key: "playlists".into(), label: "Playlists row".into(), kind: SettingKind::Toggle, required: false, help: Some("Your own playlists. Watch later is not one YouTube hands out.".into()), default: Some("true".into()) },
-                SettingSpec { key: "liked".into(), label: "Liked videos row".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
-                SettingSpec { key: "per_source".into(), label: "Videos per channel".into(), kind: SettingKind::Number, required: false, help: None, default: Some("4".into()) },
-                SettingSpec { key: "days".into(), label: "Only the last … days".into(), kind: SettingKind::Number, required: false, help: Some("0 shows the feed's newest videos whatever their age.".into()), default: Some("30".into()) },
-                SettingSpec { key: "shorts".into(), label: "Include Shorts".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
+                SettingSpec { key: "client_secret".into(), label: t!("Google Client secret"), kind: SettingKind::Password, required: false, help: None, default: None },
+                SettingSpec {
+                    key: "subscriptions".into(),
+                    label: t!("Subscriptions"),
+                    kind: SettingKind::Toggle,
+                    required: false,
+                    // Translators: "New on YouTube" is the title of this plugin's first row.
+                    help: Some(t!("New videos from the channels you subscribe to, in New on YouTube.")),
+                    default: Some("true".into()),
+                },
+                SettingSpec {
+                    key: "playlists".into(),
+                    label: t!("Playlists row"),
+                    kind: SettingKind::Toggle,
+                    required: false,
+                    // Translators: "Watch later" is YouTube's own playlist of that name.
+                    help: Some(t!("Your own playlists. Watch later is not one YouTube hands out.")),
+                    default: Some("true".into()),
+                },
+                SettingSpec { key: "liked".into(), label: t!("Liked videos row"), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
+                SettingSpec { key: "per_source".into(), label: t!("Videos per channel"), kind: SettingKind::Number, required: false, help: None, default: Some("4".into()) },
+                SettingSpec {
+                    key: "days".into(),
+                    // Translators: the label of a field that takes a number, which stands where the … is.
+                    label: t!("Only the last … days"),
+                    kind: SettingKind::Number,
+                    required: false,
+                    help: Some(t!("0 shows the feed's newest videos whatever their age.")),
+                    default: Some("30".into()),
+                },
+                SettingSpec { key: "shorts".into(), label: t!("Include Shorts"), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
             ],
             homepage: None,
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -97,7 +126,7 @@ impl sdk::Plugin for YouTube {
         };
         let account = Account::connect(ctx.now_ms, &mut budget)?;
         if sources.is_empty() && account.is_none() {
-            return Err("Nothing to show yet. Add a channel link or id, or a Google Client ID, in the plugin's settings.".into());
+            return Err(t!("Nothing to show yet. Add a channel link or id, or a Google Client ID, in the plugin's settings."));
         }
         let per_source = number_setting("per_source", 4).clamp(1, 15) as usize;
         let days = number_setting("days", 30).clamp(0, 3_650);
@@ -240,7 +269,10 @@ impl Budget {
 fn feed(source: &Source) -> Result<String, String> {
     let r = sdk::fetch_online("YouTube", &HttpRequest::get(source.feed_url()))?;
     match r.status {
-        404 => Err(format!("YouTube gave no feed for {}. If the id is right, it comes with a later refresh.", source.label())),
+        404 => Err(match source {
+            Source::Channel(id) | Source::Named(id) => t!("YouTube gave no feed for channel {id}. If the id is right, it comes with a later refresh.", id = id),
+            Source::Playlist(id) => t!("YouTube gave no feed for playlist {id}. If the id is right, it comes with a later refresh.", id = id),
+        }),
         s if !(200..300).contains(&s) => Err(sdk::online_error("YouTube", s)),
         _ => Ok(if r.body_base64.is_some() { String::from_utf8_lossy(&sdk::body_bytes(r)).into_owned() } else { r.body }),
     }
@@ -341,7 +373,7 @@ impl Account {
         let Some(client_id) = host::setting("client_id").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) else {
             return Ok(None);
         };
-        let secret = host::secret("client_secret").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or_else(|| sdk::not_set("Google Client secret"))?;
+        let secret = host::secret("client_secret").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or_else(secret_not_set)?;
         let saved: Option<Token> = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice(&v).ok());
         let token = match saved {
             Some(t) if t.expires_ms - now_ms > 5 * MINUTE_MS => t,
@@ -361,7 +393,7 @@ impl Account {
                     }
                     Err(Refusal::Failed(e)) => {
                         sdk::warn!("could not renew the sign-in ({e})");
-                        return Err("Could not renew the Google sign-in. It tries again on the next refresh.".into());
+                        return Err(t!("Could not renew the Google sign-in. It tries again on the next refresh."));
                     }
                 }
             }
@@ -372,6 +404,11 @@ impl Account {
         };
         Ok(Some(Client { token: token.access }))
     }
+}
+
+fn secret_not_set() -> String {
+    // Translators: names the setting inside "Add the {label} in the plugin's settings."
+    sdk::not_set(&tc!("in a sentence", "Google Client secret"))
 }
 
 /// Why a renewal did not give a token: Google refused the refresh token, or nothing usable
@@ -405,7 +442,8 @@ fn save_token(t: TokenAnswer, keep_refresh: &str, now_ms: i64) -> Token {
     token
 }
 
-const UNKNOWN_CLIENT: &str = "Google does not know this Client ID. Check it, and that the OAuth client is of the type TVs and Limited Input devices.";
+// Translators: "TVs and Limited Input devices" is the name of the type in the Google Cloud console.
+const UNKNOWN_CLIENT: &str = mark!("Google does not know this Client ID. Check it, and that the OAuth client is of the type TVs and Limited Input devices.");
 
 /// The token once the code has been entered, so the refresh goes on with it, or else the
 /// sentence the plugin's page shows meanwhile. One poll per refresh is all the host's rhythm
@@ -427,9 +465,10 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, Stri
             "authorization_pending" | "slow_down" => return Err(instruction(&d)),
             "access_denied" => {
                 host::kv_delete(DEVICE_KEY);
-                return Err("The sign-in was declined on the phone. Press Refresh now for a new code.".into());
+                // Translators: "Refresh now" is the button on the plugin's page on the TV.
+                return Err(t!("The sign-in was declined on the phone. Press Refresh now for a new code."));
             }
-            "invalid_client" => return Err(UNKNOWN_CLIENT.into()),
+            "invalid_client" => return Err(sdk::tr(UNKNOWN_CLIENT)),
             _ => {
                 sdk::warn!("the sign-in code is no longer good: HTTP {status} {} {}", e.error, e.error_description);
                 host::kv_delete(DEVICE_KEY);
@@ -440,7 +479,7 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, Stri
     if !(200..300).contains(&status) {
         let e = oauth_error(&body);
         sdk::warn!("HTTP {status} when asked for a sign-in code: {} {}", e.error, e.error_description);
-        return Err(if e.error == "invalid_client" || status == 401 { UNKNOWN_CLIENT.into() } else { sdk::online_error("Google", status) });
+        return Err(if e.error == "invalid_client" || status == 401 { sdk::tr(UNKNOWN_CLIENT) } else { sdk::online_error("Google", status) });
     }
     let a: DeviceAnswer = serde_json::from_str(&body).map_err(|e| {
         sdk::warn!("unexpected sign-in code answer: {e}");
@@ -637,15 +676,15 @@ impl Client {
             }),
             401 => {
                 expire_token();
-                Err(SIGNED_OUT.into())
+                Err(sdk::tr(SIGNED_OUT))
             }
             s => {
                 let e: ApiError = serde_json::from_str(&r.body).unwrap_or_default();
                 let reason = e.error.errors.first().map(|d| d.reason.as_str()).unwrap_or("");
                 sdk::warn!("HTTP {s} for {name}: {reason} {}", e.error.message);
                 Err(match reason {
-                    "quotaExceeded" | "dailyLimitExceeded" | "rateLimitExceeded" => QUOTA.into(),
-                    "accessNotConfigured" => API_OFF.into(),
+                    "quotaExceeded" | "dailyLimitExceeded" | "rateLimitExceeded" => sdk::tr(QUOTA),
+                    "accessNotConfigured" => sdk::tr(API_OFF),
                     _ => sdk::online_error("YouTube", s),
                 })
             }
@@ -680,7 +719,7 @@ impl Client {
             .map(|(i, p)| Item {
                 id: format!("playlist:{}", p.id),
                 title: p.snippet.title.clone(),
-                subtitle: p.details.item_count.map(|n| if n == 1 { "1 video".to_string() } else { format!("{n} videos") }),
+                subtitle: p.details.item_count.map(|n| tn!(n, "{n} video", "{n} videos")),
                 thumbnail: p.snippet.thumbnails.best(),
                 row: Some("playlists".into()),
                 weight: count - i as i32,
@@ -906,7 +945,8 @@ pub fn parse_sources(raw: &str) -> Result<Vec<Source>, String> {
             && !heading
             && let Some(piece) = unknown
         {
-            return Err(format!("\"{piece}\" is not a channel or playlist id or link. Check the channels in the plugin's settings."));
+            // Translators: {piece} is what was typed into the Channels setting.
+            return Err(t!("\"{piece}\" is not a channel or playlist id or link. Check the channels in the plugin's settings.", piece = piece));
         }
     }
     out.dedup();
@@ -1005,11 +1045,12 @@ fn channel_page_id(name: &str) -> Result<String, String> {
         .header("Cookie", "SOCS=CAI; CONSENT=YES+");
     let r = sdk::fetch_online("YouTube", &req)?;
     match r.status {
-        404 => Err(format!("YouTube has no channel {name}. Check the channels in the plugin's settings.")),
+        // Translators: {name} is a channel's handle or the end of its link, such as @mkbhd.
+        404 => Err(t!("YouTube has no channel {name}. Check the channels in the plugin's settings.", name = name)),
         s if !(200..300).contains(&s) => Err(sdk::online_error("YouTube", s)),
         _ => {
             let html = if r.body_base64.is_some() { String::from_utf8_lossy(&sdk::body_bytes(r)).into_owned() } else { r.body };
-            channel_id_in(&html).ok_or_else(|| format!("YouTube's page for {name} doesn't say which channel it is. Use the channel's id, which starts with UC, instead."))
+            channel_id_in(&html).ok_or_else(|| t!("YouTube's page for {name} doesn't say which channel it is. Use the channel's id, which starts with UC, instead.", name = name))
         }
     }
 }

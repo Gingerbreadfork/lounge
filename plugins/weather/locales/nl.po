@@ -1,0 +1,179 @@
+# Lounge, weather: nl
+#
+msgid ""
+msgstr ""
+"Language: nl\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Weather"
+msgstr "Weer"
+
+#: src/lib.rs
+msgid "Now and the week ahead for the town you name, with weather data by Open-Meteo.com."
+msgstr "Nu en de komende week voor de plaats die je opgeeft, met weergegevens van Open-Meteo.com."
+
+#: src/lib.rs
+msgid "Town or city"
+msgstr "Plaats"
+
+#: src/lib.rs
+msgid "Add the region after a comma when the name is shared, as in Portland, Maine. Coordinates work too, as in 45.76, 4.84."
+msgstr "Zet de regio achter een komma als meer plaatsen zo heten, zoals Portland, Maine. Coördinaten werken ook, zoals 45.76, 4.84."
+
+#: src/lib.rs
+msgid "Temperatures in Fahrenheit"
+msgstr "Temperaturen in Fahrenheit"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "town or city"
+msgstr "plaats"
+
+#: src/lib.rs
+msgid "{service} couldn't find \"{asked}\". Check the spelling, try the name in English, or put a comma before the region, as in Portland, Maine."
+msgstr "{service} kon “{asked}” niet vinden. Controleer de spelling, probeer de naam in het Engels of zet een komma voor de regio, zoals Portland, Maine."
+
+#: src/lib.rs
+msgid "Sunny"
+msgstr "Zonnig"
+
+#: src/lib.rs
+msgid "Clear"
+msgstr "Helder"
+
+#: src/lib.rs
+msgid "Mostly sunny"
+msgstr "Overwegend zonnig"
+
+#: src/lib.rs
+msgid "Mostly clear"
+msgstr "Overwegend helder"
+
+#: src/lib.rs
+msgid "Partly cloudy"
+msgstr "Half bewolkt"
+
+#: src/lib.rs
+msgid "Cloudy"
+msgstr "Bewolkt"
+
+#: src/lib.rs
+msgid "Fog"
+msgstr "Mist"
+
+#: src/lib.rs
+msgid "Light drizzle"
+msgstr "Lichte motregen"
+
+#: src/lib.rs
+msgid "Drizzle"
+msgstr "Motregen"
+
+#: src/lib.rs
+msgid "Freezing drizzle"
+msgstr "Lichte ijzel"
+
+#: src/lib.rs
+msgid "Light rain"
+msgstr "Lichte regen"
+
+#: src/lib.rs
+msgid "Rain"
+msgstr "Regen"
+
+#: src/lib.rs
+msgid "Heavy rain"
+msgstr "Zware regen"
+
+#: src/lib.rs
+msgid "Freezing rain"
+msgstr "IJzel"
+
+#: src/lib.rs
+msgid "Light snow"
+msgstr "Lichte sneeuw"
+
+#: src/lib.rs
+msgid "Snow"
+msgstr "Sneeuw"
+
+#: src/lib.rs
+msgid "Heavy snow"
+msgstr "Zware sneeuw"
+
+#: src/lib.rs
+msgid "Light showers"
+msgstr "Lichte buien"
+
+#: src/lib.rs
+msgid "Showers"
+msgstr "Buien"
+
+#: src/lib.rs
+msgid "Heavy showers"
+msgstr "Zware buien"
+
+#: src/lib.rs
+msgid "Light snow showers"
+msgstr "Lichte sneeuwbuien"
+
+#: src/lib.rs
+msgid "Heavy snow showers"
+msgstr "Zware sneeuwbuien"
+
+#: src/lib.rs
+msgid "Thunderstorm"
+msgstr "Onweer"
+
+#: src/lib.rs
+msgid "Thunder and hail"
+msgstr "Onweer met hagel"
+
+#. {reading} is a temperature with its scale, such as 3°C.
+#: src/lib.rs
+msgid "{reading} now"
+msgstr "Nu {reading}"
+
+#: src/lib.rs
+msgid "Thursday"
+msgstr "Donderdag"
+
+#: src/lib.rs
+msgid "Friday"
+msgstr "Vrijdag"
+
+#: src/lib.rs
+msgid "Saturday"
+msgstr "Zaterdag"
+
+#: src/lib.rs
+msgid "Sunday"
+msgstr "Zondag"
+
+#: src/lib.rs
+msgid "Monday"
+msgstr "Maandag"
+
+#: src/lib.rs
+msgid "Tuesday"
+msgstr "Dinsdag"
+
+#: src/lib.rs
+msgid "Wednesday"
+msgstr "Woensdag"
+
+#. {degrees} is a day's high, such as 5°.
+#: src/lib.rs
+msgid "{degrees} today"
+msgstr "Vandaag {degrees}"
+
+#: src/lib.rs
+msgid "{degrees} tomorrow"
+msgstr "Morgen {degrees}"
+
+#. {day} is a weekday's name, as in "6° Thursday".
+#: src/lib.rs
+msgid "{degrees} {day}"
+msgstr "{day} {degrees}"

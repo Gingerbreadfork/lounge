@@ -3,7 +3,7 @@
 //! from the server. The API is read with the user's password, answering the server's Digest or
 //! Basic challenge; streams and pictures, which the TV fetches on its own, carry the persistent
 //! token from the user's Tvheadend settings.
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, t, tn, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use md5::{Digest, Md5};
 use serde::Deserialize;
 use std::cell::RefCell;
@@ -14,37 +14,42 @@ const PAGE: usize = 1000;
 const MAX_PAGES: usize = 8;
 
 impl sdk::Plugin for Tvheadend {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.tvheadend".into(),
             name: "Tvheadend".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Live channels, the guide and your recordings from a Tvheadend server.".into(),
+            description: t!("Live channels, the guide and your recordings from a Tvheadend server."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg, Kind::Search],
             fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
-            rows: vec![RowSpec { id: "recordings".into(), title: "Recordings on Tvheadend".into(), style: RowStyle::Landscape }],
+            rows: vec![RowSpec { id: "recordings".into(), title: t!("Recordings on Tvheadend"), style: RowStyle::Landscape }],
             settings: vec![
-                SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:9981".into()), default: None },
-                SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: false, help: Some("Leave both empty if the server allows anonymous access.".into()), default: None },
-                SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
+                SettingSpec { key: "server".into(), label: t!("Server address"), kind: SettingKind::Url, required: true, help: Some(t!("Like http://192.168.0.10:9981")), default: None },
+                SettingSpec { key: "username".into(), label: t!("Username"), kind: SettingKind::Text, required: false, help: Some(t!("Leave both empty if the server allows anonymous access.")), default: None },
+                SettingSpec { key: "password".into(), label: t!("Password"), kind: SettingKind::Password, required: false, help: None, default: None },
                 SettingSpec {
                     key: "token".into(),
-                    label: "Persistent auth token".into(),
+                    label: t!("Persistent auth token"),
                     kind: SettingKind::Password,
                     required: false,
-                    help: Some("Lets the TV play streams without a password. In Tvheadend go to Configuration, Users, Access entries, open your user and turn on Persistent authentication; the token appears there.".into()),
+                    // Translators: Configuration, Users, Access entries and Persistent authentication are names in Tvheadend's own menus.
+                    help: Some(t!("Lets the TV play streams without a password. In Tvheadend go to Configuration, Users, Access entries, open your user and turn on Persistent authentication; the token appears there.")),
                     default: None,
                 },
-                SettingSpec { key: "profile".into(), label: "Stream profile".into(), kind: SettingKind::Text, required: false, help: Some("A profile from Configuration, Stream. The default, pass, sends the channel as it is.".into()), default: Some("pass".into()) },
-                SettingSpec { key: "tag".into(), label: "Only channels tagged".into(), kind: SettingKind::Text, required: false, help: Some("A channel tag name such as TV. Empty means every enabled channel.".into()), default: None },
+                // Translators: a setting and its help. Configuration and Stream are menus in Tvheadend, and pass is a profile's name, kept as it is.
+                SettingSpec { key: "profile".into(), label: t!("Stream profile"), kind: SettingKind::Text, required: false, help: Some(t!("A profile from Configuration, Stream. The default, pass, sends the channel as it is.")), default: Some("pass".into()) },
+                SettingSpec { key: "tag".into(), label: t!("Only channels tagged"), kind: SettingKind::Text, required: false, help: Some(t!("A channel tag name such as TV. Empty means every enabled channel.")), default: None },
             ],
             homepage: Some("https://tvheadend.org".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -53,7 +58,7 @@ impl sdk::Plugin for Tvheadend {
         let tag_uuid = s.tag_uuid()?;
         let mut channels = s.channels(tag_uuid.as_deref())?;
         if channels.is_empty() {
-            return Err("Tvheadend has no enabled channels. Map some services to channels in Tvheadend first.".into());
+            return Err(t!("Tvheadend has no enabled channels. Map some services to channels in Tvheadend first."));
         }
         if channels.len() > sdk::MAX_ITEMS {
             sdk::warn!("{} channels, of which the TV shows the first {}; choose a channel tag in the settings", channels.len(), sdk::MAX_ITEMS);
@@ -180,7 +185,8 @@ fn read_challenge(header: &str) -> Result<Option<Auth>, String> {
     }
     match (basic, unsupported) {
         (true, _) => Ok(Some(Auth::Basic)),
-        (false, Some(what)) => Err(format!("Tvheadend asks for Digest sign-in with {what}, which the plugin cannot answer. In Tvheadend's general settings, set the digest hash type to MD5.")),
+        // Translators: {algorithm} is a technical name as the server sent it, such as SHA-256.
+        (false, Some(what)) => Err(t!("Tvheadend asks for Digest sign-in with {algorithm}, which the plugin cannot answer. In Tvheadend's general settings, set the digest hash type to MD5.", algorithm = what)),
         (false, None) => Ok(None),
     }
 }
@@ -375,7 +381,8 @@ pub struct Recording {
 
 impl Server {
     fn from_settings() -> Result<Server, String> {
-        let base = host::server_setting("server", "server address")?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let base = host::server_setting("server", &t!("server address"))?;
         let username = host::setting("username").map(|u| u.trim().to_string()).filter(|u| !u.is_empty());
         let password = host::secret("password").unwrap_or_default();
         let token = host::secret("token").map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
@@ -420,7 +427,7 @@ impl Server {
         let path = path.split('?').next().unwrap_or(path);
         match r.status {
             401 => return Err(self.rejected()),
-            403 => return Err("Tvheadend refused this user. Check that its access entry allows the web interface.".into()),
+            403 => return Err(t!("Tvheadend refused this user. Check that its access entry allows the web interface.")),
             s if !(200..300).contains(&s) => {
                 sdk::warn!("HTTP {s} for {path}");
                 return Err(sdk::answered_error("Tvheadend", &self.base, s));
@@ -435,13 +442,13 @@ impl Server {
 
     fn rejected(&self) -> String {
         let tried = match (&self.login, &*self.auth.borrow()) {
-            (None, _) => return "Tvheadend wants a username and password. Enter them in the plugin's settings.".into(),
-            (Some(_), None) => return "Tvheadend refused the request without saying how to sign in. In Tvheadend's general settings, check the authentication type.".into(),
+            (None, _) => return t!("Tvheadend wants a username and password. Enter them in the plugin's settings."),
+            (Some(_), None) => return t!("Tvheadend refused the request without saying how to sign in. In Tvheadend's general settings, check the authentication type."),
             (Some(_), Some(Auth::Digest(_))) => "Digest",
             (Some(_), Some(Auth::Basic)) => "Basic",
         };
         sdk::warn!("sign-in with HTTP {tried} was refused");
-        "Tvheadend rejected the username or password. Check them in the plugin's settings.".into()
+        t!("Tvheadend rejected the username or password. Check them in the plugin's settings.")
     }
 
     /// The id of the channel tag the settings name, matched in any case; the server's own
@@ -451,7 +458,7 @@ impl Server {
         let tags: Grid<Tag> = self.get_json("/api/channeltag/grid?limit=500")?;
         match tags.entries.into_iter().find(|t| t.name.eq_ignore_ascii_case(name)) {
             Some(t) => Ok(Some(t.uuid)),
-            None => Err(format!("Tvheadend has no channel tag called \"{name}\". Check the tag's name in the plugin's settings.")),
+            None => Err(t!("Tvheadend has no channel tag called \"{name}\". Check the tag's name in the plugin's settings.", name = name)),
         }
     }
 
@@ -512,7 +519,8 @@ impl Server {
         let mut item = self.event_item(e, Some(ItemKind::Program));
         let when = airs(e.start * 1000, now_ms);
         item.subtitle = Some(match e.channel_name.as_deref().filter(|c| !c.is_empty()) {
-            Some(c) => format!("{when}, {c}"),
+            // Translators: {when} is a phrase such as "On now" or "Starts in 20 minutes", and {channel} is a channel's name.
+            Some(c) => t!("{when}, {channel}", when = when, channel = c),
             None => when,
         });
         item
@@ -558,13 +566,11 @@ fn first_airings(events: Vec<Event>, limit: usize) -> Vec<Event> {
 fn airs(start_ms: i64, now_ms: i64) -> String {
     let minutes = (start_ms - now_ms + 59_999) / 60_000;
     match minutes {
-        ..=0 => "On now".into(),
-        1 => "Starts in 1 minute".into(),
-        2..=59 => format!("Starts in {minutes} minutes"),
-        60..=119 => "Starts in 1 hour".into(),
-        120..=1_439 => format!("Starts in {} hours", minutes / 60),
-        1_440..=2_879 => "Starts in 1 day".into(),
-        _ => format!("Starts in {} days", minutes / 1_440),
+        // Translators: said of a programme that is being broadcast at this moment.
+        ..=0 => t!("On now"),
+        1..=59 => tn!(minutes, "Starts in {n} minute", "Starts in {n} minutes"),
+        60..=1_439 => tn!(minutes / 60, "Starts in {n} hour", "Starts in {n} hours"),
+        _ => tn!(minutes / 1_440, "Starts in {n} day", "Starts in {n} days"),
     }
 }
 

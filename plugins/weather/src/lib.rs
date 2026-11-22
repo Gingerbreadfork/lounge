@@ -1,7 +1,7 @@
 //! Weather: how it is outside now and the week ahead for one town, as a row of small tiles to
 //! read. The forecast and the town's whereabouts come from Open-Meteo, which asks for no key or
 //! account, and the symbols are those of Yr, the Norwegian weather service.
-use lounge_plugin_sdk::{self as sdk, host, HttpRequest, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, t, HttpRequest, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 
 pub struct Weather;
@@ -28,38 +28,42 @@ const CITY: f64 = 100_000.0;
 const LATIN: [&str; 16] = ["de", "fr", "es", "it", "pt", "nl", "da", "sv", "no", "fi", "pl", "cs", "hu", "ro", "tr", "vi"];
 
 impl sdk::Plugin for Weather {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.weather".into(),
-            name: "Weather".into(),
+            name: t!("Weather"),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Now and the week ahead for the town you name, with weather data by Open-Meteo.com.".into(),
+            description: t!("Now and the week ahead for the town you name, with weather data by Open-Meteo.com."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["api.open-meteo.com".into(), "geocoding-api.open-meteo.com".into(), "cdn.jsdelivr.net".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
-            rows: vec![RowSpec { id: ROW.into(), title: "Weather".into(), style: RowStyle::Compact }],
+            rows: vec![RowSpec { id: ROW.into(), title: t!("Weather"), style: RowStyle::Compact }],
             settings: vec![
                 SettingSpec {
                     key: "place".into(),
-                    label: "Town or city".into(),
+                    label: t!("Town or city"),
                     kind: SettingKind::Text,
                     required: true,
-                    help: Some("Add the region after a comma when the name is shared, as in Portland, Maine. Coordinates work too, as in 45.76, 4.84.".into()),
+                    help: Some(t!("Add the region after a comma when the name is shared, as in Portland, Maine. Coordinates work too, as in 45.76, 4.84.")),
                     default: None,
                 },
-                SettingSpec { key: "fahrenheit".into(), label: "Temperatures in Fahrenheit".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
+                SettingSpec { key: "fahrenheit".into(), label: t!("Temperatures in Fahrenheit"), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
             ],
             homepage: Some("https://open-meteo.com".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let place = locate(&host::required_setting("place", "town or city")?)?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let place = locate(&host::required_setting("place", &t!("town or city"))?)?;
         let fahrenheit = host::setting("fahrenheit").is_some_and(|v| v == "true");
         let url = forecast_url(&place, fahrenheit);
         match get_json::<Forecast>(&url) {
@@ -254,17 +258,19 @@ fn locate(asked: &str) -> Result<Place, String> {
     if let Some((latitude, longitude)) = coordinates(asked) {
         return Ok(Place { asked: asked.to_string(), town: None, region: None, latitude, longitude });
     }
-    let known = host::kv_get(PLACE_KEY).and_then(|v| serde_json::from_slice::<Place>(&v).ok());
+    let spoken = spoken();
+    let key = place_key(&spoken);
+    let known = host::kv_get(&key).and_then(|v| serde_json::from_slice::<Place>(&v).ok());
     if let Some(place) = known.filter(|p| p.asked == asked) {
         return Ok(place);
     }
     let (found, language) = find(asked)?;
     let found = found.into_iter().next().ok_or_else(|| unknown_place(asked))?;
-    // The row is in English, so a town found under another language's name is named in English.
-    let named = if language == "en" { None } else { in_english(&found) };
+    // A town found under another language's name is named in the language the row is in.
+    let named = if language == spoken { None } else { named_in(&found, &spoken) };
     let place = named.unwrap_or(found).into_place(asked);
     if let Ok(json) = serde_json::to_vec(&place) {
-        host::kv_set(PLACE_KEY, &json);
+        host::kv_set(&key, &json);
     }
     Ok(place)
 }
@@ -288,9 +294,19 @@ fn find(asked: &str) -> Result<(Vec<Found>, &'static str), String> {
     Ok(best)
 }
 
-/// The same place under its English names, when Open-Meteo will say them.
-fn in_english(found: &Found) -> Option<Found> {
-    get_json(&format!("{PLACE_BY_ID}?id={}&language=en&format=json", found.id?)).ok()
+/// The same place under its names in `language`, when Open-Meteo will say them.
+fn named_in(found: &Found, language: &str) -> Option<Found> {
+    get_json(&format!("{PLACE_BY_ID}?id={}&language={language}&format=json", found.id?)).ok()
+}
+
+/// The language the row is written in, as Open-Meteo names languages.
+fn spoken() -> String {
+    sdk::words::language().split('-').next().unwrap_or("en").to_string()
+}
+
+/// Where the place is remembered. Each language keeps its own, since the names differ.
+fn place_key(language: &str) -> String {
+    if language == "en" { PLACE_KEY.to_string() } else { format!("{PLACE_KEY}:{language}") }
 }
 
 fn search(asked: &str, language: &str) -> Result<Vec<Found>, String> {
@@ -314,7 +330,7 @@ fn languages_for(name: &str) -> &'static [&'static str] {
 }
 
 fn unknown_place(asked: &str) -> String {
-    format!("{SERVICE} couldn't find \"{asked}\". Check the spelling, try the name in English, or put a comma before the region, as in Portland, Maine.")
+    t!("{service} couldn't find \"{asked}\". Check the spelling, try the name in English, or put a comma before the region, as in Portland, Maine.", service = SERVICE, asked = asked)
 }
 
 /// A latitude and a longitude typed as two numbers. They are told from a postcode such as
@@ -361,28 +377,28 @@ fn encode_query(s: &str) -> String {
 fn sky(code: f64, lit: bool) -> Option<(&'static str, String)> {
     let by_light = |name: &str| format!("{name}_{}", if lit { "day" } else { "night" });
     Some(match code as i64 {
-        0 => (if lit { "Sunny" } else { "Clear" }, by_light("clearsky")),
-        1 => (if lit { "Mostly sunny" } else { "Mostly clear" }, by_light("fair")),
-        2 => ("Partly cloudy", by_light("partlycloudy")),
-        3 => ("Cloudy", "cloudy".into()),
-        45 | 48 => ("Fog", "fog".into()),
-        51 => ("Light drizzle", "lightrain".into()),
-        53 | 55 => ("Drizzle", "rain".into()),
-        56 | 57 => ("Freezing drizzle", "lightsleet".into()),
-        61 => ("Light rain", "lightrain".into()),
-        63 => ("Rain", "rain".into()),
-        65 => ("Heavy rain", "heavyrain".into()),
-        66 | 67 => ("Freezing rain", "sleet".into()),
-        71 | 77 => ("Light snow", "lightsnow".into()),
-        73 => ("Snow", "snow".into()),
-        75 => ("Heavy snow", "heavysnow".into()),
-        80 => ("Light showers", by_light("lightrainshowers")),
-        81 => ("Showers", by_light("rainshowers")),
-        82 => ("Heavy showers", by_light("heavyrainshowers")),
-        85 => ("Light snow showers", by_light("lightsnowshowers")),
-        86 => ("Heavy snow showers", by_light("heavysnowshowers")),
-        95 => ("Thunderstorm", "rainandthunder".into()),
-        96 | 99 => ("Thunder and hail", "heavyrainandthunder".into()),
+        0 => (if lit { mark!("Sunny") } else { mark!("Clear") }, by_light("clearsky")),
+        1 => (if lit { mark!("Mostly sunny") } else { mark!("Mostly clear") }, by_light("fair")),
+        2 => (mark!("Partly cloudy"), by_light("partlycloudy")),
+        3 => (mark!("Cloudy"), "cloudy".into()),
+        45 | 48 => (mark!("Fog"), "fog".into()),
+        51 => (mark!("Light drizzle"), "lightrain".into()),
+        53 | 55 => (mark!("Drizzle"), "rain".into()),
+        56 | 57 => (mark!("Freezing drizzle"), "lightsleet".into()),
+        61 => (mark!("Light rain"), "lightrain".into()),
+        63 => (mark!("Rain"), "rain".into()),
+        65 => (mark!("Heavy rain"), "heavyrain".into()),
+        66 | 67 => (mark!("Freezing rain"), "sleet".into()),
+        71 | 77 => (mark!("Light snow"), "lightsnow".into()),
+        73 => (mark!("Snow"), "snow".into()),
+        75 => (mark!("Heavy snow"), "heavysnow".into()),
+        80 => (mark!("Light showers"), by_light("lightrainshowers")),
+        81 => (mark!("Showers"), by_light("rainshowers")),
+        82 => (mark!("Heavy showers"), by_light("heavyrainshowers")),
+        85 => (mark!("Light snow showers"), by_light("lightsnowshowers")),
+        86 => (mark!("Heavy snow showers"), by_light("heavysnowshowers")),
+        95 => (mark!("Thunderstorm"), "rainandthunder".into()),
+        96 | 99 => (mark!("Thunder and hail"), "heavyrainandthunder".into()),
         _ => return None,
     })
 }
@@ -430,7 +446,8 @@ fn tiles(forecast: &Forecast, place: &Place, fahrenheit: bool, moment: &Moment) 
     let mut tiles = vec![place_tile(place)];
     if moment.now {
         let now = &forecast.current;
-        tiles.push(tile("now".into(), format!("{} now", reading(now, fahrenheit)), sky_now(now)));
+        // Translators: {reading} is a temperature with its scale, such as 3°C.
+        tiles.push(tile("now".into(), t!("{reading} now", reading = reading(now, fahrenheit)), sky_now(now)));
     }
     let daily = &forecast.daily;
     for (n, date) in daily.time.iter().enumerate() {
@@ -442,7 +459,7 @@ fn tiles(forecast: &Forecast, place: &Place, fahrenheit: bool, moment: &Moment) 
         }
         // A day the sun never rises on is clear, not sunny.
         let lit = at(&daily.daylight_duration) != Some(0.0);
-        tiles.push(tile(format!("day:{ahead}"), format!("{} {}", degrees(high), day_name(ahead, day)), at(&daily.weather_code).and_then(|code| sky(code, lit))));
+        tiles.push(tile(format!("day:{ahead}"), day_title(&degrees(high), ahead, day), at(&daily.weather_code).and_then(|code| sky(code, lit))));
     }
     let count = tiles.len();
     for (i, tile) in tiles.iter_mut().enumerate() {
@@ -464,17 +481,19 @@ fn place_tile(place: &Place) -> Item {
 /// carries no action, which makes it a tile to read.
 fn tile(id: String, title: String, sky: Option<(&'static str, String)>) -> Item {
     let (words, symbol) = sky.unzip();
-    Item { id, title, subtitle: words.map(str::to_string), logo: symbol.map(|symbol| format!("{SYMBOLS}/{symbol}.png")), row: Some(ROW.into()), ..Default::default() }
+    Item { id, title, subtitle: words.map(sdk::tr), logo: symbol.map(|symbol| format!("{SYMBOLS}/{symbol}.png")), row: Some(ROW.into()), ..Default::default() }
 }
 
-/// What a day `ahead` of today is called, as it reads after a temperature.
-fn day_name(ahead: i64, day: i64) -> &'static str {
+/// A day's tile title: how warm it gets and which day, as in "5° today" and "6° Thursday".
+fn day_title(degrees: &str, ahead: i64, day: i64) -> String {
     // The first day of 1970 was a Thursday.
-    const DAYS_FROM_THURSDAY: [&str; 7] = ["Thursday", "Friday", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"];
+    const DAYS_FROM_THURSDAY: [&str; 7] = [mark!("Thursday"), mark!("Friday"), mark!("Saturday"), mark!("Sunday"), mark!("Monday"), mark!("Tuesday"), mark!("Wednesday")];
     match ahead {
-        0 => "today",
-        1 => "tomorrow",
-        _ => DAYS_FROM_THURSDAY[day.rem_euclid(7) as usize],
+        // Translators: {degrees} is a day's high, such as 5°.
+        0 => t!("{degrees} today", degrees = degrees),
+        1 => t!("{degrees} tomorrow", degrees = degrees),
+        // Translators: {day} is a weekday's name, as in "6° Thursday".
+        _ => t!("{degrees} {day}", degrees = degrees, day = sdk::tr(DAYS_FROM_THURSDAY[day.rem_euclid(7) as usize])),
     }
 }
 
@@ -674,16 +693,16 @@ mod tests {
 
     #[test]
     fn dates_fall_on_their_days() {
-        let named = |date: &str| day_number(date).map(|day| day_name(2, day));
+        let named = |date: &str| day_number(date).map(|day| day_title("6°", 2, day));
         assert_eq!(day_number("1970-01-01"), Some(0));
-        assert_eq!(named("1970-01-01"), Some("Thursday"));
-        assert_eq!(named("2026-11-11"), Some("Wednesday"));
-        assert_eq!(named("2024-02-29"), Some("Thursday"));
-        assert_eq!(named("2027-01-01"), Some("Friday"));
+        assert_eq!(named("1970-01-01"), Some("6° Thursday".to_string()));
+        assert_eq!(named("2026-11-11"), Some("6° Wednesday".to_string()));
+        assert_eq!(named("2024-02-29"), Some("6° Thursday".to_string()));
+        assert_eq!(named("2027-01-01"), Some("6° Friday".to_string()));
         for bad in ["", "2026", "2026-11", "2026-13-01", "2026-11-00", "2026-11-12T00:00", "tomorrow"] {
             assert_eq!(day_number(bad), None, "{bad}");
         }
-        assert_eq!((day_name(0, 0), day_name(1, 0)), ("today", "tomorrow"));
+        assert_eq!((day_title("5°", 0, 0), day_title("5°", 1, 0)), ("5° today".to_string(), "5° tomorrow".to_string()));
     }
 
     #[test]

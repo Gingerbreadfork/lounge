@@ -11,6 +11,8 @@
 //! ```
 
 pub use lounge_plugin_api::*;
+pub use lounge_words as words;
+pub use lounge_words::{mark, t, tc, tn, tr};
 pub use serde_json;
 
 use std::collections::{HashMap, HashSet};
@@ -18,18 +20,34 @@ use std::collections::{HashMap, HashSet};
 /// Most items the host keeps from one refresh; anything after them is dropped.
 pub const MAX_ITEMS: usize = 2_000;
 
+/// The SDK's own sentences in the languages Lounge ships.
+const LOCALES: words::Catalogs = &[
+    ("de", include_str!("../locales/de.po")),
+    ("es", include_str!("../locales/es.po")),
+    ("fr", include_str!("../locales/fr.po")),
+    ("it", include_str!("../locales/it.po")),
+    ("nl", include_str!("../locales/nl.po")),
+    ("pt-BR", include_str!("../locales/pt-BR.po")),
+    ("pt-PT", include_str!("../locales/pt-PT.po")),
+];
+
 pub trait Plugin {
+    /// The plugin's translations: a language tag and its catalog. [`locales!`] writes this from
+    /// the `locales` directory beside `Cargo.toml`.
+    fn locales() -> words::Catalogs {
+        &[]
+    }
     fn manifest() -> Manifest;
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String>;
     fn search(_query: &str, _limit: u32) -> Result<Vec<Item>, String> {
         Ok(Vec::new())
     }
     fn resolve(_action: &str) -> Result<Action, String> {
-        Err("This plugin can't open that.".to_string())
+        Err(t!("This plugin can't open that."))
     }
     /// Describes the sheet an action or a sheet row named by its id.
     fn sheet(_id: &str) -> Result<Sheet, String> {
-        Err("This plugin has nothing more to show here.".to_string())
+        Err(t!("This plugin has nothing more to show here."))
     }
 }
 
@@ -51,7 +69,8 @@ pub fn ask(ask: Ask) -> String {
 /// sentence names the page without its scheme or query, as people read it out.
 pub fn sign_in(link: &str, code: &str) -> String {
     let shown = link.trim_start_matches("https://").split(['?', '#']).next().unwrap_or(link).trim_end_matches('/');
-    let say = format!("Sign in: on your phone open {shown} and enter {code}, then press Refresh now here.");
+    // Translators: {shown} is a web address and {code} a short code. "Refresh now" is the button on the plugin's page on the TV.
+    let say = t!("Sign in: on your phone open {shown} and enter {code}, then press Refresh now here.", shown = shown, code = code);
     ask(Ask { say, link: Some(link.to_string()), code: Some(code.to_string()), after: None, watch: true })
 }
 
@@ -103,11 +122,16 @@ pub fn __call<I: serde::de::DeserializeOwned, O: serde::Serialize>(ptr: i32, len
     let outcome: Outcome<O> = match serde_json::from_slice::<I>(&input) {
         Ok(i) => match f(i) {
             Ok(o) => Outcome::Ok(o),
-            Err(e) => asked_or_failed(e, ASKED.with(|a| a.borrow_mut().take())),
+            Err(e) => asked_or_failed(spoken(e), ASKED.with(|a| a.borrow_mut().take())),
         },
         Err(e) => Outcome::Err(format!("bad input: {e}")),
     };
     __return_json(&outcome)
+}
+
+/// The SDK's errors that are constants, for plugins to compare with, in the language in use.
+fn spoken(error: String) -> String {
+    if [host::TOO_LARGE, host::BUDGET_SPENT, GUIDE_KEPT].contains(&error.as_str()) { words::tr(&error) } else { error }
 }
 
 /// An error that carries what [`ask`] made is the ask, with whatever the plugin said around it;
@@ -117,6 +141,47 @@ fn asked_or_failed<O>(error: String, asked: Option<Ask>) -> Outcome<O> {
         Some(ask) if error.contains(&ask.say) => Outcome::Ask(Ask { say: error, ..ask }),
         _ => Outcome::Err(error),
     }
+}
+
+/// Puts the language Lounge is shown in into use for the call that follows.
+#[doc(hidden)]
+pub fn __speak<P: Plugin>() {
+    let wanted = host::setting(LOCALE_SETTING).unwrap_or_else(|| words::SOURCE.to_string());
+    words::speak(&wanted, &[P::locales(), LOCALES]);
+}
+
+/// The manifest in English, with what each language the plugin ships says for its text.
+#[doc(hidden)]
+pub fn __manifest<P: Plugin>() -> Manifest {
+    let shipped = [P::locales(), LOCALES];
+    let mut manifest = words::in_language(words::SOURCE, &[], P::manifest);
+    for (tag, _) in P::locales() {
+        let theirs = words::in_language(tag, &shipped, P::manifest);
+        let (english, said) = (manifest.shown_texts(), theirs.shown_texts());
+        if english.len() != said.len() {
+            continue;
+        }
+        let said: std::collections::BTreeMap<String, String> =
+            english.iter().zip(&said).filter(|(english, said)| english != said).map(|(english, said)| (english.to_string(), said.to_string())).collect();
+        if !said.is_empty() {
+            manifest.locales.insert(tag.to_string(), said);
+        }
+    }
+    manifest
+}
+
+/// Writes [`Plugin::locales`] inside a plugin's `impl`, from `locales/<tag>.po` beside its
+/// `Cargo.toml`. With no tags it is the languages Lounge itself ships.
+#[macro_export]
+macro_rules! locales {
+    () => {
+        $crate::locales!("de", "es", "fr", "it", "nl", "pt-BR", "pt-PT");
+    };
+    ($($tag:literal),+ $(,)?) => {
+        fn locales() -> $crate::words::Catalogs {
+            &[$(($tag, include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/locales/", $tag, ".po")))),+]
+        }
+    };
 }
 
 /// Exports the ABI entry points for a [`Plugin`] implementation.
@@ -133,22 +198,26 @@ macro_rules! export_plugin {
         }
         #[unsafe(no_mangle)]
         pub extern "C" fn lg_manifest() -> i64 {
-            $crate::__return_json(&$crate::Outcome::Ok(<$plugin as $crate::Plugin>::manifest()))
+            $crate::__return_json(&$crate::Outcome::Ok($crate::__manifest::<$plugin>()))
         }
         #[unsafe(no_mangle)]
         pub extern "C" fn lg_refresh(ptr: i32, len: i32) -> i64 {
+            $crate::__speak::<$plugin>();
             $crate::__call(ptr, len, |ctx: $crate::RefreshContext| <$plugin as $crate::Plugin>::refresh(&ctx))
         }
         #[unsafe(no_mangle)]
         pub extern "C" fn lg_search(ptr: i32, len: i32) -> i64 {
+            $crate::__speak::<$plugin>();
             $crate::__call(ptr, len, |q: $crate::SearchQuery| <$plugin as $crate::Plugin>::search(&q.query, q.limit))
         }
         #[unsafe(no_mangle)]
         pub extern "C" fn lg_resolve(ptr: i32, len: i32) -> i64 {
+            $crate::__speak::<$plugin>();
             $crate::__call(ptr, len, |a: String| <$plugin as $crate::Plugin>::resolve(&a))
         }
         #[unsafe(no_mangle)]
         pub extern "C" fn lg_sheet(ptr: i32, len: i32) -> i64 {
+            $crate::__speak::<$plugin>();
             $crate::__call(ptr, len, |id: String| <$plugin as $crate::Plugin>::sheet(&id))
         }
     };
@@ -223,17 +292,17 @@ pub mod host {
     }
 
     /// The error `fetch` returns when an answer is bigger than the host lets a plugin read.
-    pub const TOO_LARGE: &str = "The answer is larger than the 8 MB a plugin may read.";
+    pub const TOO_LARGE: &str = mark!("The answer is larger than the 8 MB a plugin may read.");
 
     /// The error `fetch` returns once a call has made all the requests, or waited all the time,
     /// the host allows it.
-    pub const BUDGET_SPENT: &str = "The plugin reached the most it may fetch in one refresh, so it stopped early. It tries again in a few minutes.";
+    pub const BUDGET_SPENT: &str = mark!("The plugin reached the most it may fetch in one refresh, so it stopped early. It tries again in a few minutes.");
 
     /// GET a URL and return the body, failing on non-2xx.
     pub fn get_text(url: &str) -> Result<String, String> {
         let r = fetch(&HttpRequest::get(url))?;
         if !r.ok() {
-            return Err(format!("The server at {} answered with error {}. Check the address, then try again.", crate::address(url), r.status));
+            return Err(t!("The server at {address} answered with error {status}. Check the address, then try again.", address = crate::address(url), status = r.status));
         }
         Ok(if r.body_base64.is_some() { String::from_utf8_lossy(&crate::body_bytes(r)).into_owned() } else { r.body })
     }
@@ -488,7 +557,7 @@ pub fn new_this_week(added_ms: Option<i64>, now_ms: i64) -> bool {
 }
 
 /// The error for a refresh that failed only because its guide did.
-pub const GUIDE_KEPT: &str = "The guide didn't come through, so the TV is showing the last one it had. It tries again in a few minutes.";
+pub const GUIDE_KEPT: &str = mark!("The guide didn't come through, so the TV is showing the last one it had. It tries again in a few minutes.");
 
 /// `url` without its query string, fragment, user name or password, for messages people read.
 pub fn redact_url(url: &str) -> String {
@@ -527,39 +596,44 @@ pub fn address(url: &str) -> String {
 
 /// The error for a server the user named that could not be reached.
 pub fn didnt_answer(service: &str, url: &str) -> String {
-    format!("{service} didn't answer at {}. Check the server, then try again.", address(url))
+    t!("{service} didn't answer at {address}. Check the server, then try again.", service = service, address = address(url))
 }
 
 /// The error for a server the user named that answered with HTTP `status`.
 pub fn answered_error(service: &str, url: &str, status: u16) -> String {
-    format!("{service} at {} answered with error {status}. Check the server, then try again.", address(url))
+    t!("{service} at {address} answered with error {status}. Check the server, then try again.", service = service, address = address(url), status = status)
 }
 
 /// The error for an address where something other than `service` answered.
 pub fn wrong_server(service: &str, url: &str) -> String {
-    let a = if service.starts_with(['A', 'E', 'I', 'O', 'U']) { "an" } else { "a" };
-    format!("The server at {} didn't answer like {a} {service} server. Check the server address in the plugin's settings.", address(url))
+    // English says "an Emby server" and "a Plex server"; a translation reads the same for both.
+    if service.starts_with(['A', 'E', 'I', 'O', 'U']) {
+        t!("The server at {address} didn't answer like an {service} server. Check the server address in the plugin's settings.", address = address(url), service = service)
+    } else {
+        t!("The server at {address} didn't answer like a {service} server. Check the server address in the plugin's settings.", address = address(url), service = service)
+    }
 }
 
 /// The error for an answer from `service` at `url` that the plugin cannot read.
 pub fn unreadable(service: &str, url: &str) -> String {
-    format!("{service} at {} sent a reply this plugin can't read.", address(url))
+    t!("{service} at {address} sent a reply this plugin can't read.", service = service, address = address(url))
 }
 
 /// The error for an online service that could not be reached.
 pub fn offline(service: &str) -> String {
-    format!("{service} didn't answer. Check the TV's internet connection, then try again.")
+    t!("{service} didn't answer. Check the TV's internet connection, then try again.", service = service)
 }
 
 /// The error for an online service that answered with HTTP `status`.
 pub fn online_error(service: &str, status: u16) -> String {
-    format!("{service} answered with error {status}. Try again later.")
+    t!("{service} answered with error {status}. Try again later.", service = service, status = status)
 }
 
 /// The error for a setting still to fill in. `label` is the field's name as it reads inside a
 /// sentence, such as "server address".
 pub fn not_set(label: &str) -> String {
-    format!("Add the {label} in the plugin's settings.")
+    // Translators: {label} names a setting, already translated, such as "server address". Word the sentence so the name can stand as it is, for example after a colon.
+    t!("Add the {label} in the plugin's settings.", label = label)
 }
 
 /// [`host::fetch`] from the `service` at `server`. A server that cannot be reached gives

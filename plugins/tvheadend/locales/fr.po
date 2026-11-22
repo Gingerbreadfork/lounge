@@ -1,0 +1,124 @@
+# Lounge, tvheadend: fr
+#
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/lib.rs
+msgid "Live channels, the guide and your recordings from a Tvheadend server."
+msgstr "Les chaînes en direct, le guide et vos enregistrements depuis un serveur Tvheadend."
+
+#: src/lib.rs
+msgid "Recordings on Tvheadend"
+msgstr "Enregistrements sur Tvheadend"
+
+#: src/lib.rs
+msgid "Server address"
+msgstr "Adresse du serveur"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.10:9981"
+msgstr "Par exemple http://192.168.0.10:9981"
+
+#: src/lib.rs
+msgid "Username"
+msgstr "Nom d’utilisateur"
+
+#: src/lib.rs
+msgid "Leave both empty if the server allows anonymous access."
+msgstr "Laissez les deux vides si le serveur autorise l’accès anonyme."
+
+#: src/lib.rs
+msgid "Password"
+msgstr "Mot de passe"
+
+#: src/lib.rs
+msgid "Persistent auth token"
+msgstr "Jeton d’authentification persistant"
+
+#. Configuration, Users, Access entries and Persistent authentication are names in Tvheadend's own menus.
+#: src/lib.rs
+msgid "Lets the TV play streams without a password. In Tvheadend go to Configuration, Users, Access entries, open your user and turn on Persistent authentication; the token appears there."
+msgstr "Permet à la TV de lire les flux sans mot de passe. Dans Tvheadend, allez dans Configuration, Users, Access Entries, ouvrez votre utilisateur et activez « Persistent authentication » ; le jeton y apparaît."
+
+#. a setting and its help. Configuration and Stream are menus in Tvheadend, and pass is a profile's name, kept as it is.
+#: src/lib.rs
+msgid "Stream profile"
+msgstr "Profil de flux"
+
+#. a setting and its help. Configuration and Stream are menus in Tvheadend, and pass is a profile's name, kept as it is.
+#: src/lib.rs
+msgid "A profile from Configuration, Stream. The default, pass, sends the channel as it is."
+msgstr "Un profil de Configuration, Stream. Celui par défaut, pass, envoie la chaîne telle quelle."
+
+#: src/lib.rs
+msgid "Only channels tagged"
+msgstr "Uniquement les chaînes avec le tag"
+
+#: src/lib.rs
+msgid "A channel tag name such as TV. Empty means every enabled channel."
+msgstr "Le nom d’un tag de chaîne, par exemple TV. Vide, toutes les chaînes activées sont incluses."
+
+#: src/lib.rs
+msgid "Tvheadend has no enabled channels. Map some services to channels in Tvheadend first."
+msgstr "Tvheadend n’a aucune chaîne activée. Associez d’abord des services à des chaînes dans Tvheadend."
+
+#. {algorithm} is a technical name as the server sent it, such as SHA-256.
+#: src/lib.rs
+msgid "Tvheadend asks for Digest sign-in with {algorithm}, which the plugin cannot answer. In Tvheadend's general settings, set the digest hash type to MD5."
+msgstr "Tvheadend demande une connexion Digest avec {algorithm}, à laquelle le plugin ne sait pas répondre. Dans les paramètres généraux de Tvheadend, réglez le type de hachage Digest sur MD5."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "server address"
+msgstr "adresse du serveur"
+
+#: src/lib.rs
+msgid "Tvheadend refused this user. Check that its access entry allows the web interface."
+msgstr "Tvheadend a refusé cet utilisateur. Vérifiez que son entrée d’accès autorise l’interface web."
+
+#: src/lib.rs
+msgid "Tvheadend wants a username and password. Enter them in the plugin's settings."
+msgstr "Tvheadend demande un nom d’utilisateur et un mot de passe. Saisissez-les dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "Tvheadend refused the request without saying how to sign in. In Tvheadend's general settings, check the authentication type."
+msgstr "Tvheadend a refusé la demande sans dire comment se connecter. Dans les paramètres généraux de Tvheadend, vérifiez le type d’authentification."
+
+#: src/lib.rs
+msgid "Tvheadend rejected the username or password. Check them in the plugin's settings."
+msgstr "Tvheadend a refusé le nom d’utilisateur ou le mot de passe. Vérifiez-les dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "Tvheadend has no channel tag called \"{name}\". Check the tag's name in the plugin's settings."
+msgstr "Tvheadend n’a aucun tag de chaîne nommé « {name} ». Vérifiez le nom du tag dans les paramètres du plugin."
+
+#. {when} is a phrase such as "On now" or "Starts in 20 minutes", and {channel} is a channel's name.
+#: src/lib.rs
+msgid "{when}, {channel}"
+msgstr "{when}, {channel}"
+
+#. said of a programme that is being broadcast at this moment.
+#: src/lib.rs
+msgid "On now"
+msgstr "En ce moment"
+
+#: src/lib.rs
+msgid "Starts in {n} minute"
+msgid_plural "Starts in {n} minutes"
+msgstr[0] "Commence dans {n} minute"
+msgstr[1] "Commence dans {n} minutes"
+
+#: src/lib.rs
+msgid "Starts in {n} hour"
+msgid_plural "Starts in {n} hours"
+msgstr[0] "Commence dans {n} heure"
+msgstr[1] "Commence dans {n} heures"
+
+#: src/lib.rs
+msgid "Starts in {n} day"
+msgid_plural "Starts in {n} days"
+msgstr[0] "Commence dans {n} jour"
+msgstr[1] "Commence dans {n} jours"

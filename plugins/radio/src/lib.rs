@@ -2,7 +2,7 @@
 //! most popular ones, anywhere or in one country, as compact tiles with each station's picture,
 //! played in a player app. Search covers the whole directory.
 
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, t, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -28,15 +28,17 @@ const LOOKUP_MS: i64 = 30_000;
 const FETCHES_PER_LOOKUP: usize = 4;
 /// How many stations one request asks for by id.
 const BATCH: usize = 50;
-const GONE: &str = "Radio Browser no longer lists that station.";
+const GONE: &str = mark!("Radio Browser no longer lists that station.");
 
 impl sdk::Plugin for Radio {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.radio".into(),
-            name: "Internet radio".into(),
+            name: t!("Internet radio"),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Stations you name and the most popular ones from the radio-browser.info directory, played in a player app such as VLC.".into(),
+            description: t!("Stations you name and the most popular ones from the radio-browser.info directory, played in a player app such as VLC."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             // Each station's picture is on its own website.
@@ -44,24 +46,24 @@ impl sdk::Plugin for Radio {
             refresh_minutes: 6 * 60,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "yours".into(), title: "Your radio stations".into(), style: RowStyle::Compact },
-                RowSpec { id: "popular".into(), title: "Popular radio".into(), style: RowStyle::Compact },
+                RowSpec { id: "yours".into(), title: t!("Your radio stations"), style: RowStyle::Compact },
+                RowSpec { id: "popular".into(), title: t!("Popular radio"), style: RowStyle::Compact },
             ],
             settings: vec![
                 SettingSpec {
                     key: "stations".into(),
-                    label: "Your stations".into(),
+                    label: t!("Your stations"),
                     kind: SettingKind::List,
                     required: false,
-                    help: Some("Station names, links to stations on radio-browser.info or stream addresses, one per line or separated by commas. Lounge's search finds stations too.".into()),
+                    help: Some(t!("Station names, links to stations on radio-browser.info or stream addresses, one per line or separated by commas. Lounge's search finds stations too.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "country".into(),
-                    label: "Country for popular stations".into(),
+                    label: t!("Country for popular stations"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("A name or two letters, like Australia or AU. Left empty, the row shows the most popular stations anywhere.".into()),
+                    help: Some(t!("A name or two letters, like Australia or AU. Left empty, the row shows the most popular stations anywhere.")),
                     default: None,
                 },
             ],
@@ -69,6 +71,7 @@ impl sdk::Plugin for Radio {
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -76,14 +79,16 @@ impl sdk::Plugin for Radio {
         let mut items = yours(ctx.now_ms)?;
         let typed = host::setting("country").map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
         let code = match &typed {
-            Some(t) => Some(country_code(t)?.ok_or_else(|| format!("Radio Browser has no country called {t}. Check the country in the plugin's settings."))?),
+            // Translators: {country} is the country as typed into the plugin's settings.
+            Some(typed) => Some(country_code(typed)?.ok_or_else(|| t!("Radio Browser has no country called {country}. Check the country in the plugin's settings.", country = typed))?),
             None => None,
         };
         let popular = popular(code.as_deref())?;
         if popular.is_empty()
-            && let Some(t) = &typed
+            && let Some(typed) = &typed
         {
-            return Err(format!("Radio Browser lists no stations for {t}. Check the country in the plugin's settings."));
+            // Translators: {country} is the country as typed into the plugin's settings.
+            return Err(t!("Radio Browser lists no stations for {country}. Check the country in the plugin's settings.", country = typed));
         }
         let count = popular.len() as i32;
         items.extend(popular.iter().enumerate().map(|(i, st)| station_item(st, "popular", Some("popular"), count - i as i32, code.is_none())));
@@ -100,10 +105,10 @@ impl sdk::Plugin for Radio {
     /// Asks the directory for the station's address at the press, which it counts as a listen,
     /// as it asks every player to.
     fn resolve(action: &str) -> Result<Action, String> {
-        let id = action.strip_prefix("station:").filter(|id| is_uuid(id)).ok_or_else(|| GONE.to_string())?;
+        let id = action.strip_prefix("station:").filter(|id| is_uuid(id)).ok_or_else(|| sdk::tr(GONE))?;
         let r = get(&format!("/json/url/{id}"))?;
         if r.status == 404 {
-            return Err(GONE.into());
+            return Err(sdk::tr(GONE));
         }
         if !r.ok() {
             return Err(sdk::online_error(SERVICE, r.status));
@@ -112,7 +117,7 @@ impl sdk::Plugin for Radio {
             sdk::warn!("unexpected answer for a station's address: {e}");
             unreadable()
         })?;
-        let url = answer.url.filter(|u| answer.ok && (u.starts_with("http://") || u.starts_with("https://"))).ok_or_else(|| GONE.to_string())?;
+        let url = answer.url.filter(|u| answer.ok && (u.starts_with("http://") || u.starts_with("https://"))).ok_or_else(|| sdk::tr(GONE))?;
         Ok(Action::play(url, answer.name.unwrap_or_default().trim()).audio())
     }
 }
@@ -321,7 +326,7 @@ fn stations(path: &str) -> Result<Vec<Station>, String> {
 }
 
 fn unreadable() -> String {
-    format!("{SERVICE} sent a reply this plugin can't read.")
+    t!("{service} sent a reply this plugin can't read.", service = SERVICE)
 }
 
 /// Each station once: the directory often lists one station several times, and the first, most
@@ -352,7 +357,7 @@ fn stream_item(url: &str, weight: i32) -> Item {
     Item {
         id: format!("yours:stream:{:x}", fnv(url)),
         kind: ItemKind::Program,
-        subtitle: Some("A stream you added".into()),
+        subtitle: Some(t!("A stream you added")),
         row: Some("yours".into()),
         weight,
         action: Action::play(url, &server).audio(),

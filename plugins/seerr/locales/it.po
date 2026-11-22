@@ -1,0 +1,122 @@
+# Lounge, seerr: it
+#
+msgid ""
+msgstr ""
+"Language: it\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Seerr didn't accept the API key. Check it in the plugin's settings."
+msgstr "Seerr non ha accettato la chiave API. Controllala nelle impostazioni del plugin."
+
+#: src/lib.rs
+msgid "What has been requested and is on its way, and what has just become available, from Seerr, Jellyseerr or Overseerr."
+msgstr "Ciò che è stato richiesto ed è in arrivo, e ciò che è appena diventato disponibile, da Seerr, Jellyseerr o Overseerr."
+
+#: src/lib.rs
+msgid "Requested on Seerr"
+msgstr "Richiesti su Seerr"
+
+#: src/lib.rs
+msgid "Now available on Seerr"
+msgstr "Ora disponibili su Seerr"
+
+#: src/lib.rs
+msgid "Server address"
+msgstr "Indirizzo del server"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.10:5055"
+msgstr "Ad esempio http://192.168.0.10:5055"
+
+#: src/lib.rs
+msgid "API key"
+msgstr "Chiave API"
+
+#. "Settings, General" is where the key is in Seerr's own menus. The phone companion is Lounge's page on a phone.
+#: src/lib.rs
+msgid "In Seerr, Jellyseerr or Overseerr under Settings, General. It is easiest pasted from the phone companion."
+msgstr "In Seerr, Jellyseerr o Overseerr, in Impostazioni, Generale. Il modo più comodo per inserirla è incollarla da Lounge sul telefono."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "server address"
+msgstr "indirizzo del server"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgctxt "inside a sentence"
+msgid "API key"
+msgstr "chiave API"
+
+#. the state of a request for a film or a show, at the start of the line under its title.
+#: src/lib.rs
+msgid "Waiting for approval"
+msgstr "In attesa di approvazione"
+
+#. the same state after a comma, as in "Season 1, waiting for approval".
+#: src/lib.rs
+msgid "waiting for approval"
+msgstr "in attesa di approvazione"
+
+#: src/lib.rs
+msgid "The request failed"
+msgstr "Richiesta non riuscita"
+
+#. after a comma, as in "Season 1, the request failed".
+#: src/lib.rs
+msgid "the request failed"
+msgstr "richiesta non riuscita"
+
+#. {percent} is how much of the download is done, as in "Downloading, 40%".
+#: src/lib.rs
+msgid "Downloading, {percent}%"
+msgstr "Download in corso, {percent}%"
+
+#. after a comma, as in "2 seasons, downloading, 40%".
+#: src/lib.rs
+msgid "downloading, {percent}%"
+msgstr "download in corso, {percent}%"
+
+#. some of the episodes or seasons asked for have arrived.
+#: src/lib.rs
+msgid "Partly available"
+msgstr "Disponibile in parte"
+
+#. after a comma, as in "2 seasons, partly available".
+#: src/lib.rs
+msgid "partly available"
+msgstr "disponibile in parte"
+
+#. the request is approved and what was asked for has not arrived yet.
+#: src/lib.rs
+msgid "On its way"
+msgstr "In arrivo"
+
+#. after a comma, as in "Season 1, on its way".
+#: src/lib.rs
+msgid "on its way"
+msgstr "in arrivo"
+
+#. the one season of a show that was requested, by its number.
+#: src/lib.rs
+msgid "Season {number}"
+msgstr "Stagione {number}"
+
+#. how many seasons of a show were requested, always two or more.
+#: src/lib.rs
+msgid "{n} season"
+msgid_plural "{n} seasons"
+msgstr[0] "{n} stagione"
+msgstr[1] "{n} stagioni"
+
+#. {name} is the Seerr user who asked for the film or show.
+#: src/lib.rs
+msgid "Requested by {name}"
+msgstr "Richiesta di {name}"
+
+#. after a comma, as in "2008, requested by sam".
+#: src/lib.rs
+msgid "requested by {name}"
+msgstr "richiesta di {name}"

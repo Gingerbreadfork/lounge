@@ -1,0 +1,143 @@
+# Lounge, immich: pt-BR
+#
+msgid ""
+msgstr ""
+"Language: pt-BR\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/lib.rs
+msgid "Immich photos"
+msgstr "Fotos do Immich"
+
+#: src/lib.rs
+msgid "An album shared from Immich becomes the screensaver."
+msgstr "Um álbum compartilhado do Immich vira o protetor de tela."
+
+#: src/lib.rs
+msgid "Shared album link"
+msgstr "Link do álbum compartilhado"
+
+#. Share and Create link are names in Immich's own menus.
+#: src/lib.rs
+msgid "In Immich open the album, Share, Create link, and paste the whole address, like https://photos.example.com/share/AbC123… or its custom /s/ address."
+msgstr "No Immich, abra o álbum, Compartilhar, Criar link, e cole o endereço inteiro, por exemplo, https://photos.example.com/share/AbC123…, ou o endereço personalizado com /s/."
+
+#: src/lib.rs
+msgid "Link password"
+msgstr "Senha do link"
+
+#: src/lib.rs
+msgid "Only if the shared link has one."
+msgstr "Só se o link compartilhado tiver senha."
+
+#: src/lib.rs
+msgid "Pictures to show"
+msgstr "Imagens a mostrar"
+
+#: src/lib.rs
+msgid "The newest ones are kept. Pictures come at Immich's preview size; for a 4K panel set that to 2160 in Immich's image settings."
+msgstr "Ficam as mais recentes. As imagens vêm no tamanho de pré-visualização do Immich; para uma tela 4K, ajuste esse tamanho para 2160 nas configurações de imagem do Immich."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "shared album link"
+msgstr "link do álbum compartilhado"
+
+#: src/lib.rs
+msgid "Photos"
+msgstr "Fotos"
+
+#. Show metadata is the name of a switch on a shared link in Immich.
+#: src/lib.rs
+msgid "The album is too big to read: Immich answered with more than the 8 MB a plugin may read at once. Turn off Show metadata on the shared link, or share a smaller album."
+msgstr "O álbum é grande demais para ler: o Immich respondeu com mais do que os 8 MB que um plugin pode ler de uma vez. Desative Mostrar metadados no link compartilhado ou compartilhe um álbum menor."
+
+#: src/lib.rs
+msgid "Immich does not know this link any more. Create a new shared link for the album."
+msgstr "O Immich não reconhece mais este link. Crie um novo link compartilhado para o álbum."
+
+#: src/lib.rs
+msgid "Immich turned down the link's password. Check it in the plugin's settings."
+msgstr "O Immich recusou a senha do link. Verifique a senha nas configurações do plugin."
+
+#: src/lib.rs
+msgid "This link has a password. Enter it in the plugin's settings."
+msgstr "Este link tem senha. Informe a senha nas configurações do plugin."
+
+#: src/lib.rs
+msgid "Immich refused the link. If it has a password, enter it in the plugin's settings."
+msgstr "O Immich recusou o link. Se ele tiver senha, informe a senha nas configurações do plugin."
+
+#: src/lib.rs
+msgid "That isn't a shared album link, which has /share/ or /s/ in it. Copy the link again from Immich's Share menu into the plugin's settings."
+msgstr "Isso não é um link de álbum compartilhado, que tem /share/ ou /s/ no endereço. Copie o link de novo do menu Compartilhar do Immich para as configurações do plugin."
+
+#: src/lib.rs
+msgid "That isn't a shared album link, which looks like https://photos.example.com/share/AbC123. Copy the link again from Immich's Share menu into the plugin's settings."
+msgstr "Isso não é um link de álbum compartilhado, que se parece com https://photos.example.com/share/AbC123. Copie o link de novo do menu Compartilhar do Immich para as configurações do plugin."
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "January"
+msgstr "janeiro"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "February"
+msgstr "fevereiro"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "March"
+msgstr "março"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "April"
+msgstr "abril"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "May"
+msgstr "maio"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "June"
+msgstr "junho"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "July"
+msgstr "julho"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "August"
+msgstr "agosto"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "September"
+msgstr "setembro"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "October"
+msgstr "outubro"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "November"
+msgstr "novembro"
+
+#. a month's name as written before a year, as in October 2025.
+#: src/lib.rs
+msgid "December"
+msgstr "dezembro"
+
+#. when a photo was taken, as in October 2025.
+#: src/lib.rs
+msgid "{month} {year}"
+msgstr "{month} de {year}"

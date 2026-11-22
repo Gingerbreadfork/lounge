@@ -1,7 +1,7 @@
 //! Moonlight: the gaming PCs you stream from and the games on them, read from Sunshine's own
 //! interfaces, as tiles that start a stream in Moonlight. A game left running on a PC comes back
 //! in Continue watching, and a PC that is asleep is woken by Moonlight when a tile is chosen.
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, t, tn, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -20,48 +20,48 @@ const PCS_KEY: &str = "pcs";
 /// A client id for the status request; Sunshine answers any, and never pairs over plain HTTP.
 const CLIENT_ID: &str = "0123456789ABCDEF";
 
-const REFUSED: &str = "Sunshine refused the username or password. Check them in the plugin's settings.";
-
 impl sdk::Plugin for Moonlight {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.moonlight".into(),
             name: "Moonlight".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Your gaming PCs and the games on them, streamed with Moonlight; a game left running comes back in Continue watching.".into(),
+            description: t!("Your gaming PCs and the games on them, streamed with Moonlight; a game left running comes back in Continue watching."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$hosts".into(), "local-network".into()],
             refresh_minutes: 5,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "games".into(), title: "Games on Moonlight".into(), style: RowStyle::Poster },
-                RowSpec { id: "pcs".into(), title: "Gaming PCs on Moonlight".into(), style: RowStyle::Compact },
+                RowSpec { id: "games".into(), title: t!("Games on Moonlight"), style: RowStyle::Poster },
+                RowSpec { id: "pcs".into(), title: t!("Gaming PCs on Moonlight"), style: RowStyle::Compact },
             ],
             settings: vec![
                 SettingSpec {
                     key: "hosts".into(),
-                    label: "Gaming PCs".into(),
+                    label: t!("Gaming PCs"),
                     kind: SettingKind::Text,
                     required: true,
-                    help: Some("Names or addresses of the PCs running Sunshine, like gaming-pc or 192.168.0.50, each paired in Moonlight first. Separate several with spaces or commas, and add :port if Sunshine's port was changed from 47989. Pair each PC in Moonlight and open it there once, so Moonlight knows its games.".into()),
+                    help: Some(t!("Names or addresses of the PCs running Sunshine, like gaming-pc or 192.168.0.50, each paired in Moonlight first. Separate several with spaces or commas, and add :port if Sunshine's port was changed from 47989. Pair each PC in Moonlight and open it there once, so Moonlight knows its games.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "username".into(),
-                    label: "Sunshine username".into(),
+                    label: t!("Sunshine username"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("The sign-in for Sunshine's web page, which lets Lounge list each PC's games. The same one is used on every PC, and the page is at https://192.168.0.50:47990 for a PC at 192.168.0.50. Without it only the PCs are shown. Apollo's page has no sign-in a plugin can use, so an Apollo PC is shown without its games.".into()),
+                    help: Some(t!("The sign-in for Sunshine's web page, which lets Lounge list each PC's games. The same one is used on every PC, and the page is at https://192.168.0.50:47990 for a PC at 192.168.0.50. Without it only the PCs are shown. Apollo's page has no sign-in a plugin can use, so an Apollo PC is shown without its games.")),
                     default: None,
                 },
-                SettingSpec { key: "password".into(), label: "Sunshine password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
+                SettingSpec { key: "password".into(), label: t!("Sunshine password"), kind: SettingKind::Password, required: false, help: None, default: None },
                 SettingSpec {
                     key: "app".into(),
-                    label: "Moonlight app".into(),
+                    label: t!("Moonlight app"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("The app the tiles open: com.limelight for Moonlight, com.limelight.noir for Artemis.".into()),
+                    help: Some(t!("The app the tiles open: com.limelight for Moonlight, com.limelight.noir for Artemis.")),
                     default: Some(DEFAULT_APP.into()),
                 },
             ],
@@ -69,13 +69,16 @@ impl sdk::Plugin for Moonlight {
             self_signed_servers: true,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let addresses = parse_hosts(&host::required_setting("hosts", "addresses of your gaming PCs")?);
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let addresses = parse_hosts(&host::required_setting("hosts", &t!("addresses of your gaming PCs"))?);
         if addresses.is_empty() {
-            return Err("The gaming PCs setting holds no name or address. Add one in the plugin's settings, like gaming-pc or 192.168.0.50.".into());
+            // Translators: the setting is the one labelled "Gaming PCs".
+            return Err(t!("The gaming PCs setting holds no name or address. Add one in the plugin's settings, like gaming-pc or 192.168.0.50."));
         }
         let login = Login::from_settings();
         let mut cache = Cache::load();
@@ -165,7 +168,7 @@ impl sdk::Plugin for Moonlight {
         cache.save();
         // Only the answers of this refresh count; what a PC said before it went offline does not.
         if answered > 0 && refused == answered {
-            return Err(REFUSED.into());
+            return Err(t!("Sunshine refused the username or password. Check them in the plugin's settings."));
         }
         if !pcs.iter().any(|p| p.unique_id.is_some()) {
             return Err(pcs[0].unreachable_error());
@@ -601,8 +604,8 @@ impl Pc {
     /// The error for a PC that has never answered, with what to check.
     fn unreachable_error(&self) -> String {
         match self.reach {
-            Reach::NotAllowed => format!("The PC at {} can't be reached by that name. Use its IP address, or a name ending in .local or .lan.", self.address.host),
-            Reach::Fine => format!("The PC at {} didn't answer. Check that it is on and Sunshine is running, then try again.", self.address.key()),
+            Reach::NotAllowed => t!("The PC at {address} can't be reached by that name. Use its IP address, or a name ending in .local or .lan.", address = self.address.host),
+            Reach::Fine => t!("The PC at {address} didn't answer. Check that it is on and Sunshine is running, then try again.", address = self.address.key()),
         }
     }
 }
@@ -654,12 +657,13 @@ pub fn items(pcs: &[Pc], app: &str, now_ms: i64) -> Vec<Item> {
 /// makes it something to continue rather than something up next.
 fn running_item(pc: &Pc, app: &str, now_ms: i64) -> Item {
     let game = pc.running_app();
-    let title = game.map_or_else(|| "Game in progress".to_string(), |g| g.title().to_string());
+    let title = game.map_or_else(|| t!("Game in progress"), |g| g.title().to_string());
     Item {
         id: format!("running:{}", pc.address.key()),
         kind: ItemKind::Resume,
         title: title.clone(),
-        subtitle: Some(format!("Running on {}", pc.name())),
+        // Translators: {pc} is a gaming PC's name.
+        subtitle: Some(t!("Running on {pc}", pc = pc.name())),
         position_ms: Some(0),
         last_used_ms: Some(pc.running_since_ms.unwrap_or(now_ms)),
         poster: game.and_then(|g| cover_url(pc, g)),
@@ -670,19 +674,20 @@ fn running_item(pc: &Pc, app: &str, now_ms: i64) -> Item {
 
 fn pc_item(pc: &Pc, app: &str, weight: i32) -> Item {
     let subtitle = match (pc.online, pc.running_app(), pc.running) {
-        (true, Some(game), _) => format!("{} running", game.title()),
-        (true, None, Some(_)) => "Game running".to_string(),
+        // Translators: {game} is the name of the game a PC is running.
+        (true, Some(game), _) => t!("{game} running", game = game.title()),
+        (true, None, Some(_)) => t!("Game running"),
         (true, None, None) => match pc.web {
-            Web::Refused => "Online, sign-in refused".to_string(),
-            Web::NoBasic => "Online, Apollo lists no games".to_string(),
-            Web::Forbidden => "Online, web page refused this TV".to_string(),
-            Web::Welcome => "Online, Sunshine has no sign-in yet".to_string(),
-            Web::Fine | Web::Unknown if pc.apps.len() == 1 => "Online, 1 game".to_string(),
-            Web::Fine | Web::Unknown if !pc.apps.is_empty() => format!("Online, {} games", pc.apps.len()),
-            Web::Fine | Web::Unknown => "Online".to_string(),
+            Web::Refused => t!("Online, sign-in refused"),
+            Web::NoBasic => t!("Online, Apollo lists no games"),
+            Web::Forbidden => t!("Online, web page refused this TV"),
+            Web::Welcome => t!("Online, Sunshine has no sign-in yet"),
+            Web::Fine | Web::Unknown if !pc.apps.is_empty() => tn!(pc.apps.len(), "Online, {n} game", "Online, {n} games"),
+            // Translators: a gaming PC that is on and answering.
+            Web::Fine | Web::Unknown => t!("Online"),
         },
-        (false, ..) if pc.reach == Reach::NotAllowed => "Not reachable by this name".to_string(),
-        (false, ..) => "Not answering".to_string(),
+        (false, ..) if pc.reach == Reach::NotAllowed => t!("Not reachable by this name"),
+        (false, ..) => t!("Not answering"),
     };
     Item {
         id: format!("pc:{}", pc.address.key()),

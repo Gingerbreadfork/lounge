@@ -1,0 +1,60 @@
+# Lounge, archive: nl
+#
+msgid ""
+msgstr ""
+"Language: nl\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. names the service where a sentence starts with it, as in "The Internet Archive didn't answer."
+#: src/lib.rs
+msgid "The Internet Archive"
+msgstr "Het Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films on the Internet Archive"
+msgstr "Speelfilms op het Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films collection"
+msgstr "Collectie speelfilms"
+
+#: src/lib.rs
+msgid "Classic cartoons on the Internet Archive"
+msgstr "Klassieke tekenfilms op het Internet Archive"
+
+#: src/lib.rs
+msgid "Classic cartoons collection"
+msgstr "Collectie klassieke tekenfilms"
+
+#: src/lib.rs
+msgid "Classic television on the Internet Archive"
+msgstr "Klassieke televisie op het Internet Archive"
+
+#: src/lib.rs
+msgid "Classic television collection"
+msgstr "Collectie klassieke televisie"
+
+#: src/lib.rs
+msgid "Free films, cartoons and television from archive.org, played on the TV."
+msgstr "Gratis films, tekenfilms en televisie van archive.org, afgespeeld op de tv."
+
+#: src/lib.rs
+msgid "An archive.org collection id, the last part of its address, such as feature_films."
+msgstr "De id van een collectie op archive.org: het laatste deel van het adres, bijvoorbeeld feature_films."
+
+#: src/lib.rs
+msgid "Items per row"
+msgstr "Items per rij"
+
+#: src/lib.rs
+msgid "The Internet Archive has nothing in these collections. Check the collections in the plugin's settings."
+msgstr "Het Internet Archive heeft niets in deze collecties. Controleer de collecties in de instellingen van de plug-in."
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Deze tegel is verouderd. Vernieuw de plug-in en probeer het dan opnieuw."
+
+#: src/lib.rs
+msgid "This item has no video file the TV can play. Try another one."
+msgstr "Dit item heeft geen videobestand dat de tv kan afspelen. Probeer een ander."

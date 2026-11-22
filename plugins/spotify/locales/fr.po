@@ -1,0 +1,204 @@
+# Lounge, spotify: fr
+#
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/lib.rs
+msgid "Spotify is asking for a pause between requests. It tries again on the next refresh."
+msgstr "Spotify demande une pause entre les requêtes. Nouvel essai à la prochaine actualisation."
+
+#: src/lib.rs
+msgid "Spotify's daily allowance for this app is used up. It comes back tomorrow."
+msgstr "Le quota quotidien de Spotify pour cette appli est épuisé. Il revient demain."
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Spotify no longer accepts this sign-in. Press Refresh now to sign in again."
+msgstr "Spotify n’accepte plus cette connexion. Appuyez sur « Actualiser maintenant » pour vous reconnecter."
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Spotify says this sign-in doesn't cover what the plugin reads. Press Refresh now to sign in again."
+msgstr "D’après Spotify, cette connexion ne couvre pas ce que lit le plugin. Appuyez sur « Actualiser maintenant » pour vous reconnecter."
+
+#: src/lib.rs
+msgid "Recently played, your playlists, saved albums and podcasts from your Spotify account, or any Spotify links you paste, opened in Spotify."
+msgstr "Vos écoutes récentes, vos playlists, vos albums enregistrés et vos podcasts depuis votre compte Spotify, ou les liens Spotify que vous collez, ouverts dans Spotify."
+
+#: src/lib.rs
+msgid "Recently played on Spotify"
+msgstr "Écoutés récemment sur Spotify"
+
+#: src/lib.rs
+msgid "Your playlists on Spotify"
+msgstr "Vos playlists sur Spotify"
+
+#: src/lib.rs
+msgid "Saved albums on Spotify"
+msgstr "Albums enregistrés sur Spotify"
+
+#: src/lib.rs
+msgid "Your podcasts on Spotify"
+msgstr "Vos podcasts sur Spotify"
+
+#: src/lib.rs
+msgid "Your picks on Spotify"
+msgstr "Votre sélection sur Spotify"
+
+#: src/lib.rs
+msgid "Spotify links"
+msgstr "Liens Spotify"
+
+#. "Share" and "Copy link" are menu entries in the Spotify app.
+#: src/lib.rs
+msgid "Playlists, albums, artists or podcasts to keep on the home, one share link per line. Needs no account. Share, Copy link in Spotify gives you one."
+msgstr "Les playlists, albums, artistes ou podcasts à garder sur l’écran d’accueil, un lien de partage par ligne. Aucun compte n’est nécessaire. Dans Spotify, Partager puis Copier le lien vous en donne un."
+
+#: src/lib.rs
+msgid "Spotify Client ID"
+msgstr "Client ID Spotify"
+
+#. {redirect} is a web address. "Web API" and "User Management" are names on Spotify's developer dashboard.
+#: src/lib.rs
+msgid "To show your own listening, playlists, albums and podcasts, make an app at Spotify and paste its Client ID here. At developer.spotify.com/dashboard, signed in with a Premium account, create an app: tick Web API and give it the redirect URI {redirect}, exactly. If another account will listen, add it under User Management. The sign-in link then appears here and on the TV."
+msgstr "Pour afficher vos écoutes, vos playlists, vos albums et vos podcasts, créez une appli chez Spotify et collez son Client ID ici. Sur developer.spotify.com/dashboard, avec un compte Premium, créez une appli : cochez Web API et donnez-lui exactement cette URI de redirection : {redirect}. Si un autre compte doit écouter, ajoutez-le sous User Management. Le lien de connexion apparaît ensuite ici et sur la TV."
+
+#: src/lib.rs
+msgid "Sign-in address"
+msgstr "Adresse de connexion"
+
+#: src/lib.rs
+msgid "Paste the whole address of the page Spotify sends you to after you sign in. After you agree on the sign-in page, the browser goes to a page that can't be reached; that is expected, so copy its address from the address bar."
+msgstr "Collez l’adresse entière de la page vers laquelle Spotify vous envoie après la connexion. Une fois que vous avez accepté sur la page de connexion, le navigateur ouvre une page inaccessible ; c’est normal : copiez son adresse depuis la barre d’adresse."
+
+#: src/lib.rs
+msgid "Recently played row"
+msgstr "Rangée « Écoutés récemment »"
+
+#: src/lib.rs
+msgid "Playlists row"
+msgstr "Rangée « Playlists »"
+
+#: src/lib.rs
+msgid "Saved albums row"
+msgstr "Rangée « Albums enregistrés »"
+
+#: src/lib.rs
+msgid "Podcasts row"
+msgstr "Rangée « Podcasts »"
+
+#: src/lib.rs
+msgid "The shows you follow."
+msgstr "Les podcasts que vous suivez."
+
+#: src/lib.rs
+msgid "Nothing to show yet. Paste some Spotify links, or a Client ID for your account, in the plugin's settings."
+msgstr "Rien à afficher pour l’instant. Collez des liens Spotify, ou un Client ID pour votre compte, dans les paramètres du plugin."
+
+#. "Sign-in address" is the name of one of this plugin's settings.
+#: src/lib.rs
+msgid "After you agree, copy the whole address of the page that can't be reached into the Sign-in address setting."
+msgstr "Après avoir accepté, copiez l’adresse entière de la page inaccessible dans le paramètre « Adresse de connexion »."
+
+#. "Plugins" is a page of the phone companion and {link} a web address.
+#: src/lib.rs
+msgid "Sign in on your phone: in the phone companion open Plugins, then Spotify, and tap the link there, or open {link}."
+msgstr "Connectez-vous sur votre téléphone : dans Lounge sur téléphone, ouvrez Plugins, puis Spotify, et touchez le lien qui s’y trouve, ou ouvrez {link}."
+
+#: src/lib.rs
+msgid "Spotify ends every sign-in after six months, so it is time to sign in again."
+msgstr "Spotify met fin à chaque connexion au bout de six mois : il est temps de vous reconnecter."
+
+#: src/lib.rs
+msgid "The sign-in was declined on the phone."
+msgstr "La connexion a été refusée sur le téléphone."
+
+#. {why} is a sentence or two of its own saying what went wrong.
+#: src/lib.rs
+msgid "Couldn't renew the Spotify sign-in. {why}"
+msgstr "Impossible de renouveler la connexion à Spotify. {why}"
+
+#: src/lib.rs
+msgid "Spotify does not know this Client ID. Check it against the app in the developer dashboard."
+msgstr "Spotify ne connaît pas ce Client ID. Comparez-le à celui de l’appli dans le tableau de bord développeur."
+
+#. {redirect} is a web address.
+#: src/lib.rs
+msgid "The app's redirect URI must be {redirect}, exactly. Set it in the app's dashboard, then sign in again."
+msgstr "L’URI de redirection de l’appli doit être exactement {redirect}. Réglez-la dans le tableau de bord de l’appli, puis reconnectez-vous."
+
+#: src/lib.rs
+msgid "That sign-in came from an earlier link."
+msgstr "Cette connexion venait d’un lien plus ancien."
+
+#: src/lib.rs
+msgid "That sign-in address did not work; a code is good for a few minutes and once."
+msgstr "Cette adresse de connexion n’a pas fonctionné ; un code ne vaut que quelques minutes et une seule fois."
+
+#: src/lib.rs
+msgid "Spotify doesn't know this Client ID. Check it in the plugin's settings."
+msgstr "Spotify ne connaît pas ce Client ID. Vérifiez-le dans les paramètres du plugin."
+
+#. "User Management" is a page of Spotify's developer dashboard.
+#: src/lib.rs
+msgid "Spotify's app is in development mode and this account is not on its list. Add the account under User Management in the app's dashboard."
+msgstr "L’appli Spotify est en mode développement et ce compte n’est pas sur sa liste. Ajoutez le compte sous User Management dans le tableau de bord de l’appli."
+
+#: src/lib.rs
+msgid "Spotify needs the account that made the app to have Premium. Make the app with a Premium account, then paste its Client ID in the plugin's settings."
+msgstr "Spotify exige que le compte qui a créé l’appli soit Premium. Créez l’appli avec un compte Premium, puis collez son Client ID dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "Spotify refused the request. Check the app in the developer dashboard."
+msgstr "Spotify a refusé la demande. Vérifiez l’appli dans le tableau de bord développeur."
+
+#: src/lib.rs
+msgid "Artist"
+msgstr "Artiste"
+
+#. Spotify's own name for the songs a person has liked, as the Spotify app shows it.
+#: src/lib.rs
+msgid "Liked Songs"
+msgstr "Titres likés"
+
+#: src/lib.rs
+msgid "{n} song"
+msgid_plural "{n} songs"
+msgstr[0] "{n} titre"
+msgstr[1] "{n} titres"
+
+#. {owner} is the name of the person whose playlist it is.
+#: src/lib.rs
+msgid "{owner}, {n} song"
+msgid_plural "{owner}, {n} songs"
+msgstr[0] "{owner}, {n} titre"
+msgstr[1] "{owner}, {n} titres"
+
+#: src/lib.rs
+msgid "Playlist"
+msgstr "Playlist"
+
+#: src/lib.rs
+msgid "{n} episode"
+msgid_plural "{n} episodes"
+msgstr[0] "{n} épisode"
+msgstr[1] "{n} épisodes"
+
+#: src/lib.rs
+msgid "Album"
+msgstr "Album"
+
+#: src/lib.rs
+msgid "Podcast"
+msgstr "Podcast"
+
+#: src/lib.rs
+msgid "Episode"
+msgstr "Épisode"
+
+#: src/lib.rs
+msgid "Song"
+msgstr "Titre"

@@ -3,7 +3,7 @@
 //! and OPML exports are turned into feeds, and Apple's directory answers search. No account:
 //! the feeds are the ones every podcast publishes. Feeds are asked only for what changed, and
 //! a feed too big to read whole is read from its start, where the newest episodes are.
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, t, tn, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use quick_xml::events::Event;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -35,49 +35,60 @@ const READ_TAGS: [&str; 12] = ["title", "guid", "id", "pubDate", "published", "u
 /// Items read from one feed. Feeds list newest first, and a long-running show's early years
 /// are not worth the fuel.
 const MOST_ITEMS_READ: usize = 100;
-const OUT_OF_DATE: &str = "This tile is out of date. Refresh the plugin, then try again.";
+const OUT_OF_DATE: &str = mark!("This tile is out of date. Refresh the plugin, then try again.");
 
 impl sdk::Plugin for Podcasts {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.podcasts".into(),
-            name: "Podcasts".into(),
+            name: t!("Podcasts"),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "New episodes of the podcasts you follow, from their feeds, played in a player app such as VLC.".into(),
+            description: t!("New episodes of the podcasts you follow, from their feeds, played in a player app such as VLC."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["itunes.apple.com".into(), "*".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "new".into(), title: "New podcast episodes".into(), style: RowStyle::Landscape },
-                RowSpec { id: "shows".into(), title: "Your podcasts".into(), style: RowStyle::Landscape },
+                RowSpec { id: "new".into(), title: t!("New podcast episodes"), style: RowStyle::Landscape },
+                RowSpec { id: "shows".into(), title: t!("Your podcasts"), style: RowStyle::Landscape },
             ],
             settings: vec![
                 SettingSpec {
                     key: "feeds".into(),
-                    label: "Podcasts you follow".into(),
+                    label: t!("Podcasts you follow"),
                     kind: SettingKind::List,
                     required: false,
-                    help: Some("Feed links, Apple Podcasts links or a link to an OPML export, one per line or separated by commas. An OPML file from another podcast app can be pasted in whole. Lounge's search finds podcasts too, and plays their latest episode.".into()),
+                    help: Some(t!("Feed links, Apple Podcasts links or a link to an OPML export, one per line or separated by commas. An OPML file from another podcast app can be pasted in whole. Lounge's search finds podcasts too, and plays their latest episode.")),
                     default: None,
                 },
-                SettingSpec { key: "per_feed".into(), label: "Episodes per podcast".into(), kind: SettingKind::Number, required: false, help: Some("From 1 to 10.".into()), default: Some("3".into()) },
-                SettingSpec { key: "days".into(), label: "Only the last … days".into(), kind: SettingKind::Number, required: false, help: Some("0 shows each feed's newest episodes whatever their age.".into()), default: Some("30".into()) },
-                SettingSpec { key: "shows".into(), label: "Your podcasts row".into(), kind: SettingKind::Toggle, required: false, help: Some("A tile per podcast that plays its latest episode.".into()), default: Some("true".into()) },
-                SettingSpec { key: "country".into(), label: "Country for search".into(), kind: SettingKind::Text, required: false, help: Some("Two letters, like au or gb, so search finds the podcasts of your country first. Left empty, it follows your Apple links.".into()), default: None },
+                SettingSpec { key: "per_feed".into(), label: t!("Episodes per podcast"), kind: SettingKind::Number, required: false, help: Some(t!("From 1 to 10.")), default: Some("3".into()) },
+                SettingSpec {
+                    key: "days".into(),
+                    // Translators: the label of a field that takes a number, which stands where the … is.
+                    label: t!("Only the last … days"),
+                    kind: SettingKind::Number,
+                    required: false,
+                    help: Some(t!("0 shows each feed's newest episodes whatever their age.")),
+                    default: Some("30".into()),
+                },
+                SettingSpec { key: "shows".into(), label: t!("Your podcasts row"), kind: SettingKind::Toggle, required: false, help: Some(t!("A tile per podcast that plays its latest episode.")), default: Some("true".into()) },
+                SettingSpec { key: "country".into(), label: t!("Country for search"), kind: SettingKind::Text, required: false, help: Some(t!("Two letters, like au or gb, so search finds the podcasts of your country first. Left empty, it follows your Apple links.")), default: None },
             ],
             homepage: None,
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         let sources = parse_sources(&host::setting("feeds").unwrap_or_default())?;
         if sources.is_empty() {
-            return Err("No podcasts yet. Add a feed link, an Apple Podcasts link or an OPML export in the plugin's settings.".into());
+            return Err(t!("No podcasts yet. Add a feed link, an Apple Podcasts link or an OPML export in the plugin's settings."));
         }
         let per_feed = number_setting("per_feed", 3).clamp(1, STORED_PER_FEED as i64) as usize;
         let days = number_setting("days", 30).clamp(0, 3_650);
@@ -144,16 +155,25 @@ impl sdk::Plugin for Podcasts {
     /// Plays the latest episode of a podcast found through search.
     fn resolve(action: &str) -> Result<Action, String> {
         let Some(url) = action.strip_prefix("latest:") else {
-            return Err(OUT_OF_DATE.into());
+            return Err(sdk::tr(OUT_OF_DATE));
         };
         let fetched = match fetch_feed(url, None, RESOLVE_TIMEOUT_MS) {
             Ok(Fetched::Body(body)) => body,
-            Ok(Fetched::Unchanged) => return Err(OUT_OF_DATE.into()),
+            Ok(Fetched::Unchanged) => return Err(sdk::tr(OUT_OF_DATE)),
             Err(FeedError::Budget) => return Err(host::BUDGET_SPENT.into()),
-            Err(FeedError::Gone(e) | FeedError::TooLarge(e) | FeedError::Other(e)) => return Err(e.replace(" Check the link in the plugin's settings.", "")),
+            // A podcast found through search has no link in the settings to check.
+            Err(FeedError::Gone(_)) => return Err(t!("There is no feed at {address} any more.", address = sdk::address(url))),
+            Err(FeedError::TooLarge(e) | FeedError::Other(e)) => return Err(e),
         };
         let show = parse_feed(&fetched.text, url);
-        let latest = show.latest().ok_or_else(|| format!("{} has no episodes to play yet.", if show.title.is_empty() { "This podcast" } else { show.title.as_str() }))?;
+        let latest = show.latest().ok_or_else(|| {
+            if show.title.is_empty() {
+                t!("This podcast has no episodes to play yet.")
+            } else {
+                // Translators: {title} is a podcast's name.
+                t!("{title} has no episodes to play yet.", title = show.title)
+            }
+        })?;
         Ok(latest.play())
     }
 }
@@ -248,18 +268,18 @@ fn fetch_feed_once(url: &str, cached: Option<&Show>, partial: bool, timeout_ms: 
     }
     let r = host::fetch(&req).map_err(|e| {
         if e == host::TOO_LARGE {
-            FeedError::TooLarge(format!("The feed at {} is too big to read, even in part. Only its newest episodes are needed; the publisher's other links may give a smaller feed.", sdk::address(url)))
+            FeedError::TooLarge(t!("The feed at {address} is too big to read, even in part. Only its newest episodes are needed; the publisher's other links may give a smaller feed.", address = sdk::address(url)))
         } else if e == host::BUDGET_SPENT {
             FeedError::Budget
         } else {
             sdk::warn!("{e}");
-            FeedError::Other(format!("The feed at {} didn't answer. Check the link in the plugin's settings and the TV's connection.", sdk::address(url)))
+            FeedError::Other(t!("The feed at {address} didn't answer. Check the link in the plugin's settings and the TV's connection.", address = sdk::address(url)))
         }
     })?;
     match r.status {
         304 => Ok(Fetched::Unchanged),
-        404 | 410 => Err(FeedError::Gone(format!("There is no feed at {} any more. Check the link in the plugin's settings.", sdk::address(url)))),
-        s if !(200..300).contains(&s) => Err(FeedError::Other(format!("The feed at {} answered with error {s}. Try again later.", sdk::address(url)))),
+        404 | 410 => Err(FeedError::Gone(t!("There is no feed at {address} any more. Check the link in the plugin's settings.", address = sdk::address(url)))),
+        s if !(200..300).contains(&s) => Err(FeedError::Other(t!("The feed at {address} answered with error {status}. Try again later.", address = sdk::address(url), status = s))),
         s => {
             let header = |name: &str| r.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.trim().to_string()).filter(|v| !v.is_empty());
             let etag = header("etag");
@@ -321,14 +341,17 @@ pub fn parse_sources(raw: &str) -> Result<Vec<Source>, String> {
             }
             Source::Apple(id)
         } else if is_apple(&lower) {
-            return Err(format!("\"{piece}\" is an Apple link without a podcast id. Open the podcast's own page and copy that link."));
+            // Translators: {piece} is a link typed into the plugin's settings.
+            return Err(t!("\"{piece}\" is an Apple link without a podcast id. Open the podcast's own page and copy that link.", piece = piece));
         } else {
             let url = match lower.find("://") {
                 Some(i) if ["http", "https"].contains(&&lower[..i]) => format!("{}{}", &lower[..i + 3], &piece[i + 3..]),
                 Some(i) if ["feed", "itpc", "pcast", "podcast"].contains(&&lower[..i]) => format!("https://{}", &piece[i + 3..]),
-                Some(_) => return Err(format!("\"{piece}\" is not a link Lounge can fetch. Check the podcasts in the plugin's settings.")),
+                // Translators: {piece} is a link typed into the plugin's settings.
+                Some(_) => return Err(t!("\"{piece}\" is not a link Lounge can fetch. Check the podcasts in the plugin's settings.", piece = piece)),
                 None if piece.contains('.') => format!("https://{piece}"),
-                None => return Err(format!("\"{piece}\" is not a feed link or an Apple Podcasts link. Check the podcasts in the plugin's settings.")),
+                // Translators: {piece} is what was typed into the plugin's settings.
+                None => return Err(t!("\"{piece}\" is not a feed link or an Apple Podcasts link. Check the podcasts in the plugin's settings.", piece = piece)),
             };
             if lower.contains(".opml") || lower.contains("/opml") || lower.contains("format=opml") { Source::Opml(url) } else { Source::Feed(url) }
         };
@@ -457,16 +480,23 @@ fn resolve_sources(sources: Vec<Source>, budget: &mut Budget, failures: &mut Vec
         budget.fetches += 1;
         match fetch_json::<Directory>(&format!("{ITUNES}/lookup?id={}", unknown.join(","))) {
             Ok(d) => {
+                let mut apple_only = false;
                 for r in d.results.into_iter().filter(|r| r.collection_id > 0) {
                     if r.feed_url.is_empty() {
-                        failures.push(format!("{} is only on Apple Podcasts, with no feed to read.", if r.collection_name.is_empty() { "A podcast you listed".to_string() } else { r.collection_name.clone() }));
+                        apple_only = true;
+                        failures.push(if r.collection_name.is_empty() {
+                            t!("A podcast you listed is only on Apple Podcasts, with no feed to read.")
+                        } else {
+                            // Translators: {title} is a podcast's name.
+                            t!("{title} is only on Apple Podcasts, with no feed to read.", title = r.collection_name)
+                        });
                         continue;
                     }
                     known.insert(r.collection_id.to_string(), AppleKnown { feed: r.feed_url, name: r.collection_name, art: r.artwork_url_600.filter(|u| u.starts_with("https://")) });
                 }
                 for id in &unknown {
-                    if !known.contains_key(id) && !failures.iter().any(|f| f.contains("only on Apple")) {
-                        failures.push(format!("Apple has no podcast with the id {id}. Check the link in the plugin's settings."));
+                    if !known.contains_key(id) && !apple_only {
+                        failures.push(t!("Apple has no podcast with the id {id}. Check the link in the plugin's settings.", id = id));
                     }
                 }
                 host::kv_set(APPLE_KEY, serde_json::to_string(&known).unwrap_or_default().as_bytes());
@@ -498,7 +528,7 @@ fn resolve_sources(sources: Vec<Source>, budget: &mut Budget, failures: &mut Vec
                     Ok(Fetched::Body(body)) => {
                         let listed = opml_feeds(&body.text);
                         if listed.is_empty() {
-                            failures.push(format!("The list at {} holds no podcast feeds. Check the link in the plugin's settings.", sdk::address(&url)));
+                            failures.push(t!("The list at {address} holds no podcast feeds. Check the link in the plugin's settings.", address = sdk::address(&url)));
                         } else {
                             opml_known.insert(url.clone(), listed.clone());
                             host::kv_set(OPML_KEY, serde_json::to_string(&opml_known).unwrap_or_default().as_bytes());
@@ -650,12 +680,13 @@ impl FeedCache {
                     let mut show = parse_feed(&body.text, &f.url);
                     if show.episodes.is_empty() {
                         if show.title.is_empty() {
-                            failures.push(format!("The link {} is not a podcast feed. Check it in the plugin's settings.", sdk::address(&f.url)));
+                            failures.push(t!("The link {address} is not a podcast feed. Check it in the plugin's settings.", address = sdk::address(&f.url)));
                             if let Some(id) = &f.apple_id {
                                 gone.push(id.clone());
                             }
                         } else {
-                            failures.push(format!("{} has no episodes with a file to play.", show.title));
+                            // Translators: {title} is a podcast's name.
+                            failures.push(t!("{title} has no episodes with a file to play.", title = show.title));
                         }
                         continue;
                     }
@@ -700,17 +731,20 @@ impl FeedCache {
 /// A length in words: "48 minutes", "2 hours 25 minutes", "1 hour".
 pub fn length_text(ms: i64) -> String {
     let minutes = (ms + 30_000) / 60_000;
-    let count = |n: i64, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let hours = |h: i64| tn!(h, "{n} hour", "{n} hours");
+    let minutes_of = |m: i64| tn!(m, "{n} minute", "{n} minutes");
     match (minutes / 60, minutes % 60) {
-        (0, m) => count(m.max(1), "minute", "minutes"),
-        (h, 0) => count(h, "hour", "hours"),
-        (h, m) => format!("{} {}", count(h, "hour", "hours"), count(m, "minute", "minutes")),
+        (0, m) => minutes_of(m.max(1)),
+        (h, 0) => hours(h),
+        // Translators: a length of time. {hours} is a count of hours, such as "2 hours", and {minutes} a count of minutes, such as "25 minutes".
+        (h, m) => t!("{hours} {minutes}", hours = hours(h), minutes = minutes_of(m)),
     }
 }
 
 fn episode_item(show: &Show, e: &Episode, weight: i32, is_new: bool) -> Item {
     let subtitle = match e.duration_ms {
-        Some(d) if d > 0 => format!("{}, {}", show.title, length_text(d)),
+        // Translators: {show} is a podcast's name and {length} how long the episode runs, such as "48 minutes".
+        Some(d) if d > 0 => t!("{show}, {length}", show = show.title, length = length_text(d)),
         _ => show.title.clone(),
     };
     Item {
@@ -738,7 +772,8 @@ fn show_item(show: &Show, weight: i32) -> Option<Item> {
         id: format!("show:{}", fnv(&show.url)),
         kind: ItemKind::Program,
         title: show.title.clone(),
-        subtitle: Some(format!("Latest: {}", latest.title)),
+        // Translators: {title} is the title of a podcast's newest episode.
+        subtitle: Some(t!("Latest: {title}", title = latest.title)),
         thumbnail: show.image.clone().or_else(|| latest.image.clone()),
         row: Some("shows".into()),
         weight,

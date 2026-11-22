@@ -1,0 +1,49 @@
+# Lounge, emby: nl
+#
+msgid ""
+msgstr ""
+"Language: nl\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Continue watching, recently added and favourites from your Emby server."
+msgstr "Verder kijken, onlangs toegevoegd en favorieten van je Emby-server."
+
+#: src/lib.rs
+msgid "Recently added on Emby"
+msgstr "Onlangs toegevoegd op Emby"
+
+#: src/lib.rs
+msgid "Favourites on Emby"
+msgstr "Favorieten op Emby"
+
+#: src/lib.rs
+msgid "Server address"
+msgstr "Serveradres"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.10:8096"
+msgstr "Bijvoorbeeld http://192.168.0.10:8096"
+
+#: src/lib.rs
+msgid "Username"
+msgstr "Gebruikersnaam"
+
+#: src/lib.rs
+msgid "Password"
+msgstr "Wachtwoord"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "server address"
+msgstr "serveradres"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "username"
+msgstr "gebruikersnaam"
+
+#: src/lib.rs
+msgid "Emby rejected the username or password. Check them in the plugin's settings."
+msgstr "Emby heeft de gebruikersnaam of het wachtwoord geweigerd. Controleer ze in de instellingen van de plug-in."

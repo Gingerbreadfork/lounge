@@ -2,7 +2,7 @@
 //! feed (plain or gzipped) fills in what is on. Streams open in whatever video player the TV
 //! has (`play` action).
 
-use lounge_plugin_sdk::{self as sdk, epoch_ms, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, epoch_ms, host, t, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::BuildHasherDefault;
@@ -20,12 +20,14 @@ const MAX_FIELD_BYTES: usize = 1024;
 const DESCRIPTION_CHARS: usize = 140;
 
 impl sdk::Plugin for Iptv {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.iptv".into(),
-            name: "IPTV playlist".into(),
+            name: t!("IPTV playlist"),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Channels from an M3U playlist, with programme information from an XMLTV guide.".into(),
+            description: t!("Channels from an M3U playlist, with programme information from an XMLTV guide."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
             fetch_hosts: vec!["$playlist_url".into(), "$epg_url".into(), "*".into()],
@@ -33,27 +35,29 @@ impl sdk::Plugin for Iptv {
             refresh_seconds: 0,
             rows: Vec::new(),
             settings: vec![
-                SettingSpec { key: "playlist_url".into(), label: "Playlist address (M3U)".into(), kind: SettingKind::SecretUrl, required: true, help: Some("The .m3u or .m3u8 playlist your provider gave you.".into()), default: None },
-                SettingSpec { key: "epg_url".into(), label: "Guide address (XMLTV)".into(), kind: SettingKind::SecretUrl, required: false, help: Some("Leave it empty to use the guide the playlist names, or an Xtream provider's own. Plain or .gz XMLTV both work.".into()), default: None },
-                SettingSpec { key: "group".into(), label: "Only this group".into(), kind: SettingKind::Text, required: false, help: Some("Shows only the channels in this group, for very large playlists.".into()), default: None },
+                SettingSpec { key: "playlist_url".into(), label: t!("Playlist address (M3U)"), kind: SettingKind::SecretUrl, required: true, help: Some(t!("The .m3u or .m3u8 playlist your provider gave you.")), default: None },
+                SettingSpec { key: "epg_url".into(), label: t!("Guide address (XMLTV)"), kind: SettingKind::SecretUrl, required: false, help: Some(t!("Leave it empty to use the guide the playlist names, or an Xtream provider's own. Plain or .gz XMLTV both work.")), default: None },
+                SettingSpec { key: "group".into(), label: t!("Only this group"), kind: SettingKind::Text, required: false, help: Some(t!("Shows only the channels in this group, for very large playlists.")), default: None },
             ],
             homepage: None,
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
         // Provider links often carry the account's user name and password, so both are secrets.
-        let playlist_url = host::secret("playlist_url").filter(|v| !v.trim().is_empty()).ok_or_else(|| sdk::not_set("playlist address"))?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let playlist_url = host::secret("playlist_url").filter(|v| !v.trim().is_empty()).ok_or_else(|| sdk::not_set(&t!("playlist address")))?;
         let group = host::setting("group");
         let text = playlist(&playlist_url)?;
         let (channels, total) = parse_m3u(&text, group.as_deref(), sdk::MAX_ITEMS);
         if channels.is_empty() {
             return Err(match group {
-                Some(g) => format!("The playlist has no channels in the group \"{g}\". Check the group's name in the plugin's settings."),
-                None => "The playlist has no channels. Check the playlist address in the plugin's settings.".into(),
+                Some(g) => t!("The playlist has no channels in the group \"{group}\". Check the group's name in the plugin's settings.", group = g),
+                None => t!("The playlist has no channels. Check the playlist address in the plugin's settings."),
             });
         }
         if total > channels.len() {
@@ -91,7 +95,7 @@ sdk::export_plugin!(Iptv);
 fn playlist(url: &str) -> Result<String, String> {
     let r = host::fetch(&HttpRequest::get(url)).map_err(|e| {
         sdk::warn!("{e}");
-        if e == host::TOO_LARGE { TOO_LARGE_PLAYLIST.to_string() } else { playlist_error(url, None) }
+        if e == host::TOO_LARGE { too_large_playlist() } else { playlist_error(url, None) }
     })?;
     if !r.ok() {
         return Err(playlist_error(url, Some(r.status)));
@@ -99,7 +103,9 @@ fn playlist(url: &str) -> Result<String, String> {
     Ok(if r.body_base64.is_some() { String::from_utf8_lossy(&sdk::body_bytes(r)).into_owned() } else { r.body })
 }
 
-const TOO_LARGE_PLAYLIST: &str = "The playlist is larger than the 8 MB a plugin may read. Ask your provider for a smaller one, such as live channels only.";
+fn too_large_playlist() -> String {
+    t!("The playlist is larger than the 8 MB a plugin may read. Ask your provider for a smaller one, such as live channels only.")
+}
 
 /// The error for a playlist that did not arrive, with the server's HTTP `status` if it answered.
 /// Only the host and port are named, since the rest of the address holds the account.
@@ -107,8 +113,8 @@ fn playlist_error(url: &str, status: Option<u16>) -> String {
     let at = sdk::address(url);
     let host = at.split(['/', '?']).next().unwrap_or_default();
     match status {
-        Some(s) => format!("The playlist server at {host} answered with error {s}. Check the playlist address, then try again."),
-        None => format!("The playlist server didn't answer at {host}. Check the playlist address, then try again."),
+        Some(status) => t!("The playlist server at {host} answered with error {status}. Check the playlist address, then try again.", host = host, status = status),
+        None => t!("The playlist server didn't answer at {host}. Check the playlist address, then try again.", host = host),
     }
 }
 
@@ -327,9 +333,13 @@ pub fn parse_m3u(text: &str, only_group: Option<&str>, limit: usize) -> (Vec<Cha
                 continue;
             }
             index += 1;
-            let name = if name.is_empty() { attrs.get("tvg-name").cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Channel {index}")) } else { name };
+            let given = if name.is_empty() { attrs.get("tvg-name").cloned().filter(|n| !n.is_empty()) } else { Some(name) };
             let tvg_id = attrs.get("tvg-id").map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-            let base = tvg_id.clone().unwrap_or_else(|| Some(slug(&name)).filter(|s| !s.is_empty()).unwrap_or_else(|| url_hash(line)));
+            // A channel with no name keeps one id whatever language its name is shown in.
+            let named = given.as_deref().map_or_else(|| format!("channel-{index}"), slug);
+            let base = tvg_id.clone().unwrap_or_else(|| Some(named).filter(|s| !s.is_empty()).unwrap_or_else(|| url_hash(line)));
+            // Translators: the name shown for a playlist channel that has none. {number} is its place in the playlist.
+            let name = given.unwrap_or_else(|| t!("Channel {number}", number = index));
             let id = unique_id(&mut used, &mut next, base);
             let group = attrs.get("group-title").cloned().filter(|g| !g.is_empty());
             if only_group.is_some_and(|want| !group.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(want))) {

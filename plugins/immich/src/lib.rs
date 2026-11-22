@@ -1,7 +1,7 @@
 //! Immich photos: the pictures in an album shared from Immich become the screensaver. A shared
 //! link needs no account on the TV, and its key lets the launcher fetch the pictures without
 //! headers, which is what the artwork pipeline needs.
-use lounge_plugin_sdk::{self as sdk, host, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, t, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::HashSet;
 
@@ -14,12 +14,14 @@ const FRAME_BELOW: f64 = 1.25;
 pub struct Immich;
 
 impl sdk::Plugin for Immich {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.immich".into(),
-            name: "Immich photos".into(),
+            name: t!("Immich photos"),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "An album shared from Immich becomes the screensaver.".into(),
+            description: t!("An album shared from Immich becomes the screensaver."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Wallpaper],
             fetch_hosts: vec!["$link".into()],
@@ -29,30 +31,33 @@ impl sdk::Plugin for Immich {
             settings: vec![
                 SettingSpec {
                     key: "link".into(),
-                    label: "Shared album link".into(),
+                    label: t!("Shared album link"),
                     kind: SettingKind::Url,
                     required: true,
-                    help: Some("In Immich open the album, Share, Create link, and paste the whole address, like https://photos.example.com/share/AbC123… or its custom /s/ address.".into()),
+                    // Translators: Share and Create link are names in Immich's own menus.
+                    help: Some(t!("In Immich open the album, Share, Create link, and paste the whole address, like https://photos.example.com/share/AbC123… or its custom /s/ address.")),
                     default: None,
                 },
-                SettingSpec { key: "password".into(), label: "Link password".into(), kind: SettingKind::Password, required: false, help: Some("Only if the shared link has one.".into()), default: None },
-                SettingSpec { key: "max".into(), label: "Pictures to show".into(), kind: SettingKind::Number, required: false, help: Some("The newest ones are kept. Pictures come at Immich's preview size; for a 4K panel set that to 2160 in Immich's image settings.".into()), default: Some("60".into()) },
+                SettingSpec { key: "password".into(), label: t!("Link password"), kind: SettingKind::Password, required: false, help: Some(t!("Only if the shared link has one.")), default: None },
+                SettingSpec { key: "max".into(), label: t!("Pictures to show"), kind: SettingKind::Number, required: false, help: Some(t!("The newest ones are kept. Pictures come at Immich's preview size; for a 4K panel set that to 2160 in Immich's image settings.")), default: Some("60".into()) },
             ],
             homepage: Some("https://immich.app".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
     fn refresh(_ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let link = host::required_setting("link", "shared album link")?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let link = host::required_setting("link", &t!("shared album link"))?;
         let (base, name) = parse_link(&link)?;
         let password = host::secret("password").filter(|p| !p.is_empty());
         let max = host::setting("max").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(60).clamp(1, 300);
         let auth = query(&name, password.as_deref());
         let shared = shared_link(&base, &name, password.as_deref())?;
-        let album = shared.album.as_ref().and_then(|a| a.album_name.clone()).unwrap_or_else(|| "Photos".into());
+        let album = shared.album.as_ref().and_then(|a| a.album_name.clone()).unwrap_or_else(|| t!("Photos"));
         // Older servers list an album's pictures with the link; newer ones serve them a month at a time.
         let (mut pictures, album_id) = match shared.album {
             Some(a) => ([shared.assets.0, a.assets.0].concat(), Some(a.id).filter(|id| !id.is_empty())),
@@ -82,7 +87,10 @@ impl sdk::Plugin for Immich {
     }
 }
 
-const TOO_BIG: &str = "The album is too big to read: Immich answered with more than the 8 MB a plugin may read at once. Turn off Show metadata on the shared link, or share a smaller album.";
+fn too_big() -> String {
+    // Translators: Show metadata is the name of a switch on a shared link in Immich.
+    t!("The album is too big to read: Immich answered with more than the 8 MB a plugin may read at once. Turn off Show metadata on the shared link, or share a smaller album.")
+}
 
 /// GET from Immich, turning its refusals into advice.
 fn get(base: &str, url: &str) -> Result<String, String> {
@@ -113,7 +121,7 @@ fn shared_link(base: &str, name: &str, password: Option<&str>) -> Result<SharedL
 /// Sends `req` to the Immich at `base` and reads the whole answer, whatever its status.
 fn send(base: &str, req: &HttpRequest) -> Result<(u16, String), String> {
     match sdk::fetch_from("Immich", base, req) {
-        Err(e) if e == host::TOO_LARGE => Err(TOO_BIG.into()),
+        Err(e) if e == host::TOO_LARGE => Err(too_big()),
         Err(e) => Err(e),
         Ok(r) => Ok((r.status, r.body)),
     }
@@ -122,7 +130,7 @@ fn send(base: &str, req: &HttpRequest) -> Result<(u16, String), String> {
 fn answer(base: &str, status: u16, body: String) -> Result<String, String> {
     match status {
         401 => Err(refusal(&body)),
-        404 => Err("Immich does not know this link any more. Create a new shared link for the album.".into()),
+        404 => Err(t!("Immich does not know this link any more. Create a new shared link for the album.")),
         s if !(200..300).contains(&s) => Err(sdk::answered_error("Immich", base, s)),
         _ => Ok(body),
     }
@@ -138,13 +146,13 @@ fn unreadable(base: &str, what: &str, e: impl std::fmt::Display) -> String {
 fn refusal(body: &str) -> String {
     let message = serde_json::from_str::<serde_json::Value>(body).ok().and_then(|v| v["message"].as_str().map(str::to_lowercase)).unwrap_or_default();
     if message.contains("invalid password") {
-        "Immich turned down the link's password. Check it in the plugin's settings.".into()
+        t!("Immich turned down the link's password. Check it in the plugin's settings.")
     } else if message.contains("password") {
-        "This link has a password. Enter it in the plugin's settings.".into()
+        t!("This link has a password. Enter it in the plugin's settings.")
     } else if message.contains("share key") {
-        "Immich does not know this link any more. Create a new shared link for the album.".into()
+        t!("Immich does not know this link any more. Create a new shared link for the album.")
     } else {
-        "Immich refused the link. If it has a password, enter it in the plugin's settings.".into()
+        t!("Immich refused the link. If it has a password, enter it in the plugin's settings.")
     }
 }
 
@@ -319,11 +327,11 @@ pub fn parse_link(link: &str) -> Result<(String, String), String> {
     let (base, name) = match (link.split_once("/share/"), link.split_once("/s/")) {
         (Some((base, rest)), _) => (base, Some(token(rest)).filter(|k| !k.is_empty()).map(|k| format!("key={k}"))),
         (None, Some((base, rest))) => (base, Some(token(rest)).filter(|k| !k.is_empty()).map(|k| format!("slug={k}"))),
-        (None, None) => return Err("That isn't a shared album link, which has /share/ or /s/ in it. Copy the link again from Immich's Share menu into the plugin's settings.".into()),
+        (None, None) => return Err(t!("That isn't a shared album link, which has /share/ or /s/ in it. Copy the link again from Immich's Share menu into the plugin's settings.")),
     };
     match name {
         Some(name) if base.starts_with("http://") || base.starts_with("https://") => Ok((base.to_string(), name)),
-        _ => Err("That isn't a shared album link, which looks like https://photos.example.com/share/AbC123. Copy the link again from Immich's Share menu into the plugin's settings.".into()),
+        _ => Err(t!("That isn't a shared album link, which looks like https://photos.example.com/share/AbC123. Copy the link again from Immich's Share menu into the plugin's settings.")),
     }
 }
 
@@ -338,8 +346,10 @@ fn query(name: &str, password: Option<&str>) -> String {
 pub fn month_year(ms: i64) -> String {
     let days = ms.div_euclid(86_400_000);
     let (y, m) = civil_from_days(days);
-    const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    format!("{} {y}", MONTHS[(m - 1) as usize])
+    // Translators: a month's name as written before a year, as in October 2025.
+    const MONTHS: [&str; 12] = [mark!("January"), mark!("February"), mark!("March"), mark!("April"), mark!("May"), mark!("June"), mark!("July"), mark!("August"), mark!("September"), mark!("October"), mark!("November"), mark!("December")];
+    // Translators: when a photo was taken, as in October 2025.
+    t!("{month} {year}", month = sdk::tr(MONTHS[(m - 1) as usize]), year = y)
 }
 
 /// Howard Hinnant's days-to-civil, year and month only.

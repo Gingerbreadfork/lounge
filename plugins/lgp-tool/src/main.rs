@@ -4,14 +4,15 @@
 //! lgp-tool keygen <key-file>                       write a new Ed25519 signing key (hex seed, mode 0600, never over a file)
 //! lgp-tool bundle <plugin.wasm> <key-file> <out.lgp> [--manifest manifest.json]
 //! lgp-tool inspect <bundle.lgp>                    print the manifest and verify the signature
-//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--now ms] [--artwork] [--state file] [--search query] [--resolve action] [--sheet id] [--json]
+//! lgp-tool run <plugin.wasm|bundle.lgp> [--set key=value]... [--secret key=value]... [--fixtures dir] [--now ms] [--artwork] [--state file] [--search query] [--resolve action] [--sheet id] [--lang tag] [--json]
 //! ```
 //! `run` executes `refresh`, or `search`, `resolve` or `sheet`, with a host that keeps key-values in memory, or in
 //! the `--state` file between runs as the TV keeps them between refreshes, reads settings from
 //! the flags, and fetches live unless `--fixtures` points at a directory of fixtures; [`FIXTURES`]
-//! describes them. `--now` fixes the clock a refresh is given. It prints the log, the fuel used
-//! and the items, or with `--json` every item as JSON and the log on stderr, then any pictures
-//! the TV would not show; `--artwork` downloads each one as the TV would to find out.
+//! describes them. `--now` fixes the clock a refresh is given, and `--lang` the language the
+//! plugin answers in. It prints the log, the fuel used and the items, or with `--json` every item
+//! as JSON and the log on stderr, then any pictures the TV would not show; `--artwork` downloads
+//! each one as the TV would to find out.
 
 use ed25519_dalek::{Signer, SigningKey};
 use lounge_plugin_api::{HttpRequest, HttpResponse, Item, ItemKind, Manifest, RefreshContext, GLYPHS};
@@ -39,7 +40,7 @@ fn main() {
     }
 }
 
-const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--now ms] [--artwork] [--state file] [--search q] [--resolve action] [--sheet id] [--json]";
+const USAGE: &str = "usage: lgp-tool keygen <key> | bundle <wasm> <key> <out.lgp> [--manifest m.json] | inspect <lgp> | run <wasm|lgp> [--set k=v] [--secret k=v] [--fixtures dir] [--now ms] [--artwork] [--state file] [--search q] [--resolve action] [--sheet id] [--lang tag] [--json]";
 
 const FIXTURES: &str = "fixtures: --fixtures dir answers each fetch from <sha256 of the url, hex>.body in dir.
 A request that is not a GET, or carries a body, first looks for <sha256 of \"METHOD url\\nbody\">.body, so
@@ -129,7 +130,7 @@ fn run(args: &[String]) -> Result<(), String> {
     let state = flag(args, "--state").map(PathBuf::from);
     let services = Arc::new(RunServices {
         kv: Mutex::new(state.as_deref().map(load_state).transpose()?.unwrap_or_default()),
-        settings: Mutex::new(pairs(args, "--set")),
+        settings: Mutex::new(in_language(pairs(args, "--set"), flag(args, "--lang").as_deref())),
         secrets: Mutex::new(pairs(args, "--secret")),
         fixtures: flag(args, "--fixtures").map(PathBuf::from),
         ..Default::default()
@@ -441,6 +442,14 @@ fn save_state(file: &Path, kv: &HashMap<String, Vec<u8>>) -> Result<(), String> 
 
 fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
+}
+
+/// `settings` with the language the plugin is asked to speak, as the TV tells it.
+fn in_language(mut settings: HashMap<String, String>, lang: Option<&str>) -> HashMap<String, String> {
+    if let Some(lang) = lang {
+        settings.insert(lounge_plugin_api::LOCALE_SETTING.to_string(), lang.to_string());
+    }
+    settings
 }
 
 fn pairs(args: &[String], name: &str) -> HashMap<String, String> {

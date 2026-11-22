@@ -1,0 +1,52 @@
+# Lounge, hdhomerun: es
+#
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Over-the-air channels and a guide from an HDHomeRun tuner on your network."
+msgstr "Canales por antena y una guía, desde un sintonizador HDHomeRun de tu red."
+
+#: src/lib.rs
+msgid "Tuner address"
+msgstr "Dirección del sintonizador"
+
+#: src/lib.rs
+msgid "Leave it empty and the tuner is found automatically. Otherwise use its address, like http://192.168.0.20."
+msgstr "Déjalo vacío y el sintonizador se encuentra automáticamente. Si no, usa su dirección, por ejemplo, http://192.168.0.20."
+
+#: src/lib.rs
+msgid "Hide channels marked DRM"
+msgstr "Ocultar canales marcados con DRM"
+
+#: src/lib.rs
+msgid "They cannot play outside HDHomeRun's own app."
+msgstr "No se pueden reproducir fuera de la app de HDHomeRun."
+
+#: src/lib.rs
+msgid "No HDHomeRun answered at {address}. Check the tuner and its address, then try again."
+msgstr "Ningún HDHomeRun respondió en {address}. Comprueba el sintonizador y su dirección, y vuelve a intentarlo."
+
+#: src/lib.rs
+msgid "The HDHomeRun at {address} didn't send its channels. Check the tuner, then try again."
+msgstr "El HDHomeRun de {address} no envió sus canales. Comprueba el sintonizador y vuelve a intentarlo."
+
+#. {tuner} is the name the tuner gives itself, such as HDHomeRun FLEX 4K.
+#: src/lib.rs
+msgid "{tuner} has no channels yet. Run a channel scan in the HDHomeRun app first."
+msgstr "{tuner} aún no tiene canales. Haz primero una búsqueda de canales en la app de HDHomeRun."
+
+#: src/lib.rs
+msgid "The tuner has no channels yet. Run a channel scan in the HDHomeRun app first."
+msgstr "El sintonizador aún no tiene canales. Haz primero una búsqueda de canales en la app de HDHomeRun."
+
+#: src/lib.rs
+msgid "Could not look for tuners. Check the TV's internet connection, or enter the tuner's address in the plugin's settings."
+msgstr "No se pudieron buscar sintonizadores. Comprueba la conexión a internet de la TV o escribe la dirección del sintonizador en los ajustes del plugin."
+
+#: src/lib.rs
+msgid "No HDHomeRun tuner was found on this network. Enter its address in the plugin's settings."
+msgstr "No se encontró ningún sintonizador HDHomeRun en esta red. Escribe su dirección en los ajustes del plugin."

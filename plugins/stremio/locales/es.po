@@ -1,0 +1,72 @@
+# Lounge, stremio: es
+#
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Stremio rejected the email or password. Check them in the plugin's settings."
+msgstr "Stremio rechazó el correo electrónico o la contraseña. Compruébalos en los ajustes del plugin."
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Stremio no longer knows this sign-in. Press Refresh now to sign in again."
+msgstr "Stremio ya no reconoce este inicio de sesión. Pulsa Actualizar ahora para volver a iniciar sesión."
+
+#: src/lib.rs
+msgid "Continue watching, new episodes and your library from your Stremio account, opened in Stremio."
+msgstr "Seguir viendo, los episodios nuevos y tu biblioteca, de tu cuenta de Stremio, abiertos en Stremio."
+
+#: src/lib.rs
+msgid "Library on Stremio"
+msgstr "Biblioteca en Stremio"
+
+#: src/lib.rs
+msgid "Email"
+msgstr "Correo electrónico"
+
+#. "both" are the email and the password, the two settings this sits between.
+#: src/lib.rs
+msgid "Leave both empty to sign in with a code on your phone instead; this page shows the code. Accounts made with Facebook or Apple have no password, so they sign in that way."
+msgstr "Deja ambos vacíos para iniciar sesión con un código en tu teléfono; esta página muestra el código. Las cuentas creadas con Facebook o Apple no tienen contraseña, así que inician sesión de ese modo."
+
+#: src/lib.rs
+msgid "Password"
+msgstr "Contraseña"
+
+#: src/lib.rs
+msgid "Only with an email above."
+msgstr "Solo si hay un correo arriba."
+
+#: src/lib.rs
+msgid "New episodes"
+msgstr "Episodios nuevos"
+
+#. "Continue watching" is the row on Lounge's home screen.
+#: src/lib.rs
+msgid "A show in your library with an episode out since you last watched it joins Continue watching as up next."
+msgstr "Una serie de tu biblioteca con un episodio estrenado desde la última vez que la viste se suma a Seguir viendo como lo siguiente por ver."
+
+#: src/lib.rs
+msgid "Library row"
+msgstr "Fila Biblioteca"
+
+#: src/lib.rs
+msgid "The movies and shows in your Stremio library, most recently watched first."
+msgstr "Las películas y series de tu biblioteca de Stremio, primero lo visto más recientemente."
+
+#: src/lib.rs
+msgid "Add the password in the plugin's settings. To sign in with a code instead, leave the email empty too."
+msgstr "Añade la contraseña en los ajustes del plugin. Para iniciar sesión con un código, deja vacío también el correo electrónico."
+
+#. {code} ends the web address. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Sign in: on your phone open link.stremio.com/{code} and sign in to Stremio, then press Refresh now here."
+msgstr "Inicia sesión: en tu teléfono abre link.stremio.com/{code} e inicia sesión en Stremio; luego pulsa aquí Actualizar ahora."
+
+#. the step to take once link.stremio.com is open on the phone.
+#: src/lib.rs
+msgid "Sign in to Stremio on that page."
+msgstr "Inicia sesión en Stremio en esa página."

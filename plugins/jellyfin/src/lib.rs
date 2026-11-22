@@ -3,7 +3,7 @@
 //! favourites into rows of their own, and searches the library. Items open on their page in the
 //! Jellyfin Android TV app.
 
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, t, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -11,12 +11,16 @@ pub struct Jellyfin;
 
 const APP_PACKAGE: &str = "org.jellyfin.androidtv";
 const QUICK_KEY: &str = "quick";
-const QUICK_OFF: &str = "Quick Connect is turned off on this Jellyfin server. Turn it on in the Dashboard under General, or enter a username and password in the plugin's settings.";
 /// The client header, sent as `Authorization`, which every Jellyfin reads; newer servers ignore
 /// `X-Emby-Authorization` and `api_key` unless legacy authorization is switched on. It names this
 /// TV by an id of its own, since the server signs out an older session of the same user and id.
 fn auth_header(device_id: &str) -> String {
     format!("MediaBrowser Client=\"Lounge\", Device=\"Android TV\", DeviceId=\"{device_id}\", Version=\"{}\"", env!("CARGO_PKG_VERSION"))
+}
+
+fn quick_off() -> String {
+    // Translators: Quick Connect, Dashboard and General are names in Jellyfin's own pages.
+    t!("Quick Connect is turned off on this Jellyfin server. Turn it on in the Dashboard under General, or enter a username and password in the plugin's settings.")
 }
 
 /// This TV's device id, made the first time and kept; the clock is the only thing that differs
@@ -30,42 +34,46 @@ fn device_id() -> String {
 }
 
 impl sdk::Plugin for Jellyfin {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.jellyfin".into(),
             name: "Jellyfin".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue watching, recently added and favourites from your Jellyfin server.".into(),
+            description: t!("Continue watching, recently added and favourites from your Jellyfin server."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "recent".into(), title: "Recently added on Jellyfin".into(), style: RowStyle::Poster },
-                RowSpec { id: "favourites".into(), title: "Favourites on Jellyfin".into(), style: RowStyle::Poster },
+                RowSpec { id: "recent".into(), title: t!("Recently added on Jellyfin"), style: RowStyle::Poster },
+                RowSpec { id: "favourites".into(), title: t!("Favourites on Jellyfin"), style: RowStyle::Poster },
             ],
             settings: vec![
-                SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8096".into()), default: None },
+                SettingSpec { key: "server".into(), label: t!("Server address"), kind: SettingKind::Url, required: true, help: Some(t!("Like http://192.168.0.10:8096")), default: None },
                 SettingSpec {
                     key: "username".into(),
-                    label: "Username".into(),
+                    label: t!("Username"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("Leave empty to sign in with Quick Connect: this page shows a code to enter in Jellyfin on a phone or computer that is already signed in.".into()),
+                    help: Some(t!("Leave empty to sign in with Quick Connect: this page shows a code to enter in Jellyfin on a phone or computer that is already signed in.")),
                     default: None,
                 },
-                SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
+                SettingSpec { key: "password".into(), label: t!("Password"), kind: SettingKind::Password, required: false, help: None, default: None },
             ],
             homepage: Some("https://jellyfin.org".into()),
             self_signed_servers: false,
             for_apps: vec![APP_PACKAGE.into()],
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let Some(session) = Session::connect(true)? else { return Err("Jellyfin isn't signed in yet. Press Refresh now to sign in.".into()) };
+        // Translators: "Refresh now" is the button on the plugin's page on the TV.
+        let Some(session) = Session::connect(true)? else { return Err(t!("Jellyfin isn't signed in yet. Press Refresh now to sign in.")) };
         let mut items = Vec::new();
         let resume: ItemsResponse = session.get_json(&format!(
             "/Users/{}/Items/Resume?Limit=24&Recursive=true&MediaTypes=Video&Fields=Overview,ParentId,SeriesInfo,RunTimeTicks&EnableImageTypes=Primary,Backdrop,Thumb",
@@ -253,7 +261,7 @@ fn quick_connect(server: &str, device_id: &str) -> Result<AuthResponse, String> 
                 }
                 return serde_json::from_str(&r.body).map_err(unreadable);
             }
-            401 => return Err(QUICK_OFF.into()),
+            401 => return Err(quick_off()),
             // The code has run out; a new one follows.
             404 => host::kv_delete(QUICK_KEY),
             s if s >= 500 => {
@@ -270,7 +278,7 @@ fn quick_connect(server: &str, device_id: &str) -> Result<AuthResponse, String> 
         r = start("GET")?;
     }
     match r.status {
-        401 => return Err(QUICK_OFF.into()),
+        401 => return Err(quick_off()),
         404 => return Err(sdk::wrong_server("Jellyfin", server)),
         _ if !r.ok() => return Err(sdk::answered_error("Jellyfin", server, r.status)),
         _ => {}
@@ -288,10 +296,12 @@ fn quick_connect(server: &str, device_id: &str) -> Result<AuthResponse, String> 
 /// to, so the ask has no link. Jellyfin's TV app has no place to enter one.
 fn instruction(code: &str) -> String {
     sdk::ask(sdk::Ask {
-        say: format!("Sign in: on a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter {code}, then press Refresh now here."),
+        // Translators: {code} is a short code. Settings and Quick Connect are names in Jellyfin. "Refresh now" is the button on the plugin's page on the TV.
+        say: t!("Sign in: on a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter {code}, then press Refresh now here.", code = code),
         link: None,
         code: Some(code.to_string()),
-        after: Some("On a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter this code.".into()),
+        // Translators: shown on the TV with the code.
+        after: Some(t!("On a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter this code.")),
         watch: true,
     })
 }
@@ -301,7 +311,8 @@ impl Session {
     /// no username that is by Quick Connect, which only `may_ask` starts; without it there is
     /// no session yet.
     fn connect(may_ask: bool) -> Result<Option<Session>, String> {
-        let server = host::server_setting("server", "server address")?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let server = host::server_setting("server", &t!("server address"))?;
         let username = host::setting("username").map(|u| u.trim().to_string()).unwrap_or_default();
         let device_id = device_id();
         // The saved session belongs to one server and user; another of either signs in afresh.
@@ -345,7 +356,7 @@ impl Session {
         };
         let response = sdk::fetch_from("Jellyfin", &server, &req)?;
         match response.status {
-            401 => return Err("Jellyfin rejected the username or password. Check them in the plugin's settings.".into()),
+            401 => return Err(t!("Jellyfin rejected the username or password. Check them in the plugin's settings.")),
             404 => return Err(sdk::wrong_server("Jellyfin", &server)),
             _ if !response.ok() => return Err(sdk::answered_error("Jellyfin", &server, response.status)),
             _ => {}

@@ -4,7 +4,7 @@
 //! address it lands on pasted back; the plugin keeps the session going from there, until
 //! Spotify ends it, which it does six months after every sign-in.
 
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, parse_iso8601, t, tn, Action, HttpRequest, HttpResponse, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -36,64 +36,74 @@ const REFUSED_FOR_MS: i64 = 86_400_000;
 const VERIFIER_FOR_MS: i64 = 86_400_000;
 const MINUTE_MS: i64 = 60_000;
 const DAY_MS: i64 = 86_400_000;
-const PAUSE: &str = "Spotify is asking for a pause between requests. It tries again on the next refresh.";
-const QUOTA: &str = "Spotify's daily allowance for this app is used up. It comes back tomorrow.";
-const SIGNED_OUT: &str = "Spotify no longer accepts this sign-in. Press Refresh now to sign in again.";
-const NARROW_SIGN_IN: &str = "Spotify says this sign-in doesn't cover what the plugin reads. Press Refresh now to sign in again.";
+const PAUSE: &str = mark!("Spotify is asking for a pause between requests. It tries again on the next refresh.");
+const QUOTA: &str = mark!("Spotify's daily allowance for this app is used up. It comes back tomorrow.");
+// Translators: "Refresh now" is the button on the plugin's page on the TV.
+const SIGNED_OUT: &str = mark!("Spotify no longer accepts this sign-in. Press Refresh now to sign in again.");
+// Translators: "Refresh now" is the button on the plugin's page on the TV.
+const NARROW_SIGN_IN: &str = mark!("Spotify says this sign-in doesn't cover what the plugin reads. Press Refresh now to sign in again.");
 
 impl sdk::Plugin for Spotify {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.spotify".into(),
             name: "Spotify".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Recently played, your playlists, saved albums and podcasts from your Spotify account, or any Spotify links you paste, opened in Spotify.".into(),
+            description: t!("Recently played, your playlists, saved albums and podcasts from your Spotify account, or any Spotify links you paste, opened in Spotify."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["api.spotify.com".into(), "accounts.spotify.com".into(), "open.spotify.com".into(), "*.scdn.co".into(), "*.spotifycdn.com".into()],
             refresh_minutes: 15,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "recent".into(), title: "Recently played on Spotify".into(), style: RowStyle::Landscape },
-                RowSpec { id: "playlists".into(), title: "Your playlists on Spotify".into(), style: RowStyle::Landscape },
-                RowSpec { id: "albums".into(), title: "Saved albums on Spotify".into(), style: RowStyle::Landscape },
-                RowSpec { id: "podcasts".into(), title: "Your podcasts on Spotify".into(), style: RowStyle::Landscape },
-                RowSpec { id: "picks".into(), title: "Your picks on Spotify".into(), style: RowStyle::Landscape },
+                RowSpec { id: "recent".into(), title: t!("Recently played on Spotify"), style: RowStyle::Landscape },
+                RowSpec { id: "playlists".into(), title: t!("Your playlists on Spotify"), style: RowStyle::Landscape },
+                RowSpec { id: "albums".into(), title: t!("Saved albums on Spotify"), style: RowStyle::Landscape },
+                RowSpec { id: "podcasts".into(), title: t!("Your podcasts on Spotify"), style: RowStyle::Landscape },
+                RowSpec { id: "picks".into(), title: t!("Your picks on Spotify"), style: RowStyle::Landscape },
             ],
             settings: vec![
                 SettingSpec {
                     key: "links".into(),
-                    label: "Spotify links".into(),
+                    label: t!("Spotify links"),
                     kind: SettingKind::List,
                     required: false,
-                    help: Some("Playlists, albums, artists or podcasts to keep on the home, one share link per line. Needs no account. Share, Copy link in Spotify gives you one.".into()),
+                    // Translators: "Share" and "Copy link" are menu entries in the Spotify app.
+                    help: Some(t!("Playlists, albums, artists or podcasts to keep on the home, one share link per line. Needs no account. Share, Copy link in Spotify gives you one.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "client_id".into(),
-                    label: "Spotify Client ID".into(),
+                    label: t!("Spotify Client ID"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some(format!("To show your own listening, playlists, albums and podcasts, make an app at Spotify and paste its Client ID here. At developer.spotify.com/dashboard, signed in with a Premium account, create an app: tick Web API and give it the redirect URI {REDIRECT_URI}, exactly. If another account will listen, add it under User Management. The sign-in link then appears here and on the TV.")),
+                    // Translators: {redirect} is a web address. "Web API" and "User Management" are names on Spotify's developer dashboard.
+                    help: Some(t!(
+                        "To show your own listening, playlists, albums and podcasts, make an app at Spotify and paste its Client ID here. At developer.spotify.com/dashboard, signed in with a Premium account, create an app: tick Web API and give it the redirect URI {redirect}, exactly. If another account will listen, add it under User Management. The sign-in link then appears here and on the TV.",
+                        redirect = REDIRECT_URI
+                    )),
                     default: None,
                 },
                 SettingSpec {
                     key: "code".into(),
-                    label: "Sign-in address".into(),
+                    label: t!("Sign-in address"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("Paste the whole address of the page Spotify sends you to after you sign in. After you agree on the sign-in page, the browser goes to a page that can't be reached; that is expected, so copy its address from the address bar.".into()),
+                    help: Some(t!("Paste the whole address of the page Spotify sends you to after you sign in. After you agree on the sign-in page, the browser goes to a page that can't be reached; that is expected, so copy its address from the address bar.")),
                     default: None,
                 },
-                SettingSpec { key: "recent".into(), label: "Recently played row".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
-                SettingSpec { key: "playlists".into(), label: "Playlists row".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
-                SettingSpec { key: "albums".into(), label: "Saved albums row".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
-                SettingSpec { key: "podcasts".into(), label: "Podcasts row".into(), kind: SettingKind::Toggle, required: false, help: Some("The shows you follow.".into()), default: Some("true".into()) },
+                SettingSpec { key: "recent".into(), label: t!("Recently played row"), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
+                SettingSpec { key: "playlists".into(), label: t!("Playlists row"), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
+                SettingSpec { key: "albums".into(), label: t!("Saved albums row"), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
+                SettingSpec { key: "podcasts".into(), label: t!("Podcasts row"), kind: SettingKind::Toggle, required: false, help: Some(t!("The shows you follow.")), default: Some("true".into()) },
             ],
             homepage: Some("https://www.spotify.com".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -101,7 +111,7 @@ impl sdk::Plugin for Spotify {
         let links = parse_links(&host::setting("links").unwrap_or_default());
         let account = Account::connect(ctx.now_ms)?;
         if account.is_none() && links.is_empty() {
-            return Err("Nothing to show yet. Paste some Spotify links, or a Client ID for your account, in the plugin's settings.".into());
+            return Err(t!("Nothing to show yet. Paste some Spotify links, or a Client ID for your account, in the plugin's settings."));
         }
         let mut items = Vec::new();
         let mut failures = Vec::new();
@@ -303,14 +313,13 @@ pub fn authorize_url(client_id: &str, verifier: &str) -> String {
 /// What to do to sign in. The sentence names the link without its scheme, since the host cuts
 /// an address written with one down to its path; the ask carries the link whole.
 fn instruction(client_id: &str, verifier: &str, again: bool) -> String {
-    let why = if again { "Spotify ends every sign-in after six months, so it is time to sign in again. " } else { "" };
-    let after = "After you agree, copy the whole address of the page that can't be reached into the Sign-in address setting.";
+    // Translators: "Sign-in address" is the name of one of this plugin's settings.
+    let after = t!("After you agree, copy the whole address of the page that can't be reached into the Sign-in address setting.");
     let link = authorize_url(client_id, verifier);
-    let say = format!(
-        "{why}Sign in on your phone: in the phone companion open Plugins, then Spotify, and tap the link there, or open {}. {after}",
-        link.strip_prefix("https://").unwrap_or(&link)
-    );
-    sdk::ask(sdk::Ask { say, link: Some(link), code: None, after: Some(after.into()), watch: false })
+    // Translators: "Plugins" is a page of the phone companion and {link} a web address.
+    let open = t!("Sign in on your phone: in the phone companion open Plugins, then Spotify, and tap the link there, or open {link}.", link = link.strip_prefix("https://").unwrap_or(&link));
+    let say = if again { format!("{} {open} {after}", t!("Spotify ends every sign-in after six months, so it is time to sign in again.")) } else { format!("{open} {after}") };
+    sdk::ask(sdk::Ask { say, link: Some(link), code: None, after: Some(after), watch: false })
 }
 
 struct Client {
@@ -331,7 +340,7 @@ impl Account {
             return Ok(None);
         };
         if host::kv_get_string(PAUSE_KEY).and_then(|v| v.parse::<i64>().ok()).is_some_and(|until| until > now_ms) {
-            return Err(PAUSE.into());
+            return Err(sdk::tr(PAUSE));
         }
         let pasted = pasted_code(&host::setting("code").unwrap_or_default());
         let used = host::kv_get_string(USED_CODE_KEY);
@@ -358,17 +367,22 @@ impl Account {
                     }
                     Err(Refusal::Failed(e)) => {
                         sdk::warn!("could not renew the sign-in ({e})");
-                        return Err(format!("Couldn't renew the Spotify sign-in. {e}"));
+                        return Err(couldnt_renew(&e));
                     }
                 },
                 None if pasted == Pasted::Declined => {
-                    return Err(format!("The sign-in was declined on the phone. {}", instruction(&client_id, &verifier(&client_id, now_ms), false)));
+                    return Err(format!("{} {}", t!("The sign-in was declined on the phone."), instruction(&client_id, &verifier(&client_id, now_ms), false)));
                 }
                 None => return Err(instruction(&client_id, &verifier(&client_id, now_ms), false)),
             }
         };
         Ok(Some(Client { client_id, token, now_ms, paused: false }))
     }
+}
+
+fn couldnt_renew(why: &str) -> String {
+    // Translators: {why} is a sentence or two of its own saying what went wrong.
+    t!("Couldn't renew the Spotify sign-in. {why}", why = why)
 }
 
 /// Why a renewal did not give a token: Spotify refused the refresh token, or nothing usable
@@ -423,16 +437,17 @@ fn exchange_code(client_id: &str, code: &str, now_ms: i64) -> Result<Token, Stri
     sdk::warn!("the sign-in code was refused: HTTP {status} {} {}", e.error, e.error_description);
     let description = e.error_description.to_lowercase();
     Err(match e.error.as_str() {
-        "invalid_client" => "Spotify does not know this Client ID. Check it against the app in the developer dashboard.".into(),
-        "invalid_grant" if description.contains("redirect") => format!("The app's redirect URI must be {REDIRECT_URI}, exactly. Set it in the app's dashboard, then sign in again."),
+        "invalid_client" => t!("Spotify does not know this Client ID. Check it against the app in the developer dashboard."),
+        // Translators: {redirect} is a web address.
+        "invalid_grant" if description.contains("redirect") => t!("The app's redirect URI must be {redirect}, exactly. Set it in the app's dashboard, then sign in again.", redirect = REDIRECT_URI),
         "invalid_grant" if description.contains("verifier") || description.contains("challenge") => {
             host::kv_set(USED_CODE_KEY, code.as_bytes());
             host::kv_delete(VERIFIER_KEY);
-            format!("That sign-in came from an earlier link. {}", instruction(client_id, &self::verifier(client_id, now_ms), false))
+            format!("{} {}", t!("That sign-in came from an earlier link."), instruction(client_id, &self::verifier(client_id, now_ms), false))
         }
         "invalid_grant" => {
             host::kv_set(USED_CODE_KEY, code.as_bytes());
-            format!("That sign-in address did not work; a code is good for a few minutes and once. {}", instruction(client_id, &verifier, false))
+            format!("{} {}", t!("That sign-in address did not work; a code is good for a few minutes and once."), instruction(client_id, &verifier, false))
         }
         _ => sdk::online_error("Spotify", status),
     })
@@ -455,7 +470,7 @@ fn renew(client_id: &str, old: &Token, now_ms: i64) -> Result<Token, Refusal> {
     // does not know is a setting to fix while the session waits.
     match e.error.as_str() {
         "invalid_grant" => Err(Refusal::Refused(format!("HTTP {status} {}", e.error_description))),
-        "invalid_client" => Err(Refusal::Failed("Spotify doesn't know this Client ID. Check it in the plugin's settings.".into())),
+        "invalid_client" => Err(Refusal::Failed(t!("Spotify doesn't know this Client ID. Check it in the plugin's settings."))),
         _ => {
             sdk::warn!("renewal refused: HTTP {status} {} {}", e.error, e.error_description);
             Err(Refusal::Failed(sdk::online_error("Spotify", status)))
@@ -468,7 +483,7 @@ impl Client {
     /// for a pause stops everything else this refresh.
     fn get(&mut self, path: &str) -> Result<HttpResponse, String> {
         if self.paused {
-            return Err(PAUSE.into());
+            return Err(sdk::tr(PAUSE));
         }
         for attempt in 0..2 {
             let r = sdk::fetch_online("Spotify", &HttpRequest::get(format!("{API}{path}")).header("Authorization", &format!("Bearer {}", self.token.access)).header("Accept", "application/json"))?;
@@ -478,21 +493,21 @@ impl Client {
                     Err(Refusal::Refused(why)) => {
                         sdk::warn!("Spotify refused to renew the sign-in ({why})");
                         host::kv_delete(TOKEN_KEY);
-                        return Err(SIGNED_OUT.into());
+                        return Err(sdk::tr(SIGNED_OUT));
                     }
-                    Err(Refusal::Failed(e)) => return Err(format!("Couldn't renew the Spotify sign-in. {e}")),
+                    Err(Refusal::Failed(e)) => return Err(couldnt_renew(&e)),
                 },
-                401 => return Err(SIGNED_OUT.into()),
+                401 => return Err(sdk::tr(SIGNED_OUT)),
                 429 => {
                     self.paused = true;
                     let wait_s = r.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("retry-after")).and_then(|(_, v)| v.trim().parse::<i64>().ok()).unwrap_or(60);
                     host::kv_set(PAUSE_KEY, (self.now_ms + wait_s.clamp(1, 86_400) * 1000).to_string().as_bytes());
-                    return Err(if r.body.to_uppercase().contains("QUOTA") { QUOTA.into() } else { PAUSE.into() });
+                    return Err(sdk::tr(if r.body.to_uppercase().contains("QUOTA") { QUOTA } else { PAUSE }));
                 }
                 _ => return Ok(r),
             }
         }
-        Err(SIGNED_OUT.into())
+        Err(sdk::tr(SIGNED_OUT))
     }
 
     fn get_json<T: serde::de::DeserializeOwned>(&mut self, path: &str) -> Result<T, String> {
@@ -509,7 +524,7 @@ impl Client {
                 if why == NARROW_SIGN_IN {
                     host::kv_delete(TOKEN_KEY);
                 }
-                Err(why)
+                Err(sdk::tr(why))
             }
             s => {
                 sdk::warn!("HTTP {s} for {what}");
@@ -530,8 +545,9 @@ impl Client {
     }
 }
 
-/// Spotify's 403 says why in plain text, or in JSON with a message.
-fn refused_why(body: &str) -> String {
+/// Spotify's 403 says why in plain text, or in JSON with a message. The sentence comes back
+/// as written here, for [`sdk::tr`] to say.
+fn refused_why(body: &str) -> &'static str {
     #[derive(Deserialize, Default)]
     struct ApiError {
         #[serde(default)]
@@ -546,13 +562,14 @@ fn refused_why(body: &str) -> String {
     sdk::warn!("HTTP 403: {said}");
     let lower = said.to_lowercase();
     if lower.contains("registered") {
-        "Spotify's app is in development mode and this account is not on its list. Add the account under User Management in the app's dashboard.".into()
+        // Translators: "User Management" is a page of Spotify's developer dashboard.
+        mark!("Spotify's app is in development mode and this account is not on its list. Add the account under User Management in the app's dashboard.")
     } else if lower.contains("premium") {
-        "Spotify needs the account that made the app to have Premium. Make the app with a Premium account, then paste its Client ID in the plugin's settings.".into()
+        mark!("Spotify needs the account that made the app to have Premium. Make the app with a Premium account, then paste its Client ID in the plugin's settings.")
     } else if lower.contains("scope") {
-        NARROW_SIGN_IN.into()
+        NARROW_SIGN_IN
     } else {
-        "Spotify refused the request. Check the app in the developer dashboard.".into()
+        mark!("Spotify refused the request. Check the app in the developer dashboard.")
     }
 }
 
@@ -839,13 +856,21 @@ struct Contexts {
 }
 
 impl Contexts {
+    /// Where the names are kept. Each language keeps its own, since a tile's second line is worded in it.
+    fn key() -> String {
+        match sdk::words::language().as_str() {
+            sdk::words::SOURCE => CONTEXTS_KEY.to_string(),
+            language => format!("{CONTEXTS_KEY}:{language}"),
+        }
+    }
+
     fn load(now_ms: i64) -> Contexts {
-        Contexts { known: host::kv_get(CONTEXTS_KEY).and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or_default(), now_ms }
+        Contexts { known: host::kv_get(&Contexts::key()).and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or_default(), now_ms }
     }
 
     fn save(&self) {
         if let Ok(json) = serde_json::to_vec(&self.known) {
-            host::kv_set(CONTEXTS_KEY, &json);
+            host::kv_set(&Contexts::key(), &json);
         }
     }
 
@@ -889,7 +914,7 @@ impl Contexts {
             } else if let Some(id) = l.uri.strip_prefix("spotify:artist:") {
                 lookups += 1;
                 match client.get_optional::<Artist>(&format!("/artists/{}", url_encode(id))) {
-                    Ok(Some(a)) => Some(KnownContext { name: a.name, subtitle: Some("Artist".into()), image: largest(&a.images), fetched_ms: now_ms, refused: false }),
+                    Ok(Some(a)) => Some(KnownContext { name: a.name, subtitle: Some(t!("Artist")), image: largest(&a.images), fetched_ms: now_ms, refused: false }),
                     Ok(None) => None,
                     Err(e) => {
                         sdk::warn!("artist {id}: {e}");
@@ -899,7 +924,8 @@ impl Contexts {
             } else if l.uri.ends_with(":collection") {
                 lookups += 1;
                 let count = client.get_json::<Count>("/me/tracks?limit=1").ok().and_then(|c| c.total);
-                Some(KnownContext { name: "Liked Songs".into(), subtitle: count.map(songs), image: None, fetched_ms: now_ms, refused: false })
+                // Translators: Spotify's own name for the songs a person has liked, as the Spotify app shows it.
+                Some(KnownContext { name: t!("Liked Songs"), subtitle: count.map(songs), image: None, fetched_ms: now_ms, refused: false })
             } else {
                 continue;
             };
@@ -909,7 +935,7 @@ impl Contexts {
                 None => {
                     lookups += 1;
                     match oembed(&l.uri) {
-                        Ok(Some(card)) if !card.title.is_empty() => KnownContext { name: card.title, subtitle: Some(kind_word(&l.uri).into()), image: card.thumbnail_url, fetched_ms: now_ms, refused: false },
+                        Ok(Some(card)) if !card.title.is_empty() => KnownContext { name: card.title, subtitle: Some(sdk::tr(kind_word(&l.uri))), image: card.thumbnail_url, fetched_ms: now_ms, refused: false },
                         Ok(_) => KnownContext { fetched_ms: now_ms, refused: true, ..Default::default() },
                         Err(e) => {
                             sdk::warn!("card for {}: {e}", l.uri);
@@ -949,15 +975,16 @@ impl Contexts {
 }
 
 fn songs(n: u32) -> String {
-    if n == 1 { "1 song".to_string() } else { format!("{n} songs") }
+    tn!(n, "{n} song", "{n} songs")
 }
 
 fn playlist_subtitle(owner: Option<&str>, count: Option<u32>) -> String {
-    match (owner.filter(|o| !o.is_empty()), count.map(songs)) {
-        (Some(owner), Some(count)) => format!("{owner}, {count}"),
+    match (owner.filter(|o| !o.is_empty()), count) {
+        // Translators: {owner} is the name of the person whose playlist it is.
+        (Some(owner), Some(count)) => tn!(count, "{owner}, {n} song", "{owner}, {n} songs", owner = owner),
         (Some(owner), None) => owner.to_string(),
-        (None, Some(count)) => count,
-        (None, None) => "Playlist".to_string(),
+        (None, Some(count)) => songs(count),
+        (None, None) => t!("Playlist"),
     }
 }
 
@@ -1011,7 +1038,7 @@ fn show_item(s: SavedShow, weight: i32) -> Option<Item> {
         return None;
     }
     let image = largest(&show.images);
-    let subtitle = show.publisher.clone().filter(|p| !p.is_empty()).or_else(|| show.total_episodes.map(|n| if n == 1 { "1 episode".to_string() } else { format!("{n} episodes") }));
+    let subtitle = show.publisher.clone().filter(|p| !p.is_empty()).or_else(|| show.total_episodes.map(|n| tn!(n, "{n} episode", "{n} episodes")));
     Some(Item {
         id: format!("show:{}", show.id),
         kind: ItemKind::Program,
@@ -1034,12 +1061,12 @@ fn open(uri: &str, title: &str) -> Action {
 /// What kind of thing a Spotify URI names, as a tile's second line.
 fn kind_word(uri: &str) -> &'static str {
     match uri.split(':').nth(1).unwrap_or("") {
-        "playlist" => "Playlist",
-        "album" => "Album",
-        "artist" => "Artist",
-        "show" => "Podcast",
-        "episode" => "Episode",
-        "track" => "Song",
+        "playlist" => mark!("Playlist"),
+        "album" => mark!("Album"),
+        "artist" => mark!("Artist"),
+        "show" => mark!("Podcast"),
+        "episode" => mark!("Episode"),
+        "track" => mark!("Song"),
         _ => "Spotify",
     }
 }
@@ -1138,7 +1165,7 @@ impl Picks {
                 id: format!("pick:{uri}"),
                 kind: ItemKind::Program,
                 title: k.title.clone(),
-                subtitle: Some(kind_word(uri).into()),
+                subtitle: Some(sdk::tr(kind_word(uri))),
                 thumbnail: k.image.clone(),
                 logo: k.image.clone(),
                 row: Some("picks".into()),

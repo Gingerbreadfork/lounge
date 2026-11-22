@@ -1,0 +1,61 @@
+# Lounge, radio: de
+#
+msgid ""
+msgstr ""
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Radio Browser no longer lists that station."
+msgstr "Radio Browser führt diesen Sender nicht mehr."
+
+#: src/lib.rs
+msgid "Internet radio"
+msgstr "Internetradio"
+
+#: src/lib.rs
+msgid "Stations you name and the most popular ones from the radio-browser.info directory, played in a player app such as VLC."
+msgstr "Sender, die du angibst, und die beliebtesten aus dem Verzeichnis radio-browser.info, abgespielt in einer Player-App wie VLC."
+
+#: src/lib.rs
+msgid "Your radio stations"
+msgstr "Deine Radiosender"
+
+#: src/lib.rs
+msgid "Popular radio"
+msgstr "Beliebte Radiosender"
+
+#: src/lib.rs
+msgid "Your stations"
+msgstr "Deine Sender"
+
+#: src/lib.rs
+msgid "Station names, links to stations on radio-browser.info or stream addresses, one per line or separated by commas. Lounge's search finds stations too."
+msgstr "Sendernamen, Links zu Sendern auf radio-browser.info oder Stream-Adressen, einer pro Zeile oder durch Kommas getrennt. Die Suche von Lounge findet ebenfalls Sender."
+
+#: src/lib.rs
+msgid "Country for popular stations"
+msgstr "Land für beliebte Sender"
+
+#: src/lib.rs
+msgid "A name or two letters, like Australia or AU. Left empty, the row shows the most popular stations anywhere."
+msgstr "Ein englischer Name oder zwei Buchstaben, zum Beispiel Australia oder AU. Bleibt das Feld leer, zeigt die Reihe die weltweit beliebtesten Sender."
+
+#. {country} is the country as typed into the plugin's settings.
+#: src/lib.rs
+msgid "Radio Browser has no country called {country}. Check the country in the plugin's settings."
+msgstr "Radio Browser kennt kein Land namens {country}. Prüfe das Land in den Plugin-Einstellungen."
+
+#. {country} is the country as typed into the plugin's settings.
+#: src/lib.rs
+msgid "Radio Browser lists no stations for {country}. Check the country in the plugin's settings."
+msgstr "Radio Browser führt für {country} keine Sender. Prüfe das Land in den Plugin-Einstellungen."
+
+#: src/lib.rs
+msgid "{service} sent a reply this plugin can't read."
+msgstr "{service} hat eine Antwort geschickt, die dieses Plugin nicht lesen kann."
+
+#: src/lib.rs
+msgid "A stream you added"
+msgstr "Von dir hinzugefügter Stream"

@@ -1,0 +1,1927 @@
+# Lounge, homeassistant: it
+#
+msgid ""
+msgstr ""
+"Language: it\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Home Assistant didn't accept the access token. Check it in the plugin's settings, or make a new one."
+msgstr "Home Assistant non ha accettato il token di accesso. Controllalo nelle impostazioni del plugin, oppure creane uno nuovo."
+
+#: src/lib.rs
+msgid "Home Assistant no longer accepts this TV's sign-in. Refresh the plugin to sign in again."
+msgstr "Home Assistant non accetta più l'accesso di questa TV. Aggiorna il plugin per accedere di nuovo."
+
+#: src/lib.rs
+msgid "Sign in to Home Assistant on your phone: scan the code on the plugin's page, or tap the link in the phone companion."
+msgstr "Accedi a Home Assistant dal telefono: inquadra il codice nella pagina del plugin, oppure tocca il link in Lounge sul telefono."
+
+#: src/lib.rs
+msgid "Sign in there as you do in Home Assistant. This TV carries on by itself."
+msgstr "Accedi lì come fai in Home Assistant. Questa TV prosegue da sola."
+
+#: src/lib.rs
+msgid "To sign in on your phone, turn on Phone companion in Lounge's settings. Or paste an access token in this plugin's settings."
+msgstr "Per accedere dal telefono, attiva Lounge sul telefono nelle impostazioni di Lounge. Oppure incolla un token di accesso nelle impostazioni di questo plugin."
+
+#: src/lib.rs
+msgid "Home Assistant has blocked this TV after too many refused sign-ins. Remove the TV's address from ip_bans.yaml there, then restart Home Assistant."
+msgstr "Home Assistant ha bloccato questa TV dopo troppi accessi rifiutati. Rimuovi lì l'indirizzo della TV da ip_bans.yaml, poi riavvia Home Assistant."
+
+#: src/lib.rs
+msgid "Home Assistant lets this access token read the home but not control it. Use an administrator's token in the plugin's settings."
+msgstr "Con questo token di accesso Home Assistant consente di leggere la casa, ma non di controllarla. Usa il token di un amministratore nelle impostazioni del plugin."
+
+#: src/lib.rs
+msgid "Home Assistant's list of devices is larger than the 8 MB a plugin may read, so this plugin can't show a home that large yet."
+msgstr "L'elenco dei dispositivi di Home Assistant supera gli 8 MB che un plugin può leggere, quindi per ora questo plugin non può mostrare una casa così grande."
+
+#: src/lib.rs
+msgid "Labels need Home Assistant 2024.4 or newer. Clear the label in the plugin's settings, or update Home Assistant."
+msgstr "Le etichette richiedono Home Assistant 2024.4 o successivo. Svuota l'etichetta nelle impostazioni del plugin, oppure aggiorna Home Assistant."
+
+#: src/lib.rs
+msgid "Home Assistant lets only an administrator's access token read labels. Clear the label in the plugin's settings, or use an administrator's token."
+msgstr "Home Assistant consente di leggere le etichette solo con il token di accesso di un amministratore. Svuota l'etichetta nelle impostazioni del plugin, oppure usa il token di un amministratore."
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Questo riquadro non è più aggiornato. Aggiorna il plugin, poi riprova."
+
+#: src/lib.rs
+msgid "Home Assistant has no label called {label}. Check the label in the plugin's settings."
+msgstr "Home Assistant non ha un'etichetta chiamata {label}. Controlla l'etichetta nelle impostazioni del plugin."
+
+#: src/lib.rs
+msgid "Home Assistant at {address} is still starting. The tiles come back by themselves in a minute."
+msgstr "Home Assistant all'indirizzo {address} si sta ancora avviando. I riquadri tornano da soli tra un minuto."
+
+#: src/lib.rs
+msgid "Home Assistant no longer has {name}. If it was renamed there, its tile catches up in a few minutes."
+msgstr "Home Assistant non ha più {name}. Se lì ha cambiato nome, il suo riquadro si aggiorna tra qualche minuto."
+
+#: src/lib.rs
+msgid "Home Assistant can't reach {name}. Check its power and connection, then try again."
+msgstr "Home Assistant non riesce a raggiungere {name}. Controlla alimentazione e connessione, poi riprova."
+
+#: src/lib.rs
+msgid "Home Assistant turned that down for {name}. Check the device in Home Assistant."
+msgstr "Home Assistant ha rifiutato il comando per {name}. Controlla il dispositivo in Home Assistant."
+
+#: src/lib.rs
+msgid "Home Assistant couldn't get {name} to do that. Check the device there, then try again."
+msgstr "Home Assistant non è riuscito a eseguire il comando per {name}. Controlla il dispositivo lì, poi riprova."
+
+#: src/lib.rs
+msgid "Home Assistant is still working on {name}. Look at its tile in a moment."
+msgstr "Home Assistant sta ancora lavorando su {name}. Guarda il suo riquadro tra un attimo."
+
+#: src/lib.rs
+msgid "Lights, scenes, blinds, heating, locks and cameras from Home Assistant, starting with the room this TV is in."
+msgstr "Luci, scene, tapparelle, riscaldamento, serrature e telecamere da Home Assistant, a partire dalla stanza in cui si trova questa TV."
+
+#: src/lib.rs
+msgid "This room"
+msgstr "Questa stanza"
+
+#: src/lib.rs
+msgid "Rooms"
+msgstr "Stanze"
+
+#: src/lib.rs
+msgid "Scenes"
+msgstr "Scene"
+
+#: src/lib.rs
+msgid "Cameras"
+msgstr "Telecamere"
+
+#: src/lib.rs
+msgid "Around the home"
+msgstr "In giro per casa"
+
+#: src/lib.rs
+msgid "Home Assistant address"
+msgstr "Indirizzo di Home Assistant"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.20:8123 or http://homeassistant.local:8123."
+msgstr "Ad esempio http://192.168.0.20:8123 oppure http://homeassistant.local:8123."
+
+#: src/lib.rs
+msgid "Access token"
+msgstr "Token di accesso"
+
+#: src/lib.rs
+msgid "Leave it empty to sign in on your phone. Or make a long-lived access token in an administrator's Home Assistant profile, under Security, and paste it here."
+msgstr "Lascialo vuoto per accedere dal telefono. Oppure crea un token di accesso a lungo termine nel profilo Home Assistant di un amministratore, in Sicurezza, e incollalo qui."
+
+#: src/lib.rs
+msgid "Label"
+msgstr "Etichetta"
+
+#: src/lib.rs
+msgid "Shows only what carries this label in Home Assistant, on an entity, a device or a whole area. Left empty, everything shows."
+msgstr "Mostra solo ciò che in Home Assistant ha questa etichetta, su un'entità, un dispositivo o un'intera area. Se è vuoto, vedi tutto."
+
+#: src/lib.rs
+msgid "Scripts"
+msgstr "Script"
+
+#: src/lib.rs
+msgid "Adds scripts to the Scenes row. Leave it off when most of yours are parts of automations."
+msgstr "Aggiunge gli script alla riga Scene. Lascialo su No se la maggior parte dei tuoi fa parte di automazioni."
+
+#: src/lib.rs
+msgid "This TV has no room"
+msgstr "Questa TV non ha una stanza"
+
+#: src/lib.rs
+msgid "This TV is in {room}"
+msgstr "Stanza di questa TV: {room}"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgctxt "in a sentence"
+msgid "Home Assistant address"
+msgstr "indirizzo di Home Assistant"
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "access token"
+msgstr "token di accesso"
+
+#: src/lib.rs
+msgid "Home Assistant is still working on the lights. Look at its tile in a moment."
+msgstr "Home Assistant sta ancora lavorando sulle luci. Guarda il riquadro tra un attimo."
+
+#: src/lib.rs
+msgid "Home Assistant turned that down for the lights. Check the device in Home Assistant."
+msgstr "Home Assistant ha rifiutato il comando per le luci. Controlla il dispositivo in Home Assistant."
+
+#: src/lib.rs
+msgid "Home Assistant couldn't get the lights to do that. Check the device there, then try again."
+msgstr "Home Assistant non è riuscito a eseguire il comando per le luci. Controlla il dispositivo lì, poi riprova."
+
+#: src/lib.rs
+msgid "Scene"
+msgstr "Scena"
+
+#: src/lib.rs
+msgid "Script"
+msgstr "Script"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Light"
+msgstr "Luce"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Blind"
+msgstr "Tapparella"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Thermostat"
+msgstr "Termostato"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Fan"
+msgstr "Ventilatore"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Speaker"
+msgstr "Altoparlante"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Switch"
+msgstr "Interruttore"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Lock"
+msgstr "Serratura"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Vacuum"
+msgstr "Aspirapolvere"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Humidifier"
+msgstr "Umidificatore"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Water heater"
+msgstr "Scaldabagno"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Alarm"
+msgstr "Allarme"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Camera"
+msgstr "Telecamera"
+
+#: src/lib.rs
+msgid "Person"
+msgstr "Persona"
+
+#: src/lib.rs
+msgid "Weather"
+msgstr "Meteo"
+
+#: src/lib.rs
+msgctxt "device"
+msgid "Sensor"
+msgstr "Sensore"
+
+#: src/lib.rs
+msgid "Lights"
+msgstr "Luci"
+
+#: src/lib.rs
+msgid "Blinds and doors"
+msgstr "Tapparelle e porte"
+
+#: src/lib.rs
+msgid "Climate"
+msgstr "Clima"
+
+#: src/lib.rs
+msgid "Fans"
+msgstr "Ventilatori"
+
+#: src/lib.rs
+msgid "Speakers and TVs"
+msgstr "Altoparlanti e TV"
+
+#: src/lib.rs
+msgid "Switches"
+msgstr "Interruttori"
+
+#: src/lib.rs
+msgid "Locks"
+msgstr "Serrature"
+
+#: src/lib.rs
+msgid "Vacuums"
+msgstr "Aspirapolvere"
+
+#: src/lib.rs
+msgid "Alarm"
+msgstr "Allarme"
+
+#: src/lib.rs
+msgid "Sensors"
+msgstr "Sensori"
+
+#: src/lib.rs
+msgid "Lights off"
+msgstr "Luci spente"
+
+#: src/lib.rs
+msgid "{n} light on"
+msgid_plural "{n} lights on"
+msgstr[0] "{n} luce accesa"
+msgstr[1] "{n} luci accese"
+
+#. {lights} says how many lights are on, as in "2 lights on", and {temperature} how warm the room is, as in 21°.
+#: src/lib.rs
+msgid "{lights}, {temperature}"
+msgstr "{lights}, {temperature}"
+
+#: src/lib.rs
+msgid "{n} device"
+msgid_plural "{n} devices"
+msgstr[0] "{n} dispositivo"
+msgstr[1] "{n} dispositivi"
+
+#: src/lib.rs
+msgid "TV"
+msgstr "TV"
+
+#. {share} is a whole number, as in 60%.
+#: src/lib.rs
+msgid "{share}%"
+msgstr "{share}%"
+
+#. how long a door has been open or a lock unlocked.
+#: src/lib.rs
+msgid "For {n} minute"
+msgid_plural "For {n} minutes"
+msgstr[0] "Da un minuto"
+msgstr[1] "Da {n} minuti"
+
+#. how long a door has been open or a lock unlocked.
+#: src/lib.rs
+msgid "For {n} hour"
+msgid_plural "For {n} hours"
+msgstr[0] "Da un'ora"
+msgstr[1] "Da {n} ore"
+
+#. how long a door has been open or a lock unlocked.
+#: src/lib.rs
+msgid "For {n} day"
+msgid_plural "For {n} days"
+msgstr[0] "Da un giorno"
+msgstr[1] "Da {n} giorni"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "on"
+msgstr "acceso"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "On"
+msgstr "Acceso"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "off"
+msgstr "spento"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Off"
+msgstr "Spento"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "unknown"
+msgstr "sconosciuto"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Unknown"
+msgstr "Sconosciuto"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "open"
+msgstr "aperto"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Open"
+msgstr "Aperto"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "closed"
+msgstr "chiuso"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Closed"
+msgstr "Chiuso"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "opening"
+msgstr "in apertura"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Opening"
+msgstr "In apertura"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "closing"
+msgstr "in chiusura"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Closing"
+msgstr "In chiusura"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "locked"
+msgstr "bloccato"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Locked"
+msgstr "Bloccato"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "unlocked"
+msgstr "sbloccato"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Unlocked"
+msgstr "Sbloccato"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "locking"
+msgstr "blocco in corso"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Locking"
+msgstr "Blocco in corso"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "unlocking"
+msgstr "sblocco in corso"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Unlocking"
+msgstr "Sblocco in corso"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "jammed"
+msgstr "inceppato"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Jammed"
+msgstr "Inceppato"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "playing"
+msgstr "in riproduzione"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Playing"
+msgstr "In riproduzione"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "paused"
+msgstr "in pausa"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Paused"
+msgstr "In pausa"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "idle"
+msgstr "inattivo"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Idle"
+msgstr "Inattivo"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "standby"
+msgstr "in standby"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Standby"
+msgstr "In standby"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "buffering"
+msgstr "in caricamento"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Buffering"
+msgstr "In caricamento"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "cleaning"
+msgstr "in pulizia"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Cleaning"
+msgstr "In pulizia"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "docked"
+msgstr "alla base"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Docked"
+msgstr "Alla base"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "disarmed"
+msgstr "disattivo"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Disarmed"
+msgstr "Disattivo"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "arming"
+msgstr "in attivazione"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Arming"
+msgstr "In attivazione"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "disarming"
+msgstr "in disattivazione"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Disarming"
+msgstr "In disattivazione"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "triggered"
+msgstr "scattato"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Triggered"
+msgstr "Scattato"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "recording"
+msgstr "in registrazione"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Recording"
+msgstr "In registrazione"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "streaming"
+msgstr "in trasmissione"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Streaming"
+msgstr "In trasmissione"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "heat"
+msgstr "caldo"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Heat"
+msgstr "Caldo"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "cool"
+msgstr "freddo"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Cool"
+msgstr "Freddo"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "heat and cool"
+msgstr "caldo e freddo"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Heat and cool"
+msgstr "Caldo e freddo"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "auto"
+msgstr "auto"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Auto"
+msgstr "Auto"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "dry"
+msgstr "deumidificazione"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Dry"
+msgstr "Deumidificazione"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "fan only"
+msgstr "solo ventilazione"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Fan only"
+msgstr "Solo ventilazione"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "none"
+msgstr "nessuna"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "None"
+msgstr "Nessuna"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "eco"
+msgstr "eco"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Eco"
+msgstr "Eco"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "away"
+msgstr "fuori casa"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Away"
+msgstr "Fuori casa"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "boost"
+msgstr "boost"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Boost"
+msgstr "Boost"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "comfort"
+msgstr "comfort"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Comfort"
+msgstr "Comfort"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "home"
+msgstr "in casa"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Home"
+msgstr "In casa"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "sleep"
+msgstr "notte"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Sleep"
+msgstr "Notte"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "activity"
+msgstr "attività"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Activity"
+msgstr "Attività"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "low"
+msgstr "bassa"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Low"
+msgstr "Bassa"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "medium"
+msgstr "media"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Medium"
+msgstr "Media"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "high"
+msgstr "alta"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "High"
+msgstr "Alta"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "top"
+msgstr "in alto"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Top"
+msgstr "In alto"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "middle"
+msgstr "al centro"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Middle"
+msgstr "Al centro"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "focus"
+msgstr "concentrata"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Focus"
+msgstr "Concentrata"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "diffuse"
+msgstr "diffusa"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Diffuse"
+msgstr "Diffusa"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "electric"
+msgstr "elettrica"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Electric"
+msgstr "Elettrica"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "performance"
+msgstr "prestazioni"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Performance"
+msgstr "Prestazioni"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "high demand"
+msgstr "alta richiesta"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "High demand"
+msgstr "Alta richiesta"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "heat pump"
+msgstr "pompa di calore"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Heat pump"
+msgstr "Pompa di calore"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "gas"
+msgstr "gas"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Gas"
+msgstr "Gas"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "normal"
+msgstr "normale"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Normal"
+msgstr "Normale"
+
+#: src/lib.rs
+msgctxt "mode, after a comma"
+msgid "baby"
+msgstr "neonati"
+
+#: src/lib.rs
+msgctxt "mode"
+msgid "Baby"
+msgstr "Neonati"
+
+#. two names in a list, as in "Kitchen, Hall, Office".
+#: src/lib.rs
+msgid "{first}, {next}"
+msgstr "{first}, {next}"
+
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "not responding"
+msgstr "non risponde"
+
+#: src/lib.rs
+msgid "Not responding"
+msgstr "Non risponde"
+
+#. {mode} is a fan's mode, such as "auto".
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "on, {mode}"
+msgstr "acceso, {mode}"
+
+#. {mode} is a fan's mode, such as "auto".
+#: src/lib.rs
+msgid "On, {mode}"
+msgstr "Acceso, {mode}"
+
+#. how far a blind is open, as in "40% open".
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "{position} open"
+msgstr "apertura {position}"
+
+#. how far a blind is open, as in "40% open".
+#: src/lib.rs
+msgid "{position} open"
+msgstr "Apertura {position}"
+
+#. {title} is what a speaker or a TV is playing.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "playing, {title}"
+msgstr "in riproduzione: {title}"
+
+#. {title} is what a speaker or a TV is playing.
+#: src/lib.rs
+msgid "Playing, {title}"
+msgstr "In riproduzione: {title}"
+
+#. {title} is what a speaker or a TV was playing when it was paused.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "paused, {title}"
+msgstr "in pausa: {title}"
+
+#. {title} is what a speaker or a TV was playing when it was paused.
+#: src/lib.rs
+msgid "Paused, {title}"
+msgstr "In pausa: {title}"
+
+#. a robot vacuum on its way back to its dock.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "going home"
+msgstr "ritorno alla base"
+
+#. a robot vacuum on its way back to its dock.
+#: src/lib.rs
+msgid "Going home"
+msgstr "Ritorno alla base"
+
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "needs attention"
+msgstr "richiede attenzione"
+
+#: src/lib.rs
+msgid "Needs attention"
+msgstr "Richiede attenzione"
+
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "scene"
+msgstr "scena"
+
+#. a script that is running now.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "running"
+msgstr "in esecuzione"
+
+#. a script that is running now.
+#: src/lib.rs
+msgid "Running"
+msgstr "In esecuzione"
+
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "script"
+msgstr "script"
+
+#. an alarm armed in its mode for when people are at home.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "armed, home"
+msgstr "attivo in casa"
+
+#. an alarm armed in its mode for when people are at home.
+#: src/lib.rs
+msgid "Armed, home"
+msgstr "Attivo in casa"
+
+#. an alarm armed in its mode for when everyone is out.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "armed, away"
+msgstr "attivo fuori casa"
+
+#. an alarm armed in its mode for when everyone is out.
+#: src/lib.rs
+msgid "Armed, away"
+msgstr "Attivo fuori casa"
+
+#. an alarm armed in its mode for the night.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "armed, night"
+msgstr "attivo notte"
+
+#. an alarm armed in its mode for the night.
+#: src/lib.rs
+msgid "Armed, night"
+msgstr "Attivo notte"
+
+#. an alarm armed in its mode for when the home is left for days.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "armed, vacation"
+msgstr "attivo in vacanza"
+
+#. an alarm armed in its mode for when the home is left for days.
+#: src/lib.rs
+msgid "Armed, vacation"
+msgstr "Attivo in vacanza"
+
+#: src/lib.rs
+msgctxt "state, after a comma"
+msgid "armed"
+msgstr "attivo"
+
+#: src/lib.rs
+msgctxt "state"
+msgid "Armed"
+msgstr "Attivo"
+
+#. an alarm counting down before it sounds, so the person coming in can disarm it.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "entry delay"
+msgstr "ritardo d'ingresso"
+
+#. an alarm counting down before it sounds, so the person coming in can disarm it.
+#: src/lib.rs
+msgid "Entry delay"
+msgstr "Ritardo d'ingresso"
+
+#: src/lib.rs
+msgctxt "presence, after a comma"
+msgid "home"
+msgstr "in casa"
+
+#: src/lib.rs
+msgctxt "presence"
+msgid "Home"
+msgstr "In casa"
+
+#: src/lib.rs
+msgctxt "presence, after a comma"
+msgid "away"
+msgstr "fuori casa"
+
+#: src/lib.rs
+msgctxt "presence"
+msgid "Away"
+msgstr "Fuori casa"
+
+#. {level} is a lamp's brightness or a fan's speed, such as 60%.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "on, {level}"
+msgstr "acceso, {level}"
+
+#. {level} is a lamp's brightness or a fan's speed, such as 60%.
+#: src/lib.rs
+msgid "On, {level}"
+msgstr "Acceso, {level}"
+
+#. {now} is a reading and {target} what the device is set to: temperatures such as 21°, or humidities such as 50%.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "{now}, set to {target}"
+msgstr "{now}, impostato a {target}"
+
+#. {now} is a reading and {target} what the device is set to: temperatures such as 21°, or humidities such as 50%.
+#: src/lib.rs
+msgid "{now}, set to {target}"
+msgstr "{now}, impostato a {target}"
+
+#. {target} is what a device is set to: a temperature such as 21°, or a humidity such as 50%.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "set to {target}"
+msgstr "impostato a {target}"
+
+#. {target} is what a device is set to: a temperature such as 21°, or a humidity such as 50%.
+#: src/lib.rs
+msgid "Set to {target}"
+msgstr "Impostato a {target}"
+
+#. a thermostat that is off, and {now} is how warm the room is, such as 19°.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "off, {now}"
+msgstr "spento, {now}"
+
+#. a thermostat that is off, and {now} is how warm the room is, such as 19°.
+#: src/lib.rs
+msgid "Off, {now}"
+msgstr "Spento, {now}"
+
+#. {now} is how warm the room is, and the thermostat keeps it between {low} and {high}.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "{now}, {low} to {high}"
+msgstr "{now}, da {low} a {high}"
+
+#. {now} is how warm the room is, and the thermostat keeps it between {low} and {high}.
+#: src/lib.rs
+msgid "{now}, {low} to {high}"
+msgstr "{now}, da {low} a {high}"
+
+#. {now} is how warm the room is and {target} how warm the thermostat is making it.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "{now}, heating to {target}"
+msgstr "{now}, riscalda fino a {target}"
+
+#. {now} is how warm the room is and {target} how warm the thermostat is making it.
+#: src/lib.rs
+msgid "{now}, heating to {target}"
+msgstr "{now}, riscalda fino a {target}"
+
+#. {now} is how warm the room is and {target} how cool the thermostat is making it.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "{now}, cooling to {target}"
+msgstr "{now}, raffresca fino a {target}"
+
+#. {now} is how warm the room is and {target} how cool the thermostat is making it.
+#: src/lib.rs
+msgid "{now}, cooling to {target}"
+msgstr "{now}, raffresca fino a {target}"
+
+#. the two temperatures a thermostat keeps the room between.
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "{low} to {high}"
+msgstr "da {low} a {high}"
+
+#. the two temperatures a thermostat keeps the room between.
+#: src/lib.rs
+msgid "{low} to {high}"
+msgstr "Da {low} a {high}"
+
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "heating to {target}"
+msgstr "riscalda fino a {target}"
+
+#: src/lib.rs
+msgid "Heating to {target}"
+msgstr "Riscalda fino a {target}"
+
+#: src/lib.rs
+msgctxt "after a comma"
+msgid "cooling to {target}"
+msgstr "raffresca fino a {target}"
+
+#: src/lib.rs
+msgid "Cooling to {target}"
+msgstr "Raffresca fino a {target}"
+
+#: src/lib.rs
+msgid "Clear"
+msgstr "Sereno"
+
+#: src/lib.rs
+msgid "Cloudy"
+msgstr "Nuvoloso"
+
+#: src/lib.rs
+msgid "Fog"
+msgstr "Nebbia"
+
+#: src/lib.rs
+msgid "Hail"
+msgstr "Grandine"
+
+#: src/lib.rs
+msgid "Thunderstorm"
+msgstr "Temporale"
+
+#: src/lib.rs
+msgid "Thunder and rain"
+msgstr "Temporale con pioggia"
+
+#: src/lib.rs
+msgid "Partly cloudy"
+msgstr "Parzialmente nuvoloso"
+
+#: src/lib.rs
+msgid "Heavy rain"
+msgstr "Pioggia forte"
+
+#: src/lib.rs
+msgid "Rain"
+msgstr "Pioggia"
+
+#: src/lib.rs
+msgid "Snow"
+msgstr "Neve"
+
+#: src/lib.rs
+msgid "Sleet"
+msgstr "Nevischio"
+
+#: src/lib.rs
+msgid "Sunny"
+msgstr "Soleggiato"
+
+#: src/lib.rs
+msgid "Windy"
+msgstr "Ventoso"
+
+#: src/lib.rs
+msgid "Whole room"
+msgstr "Tutta la stanza"
+
+#: src/lib.rs
+msgid "Choose this room"
+msgstr "Scegli questa stanza"
+
+#: src/lib.rs
+msgid "See its lights here"
+msgstr "Vedi qui le sue luci"
+
+#: src/lib.rs
+msgid "No rooms shown"
+msgstr "Nessuna stanza mostrata"
+
+#: src/lib.rs
+msgid "Needs an admin token"
+msgstr "Serve un token admin"
+
+#: src/lib.rs
+msgid "No rooms yet"
+msgstr "Ancora nessuna stanza"
+
+#: src/lib.rs
+msgid "Areas show as rooms"
+msgstr "Le aree diventano stanze"
+
+#. the title of the row that shows the whole home when it has no rooms.
+#: src/lib.rs
+msgctxt "the whole home"
+msgid "Home"
+msgstr "Casa"
+
+#: src/lib.rs
+msgid "Not in a room"
+msgstr "In nessuna stanza"
+
+#: src/lib.rs
+msgid "Other rooms"
+msgstr "Altre stanze"
+
+#: src/lib.rs
+msgid "Gas detected"
+msgstr "Gas rilevato"
+
+#. CO is carbon monoxide.
+#: src/lib.rs
+msgid "CO detected"
+msgstr "CO rilevato"
+
+#: src/lib.rs
+msgid "Smoke detected"
+msgstr "Fumo rilevato"
+
+#: src/lib.rs
+msgid "Water leak"
+msgstr "Perdita d'acqua"
+
+#. every lock in the home is locked.
+#: src/lib.rs
+msgid "All locked"
+msgstr "Tutte bloccate"
+
+#. every lock in the home is locked.
+#: src/lib.rs
+msgid "{n} lock"
+msgid_plural "{n} locks"
+msgstr[0] "{n} serratura"
+msgstr[1] "{n} serrature"
+
+#: src/lib.rs
+msgid "{n} lock unlocked"
+msgid_plural "{n} locks unlocked"
+msgstr[0] "{n} serratura sbloccata"
+msgstr[1] "{n} serrature sbloccate"
+
+#. every door and window in the home is closed.
+#: src/lib.rs
+msgid "All closed"
+msgstr "Tutto chiuso"
+
+#. every door and window in the home is closed.
+#: src/lib.rs
+msgid "{n} door or window"
+msgid_plural "{n} doors and windows"
+msgstr[0] "{n} porta o finestra"
+msgstr[1] "{n} porte e finestre"
+
+#. {name} is a door, a window or a lock that stands open.
+#: src/lib.rs
+msgid "{name} open"
+msgstr "{name}: aperto"
+
+#. how many doors and windows stand open.
+#: src/lib.rs
+msgid "{n} left open"
+msgid_plural "{n} left open"
+msgstr[0] "{n} rimasta aperta"
+msgstr[1] "{n} rimaste aperte"
+
+#. {name} is what a battery is in and {level} how full it is, such as 9%.
+#: src/lib.rs
+msgid "{name}, {level}"
+msgstr "{name}, {level}"
+
+#: src/lib.rs
+msgid "Battery low"
+msgstr "Batteria scarica"
+
+#: src/lib.rs
+msgid "{n} battery low"
+msgid_plural "{n} batteries low"
+msgstr[0] "{n} batteria scarica"
+msgstr[1] "{n} batterie scariche"
+
+#. {name} is a person who is out.
+#: src/lib.rs
+msgid "{name} away"
+msgstr "{name} fuori casa"
+
+#. {first} and {second} are two people who are out.
+#: src/lib.rs
+msgid "{first} and {second} away"
+msgstr "{first} e {second} fuori casa"
+
+#. how many people are out.
+#: src/lib.rs
+msgid "{n} away"
+msgid_plural "{n} away"
+msgstr[0] "{n} fuori casa"
+msgstr[1] "{n} fuori casa"
+
+#: src/lib.rs
+msgid "Nobody home"
+msgstr "Nessuno in casa"
+
+#. {name} is a person who is at home.
+#: src/lib.rs
+msgid "{name} home"
+msgstr "{name} in casa"
+
+#. {first} and {second} are two people who are at home.
+#: src/lib.rs
+msgid "{first} and {second} home"
+msgstr "{first} e {second} in casa"
+
+#: src/lib.rs
+msgid "{n} person home"
+msgid_plural "{n} people home"
+msgstr[0] "{n} persona in casa"
+msgstr[1] "{n} persone in casa"
+
+#. {reading} is a temperature with its scale, such as 12°C.
+#: src/lib.rs
+msgid "{reading} outside"
+msgstr "{reading} fuori"
+
+#. no light in the home is on.
+#: src/lib.rs
+msgctxt "state"
+msgid "All lights off"
+msgstr "Tutte le luci spente"
+
+#: src/lib.rs
+msgid "{name} unlocked"
+msgstr "{name}: sbloccato"
+
+#: src/lib.rs
+msgid "{name} unlocking"
+msgstr "{name}: sblocco in corso"
+
+#: src/lib.rs
+msgid "{name} locking"
+msgstr "{name}: blocco in corso"
+
+#: src/lib.rs
+msgid "{name} jammed"
+msgstr "{name}: inceppato"
+
+#: src/lib.rs
+msgid "{name} opening"
+msgstr "{name}: in apertura"
+
+#. {name} is a lock and {state} how it stands, in a word this plugin has no wording for.
+#: src/lib.rs
+msgid "{name} {state}"
+msgstr "{name}: {state}"
+
+#. how warm a lamp's white light is.
+#: src/lib.rs
+msgid "Candlelight"
+msgstr "Lume di candela"
+
+#. how warm a lamp's white light is.
+#: src/lib.rs
+msgid "Warm"
+msgstr "Calda"
+
+#. how warm a lamp's white light is.
+#: src/lib.rs
+msgid "Neutral"
+msgstr "Neutra"
+
+#. how warm a lamp's white light is.
+#: src/lib.rs
+msgid "Cool"
+msgstr "Fredda"
+
+#. how warm a lamp's white light is.
+#: src/lib.rs
+msgid "Daylight"
+msgstr "Luce diurna"
+
+#: src/lib.rs
+msgid "Red"
+msgstr "Rosso"
+
+#: src/lib.rs
+msgid "Orange"
+msgstr "Arancione"
+
+#: src/lib.rs
+msgid "Yellow"
+msgstr "Giallo"
+
+#: src/lib.rs
+msgid "Green"
+msgstr "Verde"
+
+#: src/lib.rs
+msgid "Turquoise"
+msgstr "Turchese"
+
+#: src/lib.rs
+msgid "Sky blue"
+msgstr "Azzurro"
+
+#: src/lib.rs
+msgid "Blue"
+msgstr "Blu"
+
+#: src/lib.rs
+msgid "Purple"
+msgstr "Viola"
+
+#: src/lib.rs
+msgid "Pink"
+msgstr "Rosa"
+
+#. the value beside a setting that is switched on or off, such as "Away mode" or "This TV is in this room".
+#: src/lib.rs
+msgctxt "a setting's switch"
+msgid "On"
+msgstr "Sì"
+
+#. the value beside a setting that is switched on or off, such as "Away mode" or "This TV is in this room".
+#: src/lib.rs
+msgctxt "a setting's switch"
+msgid "Off"
+msgstr "No"
+
+#: src/lib.rs
+msgid "Needs its code, so use it in Home Assistant"
+msgstr "Richiede il codice, quindi usa Home Assistant"
+
+#: src/lib.rs
+msgid "Yes, unlock {name}"
+msgstr "Sì, sblocca {name}"
+
+#: src/lib.rs
+msgid "This TV"
+msgstr "Questa TV"
+
+#: src/lib.rs
+msgid "None of these"
+msgstr "Nessuna di queste"
+
+#: src/lib.rs
+msgid "Home Assistant has no areas yet. Add some there and they show here as rooms."
+msgstr "Home Assistant non ha ancora aree. Aggiungine qualcuna lì e compariranno qui come stanze."
+
+#: src/lib.rs
+msgid "The first row of the home shows this room's lights and scenes."
+msgstr "La prima riga della casa mostra le luci e le scene di questa stanza."
+
+#: src/lib.rs
+msgid "This TV's room"
+msgstr "La stanza di questa TV"
+
+#: src/lib.rs
+msgid "Choose the room this TV is in"
+msgstr "Scegli la stanza in cui si trova questa TV"
+
+#. how many of a room's lights are on, beside "All lights".
+#: src/lib.rs
+msgid "{n} on"
+msgid_plural "{n} on"
+msgstr[0] "{n} accesa"
+msgstr[1] "{n} accese"
+
+#: src/lib.rs
+msgid "All lights"
+msgstr "Tutte le luci"
+
+#. the heading over a room's lesser switches.
+#: src/lib.rs
+msgid "More"
+msgstr "Altro"
+
+#: src/lib.rs
+msgid "This TV is in this room"
+msgstr "Questa TV è in questa stanza"
+
+#: src/lib.rs
+msgid "Give these an area in Home Assistant and they move to its room."
+msgstr "Assegna a questi dispositivi un'area in Home Assistant e passeranno alla sua stanza."
+
+#. a button that turns off every light that is on.
+#: src/lib.rs
+msgctxt "button"
+msgid "All lights off"
+msgstr "Spegni tutte le luci"
+
+#: src/lib.rs
+msgid "Yes, turn off {n} light"
+msgid_plural "Yes, turn off {n} lights"
+msgstr[0] "Sì, spegni {n} luce"
+msgstr[1] "Sì, spegni {n} luci"
+
+#: src/lib.rs
+msgid "All lights are off"
+msgstr "Tutte le luci sono spente"
+
+#: src/lib.rs
+msgid "{n} light"
+msgid_plural "{n} lights"
+msgstr[0] "{n} luce"
+msgstr[1] "{n} luci"
+
+#. ends "3 lights in 2 rooms".
+#: src/lib.rs
+msgid "in {n} room"
+msgid_plural "in {n} rooms"
+msgstr[0] "in {n} stanza"
+msgstr[1] "in {n} stanze"
+
+#. {spread} is the rest of the line, such as "in 2 rooms".
+#: src/lib.rs
+msgid "{n} light {spread}"
+msgid_plural "{n} lights {spread}"
+msgstr[0] "{n} luce {spread}"
+msgstr[1] "{n} luci {spread}"
+
+#. the title of the list of lights that are on.
+#: src/lib.rs
+msgid "Lights on"
+msgstr "Luci accese"
+
+#: src/lib.rs
+msgid "Doors and windows"
+msgstr "Porte e finestre"
+
+#: src/lib.rs
+msgid "Who is home"
+msgstr "Chi è in casa"
+
+#: src/lib.rs
+msgid "Batteries"
+msgstr "Batterie"
+
+#. what a speaker or a TV plays from, such as an input or an app.
+#: src/lib.rs
+msgid "Source"
+msgstr "Sorgente"
+
+#. the row that turns a device on or off.
+#: src/lib.rs
+msgctxt "on or off"
+msgid "Power"
+msgstr "Accensione"
+
+#: src/lib.rs
+msgid "Mode"
+msgstr "Modalità"
+
+#: src/lib.rs
+msgid "Check its power and connection"
+msgstr "Controlla alimentazione e connessione"
+
+#: src/lib.rs
+msgid "Brightness"
+msgstr "Luminosità"
+
+#. how warm a lamp's white light is.
+#: src/lib.rs
+msgid "Warmth"
+msgstr "Temperatura colore"
+
+#: src/lib.rs
+msgid "Colour"
+msgstr "Colore"
+
+#: src/lib.rs
+msgid "In this group"
+msgstr "In questo gruppo"
+
+#: src/lib.rs
+msgid "Speed"
+msgstr "Velocità"
+
+#. whether a fan turns from side to side.
+#: src/lib.rs
+msgid "Oscillate"
+msgstr "Oscillazione"
+
+#: src/lib.rs
+msgctxt "button"
+msgid "Stop"
+msgstr "Ferma"
+
+#: src/lib.rs
+msgctxt "button"
+msgid "Open"
+msgstr "Apri"
+
+#: src/lib.rs
+msgid "Yes, open {name}"
+msgstr "Sì, apri {name}"
+
+#: src/lib.rs
+msgctxt "button"
+msgid "Close"
+msgstr "Chiudi"
+
+#: src/lib.rs
+msgid "Yes, close {name}"
+msgstr "Sì, chiudi {name}"
+
+#. shown before a garage door or a gate is moved.
+#: src/lib.rs
+msgid "Check that nothing is in its way first."
+msgstr "Prima controlla che non ci siano ostacoli."
+
+#. how far a blind is open.
+#: src/lib.rs
+msgid "Position"
+msgstr "Apertura"
+
+#. the angle of a blind's slats.
+#: src/lib.rs
+msgid "Tilt"
+msgstr "Inclinazione"
+
+#: src/lib.rs
+msgid "Needs its code, so unlock it in Home Assistant"
+msgstr "Richiede il codice, quindi sblocca da Home Assistant"
+
+#: src/lib.rs
+msgid "Needs its code, so lock it in Home Assistant"
+msgstr "Richiede il codice, quindi blocca da Home Assistant"
+
+#: src/lib.rs
+msgctxt "button"
+msgid "Lock"
+msgstr "Blocca"
+
+#: src/lib.rs
+msgctxt "button"
+msgid "Unlock"
+msgstr "Sblocca"
+
+#. how warm and how humid it is now, as in "21°, 45%".
+#: src/lib.rs
+msgid "{temperature}, {humidity}"
+msgstr "{temperature}, {humidity}"
+
+#. the row that shows the reading as it is now.
+#: src/lib.rs
+msgid "Now"
+msgstr "Adesso"
+
+#. the temperature below which the heating comes on.
+#: src/lib.rs
+msgid "Heat to"
+msgstr "Riscalda fino a"
+
+#. the temperature above which the cooling comes on.
+#: src/lib.rs
+msgid "Cool to"
+msgstr "Raffresca fino a"
+
+#: src/lib.rs
+msgid "Temperature"
+msgstr "Temperatura"
+
+#. a thermostat's ready-made setting, such as Eco or Away.
+#: src/lib.rs
+msgid "Preset"
+msgstr "Preimpostazione"
+
+#. how hard a thermostat's own fan blows.
+#: src/lib.rs
+msgctxt "setting"
+msgid "Fan"
+msgstr "Ventilazione"
+
+#. a water heater's setting for when nobody is home.
+#: src/lib.rs
+msgid "Away mode"
+msgstr "Modalità fuori casa"
+
+#: src/lib.rs
+msgid "Humidity"
+msgstr "Umidità"
+
+#: src/lib.rs
+msgid "Turn on"
+msgstr "Accendi"
+
+#: src/lib.rs
+msgctxt "button"
+msgid "Pause"
+msgstr "Pausa"
+
+#: src/lib.rs
+msgctxt "button"
+msgid "Play"
+msgstr "Riproduci"
+
+#: src/lib.rs
+msgid "Volume"
+msgstr "Volume"
+
+#: src/lib.rs
+msgid "Muted"
+msgstr "Muto"
+
+#. a button that skips to the next track.
+#: src/lib.rs
+msgctxt "track"
+msgid "Next"
+msgstr "Successivo"
+
+#. a button that goes back to the track before.
+#: src/lib.rs
+msgctxt "track"
+msgid "Previous"
+msgstr "Precedente"
+
+#: src/lib.rs
+msgid "Turn off"
+msgstr "Spegni"
+
+#: src/lib.rs
+msgctxt "button"
+msgid "Start"
+msgstr "Avvia"
+
+#. a button that sends a robot vacuum back to its dock.
+#: src/lib.rs
+msgid "Send home"
+msgstr "Manda alla base"
+
+#. a button that makes a robot vacuum sound, so it can be found.
+#: src/lib.rs
+msgid "Find it"
+msgstr "Trovalo"
+
+#. how hard a robot vacuum sucks.
+#: src/lib.rs
+msgctxt "suction"
+msgid "Power"
+msgstr "Potenza"
+
+#: src/lib.rs
+msgid "Needs its code, so arm it in Home Assistant"
+msgstr "Richiede il codice, quindi attiva da Home Assistant"
+
+#. buttons that arm an alarm in its mode for people at home, for everyone out, and for the night.
+#: src/lib.rs
+msgid "Arm home"
+msgstr "Attiva in casa"
+
+#. buttons that arm an alarm in its mode for people at home, for everyone out, and for the night.
+#: src/lib.rs
+msgid "Arm away"
+msgstr "Attiva fuori casa"
+
+#. buttons that arm an alarm in its mode for people at home, for everyone out, and for the night.
+#: src/lib.rs
+msgid "Arm night"
+msgstr "Attiva notte"
+
+#: src/lib.rs
+msgid "Needs its code, so disarm it in Home Assistant"
+msgstr "Richiede il codice, quindi disattiva da Home Assistant"
+
+#: src/lib.rs
+msgid "Disarm"
+msgstr "Disattiva"
+
+#: src/lib.rs
+msgid "Yes, disarm {name}"
+msgstr "Sì, disattiva {name}"
+
+#. the row that says how a device stands.
+#: src/lib.rs
+msgid "State"
+msgstr "Stato"
+
+#. {room} is the room a device is in and {state} how it stands, worded to follow the comma, as in "Kitchen, on, 60%".
+#: src/lib.rs
+msgid "{room}, {state}"
+msgstr "{room}, {state}"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} locked"
+msgstr "{name}: bloccato"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} off"
+msgstr "{name}: spento"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} on"
+msgstr "{name}: acceso"
+
+#. said once a scene has been set. {name} is the scene's name.
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} set"
+msgstr "{name}: scena attivata"
+
+#. said once a script has been started. {name} is the script's name.
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} started"
+msgstr "{name}: script avviato"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} unlocked"
+msgstr "{name}: sbloccato"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} stopped"
+msgstr "{name}: movimento fermato"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} opening"
+msgstr "{name}: in apertura"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} closing"
+msgstr "{name}: in chiusura"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} paused"
+msgstr "{name}: in pausa"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} playing"
+msgstr "{name}: in riproduzione"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} cleaning"
+msgstr "{name}: in pulizia"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} going home"
+msgstr "{name}: ritorno alla base"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} armed"
+msgstr "{name}: attivo"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{name} disarmed"
+msgstr "{name}: disattivo"
+
+#. said once a room's lights have been turned on. {room} is the room's name.
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{room} lights on"
+msgstr "{room}: luci accese"
+
+#. said once a room's lights have been turned off. {room} is the room's name.
+#: src/lib.rs
+msgctxt "after a press"
+msgid "{room} lights off"
+msgstr "{room}: luci spente"
+
+#: src/lib.rs
+msgctxt "after a press"
+msgid "All lights off"
+msgstr "Tutte le luci spente"
+
+#. said once the lights that were on have been turned off.
+#: src/lib.rs
+msgid "{n} light off"
+msgid_plural "{n} lights off"
+msgstr[0] "{n} luce spenta"
+msgstr[1] "{n} luci spente"

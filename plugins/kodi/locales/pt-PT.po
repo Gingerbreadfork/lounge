@@ -1,0 +1,101 @@
+# Lounge, kodi: pt-PT
+#
+msgid ""
+msgstr ""
+"Language: pt-PT\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Kodi turned down the plugin's request. Check that Kodi is up to date, then try again."
+msgstr "O Kodi recusou o pedido do plugin. Verifique se o Kodi está atualizado e tente novamente."
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Este cartão está desatualizado. Atualize o plugin e tente novamente."
+
+#: src/lib.rs
+msgid "Continue watching, up next, recently added and Live TV from your Kodi library; Kodi plays them."
+msgstr "Continuar a ver, a seguir, adicionados recentemente e TV em direto da sua biblioteca do Kodi; é o Kodi que os reproduz."
+
+#: src/lib.rs
+msgid "Up next on Kodi"
+msgstr "A seguir no Kodi"
+
+#: src/lib.rs
+msgid "New on Kodi"
+msgstr "Novidades no Kodi"
+
+#: src/lib.rs
+msgid "Kodi address"
+msgstr "Endereço do Kodi"
+
+#. Settings, Services, Control and Allow remote control via HTTP are names in Kodi's own menus.
+#: src/lib.rs
+msgid "Like http://192.168.0.20:8080, or http://localhost:8080 for Kodi on this TV. In Kodi's Settings, Services, Control, turn on Allow remote control via HTTP."
+msgstr "Por exemplo, http://192.168.0.20:8080, ou http://localhost:8080 para o Kodi nesta TV. No Kodi, em Definições, Serviços, Controlo, ative Permitir controlo remoto via HTTP."
+
+#. a setting and its help. The second kodi is the username itself, kept as it is.
+#: src/lib.rs
+msgid "Username"
+msgstr "Nome de utilizador"
+
+#. a setting and its help. The second kodi is the username itself, kept as it is.
+#: src/lib.rs
+msgid "Kodi's default is kodi."
+msgstr "A predefinição do Kodi é kodi."
+
+#: src/lib.rs
+msgid "Password"
+msgstr "Palavra-passe"
+
+#: src/lib.rs
+msgid "Kodi app"
+msgstr "App do Kodi"
+
+#: src/lib.rs
+msgid "The package brought to the front after Kodi starts playing."
+msgstr "O pacote trazido para a frente depois de o Kodi começar a reproduzir."
+
+#: src/lib.rs
+msgid "Bring Kodi to the front"
+msgstr "Trazer o Kodi para a frente"
+
+#: src/lib.rs
+msgid "On when Kodi runs on this TV. Off when it is another box: it starts playing and this TV stays where it is."
+msgstr "Sim quando o Kodi corre nesta TV. Não quando está noutro aparelho: a reprodução começa lá e esta TV fica onde está."
+
+#: src/lib.rs
+msgid "Live TV channels"
+msgstr "Canais de TV em direto"
+
+#: src/lib.rs
+msgid "Kodi's PVR channels in Live now and the guide."
+msgstr "Os canais PVR do Kodi na linha Em direto agora e no guia."
+
+#: src/lib.rs
+msgid "Kodi has no episodes of this show. Update Kodi's library, then try again."
+msgstr "O Kodi não tem episódios desta série. Atualize a biblioteca do Kodi e tente novamente."
+
+#: src/lib.rs
+msgid "Kodi would not play it. Refresh the plugin, then try again."
+msgstr "O Kodi recusou a reprodução. Atualize o plugin e tente novamente."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgctxt "in a sentence"
+msgid "Kodi address"
+msgstr "endereço do Kodi"
+
+#. {address} is the address in the settings and {local} the one to use, such as http://localhost:8080.
+#: src/lib.rs
+msgid "The address {address} is this TV's own, which a plugin may not use. For Kodi on this TV, set the address to {local}."
+msgstr "O endereço {address} é o desta TV, que um plugin não pode usar. Para o Kodi nesta TV, defina o endereço como {local}."
+
+#: src/lib.rs
+msgid "Kodi didn't answer at {address}. Check that it is running and allows remote control over HTTP, then try again."
+msgstr "O Kodi não respondeu em {address}. Verifique se está a correr e se permite o controlo remoto via HTTP e tente novamente."
+
+#: src/lib.rs
+msgid "Kodi refused the username or password. Check them in the plugin's settings."
+msgstr "O Kodi recusou o nome de utilizador ou a palavra-passe. Verifique-os nas definições do plugin."

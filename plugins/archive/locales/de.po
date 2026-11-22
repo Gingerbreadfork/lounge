@@ -1,0 +1,60 @@
+# Lounge, archive: de
+#
+msgid ""
+msgstr ""
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. names the service where a sentence starts with it, as in "The Internet Archive didn't answer."
+#: src/lib.rs
+msgid "The Internet Archive"
+msgstr "Das Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films on the Internet Archive"
+msgstr "Spielfilme im Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films collection"
+msgstr "Sammlung für Spielfilme"
+
+#: src/lib.rs
+msgid "Classic cartoons on the Internet Archive"
+msgstr "Zeichentrickklassiker im Internet Archive"
+
+#: src/lib.rs
+msgid "Classic cartoons collection"
+msgstr "Sammlung für Zeichentrickklassiker"
+
+#: src/lib.rs
+msgid "Classic television on the Internet Archive"
+msgstr "Fernsehklassiker im Internet Archive"
+
+#: src/lib.rs
+msgid "Classic television collection"
+msgstr "Sammlung für Fernsehklassiker"
+
+#: src/lib.rs
+msgid "Free films, cartoons and television from archive.org, played on the TV."
+msgstr "Kostenlose Filme, Zeichentrick und Fernsehen von archive.org, direkt auf dem Fernseher abgespielt."
+
+#: src/lib.rs
+msgid "An archive.org collection id, the last part of its address, such as feature_films."
+msgstr "Die ID einer Sammlung auf archive.org, also der letzte Teil ihrer Adresse, zum Beispiel feature_films."
+
+#: src/lib.rs
+msgid "Items per row"
+msgstr "Einträge pro Reihe"
+
+#: src/lib.rs
+msgid "The Internet Archive has nothing in these collections. Check the collections in the plugin's settings."
+msgstr "Das Internet Archive hat in diesen Sammlungen nichts. Prüfe die Sammlungen in den Plugin-Einstellungen."
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Diese Kachel ist veraltet. Aktualisiere das Plugin und versuche es dann erneut."
+
+#: src/lib.rs
+msgid "This item has no video file the TV can play. Try another one."
+msgstr "Dieser Eintrag hat keine Videodatei, die der Fernseher abspielen kann. Probiere einen anderen."

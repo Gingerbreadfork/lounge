@@ -1,0 +1,60 @@
+# Lounge, archive: es
+#
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. names the service where a sentence starts with it, as in "The Internet Archive didn't answer."
+#: src/lib.rs
+msgid "The Internet Archive"
+msgstr "Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films on the Internet Archive"
+msgstr "Largometrajes en Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films collection"
+msgstr "Colección de largometrajes"
+
+#: src/lib.rs
+msgid "Classic cartoons on the Internet Archive"
+msgstr "Dibujos animados clásicos en Internet Archive"
+
+#: src/lib.rs
+msgid "Classic cartoons collection"
+msgstr "Colección de dibujos animados clásicos"
+
+#: src/lib.rs
+msgid "Classic television on the Internet Archive"
+msgstr "Televisión clásica en Internet Archive"
+
+#: src/lib.rs
+msgid "Classic television collection"
+msgstr "Colección de televisión clásica"
+
+#: src/lib.rs
+msgid "Free films, cartoons and television from archive.org, played on the TV."
+msgstr "Películas, dibujos animados y televisión gratis de archive.org, reproducidos en la TV."
+
+#: src/lib.rs
+msgid "An archive.org collection id, the last part of its address, such as feature_films."
+msgstr "El ID de una colección de archive.org, la última parte de su dirección, como feature_films."
+
+#: src/lib.rs
+msgid "Items per row"
+msgstr "Elementos por fila"
+
+#: src/lib.rs
+msgid "The Internet Archive has nothing in these collections. Check the collections in the plugin's settings."
+msgstr "Internet Archive no tiene nada en estas colecciones. Comprueba las colecciones en los ajustes del plugin."
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Esta tarjeta está desactualizada. Actualiza el plugin y vuelve a intentarlo."
+
+#: src/lib.rs
+msgid "This item has no video file the TV can play. Try another one."
+msgstr "Este elemento no tiene ningún archivo de video que la TV pueda reproducir. Prueba con otro."

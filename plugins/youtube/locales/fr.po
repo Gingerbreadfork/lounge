@@ -1,0 +1,148 @@
+# Lounge, youtube: fr
+#
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "Google no longer accepts this sign-in. Press Refresh now to sign in again."
+msgstr "Google n’accepte plus cette connexion. Appuyez sur « Actualiser maintenant » pour vous reconnecter."
+
+#: src/lib.rs
+msgid "YouTube's daily allowance for this app is used up. It comes back at midnight, Pacific time."
+msgstr "Le quota quotidien de YouTube pour cette appli est épuisé. Il revient à minuit, heure du Pacifique."
+
+#: src/lib.rs
+msgid "The YouTube Data API v3 is not enabled for this Google Cloud project. Enable it, then try again."
+msgstr "L’API « YouTube Data API v3 » n’est pas activée pour ce projet Google Cloud. Activez-la, puis réessayez."
+
+#: src/lib.rs
+msgid "New videos from the channels you follow, and with a Google sign-in your subscriptions, playlists and liked videos."
+msgstr "Les nouvelles vidéos des chaînes que vous suivez et, avec une connexion Google, vos abonnements, vos playlists et vos vidéos aimées."
+
+#: src/lib.rs
+msgid "New on YouTube"
+msgstr "Nouveautés sur YouTube"
+
+#: src/lib.rs
+msgid "Your playlists on YouTube"
+msgstr "Vos playlists sur YouTube"
+
+#: src/lib.rs
+msgid "Liked on YouTube"
+msgstr "Vidéos aimées sur YouTube"
+
+#: src/lib.rs
+msgid "Channels"
+msgstr "Chaînes"
+
+#: src/lib.rs
+msgid "The channels and playlists to follow, as links, @handles or ids, one per line or separated by commas. A channel's id starts with UC and a playlist's with PL. A Google Takeout export of your subscriptions, the CSV file, can be pasted in whole. Not needed with a sign-in below."
+msgstr "Les chaînes et les playlists à suivre, sous forme de liens, d’@identifiants ou d’ID, un par ligne ou séparés par des virgules. L’ID d’une chaîne commence par UC et celui d’une playlist par PL. Un export Google Takeout de vos abonnements, le fichier CSV, peut être collé en entier. Inutile avec une connexion ci-dessous."
+
+#: src/lib.rs
+msgid "Google Client ID"
+msgstr "Client ID Google"
+
+#. "External" and "TVs and Limited Input devices" are choices in the Google Cloud console.
+#: src/lib.rs
+msgid "To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here. At console.cloud.google.com make a project, enable the YouTube Data API v3, set the OAuth consent screen to External and publish it, then make an OAuth client of the type TVs and Limited Input devices. This page then shows a code to enter on your phone."
+msgstr "Pour afficher vos abonnements, vos playlists et vos vidéos aimées, créez votre propre projet Google Cloud et collez ici son Client ID et son Client secret. Sur console.cloud.google.com, créez un projet, activez l’API « YouTube Data API v3 », réglez l’écran de consentement OAuth sur External et publiez-le, puis créez un client OAuth de type « TVs and Limited Input devices ». Cette page affiche ensuite un code à saisir sur votre téléphone."
+
+#: src/lib.rs
+msgid "Google Client secret"
+msgstr "Client secret Google"
+
+#: src/lib.rs
+msgid "Subscriptions"
+msgstr "Abonnements"
+
+#. "New on YouTube" is the title of this plugin's first row.
+#: src/lib.rs
+msgid "New videos from the channels you subscribe to, in New on YouTube."
+msgstr "Les nouvelles vidéos de vos abonnements, dans « Nouveautés sur YouTube »."
+
+#: src/lib.rs
+msgid "Playlists row"
+msgstr "Rangée « Playlists »"
+
+#. "Watch later" is YouTube's own playlist of that name.
+#: src/lib.rs
+msgid "Your own playlists. Watch later is not one YouTube hands out."
+msgstr "Vos propres playlists. YouTube ne fournit pas « À regarder plus tard »."
+
+#: src/lib.rs
+msgid "Liked videos row"
+msgstr "Rangée « Vidéos aimées »"
+
+#: src/lib.rs
+msgid "Videos per channel"
+msgstr "Vidéos par chaîne"
+
+#. the label of a field that takes a number, which stands where the … is.
+#: src/lib.rs
+msgid "Only the last … days"
+msgstr "Uniquement les … derniers jours"
+
+#: src/lib.rs
+msgid "0 shows the feed's newest videos whatever their age."
+msgstr "0 affiche les vidéos les plus récentes du flux, quelle que soit leur date."
+
+#: src/lib.rs
+msgid "Include Shorts"
+msgstr "Inclure les Shorts"
+
+#: src/lib.rs
+msgid "Nothing to show yet. Add a channel link or id, or a Google Client ID, in the plugin's settings."
+msgstr "Rien à afficher pour l’instant. Ajoutez le lien ou l’ID d’une chaîne, ou un Client ID Google, dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "YouTube gave no feed for channel {id}. If the id is right, it comes with a later refresh."
+msgstr "YouTube n’a donné aucun flux pour la chaîne {id}. Si l’ID est correct, il arrivera à une prochaine actualisation."
+
+#: src/lib.rs
+msgid "YouTube gave no feed for playlist {id}. If the id is right, it comes with a later refresh."
+msgstr "YouTube n’a donné aucun flux pour la playlist {id}. Si l’ID est correct, il arrivera à une prochaine actualisation."
+
+#: src/lib.rs
+msgid "Could not renew the Google sign-in. It tries again on the next refresh."
+msgstr "Impossible de renouveler la connexion à Google. Nouvel essai à la prochaine actualisation."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgctxt "in a sentence"
+msgid "Google Client secret"
+msgstr "Client secret Google"
+
+#. "TVs and Limited Input devices" is the name of the type in the Google Cloud console.
+#: src/lib.rs
+msgid "Google does not know this Client ID. Check it, and that the OAuth client is of the type TVs and Limited Input devices."
+msgstr "Google ne connaît pas ce Client ID. Vérifiez-le, et vérifiez que le client OAuth est de type « TVs and Limited Input devices »."
+
+#. "Refresh now" is the button on the plugin's page on the TV.
+#: src/lib.rs
+msgid "The sign-in was declined on the phone. Press Refresh now for a new code."
+msgstr "La connexion a été refusée sur le téléphone. Appuyez sur « Actualiser maintenant » pour obtenir un nouveau code."
+
+#: src/lib.rs
+msgid "{n} video"
+msgid_plural "{n} videos"
+msgstr[0] "{n} vidéo"
+msgstr[1] "{n} vidéos"
+
+#. {piece} is what was typed into the Channels setting.
+#: src/lib.rs
+msgid "\"{piece}\" is not a channel or playlist id or link. Check the channels in the plugin's settings."
+msgstr "« {piece} » n’est ni un ID ni un lien de chaîne ou de playlist. Vérifiez les chaînes dans les paramètres du plugin."
+
+#. {name} is a channel's handle or the end of its link, such as @mkbhd.
+#: src/lib.rs
+msgid "YouTube has no channel {name}. Check the channels in the plugin's settings."
+msgstr "YouTube n’a aucune chaîne {name}. Vérifiez les chaînes dans les paramètres du plugin."
+
+#: src/lib.rs
+msgid "YouTube's page for {name} doesn't say which channel it is. Use the channel's id, which starts with UC, instead."
+msgstr "La page YouTube « {name} » n’indique pas de quelle chaîne il s’agit. Utilisez plutôt l’ID de la chaîne, qui commence par UC."

@@ -3,7 +3,7 @@
 //! searches for its title: Lounge's own search, which finds it in whichever app has the file,
 //! or the TV's.
 
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, parse_iso8601, t, tc, tn, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -16,34 +16,41 @@ const UPCOMING_ITEMS: usize = 60;
 const RECENT_ITEMS: usize = 40;
 
 impl sdk::Plugin for Arr {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.arr".into(),
-            name: "Sonarr and Radarr".into(),
+            name: t!("Sonarr and Radarr"),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "What is coming up, downloading now and newly arrived, from your Sonarr and Radarr.".into(),
+            description: t!("What is coming up, downloading now and newly arrived, from your Sonarr and Radarr."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["$sonarr".into(), "$radarr".into(), "*".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "upcoming".into(), title: "Coming up on Sonarr and Radarr".into(), style: RowStyle::Landscape },
-                RowSpec { id: "downloading".into(), title: "Downloading on Sonarr and Radarr".into(), style: RowStyle::Landscape },
-                RowSpec { id: "recent".into(), title: "New on Sonarr and Radarr".into(), style: RowStyle::Poster },
+                RowSpec { id: "upcoming".into(), title: t!("Coming up on Sonarr and Radarr"), style: RowStyle::Landscape },
+                RowSpec { id: "downloading".into(), title: t!("Downloading on Sonarr and Radarr"), style: RowStyle::Landscape },
+                RowSpec { id: "recent".into(), title: t!("New on Sonarr and Radarr"), style: RowStyle::Poster },
             ],
             settings: vec![
-                SettingSpec { key: "sonarr".into(), label: "Sonarr address".into(), kind: SettingKind::Url, required: false, help: Some("Like http://192.168.0.10:8989, or …:8989/sonarr if you gave it a URL base. Leave empty if you only run Radarr.".into()), default: None },
-                SettingSpec { key: "sonarr_key".into(), label: "Sonarr API key".into(), kind: SettingKind::Password, required: false, help: Some("In Sonarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone companion.".into()), default: None },
-                SettingSpec { key: "radarr".into(), label: "Radarr address".into(), kind: SettingKind::Url, required: false, help: Some("Like http://192.168.0.10:7878, or …:7878/radarr if you gave it a URL base. Leave empty if you only run Sonarr.".into()), default: None },
-                SettingSpec { key: "radarr_key".into(), label: "Radarr API key".into(), kind: SettingKind::Password, required: false, help: Some("In Radarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone companion.".into()), default: None },
-                SettingSpec { key: "days".into(), label: "Days ahead".into(), kind: SettingKind::Number, required: false, help: Some("How many days ahead Coming up looks, from 1 to 60. Yesterday is always shown too.".into()), default: Some("7".into()) },
+                // Translators: URL base is the name of a setting in Sonarr.
+                SettingSpec { key: "sonarr".into(), label: t!("Sonarr address"), kind: SettingKind::Url, required: false, help: Some(t!("Like http://192.168.0.10:8989, or …:8989/sonarr if you gave it a URL base. Leave empty if you only run Radarr.")), default: None },
+                // Translators: Settings, General and Security are names in Sonarr's own pages.
+                SettingSpec { key: "sonarr_key".into(), label: t!("Sonarr API key"), kind: SettingKind::Password, required: false, help: Some(t!("In Sonarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone companion.")), default: None },
+                // Translators: URL base is the name of a setting in Radarr.
+                SettingSpec { key: "radarr".into(), label: t!("Radarr address"), kind: SettingKind::Url, required: false, help: Some(t!("Like http://192.168.0.10:7878, or …:7878/radarr if you gave it a URL base. Leave empty if you only run Sonarr.")), default: None },
+                // Translators: Settings, General and Security are names in Radarr's own pages.
+                SettingSpec { key: "radarr_key".into(), label: t!("Radarr API key"), kind: SettingKind::Password, required: false, help: Some(t!("In Radarr under Settings, General, Security. It is 32 characters, easiest pasted from the phone companion.")), default: None },
+                // Translators: Coming up is this plugin's row of what airs or is released soon.
+                SettingSpec { key: "days".into(), label: t!("Days ahead"), kind: SettingKind::Number, required: false, help: Some(t!("How many days ahead Coming up looks, from 1 to 60. Yesterday is always shown too.")), default: Some("7".into()) },
                 SettingSpec {
                     key: "tv_search".into(),
-                    label: "Open with the TV's own search".into(),
+                    label: t!("Open with the TV's own search"),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it, so a Jellyfin or Plex plugin that is on finds it.".into()),
+                    help: Some(t!("On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it, so a Jellyfin or Plex plugin that is on finds it.")),
                     default: Some("false".into()),
                 },
             ],
@@ -51,6 +58,7 @@ impl sdk::Plugin for Arr {
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: [("sonarr_key".into(), "sonarr".into()), ("radarr_key".into(), "radarr".into())].into_iter().collect(),
+            locales: Default::default(),
         }
     }
 
@@ -65,7 +73,7 @@ impl sdk::Plugin for Arr {
             }
         }
         if servers.is_empty() && failures.is_empty() {
-            return Err("Nothing to show yet. Add a Sonarr or Radarr address and API key in the plugin's settings.".into());
+            return Err(t!("Nothing to show yet. Add a Sonarr or Radarr address and API key in the plugin's settings."));
         }
         let days = host::setting("days").and_then(|v| v.trim().parse::<i64>().ok()).unwrap_or(7).clamp(1, 60);
         let clock = Clock { now_ms: ctx.now_ms, utc_offset_minutes: ctx.utc_offset_minutes };
@@ -162,7 +170,8 @@ impl Server {
         let Some(url) = host::setting(url_key).map(|u| sdk::server_address(&u)).filter(|u| u != "http://") else {
             return Ok(None);
         };
-        let key = host::secret(key_key).map(|k| k.trim().to_string()).filter(|k| !k.is_empty()).ok_or_else(|| sdk::not_set(&format!("{name} API key")))?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings." {service} is Sonarr or Radarr.
+        let key = host::secret(key_key).map(|k| k.trim().to_string()).filter(|k| !k.is_empty()).ok_or_else(|| sdk::not_set(&t!("{service} API key", service = name)))?;
         Ok(Some(Server { name, url, key }))
     }
 
@@ -170,7 +179,7 @@ impl Server {
         let req = HttpRequest::get(format!("{}{path}", self.url)).header("X-Api-Key", &self.key).header("Accept", "application/json");
         let r = sdk::fetch_from(self.name, &self.url, &req).map_err(|e| {
             if e == host::TOO_LARGE {
-                format!("{} sent more than this plugin can read in one go. Try again later.", self.name)
+                t!("{service} sent more than this plugin can read in one go. Try again later.", service = self.name)
             } else {
                 e
             }
@@ -181,7 +190,7 @@ impl Server {
                 sdk::warn!("unexpected answer for {what}: {e}");
                 sdk::unreadable(self.name, &self.url)
             }),
-            401 => Err(format!("{} rejected the API key. Check it in the plugin's settings.", self.name)),
+            401 => Err(t!("{service} rejected the API key. Check it in the plugin's settings.", service = self.name)),
             404 => Err(sdk::wrong_server(self.name, &self.url)),
             s => {
                 sdk::warn!("HTTP {s} for {what}");
@@ -197,7 +206,8 @@ impl Server {
         if status.app_name.is_empty() || status.app_name.eq_ignore_ascii_case(self.name) {
             return Ok(());
         }
-        Err(format!("The {} address answers as {}. Check the addresses in the plugin's settings.", self.name, status.app_name))
+        // Translators: {service} and {other} are each Sonarr or Radarr, or another program's name.
+        Err(t!("The {service} address answers as {other}. Check the addresses in the plugin's settings.", service = self.name, other = status.app_name))
     }
 
     fn sonarr(&self, window: &Window, clock: &Clock, open: &dyn Fn(&str) -> Action) -> Result<Found, String> {
@@ -285,14 +295,14 @@ impl Episode {
     /// What makes the episode an occasion, as Sonarr's own calendar marks it.
     fn occasion(&self) -> Option<&'static str> {
         match self.finale_type.as_deref() {
-            Some("series") => return Some("Series finale"),
-            Some("season") => return Some("Season finale"),
-            Some("midseason") => return Some("Midseason finale"),
+            Some("series") => return Some(mark!("Series finale")),
+            Some("season") => return Some(mark!("Season finale")),
+            Some("midseason") => return Some(mark!("Midseason finale")),
             _ => {}
         }
         match (self.season, self.episode) {
-            (1, 1) => Some("Series premiere"),
-            (s, 1) if s > 1 => Some("Season premiere"),
+            (1, 1) => Some(mark!("Series premiere")),
+            (s, 1) if s > 1 => Some(mark!("Season premiere")),
             _ => None,
         }
     }
@@ -376,12 +386,17 @@ impl QueueRecord {
     /// One word for where the download is, in the viewer's terms.
     fn state(&self) -> &'static str {
         match (self.tracked_state.as_deref().unwrap_or(""), self.status.as_deref().unwrap_or("")) {
-            (s, _) if s.starts_with("import") => "Arriving",
-            (_, "paused") => "Paused",
-            (_, "queued") | (_, "delay") => "Waiting",
-            (_, "completed") => "Arriving",
-            (_, "failed") | (_, "warning") => "Stuck",
-            _ => "Downloading",
+            // Translators: a download that has finished and is being added to the library.
+            (s, _) if s.starts_with("import") => mark!("Arriving"),
+            // Translators: a download someone paused.
+            (_, "paused") => mark!("Paused"),
+            // Translators: a download that has not started yet.
+            (_, "queued") | (_, "delay") => mark!("Waiting"),
+            (_, "completed") => mark!("Arriving"),
+            // Translators: a download that failed or needs someone to look at it.
+            (_, "failed") | (_, "warning") => mark!("Stuck"),
+            // Translators: a download in progress.
+            _ => mark!("Downloading"),
         }
     }
 }
@@ -436,14 +451,11 @@ impl Clock {
     /// Yesterday, or the date.
     pub fn when(&self, day: i64) -> String {
         match day - self.today() {
-            -1 => "Yesterday".into(),
-            0 => "Today".into(),
-            1 => "Tomorrow".into(),
-            2..=6 => weekday(day).into(),
-            _ => {
-                let (_, month, d) = civil(day);
-                format!("{d} {}", MONTHS[month as usize - 1])
-            }
+            -1 => t!("Yesterday"),
+            0 => t!("Today"),
+            1 => t!("Tomorrow"),
+            2..=6 => sdk::tr(weekday(day)),
+            _ => date(day),
         }
     }
 }
@@ -468,10 +480,32 @@ impl Window {
     }
 }
 
-const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// Translators: a month's name as written in a date such as 16 November.
+const MONTHS: [&str; 12] = [mark!("January"), mark!("February"), mark!("March"), mark!("April"), mark!("May"), mark!("June"), mark!("July"), mark!("August"), mark!("September"), mark!("October"), mark!("November"), mark!("December")];
 
 fn weekday(day_index: i64) -> &'static str {
-    ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][(day_index + 4).rem_euclid(7) as usize]
+    // Translators: a weekday's name on its own, as at the start of a line.
+    [mark!("Sunday"), mark!("Monday"), mark!("Tuesday"), mark!("Wednesday"), mark!("Thursday"), mark!("Friday"), mark!("Saturday")][(day_index + 4).rem_euclid(7) as usize]
+}
+
+/// A weekday's name inside a sentence, where some languages write it small.
+fn weekday_within(day_index: i64) -> String {
+    match (day_index + 4).rem_euclid(7) {
+        0 => tc!("inside a sentence", "Sunday"),
+        1 => tc!("inside a sentence", "Monday"),
+        2 => tc!("inside a sentence", "Tuesday"),
+        3 => tc!("inside a sentence", "Wednesday"),
+        4 => tc!("inside a sentence", "Thursday"),
+        5 => tc!("inside a sentence", "Friday"),
+        _ => tc!("inside a sentence", "Saturday"),
+    }
+}
+
+/// A day as its date without the year: "16 November".
+fn date(day_index: i64) -> String {
+    let (_, month, day) = civil(day_index);
+    // Translators: a date without its year, as in 16 November.
+    t!("{day} {month}", day = day, month = sdk::tr(MONTHS[month as usize - 1]))
 }
 
 /// The calendar date of a day counted from 1970-01-01, by Howard Hinnant's civil-from-days.
@@ -495,12 +529,37 @@ pub fn iso_utc(ms: i64) -> String {
     format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z", secs / 3600, secs % 3600 / 60, secs % 60)
 }
 
-/// "Today" after "Out on digital" reads as "Out on digital today"; a weekday or date keeps its
-/// capital.
-fn lower_first(when: &str) -> String {
-    match when {
-        "Today" | "Tomorrow" | "Yesterday" => when.to_lowercase(),
-        _ => when.to_string(),
+/// How a film comes out.
+#[derive(Clone, Copy)]
+enum Release {
+    Digital,
+    Disc,
+    Cinemas,
+}
+
+impl Release {
+    /// The release and its day in one line: "Out on digital today", "In cinemas Thursday".
+    fn on(self, day: i64, clock: &Clock) -> String {
+        match (self, day - clock.today()) {
+            (Release::Digital, -1) => t!("Out on digital yesterday"),
+            (Release::Digital, 0) => t!("Out on digital today"),
+            (Release::Digital, 1) => t!("Out on digital tomorrow"),
+            (Release::Digital, 2..=6) => t!("Out on digital {weekday}", weekday = weekday_within(day)),
+            // Translators: {date} is a day and month, such as 16 November.
+            (Release::Digital, _) => t!("Out on digital {date}", date = date(day)),
+            (Release::Disc, -1) => t!("On disc yesterday"),
+            (Release::Disc, 0) => t!("On disc today"),
+            (Release::Disc, 1) => t!("On disc tomorrow"),
+            (Release::Disc, 2..=6) => t!("On disc {weekday}", weekday = weekday_within(day)),
+            // Translators: {date} is a day and month, such as 16 November.
+            (Release::Disc, _) => t!("On disc {date}", date = date(day)),
+            (Release::Cinemas, -1) => t!("In cinemas yesterday"),
+            (Release::Cinemas, 0) => t!("In cinemas today"),
+            (Release::Cinemas, 1) => t!("In cinemas tomorrow"),
+            (Release::Cinemas, 2..=6) => t!("In cinemas {weekday}", weekday = weekday_within(day)),
+            // Translators: {date} is a day and month, such as 16 November.
+            (Release::Cinemas, _) => t!("In cinemas {date}", date = date(day)),
+        }
     }
 }
 
@@ -521,13 +580,13 @@ fn upcoming_episodes(episodes: Vec<Episode>, window: &Window, clock: &Clock, ope
             }
             let series = e.series.clone().unwrap_or_default();
             let when = if e.has_file {
-                "Ready to watch".to_string()
+                t!("Ready to watch")
             } else if day < clock.today() {
-                "Aired yesterday".to_string()
+                t!("Aired yesterday")
             } else {
                 clock.when(day)
             };
-            let about = e.occasion().map(str::to_string).or_else(|| e.named_title());
+            let about = e.occasion().map(sdk::tr).or_else(|| e.named_title());
             Some((
                 at,
                 Item {
@@ -535,7 +594,8 @@ fn upcoming_episodes(episodes: Vec<Episode>, window: &Window, clock: &Clock, ope
                     kind: ItemKind::Program,
                     title: series.title.clone(),
                     subtitle: Some(match about {
-                        Some(about) => format!("{when}, {about}"),
+                        // Translators: {when} is when an episode airs, such as Tomorrow, Wednesday or 16 November. {about} is the episode's title or its occasion, such as Season finale.
+                        Some(about) => t!("{when}, {about}", when = when, about = about),
                         None => when,
                     }),
                     season: Some(e.season.to_string()),
@@ -553,13 +613,13 @@ fn upcoming_episodes(episodes: Vec<Episode>, window: &Window, clock: &Clock, ope
 
 /// The release of a film that falls in the window, with what kind of release it is. A home
 /// release in the window counts before a cinema date, since that is what can be watched.
-fn release_in(m: &Movie, window: &Window, clock: &Clock) -> Option<(i64, &'static str)> {
-    [(&m.digital_release, "Out on digital", 0), (&m.physical_release, "On disc", 0), (&m.in_cinemas, "In cinemas", 1)]
+fn release_in(m: &Movie, window: &Window, clock: &Clock) -> Option<(i64, Release)> {
+    [(&m.digital_release, Release::Digital, 0), (&m.physical_release, Release::Disc, 0), (&m.in_cinemas, Release::Cinemas, 1)]
         .into_iter()
-        .filter_map(|(date, label, rank)| Some((clock.day_of_date(date.as_deref().and_then(parse_iso8601)?), label, rank)))
+        .filter_map(|(date, release, rank)| Some((clock.day_of_date(date.as_deref().and_then(parse_iso8601)?), release, rank)))
         .filter(|(day, _, _)| window.holds(*day))
         .min_by_key(|(day, _, rank)| (*rank, *day))
-        .map(|(day, label, _)| (day, label))
+        .map(|(day, release, _)| (day, release))
 }
 
 /// Films with a release in the window, each with the start of its day.
@@ -567,7 +627,7 @@ fn upcoming_movies(movies: Vec<Movie>, window: &Window, clock: &Clock, open: &dy
     movies
         .into_iter()
         .filter_map(|m| {
-            let (day, label) = release_in(&m, window, clock)?;
+            let (day, release) = release_in(&m, window, clock)?;
             if m.has_file && day < clock.today() {
                 return None;
             }
@@ -577,7 +637,7 @@ fn upcoming_movies(movies: Vec<Movie>, window: &Window, clock: &Clock, open: &dy
                     id: format!("film:{}", m.id),
                     kind: ItemKind::Program,
                     title: m.title.clone(),
-                    subtitle: Some(if m.has_file { "Ready to watch".to_string() } else { format!("{label} {}", lower_first(&clock.when(day))) }),
+                    subtitle: Some(if m.has_file { t!("Ready to watch") } else { release.on(day, clock) }),
                     thumbnail: picture(&m.images, "fanart"),
                     poster: picture(&m.images, "poster"),
                     row: Some("upcoming".into()),
@@ -606,7 +666,7 @@ fn downloading_items(records: Vec<QueueRecord>, open: &dyn Fn(&str) -> Action) -
         .into_iter()
         .filter_map(|(key, list)| {
             let first = list.first()?;
-            let state = first.state();
+            let state = sdk::tr(first.state());
             let (title, poster, fanart) = match (&first.series, &first.movie) {
                 (Some(series), _) => (series.title.clone(), picture(&series.images, "poster"), picture(&series.images, "fanart")),
                 (None, Some(movie)) => (movie.title.clone(), picture(&movie.images, "poster"), picture(&movie.images, "fanart")),
@@ -617,9 +677,10 @@ fn downloading_items(records: Vec<QueueRecord>, open: &dyn Fn(&str) -> Action) -
             }
             let episodes: Vec<&Episode> = list.iter().filter_map(|r| r.episode.as_ref()).collect();
             let (season, episode, subtitle) = match episodes.as_slice() {
-                [one] => (Some(one.season.to_string()), Some(one.episode.to_string()), one.named_title().map(|t| format!("{state}, {t}")).unwrap_or_else(|| state.to_string())),
-                [] => (None, None, state.to_string()),
-                many => (None, None, format!("{state}, {} episodes", many.len())),
+                // Translators: {state} is where a download is, such as Downloading or Paused. {about} is the episode's title or a count such as 2 episodes.
+                [one] => (Some(one.season.to_string()), Some(one.episode.to_string()), one.named_title().map(|title| t!("{state}, {about}", state = state, about = title)).unwrap_or_else(|| state.clone())),
+                [] => (None, None, state),
+                many => (None, None, t!("{state}, {about}", state = state, about = tn!(many.len(), "{n} episode", "{n} episodes"))),
             };
             Some(Item {
                 id: format!("dl:{key}"),
@@ -655,7 +716,7 @@ fn arrived_episodes(records: Vec<EpisodeHistory>, open: &dyn Fn(&str) -> Action)
             let (season, number, subtitle) = if list.len() == 1 {
                 (Some(episode.season.to_string()), Some(episode.episode.to_string()), episode.named_title())
             } else {
-                (None, None, Some(format!("{} new episodes", list.len())))
+                (None, None, Some(tn!(list.len(), "{n} new episode", "{n} new episodes")))
             };
             Item {
                 id: format!("got:series:{id}"),
@@ -758,8 +819,8 @@ mod tests {
         assert_eq!(civil(at("2000-03-01T00:00:00Z") / DAY_MS), (2000, 3, 1));
         assert_eq!(iso_utc(at("2026-11-09T09:05:07Z")), "2026-11-09T09:05:07Z");
         assert_eq!(weekday(0), "Thursday");
-        assert_eq!(lower_first("Today"), "today");
-        assert_eq!(lower_first("Friday"), "Friday");
+        assert_eq!(Release::Digital.on(clock.today(), &clock), "Out on digital today");
+        assert_eq!(Release::Digital.on(clock.today() + 4, &clock), "Out on digital Friday");
     }
 
     #[test]

@@ -2,7 +2,7 @@
 //! to come, saying whether it waits for approval or is on its way, and what has lately become
 //! available. A tile searches for its title, so it opens in whichever app has it.
 
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, parse_iso8601, t, tc, tn, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -19,15 +19,17 @@ const DAY_MS: i64 = 24 * 3_600_000;
 /// How many titles already known are looked up again in one refresh, for a new name or poster.
 const LOOK_AGAIN: usize = 8;
 const IMAGES: &str = "https://image.tmdb.org/t/p";
-const KEY_REFUSED: &str = "Seerr didn't accept the API key. Check it in the plugin's settings.";
+const KEY_REFUSED: &str = mark!("Seerr didn't accept the API key. Check it in the plugin's settings.");
 
 impl sdk::Plugin for Seerr {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.seerr".into(),
             name: "Seerr".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "What has been requested and is on its way, and what has just become available, from Seerr, Jellyseerr or Overseerr.".into(),
+            description: t!("What has been requested and is on its way, and what has just become available, from Seerr, Jellyseerr or Overseerr."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["$server".into(), "image.tmdb.org".into()],
@@ -35,17 +37,18 @@ impl sdk::Plugin for Seerr {
             refresh_seconds: 0,
             rows: vec![
                 // Landscape tiles carry a second line, which says where each request stands.
-                RowSpec { id: "requested".into(), title: "Requested on Seerr".into(), style: RowStyle::Landscape },
-                RowSpec { id: "available".into(), title: "Now available on Seerr".into(), style: RowStyle::Poster },
+                RowSpec { id: "requested".into(), title: t!("Requested on Seerr"), style: RowStyle::Landscape },
+                RowSpec { id: "available".into(), title: t!("Now available on Seerr"), style: RowStyle::Poster },
             ],
             settings: vec![
-                SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:5055".into()), default: None },
+                SettingSpec { key: "server".into(), label: t!("Server address"), kind: SettingKind::Url, required: true, help: Some(t!("Like http://192.168.0.10:5055")), default: None },
                 SettingSpec {
                     key: "api_key".into(),
-                    label: "API key".into(),
+                    label: t!("API key"),
                     kind: SettingKind::Password,
                     required: true,
-                    help: Some("In Seerr, Jellyseerr or Overseerr under Settings, General. It is easiest pasted from the phone companion.".into()),
+                    // Translators: "Settings, General" is where the key is in Seerr's own menus. The phone companion is Lounge's page on a phone.
+                    help: Some(t!("In Seerr, Jellyseerr or Overseerr under Settings, General. It is easiest pasted from the phone companion.")),
                     default: None,
                 },
             ],
@@ -53,6 +56,7 @@ impl sdk::Plugin for Seerr {
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -88,7 +92,7 @@ impl sdk::Plugin for Seerr {
                         t.at = ctx.now_ms;
                     }
                 }
-                Err(e) if e == KEY_REFUSED => return Err(e),
+                Err(e) if e == sdk::tr(KEY_REFUSED) => return Err(e),
                 // What was found so far is kept, and the rest is looked up at the next refresh.
                 Err(e) => {
                     sdk::warn!("some titles wait for the next refresh: {e}");
@@ -134,8 +138,10 @@ struct Session {
 
 impl Session {
     fn connect() -> Result<Session, String> {
-        let server = host::server_setting("server", "server address")?;
-        let key = host::secret("api_key").map(|k| k.trim().to_string()).filter(|k| !k.is_empty()).ok_or_else(|| sdk::not_set("API key"))?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let server = host::server_setting("server", &t!("server address"))?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let key = host::secret("api_key").map(|k| k.trim().to_string()).filter(|k| !k.is_empty()).ok_or_else(|| sdk::not_set(&tc!("inside a sentence", "API key")))?;
         Ok(Session { server, key })
     }
 
@@ -146,7 +152,7 @@ impl Session {
     fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, String> {
         let r = sdk::fetch_from(SERVICE, &self.server, &self.request(path))?;
         match r.status {
-            401 | 403 => return Err(KEY_REFUSED.into()),
+            401 | 403 => return Err(sdk::tr(KEY_REFUSED)),
             404 => return Err(sdk::wrong_server(SERVICE, &self.server)),
             _ if !r.ok() => {
                 sdk::warn!("HTTP {} for {path}", r.status);
@@ -163,11 +169,11 @@ impl Session {
     /// A film's or show's title and artwork, or nothing when Seerr no longer knows it.
     fn title(&self, media: &Media, now_ms: i64) -> Result<Option<Title>, String> {
         let Some(id) = media.tmdb_id else { return Ok(None) };
-        let path = format!("/api/v1/{}/{id}", if media.media_type == "tv" { "tv" } else { "movie" });
+        let path = format!("/api/v1/{}/{id}{}", if media.media_type == "tv" { "tv" } else { "movie" }, language_query());
         let r = sdk::fetch_from(SERVICE, &self.server, &self.request(&path))?;
         if !r.ok() {
             sdk::warn!("HTTP {} for {path}", r.status);
-            return if matches!(r.status, 401 | 403) { Err(KEY_REFUSED.into()) } else { Ok(None) };
+            return if matches!(r.status, 401 | 403) { Err(sdk::tr(KEY_REFUSED)) } else { Ok(None) };
         }
         let d: Details = serde_json::from_str(&r.body).map_err(|e| {
             sdk::warn!("unexpected answer for {path}: {e}");
@@ -184,7 +190,9 @@ impl Session {
 }
 
 fn requested_item(r: &Request, key: &str, t: &Title, several: bool, weight: i32) -> Item {
-    let words = [r.seasons_text(), Some(r.state()), several.then(|| r.requester()).flatten()];
+    let seasons = r.seasons_text();
+    let state = r.state(seasons.is_none());
+    let words = [seasons, Some(state), several.then(|| r.requester(false)).flatten()];
     Item {
         id: format!("requested:{key}"),
         kind: ItemKind::Program,
@@ -202,7 +210,7 @@ fn requested_item(r: &Request, key: &str, t: &Title, several: bool, weight: i32)
 /// Something that has arrived, dated by when it did so the New badge shows for a week.
 fn available_item(r: &Request, key: &str, t: &Title, several: bool, weight: i32, now_ms: i64) -> Item {
     let arrived = r.arrived_ms();
-    let words = [t.year.clone(), several.then(|| r.requester()).flatten()];
+    let words = [t.year.clone(), several.then(|| r.requester(t.year.is_none())).flatten()];
     Item {
         id: format!("available:{key}"),
         kind: ItemKind::Program,
@@ -224,11 +232,25 @@ fn search(title: &str) -> Action {
     Action { search: Some(title.to_string()), title: Some(title.to_string()), ..Default::default() }
 }
 
-/// Facts joined with commas, the first with a capital letter.
+/// Facts joined with commas. Each is already worded for its place in the line.
 fn sentence<const N: usize>(words: [Option<String>; N]) -> String {
-    let joined = words.into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(", ");
-    let mut chars = joined.chars();
-    chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default()
+    words.into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(", ")
+}
+
+/// The query that asks for a title in the language in use. Unasked, Seerr answers in its own.
+fn language_query() -> String {
+    match sdk::words::language().as_str() {
+        sdk::words::SOURCE => String::new(),
+        tag => format!("?language={tag}"),
+    }
+}
+
+/// Where the titles are kept. Each language keeps its own, since a title is named in each.
+fn titles_key() -> String {
+    match sdk::words::language().as_str() {
+        sdk::words::SOURCE => TITLES_KEY.to_string(),
+        tag => format!("{TITLES_KEY}:{tag}"),
+    }
 }
 
 /// Whether a request that has arrived did so within the last month.
@@ -257,32 +279,57 @@ pub struct Request {
 }
 
 impl Request {
-    /// Where the request stands, in a few words.
-    fn state(&self) -> String {
+    /// Where the request stands, in a few words, worded to start the tile's second line when
+    /// `first` and to follow a comma otherwise.
+    fn state(&self, first: bool) -> String {
         let (status, downloads) = if self.is_4k { (self.media.status_4k, &self.media.download_status_4k) } else { (self.media.status, &self.media.download_status) };
         let size: f64 = downloads.iter().map(|d| d.size).filter(|s| s.is_finite() && *s > 0.0).sum();
         let left: f64 = downloads.iter().map(|d| d.size_left).filter(|s| s.is_finite() && *s >= 0.0).sum();
-        match self.status {
-            PENDING => "waiting for approval".into(),
-            FAILED => "the request failed".into(),
-            _ if size > 0.0 => format!("downloading, {}%", (((size - left.min(size)) / size) * 100.0).round() as i64),
-            _ if status == Some(PARTLY_AVAILABLE) => "partly available".into(),
-            _ => "on its way".into(),
+        let percent = if size > 0.0 { (((size - left.min(size)) / size) * 100.0).round() as i64 } else { 0 };
+        match (self.status, first) {
+            // Translators: the state of a request for a film or a show, at the start of the line under its title.
+            (PENDING, true) => t!("Waiting for approval"),
+            // Translators: the same state after a comma, as in "Season 1, waiting for approval".
+            (PENDING, false) => t!("waiting for approval"),
+            (FAILED, true) => t!("The request failed"),
+            // Translators: after a comma, as in "Season 1, the request failed".
+            (FAILED, false) => t!("the request failed"),
+            // Translators: {percent} is how much of the download is done, as in "Downloading, 40%".
+            (_, true) if size > 0.0 => t!("Downloading, {percent}%", percent = percent),
+            // Translators: after a comma, as in "2 seasons, downloading, 40%".
+            (_, false) if size > 0.0 => t!("downloading, {percent}%", percent = percent),
+            // Translators: some of the episodes or seasons asked for have arrived.
+            (_, true) if status == Some(PARTLY_AVAILABLE) => t!("Partly available"),
+            // Translators: after a comma, as in "2 seasons, partly available".
+            (_, false) if status == Some(PARTLY_AVAILABLE) => t!("partly available"),
+            // Translators: the request is approved and what was asked for has not arrived yet.
+            (_, true) => t!("On its way"),
+            // Translators: after a comma, as in "Season 1, on its way".
+            (_, false) => t!("on its way"),
         }
     }
 
-    /// The seasons asked for, for a show.
+    /// The seasons asked for, for a show, which start the tile's second line.
     fn seasons_text(&self) -> Option<String> {
         match self.seasons.as_slice() {
             [] => None,
-            [one] => Some(format!("season {}", one.season_number)),
-            many => Some(format!("{} seasons", many.len())),
+            // Translators: the one season of a show that was requested, by its number.
+            [one] => Some(t!("Season {number}", number = one.season_number)),
+            // Translators: how many seasons of a show were requested, always two or more.
+            many => Some(tn!(many.len(), "{n} season", "{n} seasons")),
         }
     }
 
-    fn requester(&self) -> Option<String> {
-        let name = self.requested_by.as_ref()?.display_name.as_ref().filter(|n| !n.trim().is_empty())?;
-        Some(format!("requested by {}", name.trim()))
+    /// Who asked, worded to start the line when `first` and to follow a comma otherwise.
+    fn requester(&self, first: bool) -> Option<String> {
+        let name = self.requested_by.as_ref()?.display_name.as_ref().filter(|n| !n.trim().is_empty())?.trim();
+        Some(if first {
+            // Translators: {name} is the Seerr user who asked for the film or show.
+            t!("Requested by {name}", name = name)
+        } else {
+            // Translators: after a comma, as in "2008, requested by sam".
+            t!("requested by {name}", name = name)
+        })
     }
 
     /// When the media arrived. Seerr can write `mediaAddedAt` when the request is made, so the
@@ -380,11 +427,11 @@ struct Titles(HashMap<String, Title>);
 
 impl Titles {
     fn load() -> Titles {
-        Titles(host::kv_get(TITLES_KEY).and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or_default())
+        Titles(host::kv_get(&titles_key()).and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or_default())
     }
 
     fn save(&self) {
-        host::kv_set(TITLES_KEY, serde_json::to_string(&self.0).unwrap_or_default().as_bytes());
+        host::kv_set(&titles_key(), serde_json::to_string(&self.0).unwrap_or_default().as_bytes());
     }
 
     fn of(&self, r: &Request) -> Option<(String, &Title)> {
@@ -420,9 +467,9 @@ mod tests {
     fn requests_say_where_they_stand() {
         let page: Page = serde_json::from_str(TO_COME).unwrap();
         let [waiting, approved, show] = &page.results[..] else { panic!("three requests") };
-        assert_eq!(sentence([waiting.seasons_text(), Some(waiting.state()), waiting.requester()]), "Waiting for approval, requested by sam");
-        assert_eq!(sentence([approved.seasons_text(), Some(approved.state()), None]), "On its way");
-        assert_eq!(sentence([show.seasons_text(), Some(show.state()), None]), "Season 1, on its way");
+        assert_eq!(sentence([waiting.seasons_text(), Some(waiting.state(true)), waiting.requester(false)]), "Waiting for approval, requested by sam");
+        assert_eq!(sentence([approved.seasons_text(), Some(approved.state(true)), None]), "On its way");
+        assert_eq!(sentence([show.seasons_text(), Some(show.state(false)), None]), "Season 1, on its way");
         let item = requested_item(show, "tv:136315", &title("The Bear"), false, 3);
         assert_eq!((item.id.as_str(), item.row.as_deref(), item.weight), ("requested:tv:136315", Some("requested"), 3));
         assert_eq!(item.subtitle.as_deref(), Some("Season 1, on its way"));
@@ -438,12 +485,12 @@ mod tests {
                 "downloadStatus":[{"mediaType":"movie","externalId":1,"size":1000,"sizeLeft":600,"status":"downloading","timeLeft":"00:10:00","title":"x","downloadId":"d"}]}}"#,
         )
         .unwrap();
-        assert_eq!(r.state(), "downloading, 40%");
+        assert_eq!((r.state(false), r.state(true)), ("downloading, 40%".to_string(), "Downloading, 40%".to_string()));
         // A 4K request reads its own downloads.
         let four_k: Request = serde_json::from_str(r#"{"id":8,"status":2,"is4k":true,"media":{"mediaType":"movie","tmdbId":1,"status":5,"status4k":4,"downloadStatus":[{"size":10,"sizeLeft":5}]}}"#).unwrap();
-        assert_eq!(four_k.state(), "partly available");
+        assert_eq!(four_k.state(false), "partly available");
         let failed: Request = serde_json::from_str(r#"{"id":9,"status":4,"media":{"mediaType":"tv","tmdbId":2,"status":2}}"#).unwrap();
-        assert_eq!(failed.state(), "the request failed");
+        assert_eq!(failed.state(false), "the request failed");
         let seasons: Request = serde_json::from_str(r#"{"id":10,"status":2,"seasons":[{"seasonNumber":1},{"seasonNumber":2}],"media":{"mediaType":"tv","tmdbId":2,"status":3}}"#).unwrap();
         assert_eq!(seasons.seasons_text().as_deref(), Some("2 seasons"));
     }
@@ -489,8 +536,15 @@ mod tests {
 
     #[test]
     fn sentences_start_with_a_capital() {
-        assert_eq!(sentence([None, Some("on its way".into())]), "On its way");
+        let r: Request = serde_json::from_str(r#"{"id":1,"status":2,"media":{"mediaType":"movie","tmdbId":1,"status":3},"requestedBy":{"id":2,"displayName":" sam "}}"#).unwrap();
+        assert_eq!(sentence([None, Some(r.state(true))]), "On its way");
+        assert_eq!(sentence([Some("2008".into()), r.requester(false)]), "2008, requested by sam");
+        assert_eq!(sentence([None, r.requester(true)]), "Requested by sam");
         assert_eq!(sentence([Some(String::new()), None]), "");
+        // A title is asked for in the language in use, and each language keeps its own.
+        assert_eq!((language_query(), titles_key()), (String::new(), "titles".to_string()));
+        let shipped = [<Seerr as sdk::Plugin>::locales()];
+        assert_eq!(sdk::words::in_language("pt-PT", &shipped, || (language_query(), titles_key())), ("?language=pt-PT".to_string(), "titles:pt-PT".to_string()));
     }
 
     #[test]

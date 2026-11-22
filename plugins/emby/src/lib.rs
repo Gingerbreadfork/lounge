@@ -3,7 +3,7 @@
 //! favourites into rows of their own, and searches the library. Items open in the Emby for Android TV app. Emby and Jellyfin share one API, so this
 //! is the Jellyfin plugin with Emby's names, app and paths.
 
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, t, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowStyle, RowSpec, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -27,30 +27,33 @@ fn device_id() -> String {
 }
 
 impl sdk::Plugin for Emby {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.emby".into(),
             name: "Emby".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue watching, recently added and favourites from your Emby server.".into(),
+            description: t!("Continue watching, recently added and favourites from your Emby server."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["$server".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "recent".into(), title: "Recently added on Emby".into(), style: RowStyle::Poster },
-                RowSpec { id: "favourites".into(), title: "Favourites on Emby".into(), style: RowStyle::Poster },
+                RowSpec { id: "recent".into(), title: t!("Recently added on Emby"), style: RowStyle::Poster },
+                RowSpec { id: "favourites".into(), title: t!("Favourites on Emby"), style: RowStyle::Poster },
             ],
             settings: vec![
-                SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8096".into()), default: None },
-                SettingSpec { key: "username".into(), label: "Username".into(), kind: SettingKind::Text, required: true, help: None, default: None },
-                SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: false, help: None, default: None },
+                SettingSpec { key: "server".into(), label: t!("Server address"), kind: SettingKind::Url, required: true, help: Some(t!("Like http://192.168.0.10:8096")), default: None },
+                SettingSpec { key: "username".into(), label: t!("Username"), kind: SettingKind::Text, required: true, help: None, default: None },
+                SettingSpec { key: "password".into(), label: t!("Password"), kind: SettingKind::Password, required: false, help: None, default: None },
             ],
             homepage: Some("https://emby.media".into()),
             self_signed_servers: false,
             for_apps: vec![APP_PACKAGE.into()],
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -187,8 +190,10 @@ pub struct UserData {
 impl Session {
     /// Reuse the cached token; sign in again when there is none or the server rejects it.
     fn connect() -> Result<Session, String> {
-        let server = host::server_setting("server", "server address")?;
-        let username = host::required_setting("username", "username")?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let server = host::server_setting("server", &t!("server address"))?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let username = host::required_setting("username", &t!("username"))?;
         let device_id = device_id();
         // The saved session belongs to one server and user; another of either signs in afresh.
         let owner = format!("{server}\n{username}");
@@ -219,7 +224,7 @@ impl Session {
         };
         let response = sdk::fetch_from("Emby", &server, &req)?;
         match response.status {
-            401 => return Err("Emby rejected the username or password. Check them in the plugin's settings.".into()),
+            401 => return Err(t!("Emby rejected the username or password. Check them in the plugin's settings.")),
             404 => return Err(sdk::wrong_server("Emby", &server)),
             _ if !response.ok() => return Err(sdk::answered_error("Emby", &server, response.status)),
             _ => {}

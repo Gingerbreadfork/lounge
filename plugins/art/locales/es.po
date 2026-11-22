@@ -1,0 +1,45 @@
+# Lounge, art: es
+#
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Art mode"
+msgstr "Modo arte"
+
+#: src/lib.rs
+msgid "Paintings from the Met and the Cleveland Museum of Art, hung on the screensaver with the painter and the year."
+msgstr "Cuadros del Met y del Cleveland Museum of Art, colgados en el salvapantallas con el pintor y el año."
+
+#. The Met is the Metropolitan Museum of Art's own short name.
+#: src/lib.rs
+msgid "The Met, New York"
+msgstr "El Met, Nueva York"
+
+#: src/lib.rs
+msgid "Paintings on the wall"
+msgstr "Cuadros en la pared"
+
+#: src/lib.rs
+msgid "The screensaver cycles through these; each refresh hangs some new ones."
+msgstr "El salvapantallas va pasando de uno a otro; cada actualización cuelga algunos nuevos."
+
+#: src/lib.rs
+msgid "Only paintings matching"
+msgstr "Solo cuadros que coincidan con"
+
+#. the museums' catalogues are in English, so a subject is typed in English.
+#: src/lib.rs
+msgid "A painter or a subject, such as Monet or landscape. Empty shows the museums' highlights."
+msgstr "Un pintor o un tema en inglés, como Monet o landscape. Si lo dejas vacío, se muestran las obras destacadas de los museos."
+
+#: src/lib.rs
+msgid "Both museums are turned off. Turn on at least one in the plugin's settings."
+msgstr "Los dos museos están desactivados. Activa al menos uno en los ajustes del plugin."
+
+#: src/lib.rs
+msgid "No paintings match \"{query}\". Try a painter's surname or a subject."
+msgstr "Ningún cuadro coincide con «{query}». Prueba con el apellido de un pintor o con un tema."

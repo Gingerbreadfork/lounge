@@ -1,0 +1,61 @@
+# Lounge, radio: it
+#
+msgid ""
+msgstr ""
+"Language: it\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Radio Browser no longer lists that station."
+msgstr "Radio Browser non ha più quella stazione in elenco."
+
+#: src/lib.rs
+msgid "Internet radio"
+msgstr "Radio via Internet"
+
+#: src/lib.rs
+msgid "Stations you name and the most popular ones from the radio-browser.info directory, played in a player app such as VLC."
+msgstr "Le stazioni che indichi tu e le più popolari dell'elenco di radio-browser.info, riprodotte in un'app come VLC."
+
+#: src/lib.rs
+msgid "Your radio stations"
+msgstr "Le tue stazioni radio"
+
+#: src/lib.rs
+msgid "Popular radio"
+msgstr "Radio popolari"
+
+#: src/lib.rs
+msgid "Your stations"
+msgstr "Le tue stazioni"
+
+#: src/lib.rs
+msgid "Station names, links to stations on radio-browser.info or stream addresses, one per line or separated by commas. Lounge's search finds stations too."
+msgstr "Nomi di stazioni, link a stazioni su radio-browser.info o indirizzi di stream, uno per riga o separati da virgole. Anche la ricerca di Lounge trova le stazioni."
+
+#: src/lib.rs
+msgid "Country for popular stations"
+msgstr "Paese per le stazioni popolari"
+
+#: src/lib.rs
+msgid "A name or two letters, like Australia or AU. Left empty, the row shows the most popular stations anywhere."
+msgstr "Un nome o due lettere, ad esempio Australia o AU. Se è vuoto, la riga mostra le stazioni più popolari di tutto il mondo."
+
+#. {country} is the country as typed into the plugin's settings.
+#: src/lib.rs
+msgid "Radio Browser has no country called {country}. Check the country in the plugin's settings."
+msgstr "Radio Browser non ha un paese chiamato {country}. Controlla il paese nelle impostazioni del plugin."
+
+#. {country} is the country as typed into the plugin's settings.
+#: src/lib.rs
+msgid "Radio Browser lists no stations for {country}. Check the country in the plugin's settings."
+msgstr "Radio Browser non ha stazioni in elenco per {country}. Controlla il paese nelle impostazioni del plugin."
+
+#: src/lib.rs
+msgid "{service} sent a reply this plugin can't read."
+msgstr "{service} ha inviato una risposta che questo plugin non sa leggere."
+
+#: src/lib.rs
+msgid "A stream you added"
+msgstr "Uno stream aggiunto da te"

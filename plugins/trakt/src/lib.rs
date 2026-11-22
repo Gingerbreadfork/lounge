@@ -2,7 +2,7 @@
 //! whichever service they live on. Trakt knows the title, not the app, so selecting an item
 //! searches for it: Lounge's own search, or the TV's. Sign-in is Trakt's device code, shown on
 //! the plugin's page until it has been entered at trakt.tv/activate.
-use lounge_plugin_sdk::{self as sdk, host, parse_iso8601, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, parse_iso8601, t, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 
 pub struct Trakt;
@@ -10,8 +10,9 @@ pub struct Trakt;
 const API: &str = "https://api.trakt.tv";
 const TOKEN_KEY: &str = "token";
 const DEVICE_KEY: &str = "device";
-const SIGNED_OUT: &str = "Trakt no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now.";
-const PAUSE: &str = "Trakt is asking for a pause between requests. It tries again on the next refresh.";
+// Translators: "Refresh now" is the button on the plugin's page on the TV.
+const SIGNED_OUT: &str = mark!("Trakt no longer accepts this sign-in; it is renewed on the next refresh, or press Refresh now.");
+const PAUSE: &str = mark!("Trakt is asking for a pause between requests. It tries again on the next refresh.");
 /// Most shows in Up next.
 const UP_NEXT_SHOWS: usize = 12;
 /// Shows looked at to fill Up next, so ones already caught up on do not leave it short; well
@@ -22,39 +23,41 @@ const WEEK_MS: i64 = 7 * 86_400_000;
 const HOUR_MS: i64 = 3_600_000;
 
 impl sdk::Plugin for Trakt {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.trakt".into(),
             name: "Trakt".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue watching, up next and your watchlist from Trakt, across every service.".into(),
+            description: t!("Continue watching, up next and your watchlist from Trakt, across every service."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["api.trakt.tv".into(), "*.trakt.tv".into()],
             refresh_minutes: 15,
             refresh_seconds: 0,
             rows: vec![
-                RowSpec { id: "upnext".into(), title: "Up next on Trakt".into(), style: RowStyle::Landscape },
-                RowSpec { id: "watchlist".into(), title: "Watchlist on Trakt".into(), style: RowStyle::Poster },
+                RowSpec { id: "upnext".into(), title: t!("Up next on Trakt"), style: RowStyle::Landscape },
+                RowSpec { id: "watchlist".into(), title: t!("Watchlist on Trakt"), style: RowStyle::Poster },
             ],
             settings: vec![
                 SettingSpec {
                     key: "client_id".into(),
-                    label: "Client ID".into(),
+                    label: t!("Client ID"),
                     kind: SettingKind::Text,
                     required: true,
-                    help: Some("At trakt.tv/oauth/applications create an app (any name, redirect urn:ietf:wg:oauth:2.0:oob) and copy its Client ID and Client Secret.".into()),
+                    help: Some(t!("At trakt.tv/oauth/applications create an app (any name, redirect urn:ietf:wg:oauth:2.0:oob) and copy its Client ID and Client Secret.")),
                     default: None,
                 },
-                SettingSpec { key: "client_secret".into(), label: "Client secret".into(), kind: SettingKind::Password, required: true, help: None, default: None },
-                SettingSpec { key: "upnext".into(), label: "Up next row".into(), kind: SettingKind::Toggle, required: false, help: Some("The next episode of each show you are part-way through.".into()), default: Some("true".into()) },
-                SettingSpec { key: "watchlist".into(), label: "Watchlist row".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
+                SettingSpec { key: "client_secret".into(), label: t!("Client secret"), kind: SettingKind::Password, required: true, help: None, default: None },
+                SettingSpec { key: "upnext".into(), label: t!("Up next row"), kind: SettingKind::Toggle, required: false, help: Some(t!("The next episode of each show you are part-way through.")), default: Some("true".into()) },
+                SettingSpec { key: "watchlist".into(), label: t!("Watchlist row"), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
                 SettingSpec {
                     key: "tv_search".into(),
-                    label: "Open with the TV's own search".into(),
+                    label: t!("Open with the TV's own search"),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it.".into()),
+                    help: Some(t!("On, a title opens in the TV's own search, which on Google TV lists where it streams. Off, Lounge searches your apps and plugins for it.")),
                     default: Some("false".into()),
                 },
             ],
@@ -62,6 +65,7 @@ impl sdk::Plugin for Trakt {
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -94,7 +98,7 @@ impl sdk::Plugin for Trakt {
                 let progress: Progress = match client.get_json(&format!("/shows/{}/progress/watched?hidden=false&specials=false&count_specials=false", w.show.ids.trakt)) {
                     Ok(p) => p,
                     // Every request after one of these fails the same way.
-                    Err(e) if e == host::BUDGET_SPENT || e == SIGNED_OUT || e == PAUSE => break,
+                    Err(e) if e == host::BUDGET_SPENT || e == sdk::tr(SIGNED_OUT) || e == sdk::tr(PAUSE) => break,
                     Err(e) => {
                         sdk::warn!("{}: {e}", w.show.title);
                         continue;
@@ -190,7 +194,7 @@ fn after_renewal(current: Token, outcome: Result<Token, RenewError>, now_ms: i64
         }
         Err(RenewError::Failed(e)) => {
             sdk::warn!("could not renew the sign-in ({e})");
-            Renewed::TryLater("Could not renew the Trakt sign-in. It tries again on the next refresh.".into())
+            Renewed::TryLater(t!("Could not renew the Trakt sign-in. It tries again on the next refresh."))
         }
     }
 }
@@ -234,8 +238,10 @@ struct Client {
 impl Client {
     /// A signed-in client, or the one sentence the plugin's page should show to get there.
     fn connect(now_ms: i64) -> Result<Client, String> {
-        let client_id = host::required_setting("client_id", "client ID")?.trim().to_string();
-        let secret = host::secret("client_secret").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or_else(|| sdk::not_set("client secret"))?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let client_id = host::required_setting("client_id", &t!("client ID"))?.trim().to_string();
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let secret = host::secret("client_secret").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or_else(|| sdk::not_set(&t!("client secret")))?;
         let saved: Option<Token> = host::kv_get(TOKEN_KEY).and_then(|v| serde_json::from_slice(&v).ok());
         let token = match saved {
             Some(t) if !t.due(now_ms) => t,
@@ -269,9 +275,9 @@ impl Client {
         match r.status {
             401 => {
                 expire_token();
-                return Err(SIGNED_OUT.into());
+                return Err(sdk::tr(SIGNED_OUT));
             }
-            429 => return Err(PAUSE.into()),
+            429 => return Err(sdk::tr(PAUSE)),
             s if !(200..300).contains(&s) => {
                 sdk::warn!("HTTP {s} for {path}");
                 return Err(sdk::online_error("Trakt", s));
@@ -319,14 +325,15 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, Stri
             400 | 429 => return Err(instruction(&d)),
             418 => {
                 host::kv_delete(DEVICE_KEY);
-                return Err("The sign-in was declined on trakt.tv. Press Refresh now for a new code.".into());
+                // Translators: "Refresh now" is the button on the plugin's page on the TV.
+                return Err(t!("The sign-in was declined on trakt.tv. Press Refresh now for a new code."));
             }
             _ => host::kv_delete(DEVICE_KEY),
         }
     }
     let (status, body) = post("/oauth/device/code", serde_json::json!({ "client_id": client_id }), client_id)?;
     if status == 403 || status == 401 {
-        return Err("Trakt does not know this Client ID. Check it against your app at trakt.tv/oauth/applications.".into());
+        return Err(t!("Trakt does not know this Client ID. Check it against your app at trakt.tv/oauth/applications."));
     }
     if !(200..300).contains(&status) {
         sdk::warn!("HTTP {status} when asked for a sign-in code");

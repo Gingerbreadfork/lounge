@@ -1,50 +1,58 @@
 //! Internet Archive: three rows of free, legally hosted video from archive.org collections,
 //! and search across those collections. A row lists a collection's best-rated items; selecting one
 //! looks up its files and plays the MP4 in the TV's own player.
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, t, Action, HttpRequest, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::HashSet;
 
 pub struct Archive;
 
 /// How errors name the service.
-const SERVICE: &str = "The Internet Archive";
+fn service() -> String {
+    // Translators: names the service where a sentence starts with it, as in "The Internet Archive didn't answer."
+    t!("The Internet Archive")
+}
 
-const ROWS: [(&str, &str, &str); 3] = [
-    ("films", "Feature films", "feature_films"),
-    ("cartoons", "Classic cartoons", "classic_cartoons"),
-    ("tv", "Classic television", "classic_tv"),
+/// Each row's id, its title, the label of the setting that names its collection, and the
+/// collection it shows unless that setting says otherwise.
+const ROWS: [(&str, &str, &str, &str); 3] = [
+    ("films", mark!("Feature films on the Internet Archive"), mark!("Feature films collection"), "feature_films"),
+    ("cartoons", mark!("Classic cartoons on the Internet Archive"), mark!("Classic cartoons collection"), "classic_cartoons"),
+    ("tv", mark!("Classic television on the Internet Archive"), mark!("Classic television collection"), "classic_tv"),
 ];
 
 impl sdk::Plugin for Archive {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.archive".into(),
             name: "Internet Archive".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Free films, cartoons and television from archive.org, played on the TV.".into(),
+            description: t!("Free films, cartoons and television from archive.org, played on the TV."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["archive.org".into(), "*.archive.org".into()],
             refresh_minutes: 24 * 60,
             refresh_seconds: 0,
-            rows: ROWS.iter().map(|(id, title, _)| RowSpec { id: (*id).into(), title: format!("{title} on the Internet Archive"), style: RowStyle::Landscape }).collect(),
+            rows: ROWS.iter().map(|(id, title, _, _)| RowSpec { id: (*id).into(), title: sdk::tr(title), style: RowStyle::Landscape }).collect(),
             settings: ROWS
                 .iter()
-                .map(|(id, title, collection)| SettingSpec {
+                .map(|(id, _, label, collection)| SettingSpec {
                     key: format!("{id}_collection"),
-                    label: format!("{title} collection"),
+                    label: sdk::tr(label),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("An archive.org collection id, the last part of its address, such as feature_films.".into()),
+                    help: Some(t!("An archive.org collection id, the last part of its address, such as feature_films.")),
                     default: Some((*collection).into()),
                 })
-                .chain(std::iter::once(SettingSpec { key: "per_row".into(), label: "Items per row".into(), kind: SettingKind::Number, required: false, help: None, default: Some("24".into()) }))
+                .chain(std::iter::once(SettingSpec { key: "per_row".into(), label: t!("Items per row"), kind: SettingKind::Number, required: false, help: None, default: Some("24".into()) }))
                 .collect(),
             homepage: Some("https://archive.org".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -53,7 +61,7 @@ impl sdk::Plugin for Archive {
         let mut items = Vec::new();
         let mut failures = Vec::new();
         let mut shown = HashSet::new();
-        for (row, _, default) in ROWS {
+        for (row, _, _, default) in ROWS {
             let collection = collection_for(row, default);
             // A few extra, as an item already in an earlier row is left out of this one.
             let wanted = per_row + 8;
@@ -70,7 +78,7 @@ impl sdk::Plugin for Archive {
             items.extend(docs.into_iter().enumerate().map(|(i, d)| item_for(&d, Some(row), (count - i) as i32)));
         }
         if items.is_empty() {
-            return Err(failures.into_iter().next().unwrap_or_else(|| "The Internet Archive has nothing in these collections. Check the collections in the plugin's settings.".into()));
+            return Err(failures.into_iter().next().unwrap_or_else(|| t!("The Internet Archive has nothing in these collections. Check the collections in the plugin's settings.")));
         }
         sdk::info!("{} items", items.len());
         Ok(items)
@@ -78,17 +86,17 @@ impl sdk::Plugin for Archive {
 
     fn search(query: &str, limit: u32) -> Result<Vec<Item>, String> {
         let Some(title) = title_query(query) else { return Ok(Vec::new()) };
-        let collections: Vec<String> = ROWS.iter().map(|(row, _, default)| collection_for(row, default)).collect();
+        let collections: Vec<String> = ROWS.iter().map(|(row, _, _, default)| collection_for(row, default)).collect();
         Ok(search(&search_query(&title, &collections), limit.clamp(1, 40) as usize)?.iter().map(|d| item_for(d, None, 0)).collect())
     }
 
     fn resolve(action: &str) -> Result<Action, String> {
         let identifier = action.strip_prefix("play:").ok_or_else(|| {
             sdk::warn!("unknown action {action}");
-            "This tile is out of date. Refresh the plugin, then try again.".to_string()
+            t!("This tile is out of date. Refresh the plugin, then try again.")
         })?;
         let meta: Metadata = get_json(&format!("https://archive.org/metadata/{}", encode_path(identifier)))?;
-        let file = best_video(&meta.files).ok_or_else(|| "This item has no video file the TV can play. Try another one.".to_string())?;
+        let file = best_video(&meta.files).ok_or_else(|| t!("This item has no video file the TV can play. Try another one."))?;
         let title = meta.metadata.and_then(|m| m.title.map(|t| t.into_string())).unwrap_or_else(|| identifier.to_string());
         Ok(Action::play(format!("https://archive.org/download/{}/{}", encode_path(identifier), encode_path(&file.name)), title))
     }
@@ -242,14 +250,14 @@ fn unique_docs(docs: Vec<Doc>) -> Vec<Doc> {
 }
 
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
-    let r = sdk::fetch_online(SERVICE, &HttpRequest::get(url))?;
+    let r = sdk::fetch_online(&service(), &HttpRequest::get(url))?;
     if !r.ok() {
         sdk::warn!("HTTP {} for {}", r.status, sdk::redact_url(url));
-        return Err(sdk::online_error(SERVICE, r.status));
+        return Err(sdk::online_error(&service(), r.status));
     }
     serde_json::from_str(&r.body).map_err(|e| {
         sdk::warn!("unexpected answer from archive.org: {e}");
-        sdk::unreadable(SERVICE, "archive.org")
+        sdk::unreadable(&service(), "archive.org")
     })
 }
 

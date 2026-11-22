@@ -1,0 +1,60 @@
+# Lounge, archive: it
+#
+msgid ""
+msgstr ""
+"Language: it\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. names the service where a sentence starts with it, as in "The Internet Archive didn't answer."
+#: src/lib.rs
+msgid "The Internet Archive"
+msgstr "Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films on the Internet Archive"
+msgstr "Lungometraggi su Internet Archive"
+
+#: src/lib.rs
+msgid "Feature films collection"
+msgstr "Raccolta dei lungometraggi"
+
+#: src/lib.rs
+msgid "Classic cartoons on the Internet Archive"
+msgstr "Cartoni animati classici su Internet Archive"
+
+#: src/lib.rs
+msgid "Classic cartoons collection"
+msgstr "Raccolta dei cartoni classici"
+
+#: src/lib.rs
+msgid "Classic television on the Internet Archive"
+msgstr "TV classica su Internet Archive"
+
+#: src/lib.rs
+msgid "Classic television collection"
+msgstr "Raccolta della TV classica"
+
+#: src/lib.rs
+msgid "Free films, cartoons and television from archive.org, played on the TV."
+msgstr "Film, cartoni animati e programmi TV gratuiti da archive.org, riprodotti sulla TV."
+
+#: src/lib.rs
+msgid "An archive.org collection id, the last part of its address, such as feature_films."
+msgstr "L'ID di una raccolta di archive.org, cioè l'ultima parte del suo indirizzo, ad esempio feature_films."
+
+#: src/lib.rs
+msgid "Items per row"
+msgstr "Elementi per riga"
+
+#: src/lib.rs
+msgid "The Internet Archive has nothing in these collections. Check the collections in the plugin's settings."
+msgstr "Internet Archive non ha nulla in queste raccolte. Controlla le raccolte nelle impostazioni del plugin."
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Questo riquadro non è più aggiornato. Aggiorna il plugin, poi riprova."
+
+#: src/lib.rs
+msgid "This item has no video file the TV can play. Try another one."
+msgstr "Questo elemento non ha un file video che la TV possa riprodurre. Provane un altro."

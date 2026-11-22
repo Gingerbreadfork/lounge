@@ -4,7 +4,7 @@
 //! TMDB. Items open on their page in the Nuvio TV app; search asks Cinemeta, so a title found
 //! here opens there too.
 
-use lounge_plugin_sdk::{self as sdk, host, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, mark, t, Action, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
@@ -34,62 +34,67 @@ const CACHE_BYTES: usize = 200 * 1024;
 const MINUTE_MS: i64 = 60_000;
 /// How long "nothing out yet" stands before a show is asked about again.
 const NOTHING_NEXT_FOR_MS: i64 = 6 * 3_600_000;
-const REJECTED: &str = "Nuvio rejected the email or password. Check them in the plugin's settings.";
+const REJECTED: &str = mark!("Nuvio rejected the email or password. Check them in the plugin's settings.");
 
 impl sdk::Plugin for Nuvio {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.nuvio".into(),
             name: "Nuvio".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Continue watching, up next and your library from your Nuvio account's sync, opened in Nuvio.".into(),
+            description: t!("Continue watching, up next and your library from your Nuvio account's sync, opened in Nuvio."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Search],
             fetch_hosts: vec!["api.nuvio.tv".into(), "$server".into(), "v3-cinemeta.strem.io".into(), "api.themoviedb.org".into(), "*".into()],
             refresh_minutes: 15,
             refresh_seconds: 0,
-            rows: vec![RowSpec { id: "library".into(), title: "Library on Nuvio".into(), style: RowStyle::Poster }],
+            rows: vec![RowSpec { id: "library".into(), title: t!("Library on Nuvio"), style: RowStyle::Poster }],
             settings: vec![
                 SettingSpec {
                     key: "email".into(),
-                    label: "Email".into(),
+                    label: t!("Email"),
                     kind: SettingKind::Text,
                     required: true,
-                    help: Some("The email of your Nuvio account. Positions come from Nuvio's own sync: a profile that follows Trakt, Simkl or MDBList for its progress keeps none there, so use the Trakt plugin for that one.".into()),
+                    // Translators: a position is how far into a film or an episode someone stopped.
+                    help: Some(t!("The email of your Nuvio account. Positions come from Nuvio's own sync: a profile that follows Trakt, Simkl or MDBList for its progress keeps none there, so use the Trakt plugin for that one.")),
                     default: None,
                 },
-                SettingSpec { key: "password".into(), label: "Password".into(), kind: SettingKind::Password, required: true, help: None, default: None },
+                SettingSpec { key: "password".into(), label: t!("Password"), kind: SettingKind::Password, required: true, help: None, default: None },
                 SettingSpec {
                     key: "profile".into(),
-                    label: "Profile".into(),
+                    // Translators: one of the profiles of a Nuvio account, each a person with their own lists.
+                    label: t!("Profile"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("Leave empty for the first profile, or type another profile's name as Nuvio shows it.".into()),
+                    help: Some(t!("Leave empty for the first profile, or type another profile's name as Nuvio shows it.")),
                     default: None,
                 },
-                SettingSpec { key: "library".into(), label: "Library row".into(), kind: SettingKind::Toggle, required: false, help: Some("The movies and shows saved in your Nuvio library, newest first.".into()), default: Some("true".into()) },
+                SettingSpec { key: "library".into(), label: t!("Library row"), kind: SettingKind::Toggle, required: false, help: Some(t!("The movies and shows saved in your Nuvio library, newest first.")), default: Some("true".into()) },
                 SettingSpec {
                     key: "tmdb_key".into(),
-                    label: "TMDB API key".into(),
+                    label: t!("TMDB API key"),
                     kind: SettingKind::Password,
                     required: false,
-                    help: Some("Fill this in when tiles show a code like tmdb:1234 instead of a name. Use the API Key (v3) from themoviedb.org/settings/api, not the Read Access Token.".into()),
+                    // Translators: "API Key (v3)" and "Read Access Token" are what TMDB's settings page calls them.
+                    help: Some(t!("Fill this in when tiles show a code like tmdb:1234 instead of a name. Use the API Key (v3) from themoviedb.org/settings/api, not the Read Access Token.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "server".into(),
-                    label: "Self-hosted server address".into(),
+                    label: t!("Self-hosted server address"),
                     kind: SettingKind::Url,
                     required: false,
-                    help: Some("Leave empty for Nuvio's own. For a self-hosted backend, its address, like https://nuvio.example.com.".into()),
+                    help: Some(t!("Leave empty for Nuvio's own. For a self-hosted backend, its address, like https://nuvio.example.com.")),
                     default: None,
                 },
                 SettingSpec {
                     key: "play_store".into(),
-                    label: "Installed from Google Play".into(),
+                    label: t!("Installed from Google Play"),
                     kind: SettingKind::Toggle,
                     required: false,
-                    help: Some("On if you installed Nuvio from Google Play, off if from GitHub or a downloaded APK.".into()),
+                    help: Some(t!("On if you installed Nuvio from Google Play, off if from GitHub or a downloaded APK.")),
                     default: Some("false".into()),
                 },
             ],
@@ -97,6 +102,7 @@ impl sdk::Plugin for Nuvio {
             self_signed_servers: false,
             for_apps: vec![GITHUB_PACKAGE.into(), PLAY_PACKAGE.into()],
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -206,9 +212,11 @@ fn resolve_profile(client: &mut Client) -> Result<i64, String> {
         None => {
             let names: Vec<&str> = profiles.iter().map(|p| p.name.trim()).filter(|n| !n.is_empty()).collect();
             Err(if names.is_empty() {
-                format!("Nuvio has no profile called {wanted}. Leave the field empty for the first profile.")
+                // Translators: {name} is the profile name typed in the plugin's settings.
+                t!("Nuvio has no profile called {name}. Leave the field empty for the first profile.", name = wanted)
             } else {
-                format!("Nuvio has no profile called {wanted}. Besides the first, it has: {}.", names.join(", "))
+                // Translators: {name} is the profile name typed in the plugin's settings, and {names} the account's profiles with commas between them.
+                t!("Nuvio has no profile called {name}. Besides the first, it has: {names}.", name = wanted, names = names.join(", "))
             })
         }
     }
@@ -294,7 +302,8 @@ fn server_setting() -> String {
 
 impl Client {
     fn connect(now_ms: i64) -> Result<Client, String> {
-        let email = host::required_setting("email", "email")?.trim().to_string();
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let email = host::required_setting("email", &t!("email"))?.trim().to_string();
         let server = server_setting();
         let backend = backend_for(&server)?;
         let owner = format!("{}\n{email}", backend.url);
@@ -354,7 +363,7 @@ impl Client {
                 }
             }
         }
-        Err(REJECTED.into())
+        Err(sdk::tr(REJECTED))
     }
 }
 
@@ -391,7 +400,7 @@ fn backend_for(server: &str) -> Result<Backend, String> {
         return Err(sdk::wrong_server("Nuvio", server));
     }
     if !d.capabilities.email_password_auth {
-        return Err("This Nuvio server doesn't allow signing in with an email and password, which is the only way this plugin can.".into());
+        return Err(t!("This Nuvio server doesn't allow signing in with an email and password, which is the only way this plugin can."));
     }
     let url = sdk::server_address(&d.backend_url);
     let url = if url == "http://" { server.to_string() } else { url };
@@ -418,7 +427,8 @@ fn save_session(backend: &Backend, email: &str, t: TokenAnswer, now_ms: i64) -> 
 }
 
 fn sign_in(backend: &Backend, email: &str, now_ms: i64) -> Result<Session, String> {
-    let password = host::secret("password").filter(|p| !p.is_empty()).ok_or_else(|| sdk::not_set("password"))?;
+    // Translators: names the setting inside "Add the {label} in the plugin's settings."
+    let password = host::secret("password").filter(|p| !p.is_empty()).ok_or_else(|| sdk::not_set(&t!("password")))?;
     let r = fetch(backend, &token_request(backend, "password", serde_json::json!({ "email": email, "password": password })))?;
     match r.status {
         200..=299 => {}
@@ -426,12 +436,12 @@ fn sign_in(backend: &Backend, email: &str, now_ms: i64) -> Result<Session, Strin
         401 => {
             host::kv_delete(BACKEND_KEY);
             sdk::warn!("the server's key was refused: HTTP 401 {}", r.body.chars().take(200).collect::<String>());
-            return Err("The Nuvio server turned the sign-in away. Lounge checks the server's settings again on the next refresh.".into());
+            return Err(t!("The Nuvio server turned the sign-in away. Lounge checks the server's settings again on the next refresh."));
         }
         400 | 403 | 422 => {
             let e: AuthError = serde_json::from_str(&r.body).unwrap_or_default();
             sdk::warn!("sign-in refused: HTTP {} {}", r.status, e.msg.or(e.error_description).or(e.error).unwrap_or_default());
-            return Err(REJECTED.into());
+            return Err(sdk::tr(REJECTED));
         }
         s => {
             sdk::warn!("HTTP {s} signing in");
@@ -817,12 +827,21 @@ impl TmdbTitle {
 
 /// What a TMDB lookup gave, as [`cinemeta_meta`] does. The key stays out of the log.
 fn tmdb_get<T: serde::de::DeserializeOwned + Default>(path: &str, key: &str) -> Result<Option<T>, String> {
-    let r = sdk::fetch_online("TMDB", &HttpRequest::get(format!("{TMDB}/{path}?api_key={}", encode_segment(key))))?;
+    let r = sdk::fetch_online("TMDB", &HttpRequest::get(format!("{TMDB}/{path}?api_key={}{}", encode_segment(key), tmdb_language())))?;
     match r.status {
         404 => Ok(None),
         401 => Err("TMDB refused the API key. Check the TMDB API key in the plugin's settings.".into()),
         s if !(200..300).contains(&s) => Err(format!("HTTP {s}")),
         _ => serde_json::from_str::<T>(&r.body).map(Some).map_err(|e| e.to_string()),
+    }
+}
+
+/// The part of a TMDB address that asks for names in the language in use. TMDB answers in
+/// English when not asked.
+fn tmdb_language() -> String {
+    match sdk::words::language().as_str() {
+        sdk::words::SOURCE => String::new(),
+        tag => format!("&language={tag}"),
     }
 }
 
@@ -886,6 +905,14 @@ struct NextKnown {
     thumbnail: Option<String>,
 }
 
+/// Where the names are kept. Each language keeps its own, since TMDB names a title in each.
+fn meta_key() -> String {
+    match sdk::words::language().as_str() {
+        sdk::words::SOURCE => META_KEY.to_string(),
+        tag => format!("{META_KEY}:{tag}"),
+    }
+}
+
 fn episode_key(season: u32, episode: u32) -> String {
     format!("{season}:{episode}")
 }
@@ -917,15 +944,16 @@ struct MetaCache {
 
 impl MetaCache {
     fn load() -> MetaCache {
-        MetaCache { known: host::kv_get(META_KEY).and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or_default() }
+        MetaCache { known: host::kv_get(&meta_key()).and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or_default() }
     }
 
     fn save(&self) {
+        let key = meta_key();
         match serde_json::to_vec(&self.known) {
-            Ok(json) if json.len() <= CACHE_BYTES => host::kv_set(META_KEY, &json),
+            Ok(json) if json.len() <= CACHE_BYTES => host::kv_set(&key, &json),
             Ok(json) => {
-                sdk::warn!("{META_KEY}: {} bytes is too much to keep; starting over", json.len());
-                host::kv_delete(META_KEY);
+                sdk::warn!("{key}: {} bytes is too much to keep; starting over", json.len());
+                host::kv_delete(&key);
             }
             Err(_) => {}
         }
@@ -1355,6 +1383,14 @@ mod tests {
         let open_ended: TmdbTitle = serde_json::from_str(r#"{"title":"Film","seasons":[{"season_number":1,"episode_count":2}]}"#).unwrap();
         assert_eq!(open_ended.next_after((1, 1)), Some((1, 2)));
         assert_eq!(open_ended.next_after((3, 1)), None);
+    }
+
+    #[test]
+    fn tmdb_is_asked_in_the_language_in_use_and_each_keeps_its_own_names() {
+        assert_eq!((tmdb_language(), meta_key()), (String::new(), "meta_v2".to_string()));
+        let shipped = [<Nuvio as sdk::Plugin>::locales()];
+        assert_eq!(sdk::words::in_language("pt-BR", &shipped, || (tmdb_language(), meta_key())), ("&language=pt-BR".to_string(), "meta_v2:pt-BR".to_string()));
+        assert_eq!(sdk::words::in_language("de-AT", &shipped, tmdb_language), "&language=de");
     }
 
     #[test]

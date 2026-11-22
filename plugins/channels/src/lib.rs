@@ -1,52 +1,57 @@
 //! Channels DVR: the server's channels become Live now with the guide behind them, half-watched
 //! recordings go into Continue watching, and the rest fill a row of recordings. Everything plays
 //! in the TV's player from the server, which needs no login on the local network.
-use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, t, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use serde::Deserialize;
 use std::collections::HashSet;
 
 pub struct Channels;
 
 impl sdk::Plugin for Channels {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.channels".into(),
             name: "Channels DVR".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Live channels, the guide and your recordings from a Channels DVR server.".into(),
+            description: t!("Live channels, the guide and your recordings from a Channels DVR server."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Epg],
             fetch_hosts: vec!["$server".into(), "*".into()],
             refresh_minutes: 30,
             refresh_seconds: 0,
-            rows: vec![RowSpec { id: "recordings".into(), title: "Recordings on Channels DVR".into(), style: RowStyle::Landscape }],
+            rows: vec![RowSpec { id: "recordings".into(), title: t!("Recordings on Channels DVR"), style: RowStyle::Landscape }],
             settings: vec![
-                SettingSpec { key: "server".into(), label: "Server address".into(), kind: SettingKind::Url, required: true, help: Some("Like http://192.168.0.10:8089".into()), default: None },
-                SettingSpec { key: "favorites_only".into(), label: "Only favourite channels".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
-                SettingSpec { key: "recordings".into(), label: "Recordings to show".into(), kind: SettingKind::Number, required: false, help: Some("The newest ones.".into()), default: Some("30".into()) },
+                SettingSpec { key: "server".into(), label: t!("Server address"), kind: SettingKind::Url, required: true, help: Some(t!("Like http://192.168.0.10:8089")), default: None },
+                SettingSpec { key: "favorites_only".into(), label: t!("Only favourite channels"), kind: SettingKind::Toggle, required: false, help: None, default: Some("false".into()) },
+                // Translators: a setting that takes a number, and its help, which says which recordings are kept.
+                SettingSpec { key: "recordings".into(), label: t!("Recordings to show"), kind: SettingKind::Number, required: false, help: Some(t!("The newest ones.")), default: Some("30".into()) },
             ],
             homepage: Some("https://getchannels.com/dvr-server/".into()),
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
     fn refresh(ctx: &RefreshContext) -> Result<Vec<Item>, String> {
-        let base = host::server_setting("server", "server address")?;
+        // Translators: names the setting inside "Add the {label} in the plugin's settings."
+        let base = host::server_setting("server", &t!("server address"))?;
         let favorites_only = host::setting("favorites_only").map(|v| v == "true").unwrap_or(false);
         let max_recordings = host::setting("recordings").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(30).clamp(1, 100);
         let mut numbers = HashSet::new();
         let mut channels: Vec<Channel> = lineup(&base)
             .map_err(|e| {
                 sdk::warn!("{e}");
-                format!("No Channels DVR answered at {}. Check the server and its address, then try again.", sdk::address(&base))
+                t!("No Channels DVR answered at {address}. Check the server and its address, then try again.", address = sdk::address(&base))
             })?
             .into_iter()
             .filter(|c| !c.hidden && (c.favorite || !favorites_only) && !c.number().is_empty() && numbers.insert(c.number()))
             .collect();
         if channels.is_empty() {
-            return Err("Channels DVR has no channels to show. Add a source in its settings, or turn off the favourites filter.".into());
+            return Err(t!("Channels DVR has no channels to show. Add a source in its settings, or turn off the favourites filter."));
         }
         if channels.len() > sdk::MAX_ITEMS {
             sdk::warn!("{} channels, of which the TV shows the first {}; turn on the favourites filter to choose", channels.len(), sdk::MAX_ITEMS);

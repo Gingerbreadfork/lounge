@@ -1,0 +1,64 @@
+# Lounge, nextpvr: pt-PT
+#
+msgid ""
+msgstr ""
+"Language: pt-PT\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Live channels, the guide and your recordings from a NextPVR server."
+msgstr "Canais em direto, o guia e as suas gravações de um servidor NextPVR."
+
+#: src/lib.rs
+msgid "Recordings on NextPVR"
+msgstr "Gravações no NextPVR"
+
+#: src/lib.rs
+msgid "Server address"
+msgstr "Endereço do servidor"
+
+#: src/lib.rs
+msgid "Like http://192.168.0.10:8866"
+msgstr "Por exemplo, http://192.168.0.10:8866"
+
+#. a setting and its help. Settings and General are names in NextPVR's own menus.
+#: src/lib.rs
+msgid "PIN"
+msgstr "PIN"
+
+#. a setting and its help. Settings and General are names in NextPVR's own menus.
+#: src/lib.rs
+msgid "The server's PIN from Settings, General. New installs use 0000."
+msgstr "O PIN do servidor, em Settings, General. As instalações novas usam 0000."
+
+#. a setting that takes a number, and its help, which says which recordings are kept.
+#: src/lib.rs
+msgid "Recordings to show"
+msgstr "Gravações a mostrar"
+
+#. a setting that takes a number, and its help, which says which recordings are kept.
+#: src/lib.rs
+msgid "The newest ones."
+msgstr "As mais recentes."
+
+#: src/lib.rs
+msgid "NextPVR has no channels yet. Scan for channels in its settings first."
+msgstr "O NextPVR ainda não tem canais. Faça primeiro uma pesquisa de canais nas definições dele."
+
+#: src/lib.rs
+msgid "This tile is out of date. Refresh the plugin, then try again."
+msgstr "Este cartão está desatualizado. Atualize o plugin e tente novamente."
+
+#. names the setting inside "Add the {label} in the plugin's settings."
+#: src/lib.rs
+msgid "server address"
+msgstr "endereço do servidor"
+
+#: src/lib.rs
+msgid "NextPVR at {address} didn't start a session. Check the server, then try again."
+msgstr "O NextPVR em {address} não iniciou uma sessão. Verifique o servidor e tente novamente."
+
+#: src/lib.rs
+msgid "NextPVR rejected the PIN. Check it in the plugin's settings."
+msgstr "O NextPVR rejeitou o PIN. Verifique-o nas definições do plugin."

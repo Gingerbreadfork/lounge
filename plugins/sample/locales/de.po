@@ -1,0 +1,28 @@
+# Lounge, sample: de
+#
+msgid ""
+msgstr ""
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/lib.rs
+msgid "Sample library"
+msgstr "Beispielbibliothek"
+
+#: src/lib.rs
+msgid "Eighteen public-domain films with their posters, to see Lounge with something on it."
+msgstr "Achtzehn gemeinfreie Filme samt Plakaten, damit du Lounge mit Inhalt siehst."
+
+#: src/lib.rs
+msgid "Films in the sample library"
+msgstr "Filme in der Beispielbibliothek"
+
+#. the name of a screensaver that draws a film projector's beam.
+#: src/lib.rs
+msgid "Projector"
+msgstr "Projektor"
+
+#: src/lib.rs
+msgid "Smoke in the beam, from the back row"
+msgstr "Rauch im Lichtstrahl, aus der letzten Reihe gesehen"

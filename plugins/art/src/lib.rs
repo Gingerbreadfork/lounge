@@ -1,7 +1,7 @@
 //! Art mode: public-domain paintings from the Met and the Cleveland Museum of Art become the
 //! screensaver, each hung whole with the painter, the year and the museum under the clock. Every
 //! refresh brings a few more into the gallery, and the wall shows a different selection each time.
-use lounge_plugin_sdk::{self as sdk, host, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
+use lounge_plugin_sdk::{self as sdk, host, t, HttpRequest, Item, ItemKind, Kind, Manifest, RefreshContext, SettingKind, SettingSpec};
 use serde::{Deserialize, Serialize};
 
 pub struct Art;
@@ -20,12 +20,14 @@ const MET: &str = "The Met";
 const CMA: &str = "Cleveland Museum of Art";
 
 impl sdk::Plugin for Art {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.art".into(),
-            name: "Art mode".into(),
+            name: t!("Art mode"),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Paintings from the Met and the Cleveland Museum of Art, hung on the screensaver with the painter and the year.".into(),
+            description: t!("Paintings from the Met and the Cleveland Museum of Art, hung on the screensaver with the painter and the year."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Wallpaper],
             fetch_hosts: vec!["collectionapi.metmuseum.org".into(), "images.metmuseum.org".into(), "openaccess-api.clevelandart.org".into(), "openaccess-cdn.clevelandart.org".into()],
@@ -33,22 +35,24 @@ impl sdk::Plugin for Art {
             refresh_seconds: 0,
             rows: vec![],
             settings: vec![
-                SettingSpec { key: "met".into(), label: "The Met, New York".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
+                // Translators: The Met is the Metropolitan Museum of Art's own short name.
+                SettingSpec { key: "met".into(), label: t!("The Met, New York"), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
                 SettingSpec { key: "cleveland".into(), label: "Cleveland Museum of Art".into(), kind: SettingKind::Toggle, required: false, help: None, default: Some("true".into()) },
                 SettingSpec {
                     key: "max".into(),
-                    label: "Paintings on the wall".into(),
+                    label: t!("Paintings on the wall"),
                     kind: SettingKind::Number,
                     required: false,
-                    help: Some("The screensaver cycles through these; each refresh hangs some new ones.".into()),
+                    help: Some(t!("The screensaver cycles through these; each refresh hangs some new ones.")),
                     default: Some("60".into()),
                 },
                 SettingSpec {
                     key: "query".into(),
-                    label: "Only paintings matching".into(),
+                    label: t!("Only paintings matching"),
                     kind: SettingKind::Text,
                     required: false,
-                    help: Some("A painter or a subject, such as Monet or landscape. Empty shows the museums' highlights.".into()),
+                    // Translators: the museums' catalogues are in English, so a subject is typed in English.
+                    help: Some(t!("A painter or a subject, such as Monet or landscape. Empty shows the museums' highlights.")),
                     default: None,
                 },
             ],
@@ -56,6 +60,7 @@ impl sdk::Plugin for Art {
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -65,7 +70,7 @@ impl sdk::Plugin for Art {
         let max = host::setting("max").and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(60).clamp(4, 200);
         let query = host::setting("query").map(|q| q.trim().to_string()).unwrap_or_default();
         if !met_on && !cma_on {
-            return Err("Both museums are turned off. Turn on at least one in the plugin's settings.".into());
+            return Err(t!("Both museums are turned off. Turn on at least one in the plugin's settings."));
         }
         // An equal share each, so the museum that sends more per refresh cannot fill the walls.
         let share = GALLERY_CAP / (usize::from(met_on) + usize::from(cma_on));
@@ -99,7 +104,7 @@ impl sdk::Plugin for Art {
             sdk::warn!("{p}");
         }
         if gallery.paintings.is_empty() {
-            return Err(problems.into_iter().next().unwrap_or_else(|| format!("No paintings match \"{query}\". Try a painter's surname or a subject.")));
+            return Err(problems.into_iter().next().unwrap_or_else(|| t!("No paintings match \"{query}\". Try a painter's surname or a subject.", query = query)));
         }
         let shown = gallery.show(max);
         gallery.save();

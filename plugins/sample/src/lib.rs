@@ -2,7 +2,7 @@
 //! install has something on the Stage and in the rows. A few are left part-watched. Opening
 //! one shows its Wikipedia page, and a screensaver of a projector's beam comes with them.
 //! Nothing here is anyone's viewing history.
-use lounge_plugin_sdk::{self as sdk, host, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, Shader};
+use lounge_plugin_sdk::{self as sdk, host, t, Action, Item, ItemKind, Kind, Manifest, RefreshContext, RowSpec, RowStyle, Shader};
 
 pub struct Sample;
 
@@ -44,23 +44,26 @@ const FILMS: &[Film] = &[
 ];
 
 impl sdk::Plugin for Sample {
+    sdk::locales!();
+
     fn manifest() -> Manifest {
         Manifest {
             id: "tv.lounge.sample".into(),
-            name: "Sample library".into(),
+            name: t!("Sample library"),
             version: env!("CARGO_PKG_VERSION").into(),
-            description: "Eighteen public-domain films with their posters, to see Lounge with something on it.".into(),
+            description: t!("Eighteen public-domain films with their posters, to see Lounge with something on it."),
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content, Kind::Screensaver],
             fetch_hosts: vec!["thumb.wikimedia.org".into(), "upload.wikimedia.org".into()],
             refresh_minutes: 24 * 60,
             refresh_seconds: 0,
-            rows: vec![RowSpec { id: "shelf".into(), title: "Films in the sample library".into(), style: RowStyle::Poster }],
+            rows: vec![RowSpec { id: "shelf".into(), title: t!("Films in the sample library"), style: RowStyle::Poster }],
             settings: vec![],
             homepage: None,
             self_signed_servers: false,
             for_apps: Vec::new(),
             sent_to: Default::default(),
+            locales: Default::default(),
         }
     }
 
@@ -102,8 +105,9 @@ fn projector() -> Item {
     Item {
         id: "projector".into(),
         kind: ItemKind::Screensaver,
-        title: "Projector".into(),
-        subtitle: Some("Smoke in the beam, from the back row".into()),
+        // Translators: the name of a screensaver that draws a film projector's beam.
+        title: t!("Projector"),
+        subtitle: Some(t!("Smoke in the beam, from the back row")),
         shader: Some(Shader::new(include_str!("projector.agsl")).float("drift", 0.08).color("beam", "#FFE2B8")),
         ..Default::default()
     }
