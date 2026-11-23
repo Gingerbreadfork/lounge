@@ -727,6 +727,9 @@ one definition the host and the SDK share.
   the usual failures, and the two that carry a status put it inside the sentence ("Jellyfin at
   nas:8096 answered with error 503. Check the server, then try again."); log the raw cause with
   `sdk::warn!`.
+- A `help` may have several lines. The phone keeps the line breaks, shows lines numbered "1.",
+  "2." and so on at its end as a list of steps, and makes an address with a path, such as
+  example.com/account/keys, a link to tap.
 - A `help` longer than 160 characters opens with a sentence that stands alone, because the TV
   shows only that one and leaves the rest to the phone.
 - Row titles say where they come from ("Watchlist on Trakt"), tile lines are in sentence case

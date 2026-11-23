@@ -99,6 +99,13 @@
     const name = host(/^https?:\/\//i.test(address) ? address : `https://${address}`).replace(/:\d+$/, '');
     return /^(localhost|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|(.+\.)?example(\.[a-z]+)?)$/i.test(name);
   }
+  /** A setting's help as the lines before its steps and the steps, which are the lines numbered "1.", "2." and so on. */
+  function steps(help: string): { intro: string; steps: string[] } {
+    const lines = help.split('\n').map((line) => line.trim()).filter(Boolean);
+    const first = lines.findIndex((line) => /^\d+\.\s/.test(line));
+    if (first < 0 || !lines.slice(first).every((line) => /^\d+\.\s/.test(line))) return { intro: lines.join('\n'), steps: [] };
+    return { intro: lines.slice(0, first).join('\n'), steps: lines.slice(first).map((line) => line.replace(/^\d+\.\s+/, '')) };
+  }
   /** What stands in a field whose saved value is kept out of sight. */
   function savedHint() {
     // Translators: stands in a password field that already has a value saved
@@ -154,6 +161,8 @@
     return tn(p.refreshMinutes, 'It refreshes every {n} minute while the TV is on.', 'It refreshes every {n} minutes while the TV is on.');
   }
 </script>
+
+{#snippet words(text: string)}{#each linked(text, true) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}{/snippet}
 
 <main class="page">
   {#if id && !current}
@@ -250,7 +259,13 @@
                 autocapitalize="off" autocorrect="off" spellcheck="false"
               />
             {/if}
-            {#if st.help}<p class="caption">{#each linked(st.help, true) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>{/if}
+            {#if st.help}
+              {@const help = steps(st.help)}
+              {#if help.intro}<p class="caption help">{@render words(help.intro)}</p>{/if}
+              {#if help.steps.length}
+                <ol class="caption steps">{#each help.steps as step, n (n)}<li>{@render words(step)}</li>{/each}</ol>
+              {/if}
+            {/if}
           </div>
         {/each}
       </section>
@@ -304,6 +319,9 @@
 
 <style>
   .ember a, .houselight a, .caption a { text-decoration: underline; text-underline-offset: 3px; word-break: break-all; }
+  .help { white-space: pre-line; }
+  .steps { margin: 0; padding-left: 1.6em; display: flex; flex-direction: column; gap: 6px; }
+  .steps a { word-break: normal; overflow-wrap: anywhere; }
   .code { font: 600 32px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; color: var(--limelight); user-select: all; }
   .status .btn.primary { align-self: flex-start; }
   .back { padding: 0 12px; margin: 0 0 4px -12px; min-height: 44px; align-self: flex-start; }

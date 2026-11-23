@@ -99,8 +99,10 @@ impl sdk::Plugin for YouTube {
                     label: t!("Google Client ID"),
                     kind: SettingKind::Text,
                     required: false,
-                    // Translators: "Google Auth Platform", "Get started", "External", "Audience", "Publish app", "Clients" and "TVs and Limited Input devices" are names in the Google Cloud console.
-                    help: Some(t!("To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here. At console.cloud.google.com make a project and enable the YouTube Data API v3. Under Google Auth Platform press Get started and choose External, then on Audience press Publish app. Under Clients make a client of the type TVs and Limited Input devices, and copy its secret at once, since Google shows it only then. This page then shows a code to enter on your phone.")),
+                    // Translators: numbered steps, one a line, which the phone shows as a list; keep the line breaks, the numbers and the addresses. "Enable", "Get started", "External", "Publish app" and "TVs and Limited Input devices" are names in the Google Cloud console.
+                    help: Some(t!(
+                        "To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here.\n1. Make a project at console.cloud.google.com/projectcreate.\n2. Open console.cloud.google.com/apis/library/youtube.googleapis.com, the page of the YouTube Data API v3, and press Enable.\n3. At console.developers.google.com/auth/overview press Get started and choose External.\n4. At console.developers.google.com/auth/audience press Publish app.\n5. At console.developers.google.com/auth/clients make a client of the type TVs and Limited Input devices, and copy its secret at once, since Google shows it only then.\n6. Paste the Client ID and the secret here. This page then shows a code to enter on your phone."
+                    )),
                     default: None,
                 },
                 SettingSpec { key: "client_secret".into(), label: t!("Google Client secret"), kind: SettingKind::Password, required: false, help: None, default: None },
@@ -1870,6 +1872,20 @@ mod tests {
         assert_eq!(budget.left(), FETCH_BUDGET);
         assert_eq!(<YouTube as sdk::Plugin>::refresh(&RefreshContext::default()).err().as_deref(), Some("Nothing to show yet. Add a channel link or id, or a Google Client ID, in the plugin's settings."));
         assert!(<YouTube as sdk::Plugin>::manifest().settings.iter().all(|s| !s.required));
+    }
+
+    #[test]
+    fn the_setup_help_is_a_sentence_and_numbered_steps() {
+        let manifest = <YouTube as sdk::Plugin>::manifest();
+        let help = manifest.settings.iter().find(|s| s.key == "client_id").and_then(|s| s.help.clone()).unwrap();
+        let lines: Vec<&str> = help.lines().collect();
+        // The TV shows the first line alone; the phone lists the rest as steps with links.
+        assert!(lines[0].ends_with("Client secret here."));
+        assert_eq!(lines.len(), 7);
+        for (n, step) in lines[1..].iter().enumerate() {
+            assert!(step.starts_with(&format!("{}. ", n + 1)), "{step}");
+        }
+        assert_eq!(lines[1..6].iter().filter(|step| step.contains("google.com/")).count(), 5);
     }
 
     #[test]
