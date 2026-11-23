@@ -924,6 +924,10 @@ pub struct Ask {
     /// plugin every few seconds for a while, to notice by itself when it is done.
     #[serde(default, skip_serializing_if = "is_false")]
     pub watch: bool,
+    /// The key in the plugin's store that holds the code. With it the person can ask for a new
+    /// code: the TV deletes the key and refreshes the plugin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_key: Option<String>,
 }
 
 /// Result of a plugin call, as JSON: `{"ok": ...}`, `{"err": "..."}`, or from a refresh

@@ -71,7 +71,7 @@ export type Layout = {
 };
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
 /** A step a plugin waits on the person for, such as a sign-in. */
-export type PluginAsk = { say: string; link?: string | null; linkText?: string | null; code?: string | null; after?: string | null };
+export type PluginAsk = { say: string; link?: string | null; linkText?: string | null; code?: string | null; after?: string | null; newCode?: boolean; watched?: boolean };
 export type Plugin = {
   id: string; name: string; version: string; description: string; publisher: string; publisherName: string; kinds: string[];
   fetchHosts: string[]; selfSignedServers: boolean; enabled: boolean; builtIn: boolean; configured: boolean; refreshMinutes: number;
@@ -211,7 +211,7 @@ export const api = {
   layout: () => call<Layout>('GET', '/api/layout'),
   setLayout: (l: Partial<Layout>) => call<Layout>('PUT', '/api/layout', l),
   plugins: () => call<Plugin[]>('GET', '/api/plugins'),
-  pluginCommand: (id: string, cmd: 'enable' | 'disable' | 'refresh' | 'remove') => call<void>('POST', `/api/plugins/${encodeURIComponent(id)}/${cmd}`),
+  pluginCommand: (id: string, cmd: 'enable' | 'disable' | 'refresh' | 'new-code' | 'watch' | 'remove') => call<void>('POST', `/api/plugins/${encodeURIComponent(id)}/${cmd}`),
   pluginSetting: (id: string, key: string, value: string | null) => call<void>('PUT', `/api/plugins/${encodeURIComponent(id)}/settings`, { key, value }),
   pluginLog: (id: string) => call<string[]>('GET', `/api/plugins/${encodeURIComponent(id)}/log`),
   installPlugin: (file: File) => call<Plugin>('POST', '/api/plugins/install', undefined, file, UPLOAD_WAIT_MS),

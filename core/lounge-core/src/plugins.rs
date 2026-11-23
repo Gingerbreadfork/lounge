@@ -147,6 +147,8 @@ pub(crate) struct PluginManager {
     pub(crate) asks: Mutex<HashMap<String, PendingAsk>>,
     /// Numbers the watches kept on plugins that ask, so each sleeping thread knows its own.
     ask_watches: AtomicU64,
+    /// When the page of each plugin that asks was first and last seen open, this time it is open.
+    ask_pages: Mutex<HashMap<String, (i64, i64)>>,
     /// Where the QR pictures of asks are kept, a folder per plugin.
     ask_dir: PathBuf,
 }
@@ -180,6 +182,7 @@ pub(crate) struct PendingAsk {
 impl PendingAsk {
     /// When the wait a new ask belongs to began, and whether it is still watched. The wait runs
     /// from the plugin's first ask, so one that keeps changing its code cannot keep the watch up.
+    /// Only the person moves it on, by refreshing or by having the plugin's page open.
     fn carried_on(earlier: Option<&PendingAsk>, ask: &Ask, now_ms: i64) -> (i64, bool) {
         let since_ms = earlier.map_or(now_ms, |p| p.since_ms);
         (since_ms, ask.watch && now_ms - since_ms < ASK_AGAIN_FOR_MS)
@@ -434,6 +437,7 @@ impl PluginManager {
             unrecorded_refresh: Mutex::new(HashMap::new()),
             asks: Mutex::new(HashMap::new()),
             ask_watches: AtomicU64::new(0),
+            ask_pages: Mutex::new(HashMap::new()),
             ask_dir: cache_dir.join("plugin-asks"),
         });
         (manager, Receivers { refresh, calls, resolve, sheets, pressed, wake }, services)
@@ -449,8 +453,52 @@ impl PluginManager {
         if let Some(pending) = self.asks.lock().get_mut(id) {
             pending.since_ms = now_ms();
         }
+        self.ask_pages.lock().remove(id);
         self.refresh_soon(id);
         self.wake_schedule();
+    }
+
+    /// The plugin's page is open on the TV or a phone, so a step that finishes elsewhere stays
+    /// watched, for `ASK_AGAIN_WHILE_SHOWN_MS` at most. A watch that had lapsed starts again.
+    pub fn keep_watching(&self, id: &str) {
+        if !self.asks.lock().get(id).is_some_and(|p| p.ask.watch) {
+            return;
+        }
+        let now = now_ms();
+        let shown_for = {
+            let mut pages = self.ask_pages.lock();
+            let (since, seen) = pages.entry(id.to_string()).or_insert((now, now));
+            // Not heard from for a while, the page was closed and has been opened again.
+            if now - *seen > PAGE_GONE_MS {
+                *since = now;
+            }
+            *seen = now;
+            now - *since
+        };
+        if shown_for >= ASK_AGAIN_WHILE_SHOWN_MS {
+            return;
+        }
+        let restart = {
+            let mut asks = self.asks.lock();
+            let Some(pending) = asks.get_mut(id) else { return };
+            let lapsed = now - pending.since_ms >= ASK_AGAIN_FOR_MS;
+            pending.since_ms = now;
+            // A watch still sleeping carries on by itself.
+            lapsed && pending.watch.is_none()
+        };
+        if restart {
+            self.refresh_soon(id);
+            self.wake_schedule();
+        }
+    }
+
+    /// Has a plugin ask for a new sign-in code: the one it keeps is deleted and the plugin is
+    /// refreshed. False when it shows no code it can replace.
+    pub fn new_code(&self, id: &str) -> bool {
+        let Some(key) = self.asks.lock().get(id).and_then(|p| p.ask.code_key.clone()) else { return false };
+        self.services.kv_delete(id, &key);
+        self.refresh_now(id);
+        true
     }
 
     /// The key in a plugin's sign-in page address, made the first time it is asked for. Nothing
@@ -539,6 +587,7 @@ impl PluginManager {
     /// Forgets what a plugin was asking, and the pictures drawn for it.
     fn forget_ask(&self, id: &str) {
         self.asks.lock().remove(id);
+        self.ask_pages.lock().remove(id);
         if let Some(dir) = single_component(&self.ask_dir, id) {
             let _ = std::fs::remove_dir_all(dir);
         }
@@ -1239,10 +1288,14 @@ fn schedule_pace(inner: &Inner) -> Duration {
 const RETRY_AFTER_FAILURE_MS: i64 = 5 * 60_000;
 
 /// How often a plugin whose ask finishes elsewhere, such as a sign-in code, is refreshed to see
-/// whether it has, and for how long after the ask first showed. After that it waits like any
-/// failed refresh.
+/// whether it has, and for how long after the ask first showed or the person last refreshed it
+/// or had its page open. After that it waits like any failed refresh.
 const ASK_AGAIN_EVERY: Duration = Duration::from_secs(5);
 const ASK_AGAIN_FOR_MS: i64 = 5 * 60_000;
+/// The longest an open page keeps a watch up, so one left open does not ask all night.
+const ASK_AGAIN_WHILE_SHOWN_MS: i64 = 30 * 60_000;
+/// A page not heard from for this long has been closed.
+const PAGE_GONE_MS: i64 = 15_000;
 
 /// Whether a plugin last refreshed at `last_ms` is due again at `now`, refreshing every `every_ms`.
 fn refresh_due(last_ms: Option<i64>, failed: bool, every_ms: i64, now: i64) -> bool {
@@ -1480,7 +1533,7 @@ fn shown_ask(id: &str, ask: &Ask, ask_dir: &Path) -> crate::PluginAsk {
     // A long address is for scanning or tapping, not for reading out.
     let link_text = link.as_deref().map(|l| l.split_once("://").map_or(l, |(_, rest)| rest).trim_end_matches('/')).filter(|bare| bare.len() <= 40).map(str::to_string);
     let qr_png_path = link.as_deref().and_then(|l| ask_qr(id, l, ask_dir));
-    crate::PluginAsk { say: ask.say.clone(), link, link_text, code: ask.code.clone(), after: ask.after.clone(), qr_png_path }
+    crate::PluginAsk { say: ask.say.clone(), link, link_text, code: ask.code.clone(), after: ask.after.clone(), qr_png_path, new_code: ask.code_key.is_some(), watched: ask.watch }
 }
 
 /// The QR picture for a plugin's link, in the plugin's own folder and drawn once per link; the
@@ -1822,9 +1875,10 @@ mod tests {
     #[test]
     fn an_ask_is_shown_with_its_link_whole_and_a_picture_of_it() {
         let dir = tempfile::tempdir().unwrap();
-        let ask = Ask { say: "Sign in: on your phone open plex.tv/link and enter 25Q4, then press Refresh now here.".into(), link: Some("plex.tv/link".into()), code: Some("25Q4".into()), after: None, watch: true };
+        let ask = Ask { say: "Sign in: on your phone open plex.tv/link and enter 25Q4, then press Refresh now here.".into(), link: Some("plex.tv/link".into()), code: Some("25Q4".into()), after: None, watch: true, code_key: Some("pin".into()) };
         let shown = shown_ask("tv.lounge.plex", &ask, dir.path());
         assert_eq!((shown.link.as_deref(), shown.link_text.as_deref(), shown.code.as_deref()), (Some("https://plex.tv/link"), Some("plex.tv/link"), Some("25Q4")));
+        assert!(shown.new_code && shown.watched);
         let png = shown.qr_png_path.unwrap();
         assert!(std::fs::metadata(&png).unwrap().len() > 0);
         // The same link keeps its picture; another link's takes its place.
@@ -1841,6 +1895,7 @@ mod tests {
         // With no link there is nothing to draw.
         let plain = shown_ask("tv.lounge.plex", &Ask { say: "Enter your server's address.".into(), ..Default::default() }, dir.path());
         assert_eq!((plain.link, plain.qr_png_path, plain.say.as_str()), (None, None, "Enter your server's address."));
+        assert!(!plain.new_code && !plain.watched);
     }
 
     #[test]
@@ -1868,6 +1923,50 @@ mod tests {
         plugins.refresh_asking();
         assert!(PendingAsk::carried_on(plugins.asks.lock().get("p"), &ask, now_ms()).1);
         assert!(plugins.refreshes.lock().queued.contains("p"));
+    }
+
+    #[test]
+    fn an_open_page_keeps_the_watch_and_starts_one_that_lapsed() {
+        let dir = tempfile::tempdir().unwrap();
+        let (plugins, _jobs, _services) = PluginManager::new(&dir.path().join("data"), &dir.path().join("cache"));
+        let ask = Ask { say: "Sign in".into(), code: Some("25Q4".into()), watch: true, ..Default::default() };
+        let watched = |plugins: &PluginManager| PendingAsk::carried_on(plugins.asks.lock().get("p"), &ask, now_ms()).1;
+        // A watch still running is carried on with no refresh of the page's own.
+        plugins.asks.lock().insert("p".into(), PendingAsk { ask: ask.clone(), since_ms: now_ms() - ASK_AGAIN_FOR_MS + 60_000, watch: Some(1) });
+        plugins.keep_watching("p");
+        assert!(plugins.asks.lock().get("p").is_some_and(|p| now_ms() - p.since_ms < 1_000));
+        assert!(plugins.refreshes.lock().queued.is_empty());
+        // One that lapsed while its last check still sleeps is carried on the same way.
+        plugins.asks.lock().insert("p".into(), PendingAsk { ask: ask.clone(), since_ms: 0, watch: Some(1) });
+        plugins.keep_watching("p");
+        assert!(watched(&plugins) && plugins.refreshes.lock().queued.is_empty());
+        // One that lapsed with nothing sleeping starts again.
+        plugins.asks.lock().insert("p".into(), PendingAsk { ask: ask.clone(), since_ms: 0, watch: None });
+        assert!(!watched(&plugins));
+        plugins.keep_watching("p");
+        assert!(watched(&plugins) && plugins.refreshes.lock().queued.contains("p"));
+        // A page open longer than the limit no longer keeps the watch up.
+        plugins.refreshes.lock().queued.clear();
+        plugins.ask_pages.lock().insert("p".into(), (now_ms() - ASK_AGAIN_WHILE_SHOWN_MS, now_ms()));
+        plugins.asks.lock().get_mut("p").unwrap().since_ms = 0;
+        plugins.keep_watching("p");
+        assert!(!watched(&plugins) && plugins.refreshes.lock().queued.is_empty());
+        // Closed and opened again, or after the person's own refresh, it does.
+        plugins.ask_pages.lock().insert("p".into(), (now_ms() - ASK_AGAIN_WHILE_SHOWN_MS, now_ms() - PAGE_GONE_MS - 1));
+        plugins.keep_watching("p");
+        assert!(watched(&plugins) && plugins.refreshes.lock().queued.contains("p"));
+        plugins.ask_pages.lock().insert("p".into(), (now_ms() - ASK_AGAIN_WHILE_SHOWN_MS, now_ms()));
+        plugins.refresh_now("p");
+        plugins.asks.lock().get_mut("p").unwrap().since_ms = 0;
+        plugins.keep_watching("p");
+        assert!(watched(&plugins));
+        // A step the person takes on the TV itself is not watched, page open or not.
+        let typed = Ask { say: "Enter your server's address.".into(), ..Default::default() };
+        plugins.asks.lock().insert("q".into(), PendingAsk { ask: typed, since_ms: 0, watch: None });
+        plugins.keep_watching("q");
+        plugins.keep_watching("nobody");
+        assert!(plugins.asks.lock().get("q").is_some_and(|p| p.since_ms == 0) && !plugins.refreshes.lock().queued.contains("q"));
+        assert_eq!(plugins.ask_pages.lock().keys().collect::<Vec<_>>(), ["p"]);
     }
 
     #[test]

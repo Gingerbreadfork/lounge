@@ -185,7 +185,10 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
     fun focusOf(key: String) = fieldFocus.getOrPut(key) { FocusRequester() }
     WhileStarted(pluginId) {
         while (true) {
-            info = withContext(Dispatchers.IO) { core.plugins().firstOrNull { it.id == pluginId } }
+            info = withContext(Dispatchers.IO) {
+                core.watchPlugin(pluginId)
+                core.plugins().firstOrNull { it.id == pluginId }
+            }
             loaded = true
             if (showLog) log = withContext(Dispatchers.IO) { core.pluginLog(pluginId) }
             delay(1500)
@@ -284,13 +287,34 @@ fun PluginDetailSheet(core: CoreClient, pluginId: String, onRemoved: () -> Unit,
         }
         if (p.enabled) {
             val refreshing = refreshAsked?.let { asked -> (p.lastRefreshMs ?: 0L) < asked && System.currentTimeMillis() - asked < 120_000 } == true
+            val refreshFocus = remember { FocusRequester() }
+            val offersCode = ask?.newCode == true
+            val stillOffersCode by rememberUpdatedState(offersCode)
+            var codeRowFocused by remember { mutableStateOf(false) }
+            // The row goes once the code is taken; focus that was on it moves to its neighbour.
+            LaunchedEffect(offersCode) {
+                if (!offersCode && codeRowFocused) {
+                    codeRowFocused = false
+                    refreshFocus.requestWhenReady()
+                }
+            }
             SheetRow(
                 icon = LoungeIcons.Refresh,
                 title = stringResource(R.string.plugins_refresh),
                 value = if (refreshing) stringResource(R.string.plugins_refreshing) else null,
                 accent = if (refreshing) colors.houselight else colors.dust,
                 onClick = { refreshAsked = System.currentTimeMillis(); core.refreshPlugin(p.id) },
+                focusRequester = refreshFocus,
             )
+            if (offersCode) {
+                SheetRow(
+                    icon = LoungeIcons.Refresh,
+                    title = stringResource(R.string.plugins_new_code),
+                    onClick = { refreshAsked = System.currentTimeMillis(); scope.launch(Dispatchers.IO) { core.newPluginCode(p.id) } },
+                    // A row taken away loses focus too, which is not the person moving off it.
+                    modifier = Modifier.onFocusChanged { if (it.hasFocus || stillOffersCode) codeRowFocused = it.hasFocus },
+                )
+            }
         }
         SheetRow(
             icon = LoungeIcons.Info,
@@ -373,8 +397,8 @@ private fun reachText(p: PluginInfo): String {
 
 /**
  * What the plugin waits on the person for. A sign-in shows a QR code of its page when it has one,
- * where to go and the code to enter, large enough to read from the sofa; any other step is said
- * in words.
+ * where to go and the code to enter, large enough to read from the sofa, and says when the TV
+ * goes on without a press; any other step is said in words.
  */
 @Composable
 private fun AskCard(ask: PluginAsk) {
@@ -399,6 +423,7 @@ private fun AskCard(ask: PluginAsk) {
             where?.let { Text(it, style = LoungeTheme.typography.meta, color = colors.dust) }
             ask.code?.let { Text(it, style = LoungeTheme.typography.displayL, color = colors.limelight, maxLines = 1) }
             if (link != null) ask.after?.let { Text(it, style = LoungeTheme.typography.caption, color = colors.dust) }
+            if (ask.watched) Text(stringResource(R.string.plugins_ask_carries_on), style = LoungeTheme.typography.caption, color = colors.dust)
         }
     }
 }

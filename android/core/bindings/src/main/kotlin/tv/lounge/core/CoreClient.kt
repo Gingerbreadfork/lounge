@@ -89,6 +89,11 @@ class CoreClient(val core: Core) : SnapshotListener {
 
     fun refreshPlugin(id: String) = core.refreshPlugin(id)
 
+    fun newPluginCode(id: String) = core.newPluginCode(id)
+
+    /** Keeps a sign-in the plugin waits on watched; call it every few seconds while its page shows. */
+    fun watchPlugin(id: String) = core.watchPlugin(id)
+
     fun pluginLog(id: String): List<String> = core.pluginLog(id)
 
     /** Rows from the search plugins; blocks while they answer, so call it off the main thread. */

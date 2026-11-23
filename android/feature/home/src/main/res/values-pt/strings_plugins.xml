@@ -25,6 +25,7 @@
     <string name="plugins_fill_in_first">Primeiro preencha: %1$s</string>
     <string name="plugins_refresh">Atualizar agora</string>
     <string name="plugins_refreshing">Atualizando…</string>
+    <string name="plugins_new_code">Pedir novo código</string>
     <string name="plugins_log">Registro</string>
     <string name="plugins_log_empty">Nada registrado ainda.</string>
     <string name="plugins_remove">Remover</string>
@@ -56,6 +57,7 @@
     <string name="plugins_ask_open_enter">Escaneie com a câmera dele ou abra %1$s e digite</string>
     <string name="plugins_ask_tap">Escaneie com a câmera dele ou toque no link em Lounge no celular</string>
     <string name="plugins_ask_tap_enter">Escaneie com a câmera dele ou toque no link em Lounge no celular e digite</string>
+    <string name="plugins_ask_carries_on">A TV continua sozinha assim que você entrar.</string>
     <plurals name="plugins_items_refreshed">
         <item quantity="one">%1$d item, atualizado %2$s</item>
         <item quantity="many">%1$d itens, atualizados %2$s</item>

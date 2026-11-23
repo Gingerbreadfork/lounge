@@ -68,10 +68,20 @@ pub fn ask(ask: Ask) -> String {
 /// The TV shows both with a QR code and refreshes by itself until the code is taken. The
 /// sentence names the page without its scheme or query, as people read it out.
 pub fn sign_in(link: &str, code: &str) -> String {
+    sign_in_ask(link, code, None)
+}
+
+/// [`sign_in`] for a code kept under `key` in the plugin's store. The plugin's page then offers
+/// a new code, which deletes the key and refreshes, so the plugin asks for another.
+pub fn sign_in_kept(link: &str, code: &str, key: &str) -> String {
+    sign_in_ask(link, code, Some(key))
+}
+
+fn sign_in_ask(link: &str, code: &str, key: Option<&str>) -> String {
     let shown = link.trim_start_matches("https://").split(['?', '#']).next().unwrap_or(link).trim_end_matches('/');
     // Translators: {shown} is a web address and {code} a short code. "Refresh now" is the button on the plugin's page on the TV.
     let say = t!("Sign in: on your phone open {shown} and enter {code}, then press Refresh now here.", shown = shown, code = code);
-    ask(Ask { say, link: Some(link.to_string()), code: Some(code.to_string()), after: None, watch: true })
+    ask(Ask { say, link: Some(link.to_string()), code: Some(code.to_string()), after: None, watch: true, code_key: key.map(str::to_string) })
 }
 
 /// Memory handed across the boundary: exact-length boxed slices, allocated and freed on this side.
@@ -420,7 +430,11 @@ mod tests {
         assert_eq!(sign_in("https://www.twitch.tv/activate?device-code=ABCD", "ABCD"), "Sign in: on your phone open www.twitch.tv/activate and enter ABCD, then press Refresh now here.");
         assert_eq!(sign_in("https://simkl.com/pin/", "B-1"), "Sign in: on your phone open simkl.com/pin and enter B-1, then press Refresh now here.");
         let twitch = ASKED.with(|a| a.borrow_mut().take()).unwrap();
-        assert!(twitch.watch && twitch.link.as_deref() == Some("https://simkl.com/pin/"));
+        assert!(twitch.watch && twitch.link.as_deref() == Some("https://simkl.com/pin/") && twitch.code_key.is_none());
+        // A code the plugin keeps names its key, so the TV can have it dropped.
+        assert_eq!(sign_in_kept("https://plex.tv/link", "25Q4", "pin"), said);
+        let kept = ASKED.with(|a| a.borrow_mut().take()).unwrap();
+        assert_eq!(serde_json::to_string(&Outcome::<()>::Ask(Ask { say: "Wait".into(), ..kept })).unwrap(), r#"{"ask":{"say":"Wait","link":"https://plex.tv/link","code":"25Q4","watch":true,"code_key":"pin"}}"#);
     }
 
     #[test]

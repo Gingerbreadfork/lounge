@@ -224,7 +224,7 @@ fn run(args: &[String]) -> Result<(), String> {
         // What the TV would show as a step to take, with the parts it shows apart from the sentence.
         lounge_plugins::PluginError::Asks(ask) => {
             let part = |name: &str, value: &Option<String>| value.as_ref().map(|v| format!("\n  {name}: {v}")).unwrap_or_default();
-            format!("plugin asks: {}{}{}{}", ask.say, part("link", &ask.link), part("code", &ask.code), part("after", &ask.after))
+            format!("plugin asks: {}{}{}{}{}", ask.say, part("link", &ask.link), part("code", &ask.code), part("after", &ask.after), part("a new code deletes", &ask.code_key))
         }
         e => e.to_string(),
     })?;

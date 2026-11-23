@@ -409,6 +409,7 @@ fn instruction(code: &str) -> String {
         // Translators: the step to take once link.stremio.com is open on the phone.
         after: Some(t!("Sign in to Stremio on that page.")),
         watch: true,
+        code_key: None,
     })
 }
 

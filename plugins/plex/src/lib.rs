@@ -412,7 +412,7 @@ fn pin_step(now_ms: i64) -> Result<String, String> {
 }
 
 fn instruction(pin: &Pin) -> String {
-    sdk::sign_in("https://plex.tv/link", &pin.code)
+    sdk::sign_in_kept("https://plex.tv/link", &pin.code, PIN_KEY)
 }
 
 /// The account's servers from plex.tv, kept for later refreshes. Signs in first when no one

@@ -41,6 +41,8 @@
     <string name="plugins_fill_in_first">Fill in %1$s first</string>
     <string name="plugins_refresh">Refresh now</string>
     <string name="plugins_refreshing">Refreshing…</string>
+    <!-- Under "Refresh now" while a sign-in code shows: has the plugin ask its service for another. -->
+    <string name="plugins_new_code">Get a new code</string>
     <!-- The row that shows or hides what the plugin has logged. -->
     <string name="plugins_log">Log</string>
     <string name="plugins_log_empty">Nothing logged yet.</string>
@@ -85,6 +87,8 @@
     <string name="plugins_ask_tap">Scan this with its camera, or tap the link in the phone companion</string>
     <!-- The code to enter is shown on the next line. -->
     <string name="plugins_ask_tap_enter">Scan this with its camera, or tap the link in the phone companion and enter</string>
+    <!-- Under a sign-in that the TV checks on by itself, so nothing needs pressing afterwards. -->
+    <string name="plugins_ask_carries_on">The TV carries on by itself once you have signed in.</string>
 
     <!-- A running plugin's state. %2$s is how long ago it last fetched, such as "5 minutes ago". -->
     <plurals name="plugins_items_refreshed">

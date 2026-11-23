@@ -25,6 +25,7 @@
     <string name="plugins_fill_in_first">Remplissez d’abord : %1$s</string>
     <string name="plugins_refresh">Actualiser maintenant</string>
     <string name="plugins_refreshing">Actualisation…</string>
+    <string name="plugins_new_code">Demander un nouveau code</string>
     <string name="plugins_log">Journal</string>
     <string name="plugins_log_empty">Journal vide pour l’instant.</string>
     <string name="plugins_remove">Supprimer</string>
@@ -56,6 +57,7 @@
     <string name="plugins_ask_open_enter">Scannez ceci avec son appareil photo, ou ouvrez %1$s et saisissez</string>
     <string name="plugins_ask_tap">Scannez ceci avec son appareil photo, ou touchez le lien dans Lounge sur téléphone</string>
     <string name="plugins_ask_tap_enter">Scannez ceci avec son appareil photo, ou touchez le lien dans Lounge sur téléphone et saisissez</string>
+    <string name="plugins_ask_carries_on">La TV continue d’elle-même une fois la connexion faite.</string>
     <plurals name="plugins_items_refreshed">
         <item quantity="one">%1$d élément, actualisé %2$s</item>
         <item quantity="many">%1$d éléments, actualisés %2$s</item>

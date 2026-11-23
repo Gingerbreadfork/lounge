@@ -25,6 +25,7 @@
     <string name="plugins_fill_in_first">Zuerst ausfüllen: %1$s</string>
     <string name="plugins_refresh">Jetzt aktualisieren</string>
     <string name="plugins_refreshing">Wird aktualisiert …</string>
+    <string name="plugins_new_code">Neuen Code anfordern</string>
     <string name="plugins_log">Protokoll</string>
     <string name="plugins_log_empty">Noch nichts protokolliert.</string>
     <string name="plugins_remove">Entfernen</string>
@@ -54,6 +55,7 @@
     <string name="plugins_ask_open_enter">Scanne das mit der Handykamera oder öffne %1$s und gib diesen Code ein</string>
     <string name="plugins_ask_tap">Scanne das mit der Handykamera oder tippe in Lounge fürs Handy auf den Link</string>
     <string name="plugins_ask_tap_enter">Scanne das mit der Handykamera oder tippe in Lounge fürs Handy auf den Link und gib diesen Code ein</string>
+    <string name="plugins_ask_carries_on">Der Fernseher macht von selbst weiter, sobald du angemeldet bist.</string>
     <plurals name="plugins_items_refreshed">
         <item quantity="one">%1$d Eintrag, aktualisiert %2$s</item>
         <item quantity="other">%1$d Einträge, aktualisiert %2$s</item>

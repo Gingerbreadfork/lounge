@@ -25,6 +25,7 @@
     <string name="plugins_fill_in_first">Preencha primeiro: %1$s</string>
     <string name="plugins_refresh">Atualizar agora</string>
     <string name="plugins_refreshing">A atualizar…</string>
+    <string name="plugins_new_code">Pedir novo código</string>
     <string name="plugins_log">Registo</string>
     <string name="plugins_log_empty">Ainda nada registado.</string>
     <string name="plugins_remove">Remover</string>
@@ -56,6 +57,7 @@
     <string name="plugins_ask_open_enter">Leia isto com a câmara do telemóvel ou abra %1$s e introduza</string>
     <string name="plugins_ask_tap">Leia isto com a câmara do telemóvel ou toque no link do Lounge no telemóvel</string>
     <string name="plugins_ask_tap_enter">Leia isto com a câmara do telemóvel ou toque no link do Lounge no telemóvel e introduza</string>
+    <string name="plugins_ask_carries_on">A TV continua sozinha assim que a sessão for iniciada.</string>
     <plurals name="plugins_items_refreshed">
         <item quantity="one">%1$d item, atualizado %2$s</item>
         <item quantity="many">%1$d itens, atualizados %2$s</item>

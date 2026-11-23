@@ -25,6 +25,7 @@
     <string name="plugins_fill_in_first">Vul eerst dit in: %1$s</string>
     <string name="plugins_refresh">Nu vernieuwen</string>
     <string name="plugins_refreshing">Vernieuwen…</string>
+    <string name="plugins_new_code">Nieuwe code aanvragen</string>
     <string name="plugins_log">Logboek</string>
     <string name="plugins_log_empty">Nog niets vastgelegd.</string>
     <string name="plugins_remove">Verwijderen</string>
@@ -54,6 +55,7 @@
     <string name="plugins_ask_open_enter">Scan dit met de camera, of open %1$s en voer deze code in</string>
     <string name="plugins_ask_tap">Scan dit met de camera, of tik op de link in Lounge op je telefoon</string>
     <string name="plugins_ask_tap_enter">Scan dit met de camera, of tik op de link in Lounge op je telefoon en voer deze code in</string>
+    <string name="plugins_ask_carries_on">De tv gaat vanzelf verder zodra je bent ingelogd.</string>
     <plurals name="plugins_items_refreshed">
         <item quantity="one">%1$d item, %2$s vernieuwd</item>
         <item quantity="other">%1$d items, %2$s vernieuwd</item>

@@ -319,7 +319,7 @@ fn instruction(client_id: &str, verifier: &str, again: bool) -> String {
     // Translators: "Plugins" is a page of the phone companion and {link} a web address.
     let open = t!("Sign in on your phone: in the phone companion open Plugins, then Spotify, and tap the link there, or open {link}.", link = link.strip_prefix("https://").unwrap_or(&link));
     let say = if again { format!("{} {open} {after}", t!("Spotify ends every sign-in after six months, so it is time to sign in again.")) } else { format!("{open} {after}") };
-    sdk::ask(sdk::Ask { say, link: Some(link), code: None, after: Some(after), watch: false })
+    sdk::ask(sdk::Ask { say, link: Some(link), code: None, after: Some(after), watch: false, code_key: None })
 }
 
 struct Client {

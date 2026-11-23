@@ -217,11 +217,21 @@ A refresh that cannot go on until the person does something says so instead of f
 `Err(sdk::ask(Ask { .. }))` for anything else, such as a link with no code or a setting still to
 fill in. The plugin's page then shows a step to take rather than a problem: a QR code of the
 link on the TV, a button on the phone, and the code in large type. With `watch` set, as
-`sign_in` sets it, the TV refreshes the plugin every 5 seconds for 5 minutes, so it carries on
-by itself once the code is entered. `say` is the whole instruction as a sentence, for the log
-and for anything that shows only text. Two plugins refresh at a time, and a plugin never has two
-refreshes running: one asked for while it refreshes follows it. `search` and `resolve` each run
-on a thread of their own, so pressing a tile never waits for a refresh or a search.
+`sign_in` sets it, the TV refreshes the plugin every 5 seconds for 5 minutes, and after that
+while the plugin's page is open on the TV or the phone, for up to half an hour at a time, so it
+carries on by itself once the code is entered. `say` is the whole instruction as a sentence, for
+the log and for anything that shows only text. Write an `Ask` with `..Default::default()` after
+the fields you set, so a field Lounge adds later does not stop your plugin building.
+
+A plugin that keeps its code between refreshes says under which key of its store, with
+`sdk::sign_in_kept(link, &code, "device")` or the ask's `code_key`. Its page then offers
+"Get a new code", for a code the service no longer takes or one entered on the wrong account:
+the TV deletes that key and refreshes, and the plugin, finding no code, asks its service for
+another. Keep nothing else under that key.
+
+Two plugins refresh at a time, and a plugin never has two refreshes running: one asked for while
+it refreshes follows it. `search` and `resolve` each run on a thread of their own, so pressing a
+tile never waits for a refresh or a search.
 
 When `resolve` does the work itself and returns nothing to open, the TV refreshes the plugin a
 quarter of a second later and once more two seconds after that, for a device that reports late.
@@ -680,7 +690,7 @@ boundary as UTF-8 JSON in linear memory, and a `(ptr, len)` pair is packed into 
 | `lg_alloc(len) -> ptr` | `i32 -> i32` | allocate `len` bytes the host may write into |
 | `lg_free(ptr, len)` | `i32, i32` | free memory the plugin returned |
 | `lg_manifest() -> packed` | `-> i64` | `{"ok": Manifest}` |
-| `lg_refresh(ptr, len) -> packed` | `i32, i32 -> i64` | `RefreshContext` in; `{"ok": [Item]}`, `{"err": "…"}` or `{"ask": {"say": "…", "link": "…", "code": "…", "after": "…", "watch": true}}` out, where only `say` is required |
+| `lg_refresh(ptr, len) -> packed` | `i32, i32 -> i64` | `RefreshContext` in; `{"ok": [Item]}`, `{"err": "…"}` or `{"ask": {"say": "…", "link": "…", "code": "…", "after": "…", "watch": true, "code_key": "…"}}` out, where only `say` is required |
 | `lg_search(ptr, len) -> packed` | optional | `SearchQuery` (`query`, `limit`) in; items out |
 | `lg_resolve(ptr, len) -> packed` | optional | action string in; `Action` out |
 | `lg_sheet(ptr, len) -> packed` | optional | sheet id in; `Sheet` out |

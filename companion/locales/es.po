@@ -1042,6 +1042,10 @@ msgid "Refreshing…"
 msgstr "Actualizando…"
 
 #: src/pages/Plugins.svelte
+msgid "Asking for a new code…"
+msgstr "Pidiendo otro código…"
+
+#: src/pages/Plugins.svelte
 msgid "{plugin} removed"
 msgstr "Se quitó {plugin}"
 
@@ -1169,6 +1173,10 @@ msgstr "Abrir {page}"
 msgid "and enter"
 msgstr "y escribe"
 
+#: src/pages/Plugins.svelte
+msgid "The TV carries on by itself once you have signed in."
+msgstr "La TV sigue sola en cuanto inicies sesión."
+
 #. how many items a plugin brought; {when} is how long ago, such as "3 minutes ago" or "just now"
 #: src/pages/Plugins.svelte
 msgid "{n} item, refreshed {when}"
@@ -1207,6 +1215,11 @@ msgstr "Activar"
 #: src/pages/Plugins.svelte
 msgid "Refresh now"
 msgstr "Actualizar ahora"
+
+#. a button beside a sign-in code: has the plugin ask its service for another code
+#: src/pages/Plugins.svelte
+msgid "Get a new code"
+msgstr "Pedir otro código"
 
 #: src/pages/Plugins.svelte
 msgid "Settings"

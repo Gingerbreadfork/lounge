@@ -491,7 +491,7 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, Stri
 }
 
 fn instruction(d: &Device) -> String {
-    sdk::sign_in(&d.verification_url, &d.user_code)
+    sdk::sign_in_kept(&d.verification_url, &d.user_code, DEVICE_KEY)
 }
 
 fn renew(client_id: &str, secret: &str, old: &Token, now_ms: i64) -> Result<Token, Refusal> {

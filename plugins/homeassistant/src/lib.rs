@@ -492,7 +492,7 @@ impl Session {
         };
         let started = Started::offer(kept, base, &landing, now_ms);
         host::kv_set(SIGN_IN_KEY, serde_json::to_string(&started).unwrap_or_default().as_bytes());
-        Err(sdk::ask(Ask { say: sdk::tr(SIGN_IN), link: Some(started.link()), code: None, after: Some(sdk::tr(SIGN_IN_AFTER)), watch: true }))
+        Err(sdk::ask(Ask { say: sdk::tr(SIGN_IN), link: Some(started.link()), code: None, after: Some(sdk::tr(SIGN_IN_AFTER)), watch: true, code_key: None }))
     }
 }
 

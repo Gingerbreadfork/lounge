@@ -32,11 +32,13 @@
       loaded = true;
     }
     if (id && showLog) log = (await quiet(() => api.pluginLog(id!))) ?? log;
+    // While this page shows a sign-in, the TV keeps checking whether it is done.
+    if (id && p?.find((plugin) => plugin.id === id)?.ask?.watched) quiet(() => api.pluginCommand(id!, 'watch'));
   }
   let current = $derived(plugins.find((p) => p.id === id) ?? null);
 
-  async function command(p: Plugin, cmd: 'enable' | 'disable' | 'refresh' | 'remove') {
-    const labels = { enable: t('{plugin} is on', { plugin: p.name }), disable: t('{plugin} is off', { plugin: p.name }), refresh: t('Refreshing…'), remove: t('{plugin} removed', { plugin: p.name }) };
+  async function command(p: Plugin, cmd: 'enable' | 'disable' | 'refresh' | 'new-code' | 'remove') {
+    const labels = { enable: t('{plugin} is on', { plugin: p.name }), disable: t('{plugin} is off', { plugin: p.name }), refresh: t('Refreshing…'), 'new-code': t('Asking for a new code…'), remove: t('{plugin} removed', { plugin: p.name }) };
     const worked = await done(labels[cmd], () => api.pluginCommand(p.id, cmd));
     if (worked && cmd === 'remove') goBack('plugins');
     load();
@@ -186,6 +188,7 @@
           {/if}
           {#if ask.code}<p class="code">{ask.code}</p>{/if}
           {#if ask.link && ask.after}<p class="dust">{ask.after}</p>{/if}
+          {#if ask.watched}<p class="caption">{t('The TV carries on by itself once you have signed in.')}</p>{/if}
         {:else}
           <p class="houselight">{#each linked(ask.say) as part, i (i)}{#if part.href}<a href={part.href} target="_blank" rel="noopener">{part.text}</a>{:else}{part.text}{/if}{/each}</p>
         {/if}
@@ -208,6 +211,8 @@
         <!-- Translators: buttons that turn a plugin off or on; "Allow" lets its update connect to what it asks for -->
         <button class="btn {current.enabled ? '' : 'primary'}" disabled={!current.enabled && !current.configured} onclick={() => command(current!, current!.enabled ? 'disable' : 'enable')}>{current.enabled ? t('Turn off') : current.updateAsksToReach?.length ? t('Allow and turn on') : t('Turn on')}</button>
         {#if current.enabled}<button class="btn" onclick={() => command(current!, 'refresh')}>{t('Refresh now')}</button>{/if}
+        <!-- Translators: a button beside a sign-in code: has the plugin ask its service for another code -->
+        {#if current.enabled && current.ask?.newCode}<button class="btn" onclick={() => command(current!, 'new-code')}>{t('Get a new code')}</button>{/if}
       </div>
     </section>
 
@@ -303,7 +308,7 @@
   .status .btn.primary { align-self: flex-start; }
   .back { padding: 0 12px; margin: 0 0 4px -12px; min-height: 44px; align-self: flex-start; }
   .status { display: flex; flex-direction: column; gap: 12px; }
-  .status-actions { display: flex; gap: 10px; }
+  .status-actions { display: flex; flex-wrap: wrap; gap: 10px; }
   .log { margin: 0; padding: 12px; border-radius: var(--radius); background: var(--velvet); border: 1px solid var(--curtain-edge); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dust); white-space: pre-wrap; word-break: break-word; max-height: 40vh; overflow: auto; }
   .install { display: flex; flex-direction: column; gap: 12px; }
   .url-row { display: flex; gap: 8px; }

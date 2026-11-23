@@ -608,7 +608,7 @@ fn device_step(client_id: &str, now_ms: i64) -> Result<Token, String> {
 }
 
 fn instruction(d: &Device) -> String {
-    sdk::sign_in(&d.verification_uri, &d.user_code)
+    sdk::sign_in_kept(&d.verification_uri, &d.user_code, DEVICE_KEY)
 }
 
 /// The error for a sign-in answer that cannot be read; the cause goes to the log.

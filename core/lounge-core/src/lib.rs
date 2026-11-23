@@ -310,6 +310,10 @@ pub struct PluginAsk {
     pub code: Option<String>,
     /// What to do once the page is open, when it is more than entering the code.
     pub after: Option<String>,
+    /// Whether the plugin can be asked for a new code.
+    pub new_code: bool,
+    /// Whether the TV notices by itself when the step is done.
+    pub watched: bool,
     /// A QR code of the link as a picture on the TV, for the TV's own screen.
     pub qr_png_path: Option<String>,
 }
@@ -1324,6 +1328,18 @@ impl Core {
     pub fn refresh_plugin(&self, id: String) {
         self.count();
         self.inner.plugins.refresh_now(&id);
+    }
+
+    /// Has a plugin that shows a sign-in code ask for another.
+    pub fn new_plugin_code(&self, id: String) {
+        self.count();
+        self.inner.plugins.new_code(&id);
+    }
+
+    /// Says a plugin's page is open, so a sign-in it waits on stays watched. Call it every few
+    /// seconds while the page shows.
+    pub fn watch_plugin(&self, id: String) {
+        self.inner.plugins.keep_watching(&id);
     }
 
     /// Ask the enabled search plugins about `query`: one row per plugin that found something.

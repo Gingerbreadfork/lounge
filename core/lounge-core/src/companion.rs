@@ -430,6 +430,11 @@ impl CompanionActions for CoreActions {
                 }
                 inner.plugins.refresh_now(id);
             }
+            // Neither says anything when the plugin has since stopped asking.
+            "new-code" => {
+                inner.plugins.new_code(id);
+            }
+            "watch" => inner.plugins.keep_watching(id),
             "remove" => inner.plugin_remove(id).map_err(|e| sentence_or(&e, &t!("The TV couldn't remove that plugin. Try again.")))?,
             other => {
                 tracing::warn!("companion: unknown plugin command {other}");
@@ -1027,7 +1032,7 @@ mod tests {
         let info = core.plugins().remove(0);
         assert_eq!((info.last_error.as_deref(), info.ask), (Some(said), None));
 
-        let ask = lounge_plugin_api::Ask { say: said.into(), link: Some("plex.tv/link".into()), code: Some("25Q4".into()), after: None, watch: true };
+        let ask = lounge_plugin_api::Ask { say: said.into(), link: Some("plex.tv/link".into()), code: Some("25Q4".into()), after: None, watch: true, code_key: Some("pin".into()) };
         core.inner.plugins.asks.lock().insert(manifest.id.clone(), plugins::PendingAsk { ask, since_ms: 0, watch: None });
         let info = core.plugins().remove(0);
         assert_eq!(info.last_error, None);
@@ -1038,6 +1043,30 @@ mod tests {
         let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
         let sent = actions.plugins_json();
         assert!(sent.contains(r#""ask":{"say":"Sign in: on your phone open plex.tv/link"#) && sent.contains(r#""linkText":"plex.tv/link","code":"25Q4""#), "{sent}");
+        assert!(sent.contains(r#""newCode":true,"watched":true"#), "{sent}");
+
+        // A page open on the phone keeps the watch from lapsing.
+        {
+            let mut asks = core.inner.plugins.asks.lock();
+            let pending = asks.get_mut(&manifest.id).unwrap();
+            pending.since_ms = now_ms() - 60_000;
+            pending.watch = Some(9);
+        }
+        actions.plugin_command(&manifest.id, "watch").unwrap();
+        assert!(core.inner.plugins.asks.lock().get(&manifest.id).is_some_and(|p| now_ms() - p.since_ms < 30_000));
+
+        // Asked for a new code, the TV drops the one the plugin keeps and nothing else of its.
+        {
+            let state = core.inner.state.lock();
+            state.store.plugin_kv_set(&manifest.id, "pin", b"25Q4", 8).unwrap();
+            state.store.plugin_kv_set(&manifest.id, "account", b"token", 8).unwrap();
+        }
+        actions.plugin_command(&manifest.id, "new-code").unwrap();
+        {
+            let state = core.inner.state.lock();
+            assert_eq!(state.store.plugin_kv_get(&manifest.id, "pin").unwrap(), None);
+            assert_eq!(state.store.plugin_kv_get(&manifest.id, "account").unwrap().as_deref(), Some(&b"token"[..]));
+        }
 
         // Turned off, it waits on no one.
         core.set_plugin_enabled(manifest.id.clone(), false);

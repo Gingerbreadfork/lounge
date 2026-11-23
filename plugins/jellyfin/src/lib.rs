@@ -303,6 +303,7 @@ fn instruction(code: &str) -> String {
         // Translators: shown on the TV with the code.
         after: Some(t!("On a phone or computer signed in to Jellyfin, open Settings, then Quick Connect, and enter this code.")),
         watch: true,
+        code_key: Some(QUICK_KEY.into()),
     })
 }
 
