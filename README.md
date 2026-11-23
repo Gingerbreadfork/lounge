@@ -297,7 +297,7 @@ the TV. To fix a translation or add a language, see [docs/TRANSLATING.md](docs/T
 ## Installing on a TV
 
 Download `Lounge-<version>.apk` from the [Releases](../../releases) page, or build it yourself
-(below). It runs on Android TV and Google TV from Android 9.
+(below). It runs on Android TV and Google TV from Android 9, and needs no root.
 
 ### With a USB stick
 
