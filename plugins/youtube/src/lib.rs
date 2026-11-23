@@ -1,8 +1,9 @@
 //! YouTube: the public feed of each channel or playlist you list becomes a "New on YouTube"
 //! row, newest first, opened in the YouTube app. With a Google sign-in, made with a code on
 //! the phone, the row takes in your subscriptions as well, and your playlists and liked videos
-//! get rows of their own. The feeds are the ones YouTube publishes for every channel, so the
-//! sign-in only ever asks the API which channels you follow.
+//! get rows of their own. One playlist can have its videos as a row. The feeds are the ones
+//! YouTube publishes for every channel, so the sign-in only ever asks the API which channels
+//! you follow and how long their videos are.
 use lounge_plugin_sdk::{self as sdk, host, mark, t, tc, tn, Action, HttpRequest, Item, Kind, Manifest, RefreshContext, RowSpec, RowStyle, SettingKind, SettingSpec};
 use quick_xml::events::Event;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,9 @@ const SCOPE: &str = "https://www.googleapis.com/auth/youtube.readonly";
 const TOKEN_KEY: &str = "token";
 const DEVICE_KEY: &str = "device";
 const SUBS_KEY: &str = "subscriptions";
+const SUBS_LIST_KEY: &str = "subscribed";
+const DETAILS_KEY: &str = "details";
+const QUEUE_KEY: &str = "queue";
 const ART_KEY: &str = "hd_art";
 const HANDLES_KEY: &str = "handles";
 /// Feeds from the channels setting read on every refresh. The rest of that list takes turns
@@ -25,11 +29,20 @@ const HANDLES_KEY: &str = "handles";
 const MAX_FEEDS: usize = 40;
 /// Fetches spent in one refresh, inside the host's 64.
 const FETCH_BUDGET: usize = 60;
-/// Fetches kept back from feeds so a few pictures can still be checked.
-const ART_RESERVE: usize = 8;
+/// Fetches kept back from feeds for the account's lists and a few pictures.
+const ART_RESERVE: usize = 12;
 const ART_CHECKS: usize = 20;
 /// Pages of fifty subscriptions read, so a very long list does not use the refresh up.
 const MAX_SUB_PAGES: usize = 6;
+/// How long the list of subscriptions is kept before YouTube is asked for it again.
+const SUBS_LIST_FOR_MS: i64 = 6 * 60 * MINUTE_MS;
+/// Entries in one of YouTube's feeds when it is full.
+const FEED_SIZE: usize = 15;
+/// The feeds of a channel's long videos and of its live streams, named by what replaces the
+/// UC of its id.
+const WITHOUT_SHORTS: [&str; 2] = ["UULF", "UULV"];
+/// Videos asked about in one call for their lengths.
+const DETAILS_PER_CALL: usize = 50;
 /// Videos kept per subscribed channel between refreshes.
 const STORED_PER_CHANNEL: usize = 5;
 const MOST_ITEMS: usize = 200;
@@ -40,6 +53,7 @@ const MINUTE_MS: i64 = 60_000;
 const SIGNED_OUT: &str = mark!("Google no longer accepts this sign-in. Press Refresh now to sign in again.");
 const QUOTA: &str = mark!("YouTube's daily allowance for this app is used up. It comes back at midnight, Pacific time.");
 const API_OFF: &str = mark!("The YouTube Data API v3 is not enabled for this Google Cloud project. Enable it, then try again.");
+const REFUSED_SECRET: &str = mark!("Google refused the Client secret. Check it, and that it belongs to the same OAuth client as the Client ID.");
 
 impl sdk::Plugin for YouTube {
     sdk::locales!();
@@ -53,10 +67,12 @@ impl sdk::Plugin for YouTube {
             publisher_name: "Lounge".into(),
             kinds: vec![Kind::Content],
             fetch_hosts: vec!["www.youtube.com".into(), "m.youtube.com".into(), "*.ytimg.com".into(), "oauth2.googleapis.com".into(), "www.googleapis.com".into()],
-            refresh_minutes: 30,
+            refresh_minutes: 15,
             refresh_seconds: 0,
             rows: vec![
                 RowSpec { id: "new".into(), title: t!("New on YouTube"), style: RowStyle::Landscape },
+                // Translators: the title of a row of one playlist's videos, until the playlist's own name is known.
+                RowSpec { id: "queue".into(), title: t!("Playlist on YouTube"), style: RowStyle::Landscape },
                 RowSpec { id: "playlists".into(), title: t!("Your playlists on YouTube"), style: RowStyle::Landscape },
                 RowSpec { id: "liked".into(), title: t!("Liked on YouTube"), style: RowStyle::Landscape },
             ],
@@ -70,12 +86,21 @@ impl sdk::Plugin for YouTube {
                     default: None,
                 },
                 SettingSpec {
+                    key: "queue".into(),
+                    label: t!("Playlist as a row"),
+                    kind: SettingKind::Text,
+                    required: false,
+                    // Translators: "Watch later" is YouTube's own playlist of that name.
+                    help: Some(t!("A playlist's link or id. Its videos get a row of their own, in the playlist's order, so a playlist you add to on your phone works as a list for the TV. YouTube does not hand out Watch later. A private playlist needs the sign-in below.")),
+                    default: None,
+                },
+                SettingSpec {
                     key: "client_id".into(),
                     label: t!("Google Client ID"),
                     kind: SettingKind::Text,
                     required: false,
-                    // Translators: "External" and "TVs and Limited Input devices" are choices in the Google Cloud console.
-                    help: Some(t!("To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here. At console.cloud.google.com make a project, enable the YouTube Data API v3, set the OAuth consent screen to External and publish it, then make an OAuth client of the type TVs and Limited Input devices. This page then shows a code to enter on your phone.")),
+                    // Translators: "Google Auth Platform", "Get started", "External", "Audience", "Publish app", "Clients" and "TVs and Limited Input devices" are names in the Google Cloud console.
+                    help: Some(t!("To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here. At console.cloud.google.com make a project and enable the YouTube Data API v3. Under Google Auth Platform press Get started and choose External, then on Audience press Publish app. Under Clients make a client of the type TVs and Limited Input devices, and copy its secret at once, since Google shows it only then. This page then shows a code to enter on your phone.")),
                     default: None,
                 },
                 SettingSpec { key: "client_secret".into(), label: t!("Google Client secret"), kind: SettingKind::Password, required: false, help: None, default: None },
@@ -124,8 +149,12 @@ impl sdk::Plugin for YouTube {
             Some(raw) => parse_sources(&raw)?,
             None => Vec::new(),
         };
+        let queue = match host::setting("queue").filter(|v| !v.trim().is_empty()) {
+            Some(raw) => Some(parse_playlist(&raw)?),
+            None => None,
+        };
         let account = Account::connect(ctx.now_ms, &mut budget)?;
-        if sources.is_empty() && account.is_none() {
+        if sources.is_empty() && account.is_none() && queue.is_none() {
             return Err(t!("Nothing to show yet. Add a channel link or id, or a Google Client ID, in the plugin's settings."));
         }
         let per_source = number_setting("per_source", 4).clamp(1, 15) as usize;
@@ -133,16 +162,24 @@ impl sdk::Plugin for YouTube {
         let since = if days == 0 { 0 } else { ctx.now_ms - days * 86_400_000 };
         let shorts = host::setting("shorts").is_some_and(|v| v == "true");
         let wanted = |v: &Video| v.published_ms >= since && (shorts || !v.short);
+        // Videos the account's API said had yet to start take no place among a channel's
+        // newest, and are asked about again until they have.
+        let known = if account.is_some() { kept_details() } else { BTreeMap::new() };
+        let upcoming = |v: &Video| known.get(&v.id).is_some_and(|d| d.upcoming);
+        let mut waiting: Vec<String> = Vec::new();
         let mut videos = Vec::new();
         let mut failures = Vec::new();
         let sources = resolve_named(sources, &mut budget, &mut failures);
         let (first, rest) = sources.split_at(sources.len().min(MAX_FEEDS));
-        for source in first {
+        for (i, source) in first.iter().enumerate() {
             budget.spend();
-            match feed(source) {
-                Ok(xml) => {
-                    let mut parsed = parse_feed(&xml);
+            // The feeds still to come and the account's lists keep their fetches.
+            let keep_back = first.len() - i - 1 + ART_RESERVE;
+            match source_videos(source, per_source, shorts, &upcoming, keep_back, &mut budget) {
+                Ok(mut parsed) => {
                     parsed.retain(wanted);
+                    waiting.extend(parsed.iter().filter(|v| upcoming(v)).map(|v| v.id.clone()));
+                    parsed.retain(|v| !upcoming(v));
                     parsed.truncate(per_source);
                     videos.extend(parsed);
                 }
@@ -156,7 +193,7 @@ impl sdk::Plugin for YouTube {
         let mut cache = SubsCache::load();
         let mut subscribed = 0;
         if let Some(client) = account.as_ref().filter(|_| toggle("subscriptions", true)) {
-            match client.subscriptions(&mut budget) {
+            match subscriptions_kept(client, ctx.now_ms, &mut budget) {
                 Ok(subs) => {
                     subscribed = subs.len();
                     followed.extend(subs.into_iter().map(Followed::subscribed));
@@ -174,12 +211,12 @@ impl sdk::Plugin for YouTube {
         let mut seen: std::collections::HashSet<String> = first.iter().filter_map(Followed::listed).map(|f| f.key).collect();
         followed.retain(|f| seen.insert(f.key.clone()));
         if !followed.is_empty() || !cache.channels.is_empty() {
-            cache.refresh(&followed, ctx.now_ms, &mut budget);
+            cache.refresh(&followed, ctx.now_ms, shorts, &upcoming, &mut budget);
             cache.save();
         }
         for channel in cache.channels.values() {
-            let mut from_channel: Vec<Video> = channel.videos.iter().filter(|v| wanted(v)).take(per_source).cloned().collect();
-            videos.append(&mut from_channel);
+            waiting.extend(channel.videos.iter().filter(|v| wanted(v) && upcoming(v)).map(|v| v.id.clone()));
+            videos.extend(channel.videos.iter().filter(|v| wanted(v) && !upcoming(v)).take(per_source).cloned());
         }
         if let Some(client) = &account {
             if toggle("playlists", true) {
@@ -195,34 +232,82 @@ impl sdk::Plugin for YouTube {
                 }
             }
         }
+        let mut queued = Queue::default();
+        if let Some(list) = &queue {
+            match Queue::read(list, account.as_ref(), ctx.now_ms, &mut budget) {
+                Ok(read) => queued = read,
+                Err(e) => failures.push((format!("playlist {list}"), e)),
+            }
+        }
         for (label, e) in &failures {
             sdk::warn!("{label}: {e}");
         }
         if videos.is_empty()
             && items.is_empty()
+            && queued.videos.is_empty()
             && let Some((_, e)) = failures.into_iter().next()
         {
             return Err(e);
         }
-        videos.sort_by_key(|v| std::cmp::Reverse(v.published_ms));
-        let mut seen = std::collections::HashSet::new();
-        videos.retain(|v| seen.insert(v.id.clone()));
+        let mut videos = newest_first(videos);
         videos.truncate(MOST_ITEMS);
+        // What only the account's API knows: how long each runs, and which have yet to start.
+        let details = match &account {
+            Some(client) => {
+                let shown = videos.iter().chain(queued.videos.iter().map(|q| &q.video)).map(|v| v.id.as_str());
+                details(client, &known, shown.chain(waiting.iter().map(String::as_str)), &mut budget)
+            }
+            None => BTreeMap::new(),
+        };
+        let started = |v: &Video| !details.get(&v.id).is_some_and(|d| d.upcoming);
+        videos.retain(started);
+        queued.videos.retain(|q| started(&q.video));
         let recent = ctx.now_ms - 3 * 86_400_000;
         let count = videos.len();
-        let hd = hd_art(&videos, budget.left().min(ART_CHECKS));
-        sdk::info!("{count} videos from {} feeds and {subscribed} subscriptions, {} with large pictures, {} other tiles", sources.len(), hd.values().filter(|v| **v).count(), items.len());
-        items.extend(videos.into_iter().enumerate().map(|(i, v)| Item {
-            id: format!("video:{}", v.id),
-            title: v.title,
-            subtitle: Some(v.channel),
-            added_ms: Some(v.published_ms),
-            is_new: v.published_ms >= recent,
-            thumbnail: Some(thumbnail(&v.id, hd.get(&v.id) == Some(&true))),
-            row: Some("new".into()),
-            weight: (count - i) as i32,
-            action: watch(&v.id),
-            ..Default::default()
+        let unpictured = queued.videos.iter().filter(|q| q.picture.is_none()).map(|q| q.video.clone());
+        let pictured: Vec<Video> = videos.iter().cloned().chain(unpictured).collect();
+        let hd = hd_art(&pictured, budget.left().min(ART_CHECKS));
+        sdk::info!(
+            "{count} videos from {} feeds and {subscribed} subscriptions, {} from the playlist, {} with large pictures, {} other tiles",
+            sources.len(),
+            queued.videos.len(),
+            hd.values().filter(|v| **v).count(),
+            items.len()
+        );
+        let picture = |id: &str| thumbnail(id, hd.get(id) == Some(&true));
+        let in_queue = queued.videos.len();
+        let row_title = queued.title.as_deref().map(queue_title);
+        items.extend(queued.videos.into_iter().enumerate().map(|(i, q)| {
+            let detail = details.get(&q.video.id);
+            Item {
+                id: format!("queue:{}", q.video.id),
+                subtitle: Some(subtitle(&q.video.channel, detail)).filter(|s| !s.is_empty()),
+                duration_ms: detail.and_then(Detail::length_ms),
+                added_ms: Some(q.video.published_ms).filter(|ms| *ms > 0),
+                thumbnail: Some(q.picture.unwrap_or_else(|| picture(&q.video.id))),
+                row: Some("queue".into()),
+                weight: (in_queue - i) as i32,
+                action: watch_in(&q.video.id, queue.as_deref().unwrap_or_default()),
+                row_title: row_title.clone().filter(|_| i == 0),
+                title: q.video.title,
+                ..Default::default()
+            }
+        }));
+        items.extend(videos.into_iter().enumerate().map(|(i, v)| {
+            let detail = details.get(&v.id);
+            Item {
+                id: format!("video:{}", v.id),
+                subtitle: Some(subtitle(&v.channel, detail)),
+                duration_ms: detail.and_then(Detail::length_ms),
+                added_ms: Some(v.published_ms),
+                is_new: v.published_ms >= recent,
+                thumbnail: Some(picture(&v.id)),
+                row: Some("new".into()),
+                weight: (count - i) as i32,
+                action: watch(&v.id),
+                title: v.title,
+                ..Default::default()
+            }
         }));
         sdk::dedup_ids(&mut items);
         Ok(items)
@@ -237,6 +322,48 @@ fn toggle(key: &str, default: bool) -> bool {
 
 fn watch(video_id: &str) -> Action {
     Action { view: Some(format!("https://www.youtube.com/watch?v={video_id}")), fallback_launch: Some(APP_PACKAGE.into()), ..Default::default() }
+}
+
+/// A video opened as part of a playlist, so the app goes on to the next one.
+fn watch_in(video_id: &str, playlist: &str) -> Action {
+    Action { view: Some(format!("https://www.youtube.com/watch?v={video_id}&list={}", url_encode(playlist))), fallback_launch: Some(APP_PACKAGE.into()), ..Default::default() }
+}
+
+/// Videos newest first, each once.
+fn newest_first(mut videos: Vec<Video>) -> Vec<Video> {
+    videos.sort_by_key(|v| std::cmp::Reverse(v.published_ms));
+    let mut seen = std::collections::HashSet::new();
+    videos.retain(|v| seen.insert(v.id.clone()));
+    videos
+}
+
+/// A tile's second line: the channel, and how long the video runs or that it is live.
+fn subtitle(channel: &str, detail: Option<&Detail>) -> String {
+    match detail {
+        // Translators: a tile's second line. {channel} is a YouTube channel's name; the video is a live stream on air now.
+        Some(d) if d.live && !channel.is_empty() => t!("{channel}, live now", channel = channel),
+        // Translators: a tile's second line, for a live stream on air now whose channel is not known.
+        Some(d) if d.live => t!("Live now"),
+        Some(d) if d.seconds > 0 && !channel.is_empty() => {
+            // Translators: a tile's second line. {channel} is a YouTube channel's name and {length} how long the video runs, such as "48 minutes".
+            t!("{channel}, {length}", channel = channel, length = length_text(d.seconds * 1000))
+        }
+        Some(d) if d.seconds > 0 => length_text(d.seconds * 1000),
+        _ => channel.to_string(),
+    }
+}
+
+/// A length in words: "48 minutes", "2 hours 25 minutes", "1 hour".
+pub fn length_text(ms: i64) -> String {
+    let minutes = (ms + 30_000) / 60_000;
+    let hours = |h: i64| tn!(h, "{n} hour", "{n} hours");
+    let minutes_of = |m: i64| tn!(m, "{n} minute", "{n} minutes");
+    match (minutes / 60, minutes % 60) {
+        (0, m) => minutes_of(m.max(1)),
+        (h, 0) => hours(h),
+        // Translators: a length of time. {hours} is a count of hours, such as "2 hours", and {minutes} a count of minutes, such as "25 minutes".
+        (h, m) => t!("{hours} {minutes}", hours = hours(h), minutes = minutes_of(m)),
+    }
 }
 
 /// The fetches one refresh may still make.
@@ -267,15 +394,68 @@ impl Budget {
 /// 404 for an id it does not know, and now and then for one it does, so the sentence allows
 /// for both.
 fn feed(source: &Source) -> Result<String, String> {
+    feed_if_any(source)?.ok_or_else(|| match source {
+        Source::Channel(id) | Source::Named(id) => t!("YouTube gave no feed for channel {id}. If the id is right, it comes with a later refresh.", id = id),
+        Source::Playlist(id) => t!("YouTube gave no feed for playlist {id}. If the id is right, it comes with a later refresh.", id = id),
+    })
+}
+
+/// A source's feed, or nothing when YouTube has none under that id.
+fn feed_if_any(source: &Source) -> Result<Option<String>, String> {
     let r = sdk::fetch_online("YouTube", &HttpRequest::get(source.feed_url()))?;
     match r.status {
-        404 => Err(match source {
-            Source::Channel(id) | Source::Named(id) => t!("YouTube gave no feed for channel {id}. If the id is right, it comes with a later refresh.", id = id),
-            Source::Playlist(id) => t!("YouTube gave no feed for playlist {id}. If the id is right, it comes with a later refresh.", id = id),
-        }),
+        404 => Ok(None),
         s if !(200..300).contains(&s) => Err(sdk::online_error("YouTube", s)),
-        _ => Ok(if r.body_base64.is_some() { String::from_utf8_lossy(&sdk::body_bytes(r)).into_owned() } else { r.body }),
+        _ => Ok(Some(if r.body_base64.is_some() { String::from_utf8_lossy(&sdk::body_bytes(r)).into_owned() } else { r.body })),
     }
+}
+
+/// A source's videos, newest first. A channel's feed holds its newest uploads of every kind, so
+/// with Shorts left out and too few others among them, its feeds of long videos and of live
+/// streams are read as well, while more than `keep_back` fetches are left. Videos that
+/// `upcoming` says have yet to start do not count among those others.
+fn source_videos(source: &Source, want: usize, shorts: bool, upcoming: &dyn Fn(&Video) -> bool, keep_back: usize, budget: &mut Budget) -> Result<Vec<Video>, String> {
+    let mut videos = parse_feed(&feed(source)?);
+    let Source::Channel(id) = source else { return Ok(videos) };
+    if shorts {
+        return Ok(videos);
+    }
+    let read = videos.len();
+    videos.retain(|v| !v.short);
+    let ready = videos.iter().filter(|v| !upcoming(v)).count();
+    if !crowded(read, ready, want) {
+        return Ok(videos);
+    }
+    for prefix in WITHOUT_SHORTS {
+        let Some(list) = id.strip_prefix("UC").map(|rest| format!("{prefix}{rest}")) else { break };
+        if budget.left() <= keep_back || !budget.spend() {
+            break;
+        }
+        match feed_if_any(&Source::Playlist(list)) {
+            Ok(Some(xml)) => videos.extend(parse_feed(&xml)),
+            // A channel with no live streams has no feed of them.
+            Ok(None) => {}
+            Err(e) => sdk::warn!("channel {id}: {e}"),
+        }
+    }
+    Ok(newest_first(videos))
+}
+
+/// Whether Shorts and videos yet to start took so much of a full feed that fewer than `want`
+/// others were left.
+fn crowded(read: usize, kept: usize, want: usize) -> bool {
+    read >= FEED_SIZE && kept < read && kept < want
+}
+
+/// Cuts a list after its first `most` videos that can be played. Those yet to start that come
+/// before them stay, so they are asked about again, up to twice `most` in all.
+fn keep_ready(videos: &mut Vec<Video>, most: usize, upcoming: &dyn Fn(&Video) -> bool) {
+    let mut ready = 0;
+    let end = videos.iter().position(|v| {
+        ready += usize::from(!upcoming(v));
+        ready > most
+    });
+    videos.truncate(end.unwrap_or(videos.len()).min(2 * most));
 }
 
 /// The 1280×720 picture when YouTube has one, else the 480×360 one every video has.
@@ -458,6 +638,8 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, Stri
                 sdk::unreadable("Google", TOKEN_URL)
             })?;
             host::kv_delete(DEVICE_KEY);
+            // Another account may have signed in, with other subscriptions.
+            host::kv_delete(SUBS_LIST_KEY);
             return Ok(save_token(t, "", now_ms));
         }
         let e = oauth_error(&body);
@@ -468,7 +650,8 @@ fn device_step(client_id: &str, secret: &str, now_ms: i64) -> Result<Token, Stri
                 // Translators: "Refresh now" is the button on the plugin's page on the TV.
                 return Err(t!("The sign-in was declined on the phone. Press Refresh now for a new code."));
             }
-            "invalid_client" => return Err(sdk::tr(UNKNOWN_CLIENT)),
+            // Google gave this Client ID its code, so it is the secret it does not take.
+            "invalid_client" => return Err(sdk::tr(REFUSED_SECRET)),
             _ => {
                 sdk::warn!("the sign-in code is no longer good: HTTP {status} {} {}", e.error, e.error_description);
                 host::kv_delete(DEVICE_KEY);
@@ -613,6 +796,59 @@ struct LikedVideo {
     id: String,
     #[serde(default)]
     snippet: VideoSnippet,
+    #[serde(rename = "contentDetails", default)]
+    content: ContentDetails,
+}
+
+#[derive(Deserialize, Default)]
+struct ContentDetails {
+    /// The length as ISO 8601 writes one, such as PT1H2M3S.
+    #[serde(default)]
+    duration: String,
+}
+
+#[derive(Deserialize, Default)]
+struct VideoDetails {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    snippet: BroadcastSnippet,
+    #[serde(rename = "contentDetails", default)]
+    content: ContentDetails,
+}
+
+#[derive(Deserialize, Default)]
+struct BroadcastSnippet {
+    /// "live" for a stream on air, "upcoming" for one announced, "none" otherwise.
+    #[serde(rename = "liveBroadcastContent", default)]
+    broadcast: String,
+}
+
+#[derive(Deserialize, Default)]
+struct PlaylistItem {
+    #[serde(default)]
+    snippet: PlaylistItemSnippet,
+    #[serde(rename = "contentDetails", default)]
+    details: PlaylistItemDetails,
+}
+
+#[derive(Deserialize, Default)]
+struct PlaylistItemSnippet {
+    #[serde(default)]
+    title: String,
+    #[serde(rename = "videoOwnerChannelTitle", default)]
+    channel: String,
+    #[serde(default)]
+    thumbnails: Thumbnails,
+}
+
+#[derive(Deserialize, Default)]
+struct PlaylistItemDetails {
+    #[serde(rename = "videoId", default)]
+    video_id: String,
+    /// Missing for a video that was deleted or made private.
+    #[serde(rename = "videoPublishedAt", default)]
+    published: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -655,7 +891,7 @@ impl Thumbnails {
 }
 
 /// A subscribed channel, as the API names it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Subscribed {
     pub channel_id: String,
     pub title: String,
@@ -685,6 +921,7 @@ impl Client {
                 Err(match reason {
                     "quotaExceeded" | "dailyLimitExceeded" | "rateLimitExceeded" => sdk::tr(QUOTA),
                     "accessNotConfigured" => sdk::tr(API_OFF),
+                    "playlistNotFound" => t!("YouTube has no such playlist, or it is private and belongs to another account. Check the playlist in the plugin's settings."),
                     _ => sdk::online_error("YouTube", s),
                 })
             }
@@ -704,7 +941,25 @@ impl Client {
                 break;
             }
         }
+        if page_token.is_some() {
+            sdk::info!("the account has more than {} subscriptions; the rest are not followed", out.len());
+        }
         Ok(out)
+    }
+
+    /// A playlist's name, asked for once in a while and kept. Nothing when it cannot be had,
+    /// which leaves the row its plain title.
+    fn playlist_title(&self, list: &str, now_ms: i64, budget: &mut Budget) -> Option<String> {
+        let kept: Option<KeptTitle> = host::kv_get(QUEUE_KEY).and_then(|v| serde_json::from_slice(&v).ok());
+        if let Some(kept) = kept.filter(|k| k.id == list && (0..SUBS_LIST_FOR_MS).contains(&(now_ms - k.fetched_ms))) {
+            return Some(kept.title);
+        }
+        let fields = url_encode("items(snippet/title)");
+        let page: Page<Playlist> = self.get_json(&format!("playlists?part=snippet&fields={fields}&id={}", url_encode(list)), budget).ok()?;
+        let title = page.items.into_iter().next().map(|p| p.snippet.title).filter(|t| !t.is_empty())?;
+        let kept = KeptTitle { id: list.to_string(), title, fetched_ms: now_ms };
+        host::kv_set(QUEUE_KEY, &serde_json::to_vec(&kept).unwrap_or_default());
+        Some(kept.title)
     }
 
     /// The account's own playlists as tiles, in YouTube's order.
@@ -731,7 +986,7 @@ impl Client {
 
     /// The videos the account liked, most recent like first.
     fn liked(&self, budget: &mut Budget, now_ms: i64) -> Result<Vec<Item>, String> {
-        let page: Page<LikedVideo> = self.get_json("videos?part=snippet&myRating=like&maxResults=50", budget)?;
+        let page: Page<LikedVideo> = self.get_json("videos?part=snippet,contentDetails&myRating=like&maxResults=50", budget)?;
         let count = page.items.len() as i32;
         let recent = now_ms - 3 * 86_400_000;
         Ok(page
@@ -741,10 +996,12 @@ impl Client {
             .filter(|(_, v)| !v.id.is_empty())
             .map(|(i, v)| {
                 let published_ms = v.snippet.published.as_deref().and_then(sdk::parse_iso8601);
+                let detail = Detail { seconds: iso_duration_seconds(&v.content.duration), ..Default::default() };
                 Item {
                     id: format!("liked:{}", v.id),
                     title: v.snippet.title.clone(),
-                    subtitle: Some(v.snippet.channel.clone()).filter(|c| !c.is_empty()),
+                    subtitle: Some(subtitle(&v.snippet.channel, Some(&detail))).filter(|c| !c.is_empty()),
+                    duration_ms: detail.length_ms(),
                     added_ms: published_ms,
                     is_new: published_ms.is_some_and(|p| p >= recent),
                     thumbnail: v.snippet.thumbnails.best().or_else(|| Some(thumbnail(&v.id, false))),
@@ -756,6 +1013,210 @@ impl Client {
             })
             .collect())
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct KeptTitle {
+    id: String,
+    title: String,
+    fetched_ms: i64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SubsList {
+    fetched_ms: i64,
+    channels: Vec<Subscribed>,
+}
+
+/// The account's subscriptions. YouTube is asked once in a while and the list kept, so most
+/// refreshes spend their fetches on feeds.
+fn subscriptions_kept(client: &Client, now_ms: i64, budget: &mut Budget) -> Result<Vec<Subscribed>, String> {
+    let kept: Option<SubsList> = host::kv_get(SUBS_LIST_KEY).and_then(|v| serde_json::from_slice(&v).ok());
+    if let Some(list) = kept.filter(|l| (0..SUBS_LIST_FOR_MS).contains(&(now_ms - l.fetched_ms))) {
+        return Ok(list.channels);
+    }
+    let list = SubsList { fetched_ms: now_ms, channels: client.subscriptions(budget)? };
+    host::kv_set(SUBS_LIST_KEY, &serde_json::to_vec(&list).unwrap_or_default());
+    Ok(list.channels)
+}
+
+// ---------------------------------------------------------------------------
+// What only the API knows of a video
+// ---------------------------------------------------------------------------
+
+/// How long a video runs and whether it is a stream on air or yet to start.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+struct Detail {
+    #[serde(default)]
+    seconds: i64,
+    #[serde(default)]
+    live: bool,
+    #[serde(default)]
+    upcoming: bool,
+}
+
+impl Detail {
+    fn of(v: &VideoDetails) -> Detail {
+        Detail { seconds: iso_duration_seconds(&v.content.duration), live: v.snippet.broadcast == "live", upcoming: v.snippet.broadcast == "upcoming" }
+    }
+
+    fn length_ms(&self) -> Option<i64> {
+        (self.seconds > 0 && !self.live).then_some(self.seconds * 1000)
+    }
+
+    /// Whether it will read the same next time: a stream on air or yet to start will not.
+    fn settled(&self) -> bool {
+        !self.live && !self.upcoming
+    }
+}
+
+/// The seconds in a length such as PT1H2M3S or P1DT30M. A stream on air has P0D, which is none.
+fn iso_duration_seconds(s: &str) -> i64 {
+    let (mut total, mut number, mut in_time) = (0i64, 0i64, false);
+    for c in s.chars() {
+        match c {
+            '0'..='9' => number = number * 10 + i64::from(c as u8 - b'0'),
+            'T' => in_time = true,
+            _ => {
+                total += number
+                    * match (c, in_time) {
+                        ('W', false) => 604_800,
+                        ('D', false) => 86_400,
+                        ('H', true) => 3_600,
+                        ('M', true) => 60,
+                        ('S', true) => 1,
+                        _ => 0,
+                    };
+                number = 0;
+            }
+        }
+    }
+    total
+}
+
+/// What earlier refreshes were told of the videos.
+fn kept_details() -> BTreeMap<String, Detail> {
+    host::kv_get_string(DETAILS_KEY).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+/// What the API says of each of the videos, starting from what was `kept`. A refresh asks only
+/// about videos it has not asked about, and streams that had not ended.
+fn details<'a>(client: &Client, kept: &BTreeMap<String, Detail>, ids: impl Iterator<Item = &'a str>, budget: &mut Budget) -> BTreeMap<String, Detail> {
+    let ids: Vec<&str> = ids.collect();
+    let mut known = kept.clone();
+    known.retain(|id, _| ids.contains(&id.as_str()));
+    let ask: Vec<&str> = ids.iter().copied().filter(|id| !known.get(*id).is_some_and(Detail::settled)).collect();
+    let fields = url_encode("items(id,snippet/liveBroadcastContent,contentDetails/duration)");
+    let mut asked = false;
+    for chunk in ask.chunks(DETAILS_PER_CALL) {
+        if budget.left() == 0 {
+            break;
+        }
+        match client.get_json::<Page<VideoDetails>>(&format!("videos?part=snippet,contentDetails&maxResults=50&fields={fields}&id={}", chunk.join(",")), budget) {
+            Ok(page) => {
+                asked = true;
+                // A video YouTube no longer knows is not asked about again.
+                for id in chunk {
+                    known.insert(id.to_string(), Detail::default());
+                }
+                for v in &page.items {
+                    known.insert(v.id.clone(), Detail::of(v));
+                }
+            }
+            Err(e) => {
+                sdk::warn!("video lengths: {e}");
+                break;
+            }
+        }
+    }
+    if asked {
+        host::kv_set(DETAILS_KEY, serde_json::to_string(&known).unwrap_or_default().as_bytes());
+    }
+    known
+}
+
+// ---------------------------------------------------------------------------
+// One playlist as a row
+// ---------------------------------------------------------------------------
+
+/// A playlist's videos in the playlist's order, with its name.
+#[derive(Default)]
+struct Queue {
+    title: Option<String>,
+    videos: Vec<Queued>,
+}
+
+struct Queued {
+    video: Video,
+    /// The picture the API names for it, when the API was asked.
+    picture: Option<String>,
+}
+
+impl Queue {
+    /// Read through the account when there is one, which also reaches its private playlists,
+    /// and from the playlist's public feed otherwise.
+    fn read(list: &str, account: Option<&Client>, now_ms: i64, budget: &mut Budget) -> Result<Queue, String> {
+        let Some(client) = account else { return Queue::from_feed(list, budget) };
+        match client.get_json::<Page<PlaylistItem>>(&format!("playlistItems?part=snippet,contentDetails&maxResults=50&playlistId={}", url_encode(list)), budget) {
+            Ok(page) => {
+                let videos = page.items.into_iter().filter_map(Queued::listed).collect();
+                Ok(Queue { title: client.playlist_title(list, now_ms, budget), videos })
+            }
+            // A public playlist is still in its feed when the API will not answer.
+            Err(e) => Queue::from_feed(list, budget).map_err(|_| e),
+        }
+    }
+
+    fn from_feed(list: &str, budget: &mut Budget) -> Result<Queue, String> {
+        if !budget.spend() {
+            return Err(host::BUDGET_SPENT.into());
+        }
+        let xml = feed(&Source::Playlist(list.to_string()))?;
+        let videos = parse_feed(&xml).into_iter().map(|video| Queued { video, picture: None }).collect();
+        Ok(Queue { title: feed_title(&xml), videos })
+    }
+}
+
+impl Queued {
+    /// An entry of the playlist, unless its video was deleted or made private.
+    fn listed(item: PlaylistItem) -> Option<Queued> {
+        let published_ms = sdk::parse_iso8601(item.details.published.as_deref()?)?;
+        if item.details.video_id.is_empty() || item.snippet.title.is_empty() {
+            return None;
+        }
+        let picture = item.snippet.thumbnails.best();
+        Some(Queued { video: Video { id: item.details.video_id, title: item.snippet.title, channel: item.snippet.channel, published_ms, short: false }, picture })
+    }
+}
+
+/// The playlist a setting names by its id or by a link that carries it.
+pub fn parse_playlist(raw: &str) -> Result<String, String> {
+    let named = raw.split(|c: char| c.is_whitespace() || c == ',' || c == ';').filter_map(parse_piece).find_map(|source| match source {
+        Source::Playlist(id) => Some(id),
+        _ => None,
+    });
+    if named.as_deref() == Some("WL") {
+        // Translators: "Watch later" is YouTube's own playlist of that name.
+        return Err(t!("YouTube does not hand out Watch later. Name a playlist of your own in the plugin's settings."));
+    }
+    // Translators: {piece} is what was typed into the "Playlist as a row" setting.
+    named.ok_or_else(|| t!("\"{piece}\" is not a playlist's id or link. Check the playlist in the plugin's settings.", piece = raw.trim()))
+}
+
+/// The row's title from the playlist's name, which is cut short so the ending still fits.
+fn queue_title(name: &str) -> String {
+    let name: String = name.chars().take(40).collect();
+    // Translators: the title of a row of one playlist's videos. {playlist} is the playlist's name, as its owner wrote it.
+    t!("{playlist} on YouTube", playlist = name.trim())
+}
+
+/// A feed's own title, which for a playlist's feed is the playlist's name.
+fn feed_title(xml: &str) -> Option<String> {
+    let head = xml.split("<entry>").next()?;
+    let start = head.find("<title>")? + "<title>".len();
+    let end = start + head[start..].find("</title>")?;
+    let title = quick_xml::escape::unescape(&head[start..end]).ok()?.trim().to_string();
+    (!title.is_empty()).then_some(title)
 }
 
 // ---------------------------------------------------------------------------
@@ -862,8 +1323,9 @@ impl SubsCache {
     }
 
     /// Reads the feeds due, those not asked for longest first, keeping `ART_RESERVE` fetches
-    /// back, and forgets feeds no longer followed.
-    fn refresh(&mut self, followed: &[Followed], now_ms: i64, budget: &mut Budget) {
+    /// back, and forgets feeds no longer followed. What is kept of a feed follows `shorts`, so
+    /// after that setting changes each channel catches up when its turn comes.
+    fn refresh(&mut self, followed: &[Followed], now_ms: i64, shorts: bool, upcoming: &dyn Fn(&Video) -> bool, budget: &mut Budget) {
         self.channels.retain(|key, _| followed.iter().any(|f| &f.key == key));
         let mut due: Vec<&Followed> = followed.iter().collect();
         due.sort_by_key(|f| self.channels.get(&f.key).map_or(0, |c| c.attempted_ms.max(c.fetched_ms)));
@@ -876,10 +1338,9 @@ impl SubsCache {
             let entry = self.channels.entry(s.key.clone()).or_default();
             entry.title = s.title.clone();
             entry.attempted_ms = now_ms;
-            match feed(&s.source()) {
-                Ok(xml) => {
-                    let mut videos = parse_feed(&xml);
-                    videos.truncate(STORED_PER_CHANNEL);
+            match source_videos(&s.source(), STORED_PER_CHANNEL, shorts, upcoming, ART_RESERVE, budget) {
+                Ok(mut videos) => {
+                    keep_ready(&mut videos, STORED_PER_CHANNEL, upcoming);
                     entry.videos = videos;
                     entry.fetched_ms = now_ms;
                 }
@@ -1337,7 +1798,7 @@ mod tests {
         cache.channels.insert("UCgone".into(), CachedChannel { title: "Unsubscribed".into(), fetched_ms: 900, ..Default::default() });
         // Two fetches above the reserve: the three never-read channels come before the two read ones.
         let mut budget = Budget::new(ART_RESERVE + 2);
-        cache.refresh(&subs, 1_000, &mut budget);
+        cache.refresh(&subs, 1_000, false, &|_| false, &mut budget);
         assert_eq!(budget.left(), ART_RESERVE);
         assert!(!cache.channels.contains_key("UCgone"));
         // Off the TV the feeds fail, so the entries exist with their titles but no read time.
@@ -1347,7 +1808,7 @@ mod tests {
         assert_eq!(cache.channels["UC2"].fetched_ms, 100);
         // A feed that did not come waits its turn: next the channel never asked, then the oldest read.
         let mut budget = Budget::new(ART_RESERVE + 2);
-        cache.refresh(&subs, 2_000, &mut budget);
+        cache.refresh(&subs, 2_000, false, &|_| false, &mut budget);
         assert_eq!(cache.channels.values().filter(|c| c.attempted_ms == 1_000).count(), 2);
         assert_eq!(cache.channels["UC2"].attempted_ms, 2_000);
         assert_eq!(cache.channels["UC1"].attempted_ms, 0);
@@ -1369,7 +1830,7 @@ mod tests {
 
         // A feed dropped from both lists is forgotten.
         let mut budget = Budget::new(ART_RESERVE);
-        cache.refresh(&listed, 1_000, &mut budget);
+        cache.refresh(&listed, 1_000, false, &|_| false, &mut budget);
         assert_eq!(cache.channels.keys().map(String::as_str).collect::<Vec<_>>(), ["UCa"]);
     }
 
@@ -1409,5 +1870,113 @@ mod tests {
         assert_eq!(budget.left(), FETCH_BUDGET);
         assert_eq!(<YouTube as sdk::Plugin>::refresh(&RefreshContext::default()).err().as_deref(), Some("Nothing to show yet. Add a channel link or id, or a Google Client ID, in the plugin's settings."));
         assert!(<YouTube as sdk::Plugin>::manifest().settings.iter().all(|s| !s.required));
+    }
+
+    #[test]
+    fn a_feed_full_of_shorts_is_read_past_only_when_it_leaves_too_few() {
+        // Seven videos among fifteen entries are enough for four, and not for ten.
+        assert!(!crowded(FEED_SIZE, 7, 4));
+        assert!(crowded(FEED_SIZE, 7, 10));
+        assert!(crowded(FEED_SIZE, 0, 1));
+        // A feed that is not full is the whole channel, and one with no Shorts lost nothing.
+        assert!(!crowded(9, 2, 4));
+        assert!(!crowded(FEED_SIZE, FEED_SIZE, 20));
+        assert_eq!(WITHOUT_SHORTS.map(|prefix| Source::Playlist(format!("{prefix}x")).feed_url()), [
+            "https://www.youtube.com/feeds/videos.xml?playlist_id=UULFx",
+            "https://www.youtube.com/feeds/videos.xml?playlist_id=UULVx"
+        ]);
+    }
+
+    #[test]
+    fn videos_yet_to_start_take_no_place_among_a_channel_s_newest() {
+        let video = |id: &str| Video { id: id.into(), title: id.into(), channel: "c".into(), published_ms: 1, short: false };
+        let soon = |v: &Video| v.id.starts_with("soon");
+        let mut videos: Vec<Video> = ["soon1", "a", "soon2", "b", "c", "d"].map(video).into();
+        keep_ready(&mut videos, 2, &soon);
+        assert_eq!(videos.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), ["soon1", "a", "soon2", "b"]);
+        // With nothing yet to start it is a plain cut, and a short list is kept whole.
+        let mut plain: Vec<Video> = ["a", "b", "c"].map(video).into();
+        keep_ready(&mut plain, 2, &|_| false);
+        assert_eq!(plain.len(), 2);
+        keep_ready(&mut plain, 5, &|_| false);
+        assert_eq!(plain.len(), 2);
+        // A feed of nothing but announcements does not grow without end.
+        let mut announced: Vec<Video> = (0..15).map(|n| video(&format!("soon{n}"))).collect();
+        keep_ready(&mut announced, 5, &soon);
+        assert_eq!(announced.len(), 10);
+    }
+
+    #[test]
+    fn feeds_read_together_come_newest_first_and_once() {
+        let video = |id: &str, published_ms: i64| Video { id: id.into(), title: id.into(), channel: "c".into(), published_ms, short: false };
+        let merged = newest_first(vec![video("b", 2), video("d", 4), video("a", 1), video("d", 4), video("c", 3)]);
+        assert_eq!(merged.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), ["d", "c", "b", "a"]);
+    }
+
+    #[test]
+    fn a_length_is_read_and_said_in_words() {
+        assert_eq!(iso_duration_seconds("PT1H2M3S"), 3_723);
+        assert_eq!(iso_duration_seconds("PT15M"), 900);
+        assert_eq!(iso_duration_seconds("PT45S"), 45);
+        assert_eq!(iso_duration_seconds("P1DT30M"), 88_200);
+        assert_eq!(iso_duration_seconds("P0D"), 0);
+        assert_eq!(iso_duration_seconds(""), 0);
+        assert_eq!(length_text(48 * 60_000), "48 minutes");
+        assert_eq!(length_text(2 * 3_600_000 + 25 * 60_000), "2 hours 25 minutes");
+        assert_eq!(length_text(20_000), "1 minute");
+        let long = Detail { seconds: 754, ..Default::default() };
+        assert_eq!(subtitle("Veritasium", Some(&long)), "Veritasium, 13 minutes");
+        assert_eq!(subtitle("", Some(&long)), "13 minutes");
+        assert_eq!(subtitle("NASA", Some(&Detail { live: true, ..Default::default() })), "NASA, live now");
+        assert_eq!(subtitle("NASA", Some(&Detail::default())), "NASA");
+        assert_eq!(subtitle("NASA", None), "NASA");
+        assert_eq!((long.length_ms(), Detail::default().length_ms()), (Some(754_000), None));
+    }
+
+    #[test]
+    fn the_api_says_which_videos_have_yet_to_start() {
+        let page: Page<VideoDetails> = serde_json::from_str(
+            r#"{"items":[
+                {"id":"done","snippet":{"liveBroadcastContent":"none"},"contentDetails":{"duration":"PT12M34S"}},
+                {"id":"onair","snippet":{"liveBroadcastContent":"live"},"contentDetails":{"duration":"P0D"}},
+                {"id":"soon","snippet":{"liveBroadcastContent":"upcoming"},"contentDetails":{"duration":"P0D"}}]}"#,
+        )
+        .unwrap();
+        let read: Vec<Detail> = page.items.iter().map(Detail::of).collect();
+        assert_eq!(read[0], Detail { seconds: 754, live: false, upcoming: false });
+        assert_eq!((read[1].live, read[1].upcoming, read[1].length_ms()), (true, false, None));
+        assert!(read[2].upcoming);
+        // Only a video that is over reads the same next time.
+        assert_eq!(read.iter().map(Detail::settled).collect::<Vec<_>>(), [true, false, false]);
+    }
+
+    #[test]
+    fn a_playlist_is_named_by_its_id_or_a_link() {
+        assert_eq!(parse_playlist(" PLx1234567890abc ").as_deref(), Ok("PLx1234567890abc"));
+        assert_eq!(parse_playlist("https://www.youtube.com/playlist?list=PLx1234567890abc&si=Zx9").as_deref(), Ok("PLx1234567890abc"));
+        assert_eq!(parse_playlist("https://www.youtube.com/watch?v=scwlR0QHGOk&list=PLx1234567890abc").as_deref(), Ok("PLx1234567890abc"));
+        assert_eq!(parse_playlist("@mkbhd").unwrap_err(), "\"@mkbhd\" is not a playlist's id or link. Check the playlist in the plugin's settings.");
+        assert!(parse_playlist("UCBJycsmduvYEL83R_U4JriQ").is_err());
+        assert_eq!(parse_playlist("https://www.youtube.com/playlist?list=WL").unwrap_err(), "YouTube does not hand out Watch later. Name a playlist of your own in the plugin's settings.");
+        assert_eq!(watch_in("abc", "PLx").view.as_deref(), Some("https://www.youtube.com/watch?v=abc&list=PLx"));
+        assert_eq!(queue_title("For the TV"), "For the TV on YouTube");
+        assert_eq!(queue_title(&"long ".repeat(20)), "long long long long long long long long on YouTube");
+    }
+
+    #[test]
+    fn a_playlist_s_feed_and_its_api_page_give_its_videos() {
+        assert_eq!(feed_title(FEED).as_deref(), Some("Marques Brownlee"));
+        assert_eq!(feed_title("<feed><title>Tom &amp; Jerry</title><entry><title>One</title></entry></feed>").as_deref(), Some("Tom & Jerry"));
+        assert_eq!(feed_title("<feed><entry><title>One</title></entry></feed>"), None);
+        let page: Page<PlaylistItem> = serde_json::from_str(
+            r#"{"items":[
+                {"snippet":{"title":"A talk","videoOwnerChannelTitle":"Strange Loop","thumbnails":{"high":{"url":"https://i.ytimg.com/vi/abc/hqdefault.jpg"}}},"contentDetails":{"videoId":"abc","videoPublishedAt":"2026-10-17T02:09:23Z"}},
+                {"snippet":{"title":"Private video","thumbnails":{}},"contentDetails":{"videoId":"gone"}}]}"#,
+        )
+        .unwrap();
+        let queued: Vec<Queued> = page.items.into_iter().filter_map(Queued::listed).collect();
+        assert_eq!(queued.len(), 1);
+        assert_eq!((queued[0].video.id.as_str(), queued[0].video.channel.as_str(), queued[0].video.published_ms), ("abc", "Strange Loop", 1792202963000));
+        assert_eq!(queued[0].picture.as_deref(), Some("https://i.ytimg.com/vi/abc/hqdefault.jpg"));
     }
 }

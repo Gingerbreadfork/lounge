@@ -245,7 +245,7 @@ plugin is off, the home offers to set it up until you do or dismiss the offer.
 | HDHomeRun | The tuner's channels and guide, played in the TV's own player. |
 | Tvheadend, Channels DVR, NextPVR | A DVR's channels and guide, with its recordings as a row. |
 | Twitch | The live channels you follow, in Live now and the guide. |
-| YouTube | New videos from channels and playlists through their public feeds. With a Google sign-in, your subscriptions, playlists and liked videos too. |
+| YouTube | New videos from channels and playlists through their public feeds, and one playlist as a row of its own. With a Google sign-in, your subscriptions, playlists and liked videos too. |
 | Podcasts | New episodes from feeds, Apple Podcasts links or an OPML export, played in a player app. Search uses Apple's directory. |
 | Internet radio | Stations you name and the most popular ones, anywhere or in your country, from the radio-browser.info directory, with search across it. Played in a player app. No account or key. |
 | Audiobookshelf | Books and podcast episodes you are partway through in Continue watching, the next book of a series as up next, recently added books and new episodes as rows, and search. Played in a player app from where you left off, though the server doesn't learn where you stop on the TV. Sign in with a username and password or an API key. |

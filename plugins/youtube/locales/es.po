@@ -20,12 +20,21 @@ msgid "The YouTube Data API v3 is not enabled for this Google Cloud project. Ena
 msgstr "La YouTube Data API v3 no está habilitada en este proyecto de Google Cloud. Habilítala y vuelve a intentarlo."
 
 #: src/lib.rs
+msgid "Google refused the Client secret. Check it, and that it belongs to the same OAuth client as the Client ID."
+msgstr "Google ha rechazado el Client secret. Compruébalo, y también que sea del mismo cliente de OAuth que el Client ID."
+
+#: src/lib.rs
 msgid "New videos from the channels you follow, and with a Google sign-in your subscriptions, playlists and liked videos."
 msgstr "Videos nuevos de los canales que sigues y, si inicias sesión con Google, tus suscripciones, tus playlists y los videos que te gustan."
 
 #: src/lib.rs
 msgid "New on YouTube"
 msgstr "Novedades en YouTube"
+
+#. the title of a row of one playlist's videos, until the playlist's own name is known.
+#: src/lib.rs
+msgid "Playlist on YouTube"
+msgstr "Playlist en YouTube"
 
 #: src/lib.rs
 msgid "Your playlists on YouTube"
@@ -44,13 +53,22 @@ msgid "The channels and playlists to follow, as links, @handles or ids, one per 
 msgstr "Los canales y las playlists que quieres seguir, como enlaces, nombres con @ o ID, uno por línea o separados por comas. El ID de un canal empieza por UC y el de una playlist por PL. Una exportación de tus suscripciones de Google Takeout, el archivo CSV, se puede pegar entera. No hace falta si inicias sesión más abajo."
 
 #: src/lib.rs
+msgid "Playlist as a row"
+msgstr "Playlist como fila"
+
+#. "Watch later" is YouTube's own playlist of that name.
+#: src/lib.rs
+msgid "A playlist's link or id. Its videos get a row of their own, in the playlist's order, so a playlist you add to on your phone works as a list for the TV. YouTube does not hand out Watch later. A private playlist needs the sign-in below."
+msgstr "El enlace o el ID de una playlist. Sus videos tienen una fila propia, en el orden de la playlist, así que una playlist que vas llenando desde el teléfono sirve de lista para la TV. YouTube no entrega Ver más tarde. Una playlist privada necesita el inicio de sesión de abajo."
+
+#: src/lib.rs
 msgid "Google Client ID"
 msgstr "Client ID de Google"
 
-#. "External" and "TVs and Limited Input devices" are choices in the Google Cloud console.
+#. "Google Auth Platform", "Get started", "External", "Audience", "Publish app", "Clients" and "TVs and Limited Input devices" are names in the Google Cloud console.
 #: src/lib.rs
-msgid "To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here. At console.cloud.google.com make a project, enable the YouTube Data API v3, set the OAuth consent screen to External and publish it, then make an OAuth client of the type TVs and Limited Input devices. This page then shows a code to enter on your phone."
-msgstr "Para mostrar tus suscripciones, tus playlists y los videos que te gustan, crea tu propio proyecto de Google Cloud y pega aquí su Client ID y su Client secret. En console.cloud.google.com crea un proyecto, habilita la YouTube Data API v3, pon la pantalla de consentimiento de OAuth en External y publícala; luego crea un cliente de OAuth del tipo TVs and Limited Input devices. Después, esta página muestra un código para escribir en tu teléfono."
+msgid "To show your subscriptions, playlists and liked videos, make a Google Cloud project of your own and paste its Client ID and Client secret here. At console.cloud.google.com make a project and enable the YouTube Data API v3. Under Google Auth Platform press Get started and choose External, then on Audience press Publish app. Under Clients make a client of the type TVs and Limited Input devices, and copy its secret at once, since Google shows it only then. This page then shows a code to enter on your phone."
+msgstr "Para mostrar tus suscripciones, tus playlists y los videos que te gustan, crea tu propio proyecto de Google Cloud y pega aquí su Client ID y su Client secret. En console.cloud.google.com crea un proyecto y habilita la YouTube Data API v3. En Google Auth Platform pulsa Get started y elige External; después, en Audience, pulsa Publish app. En Clients crea un cliente del tipo TVs and Limited Input devices y copia su secret en ese momento, porque Google solo lo muestra entonces. Después, esta página muestra un código para escribir en tu teléfono."
 
 #: src/lib.rs
 msgid "Google Client secret"
@@ -99,6 +117,38 @@ msgstr "Incluir Shorts"
 msgid "Nothing to show yet. Add a channel link or id, or a Google Client ID, in the plugin's settings."
 msgstr "Todavía no hay nada que mostrar. Añade el enlace o el ID de un canal, o un Client ID de Google, en los ajustes del plugin."
 
+#. a tile's second line. {channel} is a YouTube channel's name; the video is a live stream on air now.
+#: src/lib.rs
+msgid "{channel}, live now"
+msgstr "{channel}, en directo ahora"
+
+#. a tile's second line, for a live stream on air now whose channel is not known.
+#: src/lib.rs
+msgid "Live now"
+msgstr "En directo ahora"
+
+#. a tile's second line. {channel} is a YouTube channel's name and {length} how long the video runs, such as "48 minutes".
+#: src/lib.rs
+msgid "{channel}, {length}"
+msgstr "{channel}, {length}"
+
+#: src/lib.rs
+msgid "{n} hour"
+msgid_plural "{n} hours"
+msgstr[0] "{n} hora"
+msgstr[1] "{n} horas"
+
+#: src/lib.rs
+msgid "{n} minute"
+msgid_plural "{n} minutes"
+msgstr[0] "{n} minuto"
+msgstr[1] "{n} minutos"
+
+#. a length of time. {hours} is a count of hours, such as "2 hours", and {minutes} a count of minutes, such as "25 minutes".
+#: src/lib.rs
+msgid "{hours} {minutes}"
+msgstr "{hours} y {minutes}"
+
 #: src/lib.rs
 msgid "YouTube gave no feed for channel {id}. If the id is right, it comes with a later refresh."
 msgstr "YouTube no dio ningún feed para el canal {id}. Si el ID es correcto, llegará en una actualización posterior."
@@ -128,10 +178,29 @@ msgid "The sign-in was declined on the phone. Press Refresh now for a new code."
 msgstr "El inicio de sesión se rechazó en el teléfono. Pulsa Actualizar ahora para obtener un código nuevo."
 
 #: src/lib.rs
+msgid "YouTube has no such playlist, or it is private and belongs to another account. Check the playlist in the plugin's settings."
+msgstr "YouTube no tiene esa playlist, o es privada y de otra cuenta. Comprueba la playlist en los ajustes del plugin."
+
+#: src/lib.rs
 msgid "{n} video"
 msgid_plural "{n} videos"
 msgstr[0] "{n} video"
 msgstr[1] "{n} videos"
+
+#. "Watch later" is YouTube's own playlist of that name.
+#: src/lib.rs
+msgid "YouTube does not hand out Watch later. Name a playlist of your own in the plugin's settings."
+msgstr "YouTube no entrega Ver más tarde. Indica una playlist tuya en los ajustes del plugin."
+
+#. {piece} is what was typed into the "Playlist as a row" setting.
+#: src/lib.rs
+msgid "\"{piece}\" is not a playlist's id or link. Check the playlist in the plugin's settings."
+msgstr "«{piece}» no es el ID ni el enlace de una playlist. Comprueba la playlist en los ajustes del plugin."
+
+#. the title of a row of one playlist's videos. {playlist} is the playlist's name, as its owner wrote it.
+#: src/lib.rs
+msgid "{playlist} on YouTube"
+msgstr "{playlist} en YouTube"
 
 #. {piece} is what was typed into the Channels setting.
 #: src/lib.rs
