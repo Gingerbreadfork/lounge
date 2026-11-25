@@ -1,11 +1,9 @@
 package tv.lounge.feature.home
 
 import android.content.Context
-import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
@@ -98,12 +96,3 @@ internal fun rememberOffline(): State<Boolean> {
         }
     }
 }
-
-private fun Context.settingsScreen(action: String): Intent? =
-    Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).takeIf { runCatching { it.resolveActivity(packageManager) != null }.getOrDefault(false) }
-
-/** The TV's own settings, or null on a TV with no such screen. */
-internal fun tvSettingsIntent(context: Context): Intent? = context.settingsScreen(Settings.ACTION_SETTINGS)
-
-/** The TV's network screen, or null on a TV with no such screen. */
-internal fun networkSettingsIntent(context: Context): Intent? = context.settingsScreen(Settings.ACTION_WIFI_SETTINGS)

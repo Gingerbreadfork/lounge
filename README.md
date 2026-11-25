@@ -150,7 +150,9 @@ show them on the TV, keeps none of them and sends none anywhere. Settings turns 
 a TV set up before Lounge had this it stays off until you turn it on there.
 
 **The TV's own settings.** Settings has a row for the TV's network screen, which shows whether
-the TV is on Wi-Fi or Ethernet, and one for the rest of the TV's settings. When the TV has been without a
+the TV is on Wi-Fi or Ethernet, one for pairing a remote, a game controller or headphones, and
+one for the rest of the TV's settings. On a TV that keeps its pairing screen to itself, that row
+opens the TV's settings and says what to look for. When the TV has been without a
 network for ten seconds, the top bar says so, and OK there opens the network screen.
 
 **Search.** One box for apps, what you've been watching and whatever the plugins can find.

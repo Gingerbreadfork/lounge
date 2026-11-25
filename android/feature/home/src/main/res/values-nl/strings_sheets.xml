@@ -79,6 +79,9 @@
     <string name="sheets_network_wifi">Wifi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Verbonden</string>
+    <string name="sheets_accessories_title">Afstandsbedieningen en accessoires</string>
+    <string name="sheets_accessories_subtitle">Koppel een controller, koptelefoon of afstandsbediening</string>
+    <string name="sheets_accessories_in_settings">Deze tv koppelt apparaten in zijn eigen instellingen. Zoek daar naar afstandsbedieningen en accessoires.</string>
     <string name="sheets_tv_settings_title">Instellingen van de tv</string>
     <string name="sheets_tv_settings_subtitle">Beeld, geluid, accounts en de rest van de eigen instellingen van de tv</string>
     <string name="sheets_diagnostics_title">Diagnose</string>

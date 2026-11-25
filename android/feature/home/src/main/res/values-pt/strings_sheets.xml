@@ -83,6 +83,9 @@
     <string name="sheets_network_wifi">Wi-Fi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Conectada</string>
+    <string name="sheets_accessories_title">Controles remotos e acessórios</string>
+    <string name="sheets_accessories_subtitle">Pareie um controle de jogo, fones de ouvido ou um controle remoto</string>
+    <string name="sheets_accessories_in_settings">Esta TV pareia dispositivos nas próprias configurações. Procure por controles remotos e acessórios lá.</string>
     <string name="sheets_tv_settings_title">Configurações da TV</string>
     <string name="sheets_tv_settings_subtitle">Imagem, som, contas e o restante das configurações da TV</string>
     <string name="sheets_diagnostics_title">Diagnóstico</string>

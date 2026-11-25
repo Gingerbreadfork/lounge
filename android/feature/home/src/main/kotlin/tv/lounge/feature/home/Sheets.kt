@@ -433,6 +433,7 @@ fun QuickSettingsSheet(
     val context = LocalContext.current
     val tvSettings = remember { tvSettingsIntent(context) }
     val networkSettings = remember { networkSettingsIntent(context) }
+    val accessories = remember { accessoryScreen(context) }
     val link by rememberLink()
     // Back from one of its pages puts focus on the row that opened it.
     val pages = listOf(Overlay.Rows, Overlay.AppGroups(), Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.Language, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate)
@@ -636,6 +637,18 @@ fun QuickSettingsSheet(
                 ),
                 accent = if (link == Link.None) colors.ember else colors.signal,
                 onClick = { runCatching { context.startActivity(screen) } },
+            )
+        }
+        accessories?.let { screen ->
+            SheetRow(
+                icon = LoungeIcons.Bluetooth,
+                title = stringResource(R.string.sheets_accessories_title),
+                subtitle = stringResource(R.string.sheets_accessories_subtitle),
+                onClick = {
+                    // Where only the TV's settings open, a word on what to look for there.
+                    if (!screen.direct) say(resources.getString(R.string.sheets_accessories_in_settings))
+                    runCatching { context.startActivity(screen.intent) }
+                },
             )
         }
         tvSettings?.let { screen ->

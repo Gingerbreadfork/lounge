@@ -275,6 +275,13 @@ object LoungeIcons {
         }
     }
 
+    /** The Bluetooth rune: remotes, controllers and headphones paired with the TV. */
+    val Bluetooth: ImageVector by lazy {
+        icon("bluetooth") {
+            stroke { moveTo(8.5f, 9f); lineTo(19.5f, 19.5f); lineTo(14f, 24.5f); lineTo(14f, 3.5f); lineTo(19.5f, 8.5f); lineTo(8.5f, 19f) }
+        }
+    }
+
     /** Wi-Fi arcs over a dot: the TV's network. */
     val Network: ImageVector by lazy {
         icon("network") {

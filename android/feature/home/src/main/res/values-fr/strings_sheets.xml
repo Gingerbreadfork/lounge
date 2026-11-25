@@ -83,6 +83,9 @@
     <string name="sheets_network_wifi">Wi-Fi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Connecté</string>
+    <string name="sheets_accessories_title">Télécommandes et accessoires</string>
+    <string name="sheets_accessories_subtitle">Associer une manette, un casque ou une télécommande</string>
+    <string name="sheets_accessories_in_settings">Cette TV associe les appareils depuis ses propres paramètres. Cherchez-y les télécommandes et accessoires.</string>
     <string name="sheets_tv_settings_title">Paramètres de la TV</string>
     <string name="sheets_tv_settings_subtitle">Image, son, comptes et le reste des paramètres de la TV</string>
     <string name="sheets_diagnostics_title">Diagnostic</string>

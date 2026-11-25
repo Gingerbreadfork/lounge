@@ -79,6 +79,9 @@
     <string name="sheets_network_wifi">WLAN</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Verbunden</string>
+    <string name="sheets_accessories_title">Fernbedienungen und Zubehör</string>
+    <string name="sheets_accessories_subtitle">Controller, Kopfhörer oder Fernbedienung koppeln</string>
+    <string name="sheets_accessories_in_settings">Dieser Fernseher koppelt Geräte in seinen eigenen Einstellungen. Such dort nach Fernbedienungen und Zubehör.</string>
     <string name="sheets_tv_settings_title">Einstellungen des Fernsehers</string>
     <string name="sheets_tv_settings_subtitle">Bild, Ton, Konten und die übrigen Einstellungen des Fernsehers</string>
     <string name="sheets_diagnostics_title">Diagnose</string>

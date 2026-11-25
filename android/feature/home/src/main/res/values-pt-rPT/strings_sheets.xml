@@ -83,6 +83,9 @@
     <string name="sheets_network_wifi">Wi-Fi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Ligada</string>
+    <string name="sheets_accessories_title">Comandos e acessórios</string>
+    <string name="sheets_accessories_subtitle">Emparelhe um comando de jogos, auscultadores ou um comando</string>
+    <string name="sheets_accessories_in_settings">Esta TV emparelha dispositivos nas suas próprias definições. Procure aí comandos e acessórios.</string>
     <string name="sheets_tv_settings_title">Definições da TV</string>
     <string name="sheets_tv_settings_subtitle">Imagem, som, contas e o resto das definições da TV</string>
     <string name="sheets_diagnostics_title">Diagnóstico</string>
