@@ -281,10 +281,16 @@ fun HomeScreen(
         }
     }
 
+    // The top bar says when the TV has no network, on a TV with a screen to mend that.
+    val networkSettings = remember { networkSettingsIntent(context) ?: tvSettingsIntent(context) }
+    val noNetwork = rememberOffline()
+    fun offline() = networkSettings != null && noNetwork.value
+
     /** Whether [button] is a top-bar chip that has left with what it showed. */
     fun chipGone(button: FocusRequester?): Boolean =
         (button === state.topBar.nowPlaying && snapshot.nowPlaying == null) ||
-            (button === state.topBar.notifications && notices.value.list.isEmpty())
+            (button === state.topBar.notifications && notices.value.list.isEmpty()) ||
+            (button === state.topBar.offline && !offline())
 
     /** Focus back on the home where it was, or as near as the current rows allow. */
     suspend fun focusHome() {
@@ -563,6 +569,12 @@ fun HomeScreen(
             }
         }
     }
+    // The chip for a missing network leaves when one is back, and focus left on it moves along the bar.
+    LaunchedEffect(Unit) {
+        snapshotFlow { noNetwork.value }.collect {
+            if (state.overlay == Overlay.None && state.region == FocusRegion.TopBar && chipGone(state.topBar.last)) focusHome()
+        }
+    }
     // What is listed when the panel opens, and whatever arrives while it is open, has been seen.
     val panelOpen = overlay == Overlay.Notifications || overlay is Overlay.NotificationDetail
     LaunchedEffect(panelOpen) {
@@ -671,6 +683,7 @@ fun HomeScreen(
                 showGuide = (snapshot.rows + snapshot.hiddenRows).any { it.id == "live" },
                 nowPlaying = nowPlaying,
                 notifications = notices,
+                offline = { offline() },
                 focus = state.topBar,
                 downFocus = { state.stripFocus() },
                 onFocused = { state.region = FocusRegion.TopBar; light.clear() },
@@ -679,6 +692,7 @@ fun HomeScreen(
                 onGuide = { uiSounds?.open(); openOverlay(Overlay.Guide) },
                 onNowPlaying = { uiSounds?.open(); openOverlay(Overlay.NowPlaying) },
                 onNotifications = { uiSounds?.open(); openOverlay(Overlay.Notifications) },
+                onOffline = { uiSounds?.open(); networkSettings?.let { runCatching { context.startActivity(it) } } },
                 onSettings = { uiSounds?.open(); openOverlay(Overlay.QuickSettings) },
                 modifier = Modifier.graphicsLayer { alpha = roomAlpha.value },
             )

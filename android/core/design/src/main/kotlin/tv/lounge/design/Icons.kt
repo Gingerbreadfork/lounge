@@ -275,6 +275,42 @@ object LoungeIcons {
         }
     }
 
+    /** Wi-Fi arcs over a dot: the TV's network. */
+    val Network: ImageVector by lazy {
+        icon("network") {
+            stroke { moveTo(3.4f, 10.4f); arcTo(15f, 15f, 0f, false, true, 24.6f, 10.4f) }
+            stroke { moveTo(6.9f, 13.9f); arcTo(10f, 10f, 0f, false, true, 21.1f, 13.9f) }
+            stroke { moveTo(10.5f, 17.5f); arcTo(5f, 5f, 0f, false, true, 17.5f, 17.5f) }
+            fill { moveTo(14f, 19.4f); arcTo(1.6f, 1.6f, 0f, true, true, 14f, 22.6f); arcTo(1.6f, 1.6f, 0f, true, true, 14f, 19.4f) }
+        }
+    }
+
+    /** A network socket with its three pins: the TV is on a cable. */
+    val Ethernet: ImageVector by lazy {
+        icon("ethernet") {
+            stroke {
+                moveTo(4.5f, 20.5f); lineTo(4.5f, 10.5f); lineTo(9f, 10.5f); lineTo(9f, 6f); lineTo(19f, 6f); lineTo(19f, 10.5f); lineTo(23.5f, 10.5f); lineTo(23.5f, 20.5f)
+                arcTo(2f, 2f, 0f, false, true, 21.5f, 22.5f); lineTo(6.5f, 22.5f); arcTo(2f, 2f, 0f, false, true, 4.5f, 20.5f); close()
+            }
+            stroke { moveTo(10f, 15f); lineTo(10f, 18f) }
+            stroke { moveTo(14f, 15f); lineTo(14f, 18f) }
+            stroke { moveTo(18f, 15f); lineTo(18f, 18f) }
+        }
+    }
+
+    /** The same arcs struck through: the TV has no network. The arcs stop short of the line. */
+    val NoNetwork: ImageVector by lazy {
+        icon("no-network") {
+            stroke { moveTo(3.4f, 10.4f); arcTo(15f, 15f, 0f, false, true, 5.3f, 8.8f) }
+            stroke { moveTo(11.9f, 6.2f); arcTo(15f, 15f, 0f, false, true, 24.6f, 10.4f) }
+            stroke { moveTo(6.9f, 13.9f); arcTo(10f, 10f, 0f, false, true, 8.7f, 12.5f) }
+            stroke { moveTo(16.5f, 11.3f); arcTo(10f, 10f, 0f, false, true, 21.1f, 13.9f) }
+            stroke { moveTo(10.5f, 17.5f); arcTo(5f, 5f, 0f, false, true, 12.1f, 16.4f) }
+            fill { moveTo(14f, 19.4f); arcTo(1.6f, 1.6f, 0f, true, true, 14f, 22.6f); arcTo(1.6f, 1.6f, 0f, true, true, 14f, 19.4f) }
+            stroke { moveTo(5.5f, 4f); lineTo(22.5f, 23f) }
+        }
+    }
+
     val Trash: ImageVector by lazy {
         icon("trash") {
             stroke { moveTo(4f, 7f); lineTo(24f, 7f) }

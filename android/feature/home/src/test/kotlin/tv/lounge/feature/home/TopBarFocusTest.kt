@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -45,6 +46,8 @@ class TopBarFocusTest {
     private var searches = 0
     private val notices = MutableStateFlow(NotificationsShown())
     private var opened = 0
+    private val offline = mutableStateOf(false)
+    private var networkOpened = 0
 
     private fun notice(key: String) = AppNotification(key, "tv.shop", "Shop", "Title $key", "", postedAt = 0, dismissible = true, opens = true)
 
@@ -63,6 +66,7 @@ class TopBarFocusTest {
                         showGuide = true,
                         nowPlaying = null,
                         notifications = notices,
+                        offline = { offline.value },
                         focus = focus,
                         downFocus = { below },
                         onFocused = {},
@@ -71,6 +75,7 @@ class TopBarFocusTest {
                         onGuide = {},
                         onNowPlaying = {},
                         onNotifications = { opened++ },
+                        onOffline = { networkOpened++ },
                         onSettings = {},
                     )
                 }
@@ -158,6 +163,45 @@ class TopBarFocusTest {
         // moment, before the bar has let go of the chip.
         rule.runOnIdle {
             notices.value = NotificationsShown()
+            focus.settings.requestFocus()
+        }
+        rule.waitForIdle()
+        assertFocusedButton("Settings")
+    }
+
+    @Test
+    fun theNoConnectionButtonSitsBeforeSettingsWhileTheTvHasNoNetwork() {
+        showTopBar()
+        rule.runOnIdle { focus.settings.requestFocus() }
+        offline.value = true
+        rule.waitForIdle()
+        press(Key.DirectionLeft)
+        assertFocusedButton("No connection")
+        press(Key.DirectionCenter)
+        rule.runOnIdle { assertEquals(1, networkOpened) }
+        press(Key.DirectionRight)
+        assertFocusedButton("Settings")
+
+        // It leaves when the network is back.
+        offline.value = false
+        rule.waitForIdle()
+        rule.onNode(hasText("No connection")).assertDoesNotExist()
+        press(Key.DirectionLeft)
+        assertFocusedButton("TV controls")
+    }
+
+    @Test
+    fun theNoConnectionButtonThatLeavesWhileRememberedHandsItsPlaceToSettings() {
+        showTopBar()
+        offline.value = true
+        rule.waitForIdle()
+        rule.runOnIdle { focus.offline.requestFocus() }
+        assertFocusedButton("No connection")
+        press(Key.DirectionDown)
+        rule.onNodeWithTag("left below").assertIsFocused()
+        // The network comes back, and focus is sent to Settings before the bar has let go of the button.
+        rule.runOnIdle {
+            offline.value = false
             focus.settings.requestFocus()
         }
         rule.waitForIdle()

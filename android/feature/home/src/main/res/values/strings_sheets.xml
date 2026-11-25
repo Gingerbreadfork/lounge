@@ -89,6 +89,15 @@
     <string name="sheets_power_waiting">Waiting for you</string>
     <string name="sheets_power_not_connected">Not connected</string>
     <string name="sheets_updates_title">Updates</string>
+    <!-- Two rows that leave Lounge for the TV's own settings. The first shows how the TV is connected. -->
+    <string name="sheets_network_title">Network</string>
+    <string name="sheets_network_subtitle">In the TV\'s settings</string>
+    <!-- The Network row's value by how the TV is connected. Connected is for any other kind of network. -->
+    <string name="sheets_network_wifi">Wi-Fi</string>
+    <string name="sheets_network_ethernet">Ethernet</string>
+    <string name="sheets_network_connected">Connected</string>
+    <string name="sheets_tv_settings_title">TV settings</string>
+    <string name="sheets_tv_settings_subtitle">Picture, sound, accounts and the rest of the TV\'s own settings</string>
     <string name="sheets_diagnostics_title">Diagnostics</string>
     <string name="sheets_diagnostics_subtitle">Numbers to include when you report a problem</string>
     <!-- The lines of numbers under Diagnostics. -->

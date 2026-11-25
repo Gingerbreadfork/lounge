@@ -111,6 +111,7 @@ class TopBarFocus {
     val tvControls = FocusRequester()
     val nowPlaying = FocusRequester()
     val notifications = FocusRequester()
+    val offline = FocusRequester()
     val settings = FocusRequester()
     /** The button that last had focus; not read by composition. */
     var last: FocusRequester = search

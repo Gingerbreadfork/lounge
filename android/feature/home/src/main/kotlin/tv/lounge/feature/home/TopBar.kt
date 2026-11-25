@@ -85,8 +85,8 @@ import java.time.LocalTime
 
 /**
  * Top bar (DESIGN.md §5.1): the mark on the left; Search, TV controls, Settings and the clock on
- * the right, with what is playing and what apps have posted between them while there is either.
- * Left off Search and Right off Settings nudge the button instead of leaving the bar.
+ * the right, with what is playing, what apps have posted and a missing network between them while
+ * there is any. Left off Search and Right off Settings nudge the button instead of leaving the bar.
  */
 @Composable
 fun TopBar(
@@ -94,6 +94,8 @@ fun TopBar(
     showGuide: Boolean,
     nowPlaying: NowPlaying?,
     notifications: StateFlow<NotificationsShown>,
+    /** Whether the TV has been without a network for a while. Read here, so a change recomposes the bar alone. */
+    offline: () -> Boolean,
     focus: TopBarFocus,
     downFocus: () -> FocusRequester,
     onFocused: () -> Unit,
@@ -102,6 +104,7 @@ fun TopBar(
     onGuide: () -> Unit,
     onNowPlaying: () -> Unit,
     onNotifications: () -> Unit,
+    onOffline: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -154,6 +157,9 @@ fun TopBar(
                     // chip is still here for a frame, and the bar must not hand focus back to it.
                     takesFocus = { notifications.value.list.isNotEmpty() },
                 )
+            }
+            if (offline()) {
+                TopBarButton(LoungeIcons.NoNetwork, stringResource(R.string.top_bar_no_connection), onOffline, focus, focus.offline, takesFocus = offline)
             }
             TopBarButton(LoungeIcons.Settings, stringResource(DesignR.string.common_settings), onSettings, focus, focus.settings)
             Spacer(Modifier.width(12.dp))

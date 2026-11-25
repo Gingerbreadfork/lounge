@@ -426,6 +426,11 @@ fun QuickSettingsSheet(
     val off = stringResource(DesignR.string.common_off)
     var saver by remember { mutableStateOf(screensaver()) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { saver = screensaver() }
+    // Rows that hand over to the TV's own settings, on a TV with a screen for them.
+    val context = LocalContext.current
+    val tvSettings = remember { tvSettingsIntent(context) }
+    val networkSettings = remember { networkSettingsIntent(context) }
+    val link by rememberLink()
     // Back from one of its pages puts focus on the row that opened it.
     val pages = listOf(Overlay.Rows, Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.Language, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate)
     val returnTo = cameFrom?.takeIf { it in pages }
@@ -605,6 +610,31 @@ fun QuickSettingsSheet(
             onClick = onUpdates,
             focusRequester = focusFor(Overlay.Updates),
         )
+        networkSettings?.let { screen ->
+            SheetRow(
+                icon = if (link == Link.Ethernet) LoungeIcons.Ethernet else LoungeIcons.Network,
+                title = stringResource(R.string.sheets_network_title),
+                subtitle = stringResource(R.string.sheets_network_subtitle),
+                value = stringResource(
+                    when (link) {
+                        Link.Wifi -> R.string.sheets_network_wifi
+                        Link.Ethernet -> R.string.sheets_network_ethernet
+                        Link.Other -> R.string.sheets_network_connected
+                        Link.None -> R.string.top_bar_no_connection
+                    },
+                ),
+                accent = if (link == Link.None) colors.ember else colors.signal,
+                onClick = { runCatching { context.startActivity(screen) } },
+            )
+        }
+        tvSettings?.let { screen ->
+            SheetRow(
+                icon = SettingsGlyphs.Cog,
+                title = stringResource(R.string.sheets_tv_settings_title),
+                subtitle = stringResource(R.string.sheets_tv_settings_subtitle),
+                onClick = { runCatching { context.startActivity(screen) } },
+            )
+        }
         SheetRow(
             icon = LoungeIcons.Info,
             title = stringResource(R.string.sheets_diagnostics_title),

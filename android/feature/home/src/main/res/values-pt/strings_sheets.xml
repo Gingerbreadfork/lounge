@@ -71,6 +71,13 @@
     <string name="sheets_power_waiting">Esperando você</string>
     <string name="sheets_power_not_connected">Não conectado</string>
     <string name="sheets_updates_title">Atualizações</string>
+    <string name="sheets_network_title">Rede</string>
+    <string name="sheets_network_subtitle">Nas configurações da TV</string>
+    <string name="sheets_network_wifi">Wi-Fi</string>
+    <string name="sheets_network_ethernet">Ethernet</string>
+    <string name="sheets_network_connected">Conectada</string>
+    <string name="sheets_tv_settings_title">Configurações da TV</string>
+    <string name="sheets_tv_settings_subtitle">Imagem, som, contas e o restante das configurações da TV</string>
     <string name="sheets_diagnostics_title">Diagnóstico</string>
     <string name="sheets_diagnostics_subtitle">Números para incluir ao relatar um problema</string>
     <string name="sheets_diagnostics_items">Coisas que o Lounge conhece</string>

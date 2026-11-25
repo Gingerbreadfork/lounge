@@ -92,6 +92,20 @@ internal object SettingsGlyphs {
         }
     }
 
+    /** A cog: the TV's own settings. */
+    val Cog: ImageVector by lazy {
+        icon("cog") {
+            stroke {
+                moveTo(12f, 6.5f); lineTo(12.3f, 3.5f); lineTo(15.7f, 3.5f); lineTo(16f, 6.5f); lineTo(17.9f, 7.3f); lineTo(20.2f, 5.4f); lineTo(22.6f, 7.8f); lineTo(20.7f, 10.1f)
+                lineTo(21.5f, 12f); lineTo(24.5f, 12.3f); lineTo(24.5f, 15.7f); lineTo(21.5f, 16f); lineTo(20.7f, 17.9f); lineTo(22.6f, 20.2f); lineTo(20.2f, 22.6f); lineTo(17.9f, 20.7f)
+                lineTo(16f, 21.5f); lineTo(15.7f, 24.5f); lineTo(12.3f, 24.5f); lineTo(12f, 21.5f); lineTo(10.1f, 20.7f); lineTo(7.8f, 22.6f); lineTo(5.4f, 20.2f); lineTo(7.3f, 17.9f)
+                lineTo(6.5f, 16f); lineTo(3.5f, 15.7f); lineTo(3.5f, 12.3f); lineTo(6.5f, 12f); lineTo(7.3f, 10.1f); lineTo(5.4f, 7.8f); lineTo(7.8f, 5.4f); lineTo(10.1f, 7.3f)
+                close()
+            }
+            stroke { moveTo(14f, 10.8f); arcTo(3.2f, 3.2f, 0f, true, true, 14f, 17.2f); arcTo(3.2f, 3.2f, 0f, true, true, 14f, 10.8f); close() }
+        }
+    }
+
     /** A house: the default home screen. */
     val Home: ImageVector by lazy {
         icon("home") {

@@ -71,6 +71,13 @@
     <string name="sheets_power_waiting">Tocca a te</string>
     <string name="sheets_power_not_connected">Non connesso</string>
     <string name="sheets_updates_title">Aggiornamenti</string>
+    <string name="sheets_network_title">Rete</string>
+    <string name="sheets_network_subtitle">Nelle impostazioni della TV</string>
+    <string name="sheets_network_wifi">Wi-Fi</string>
+    <string name="sheets_network_ethernet">Ethernet</string>
+    <string name="sheets_network_connected">Connessa</string>
+    <string name="sheets_tv_settings_title">Impostazioni della TV</string>
+    <string name="sheets_tv_settings_subtitle">Immagine, audio, account e il resto delle impostazioni della TV</string>
     <string name="sheets_diagnostics_title">Diagnostica</string>
     <string name="sheets_diagnostics_subtitle">Numeri da allegare quando segnali un problema</string>
     <string name="sheets_diagnostics_items">Elementi noti a Lounge</string>
