@@ -79,12 +79,15 @@ pub(crate) const CORE_ROWS: [(&str, &str); 5] = [
 ];
 
 /// The row order as it will be built: the user's order (or the default), with plugin and
-/// channel rows the user has not placed appended. Rows that cannot be built now, such as a
-/// switched-off plugin's, are left out; their saved places are kept for later.
+/// channel rows the user has not placed appended, and groups of apps not yet placed put under
+/// Your apps. Rows that cannot be built now, such as a switched-off plugin's, are left out;
+/// their saved places are kept for later.
 pub(crate) fn effective_row_order(state: &State) -> Vec<String> {
     let graph = &state.graph;
     let mut order = graph.layout.row_order_or_default();
     let mut extra: Vec<String> = CORE_ROWS.iter().map(|(id, _)| id.to_string()).collect();
+    let groups: Vec<String> = graph.layout.groups.iter().map(|g| g.row_id()).collect();
+    extra.extend(groups.iter().cloned());
     for p in state.plugins.iter().filter(|p| p.enabled) {
         for r in &p.manifest.rows {
             extra.push(format!("plugin:{}:{}", p.id, r.id));
@@ -96,8 +99,16 @@ pub(crate) fn effective_row_order(state: &State) -> Vec<String> {
         }
     }
     order.retain(|id| extra.contains(id));
-    let missing: Vec<String> = extra.into_iter().filter(|id| !order.contains(id)).collect();
+    let missing: Vec<String> = extra.into_iter().filter(|id| !order.contains(id) && !groups.contains(id)).collect();
     order.extend(missing);
+    for row in groups {
+        if !order.contains(&row) {
+            // After Your apps and any groups already under it, so new groups keep the order they were made in.
+            let apps = order.iter().position(|id| id == "apps").map_or(0, |at| at + 1);
+            let at = apps + order[apps..].iter().take_while(|id| id.starts_with("group:")).count();
+            order.insert(at, row);
+        }
+    }
     order
 }
 
@@ -165,6 +176,9 @@ pub(crate) fn row_infos(state: &State, config: &CoreConfig) -> Vec<RowInfo> {
                     tn!(n, "{plugin}, {n} title", "{plugin}, {n} titles", plugin = name)
                 };
                 (title, n, detail)
+            } else if let Some(gid) = id.strip_prefix("group:") {
+                let n = graph.group_apps(gid).len();
+                (graph.group(gid).map(|g| g.name.clone()).unwrap_or_default(), n, apps_counted(n))
             } else if let Some(cid) = id.strip_prefix("channel:") {
                 let cid: i64 = cid.parse().unwrap_or(0);
                 let found = previews.iter().find(|(id, _, _)| *id == cid);
@@ -330,6 +344,8 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
             plugin_row(state, &index, rest)
         } else if let Some(id) = row_id.strip_prefix("channel:") {
             id.parse::<i64>().ok().and_then(|cid| channel_row(graph, &index, cid))
+        } else if let Some(id) = row_id.strip_prefix("group:") {
+            group_row(graph, id)
         } else {
             build_row(state, &index, &row_id, now, config)
         };
@@ -463,6 +479,29 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
         tiles: items.iter().map(|it| provided(tile_for(graph, it, kind), graph, index, it)).collect(),
         note: None,
     })
+}
+
+/// A group of apps as a row, in the group's order. A group with no app to show has no row.
+fn group_row(graph: &Graph, id: &str) -> Option<Row> {
+    let group = graph.group(id)?;
+    let apps = graph.group_apps(id);
+    if apps.is_empty() {
+        return None;
+    }
+    Some(Row {
+        id: group.row_id(),
+        title: group.name.clone(),
+        kind: TileKind::AppBanner,
+        size: RowSize::M,
+        badge: None,
+        tiles: apps.iter().map(|it| tile_for(graph, it, TileKind::AppBanner)).collect(),
+        note: None,
+    })
+}
+
+/// Every group of apps with what it holds, in the order they were made.
+pub(crate) fn group_infos(state: &State) -> Vec<crate::GroupInfo> {
+    state.graph.layout.groups.iter().map(|g| crate::GroupInfo { id: g.id.clone(), name: g.name.clone(), apps: g.apps.clone() }).collect()
 }
 
 /// One plugin row ("<plugin id>:<row id>") with the items the plugin put there, if the plugin is on.
@@ -1594,6 +1633,31 @@ mod tests {
         assert_eq!(item_ref(&g, "plugin:tv.lounge.plex:deck:41").title, "A title that is no longer listed");
         assert_eq!(item_ref(&g, "app:com.example.removed").title, "com.example.removed");
         assert_eq!(item_ref(&g, "app:org.jellyfin.androidtv").title, "Jellyfin");
+    }
+
+    #[test]
+    fn a_group_of_apps_is_a_row_under_your_apps_until_it_is_moved() {
+        let mut g = Graph::default();
+        g.replace_source("apps", vec![Item::app("tv.a", "Main", "Alpha"), Item::app("tv.b", "Main", "Beta")]);
+        g.create_group("Kids", Some("tv.b"));
+        g.create_group("Sport", None);
+        g.create_group("Music", Some("tv.a"));
+        let mut s = state(g, Vec::new());
+        assert_eq!(effective_row_order(&s)[..5], ["continue", "apps", "group:g1", "group:g2", "group:g3"]);
+        let snap = build(&s, &config(), 0);
+        // A group with nothing to show has no row, and the editor still lists it.
+        let rows: Vec<(&str, &str)> = snap.rows.iter().filter(|r| r.id.starts_with("group:")).map(|r| (r.id.as_str(), r.title.as_str())).collect();
+        assert_eq!(rows, vec![("group:g1", "Kids"), ("group:g3", "Music")]);
+        let kids = snap.rows.iter().find(|r| r.id == "group:g1").unwrap();
+        assert_eq!(kids.tiles.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), vec!["app:tv.b"]);
+        let infos = row_infos(&s, &config());
+        let sport = infos.iter().find(|r| r.id == "group:g2").unwrap();
+        assert_eq!((sport.title.as_str(), sport.count), ("Sport", 0));
+        // Once moved, a group stays where it was put and later ones still start under Your apps.
+        let order = moved_row_order(&s, "group:g1", 0);
+        s.graph.set_row_order(order);
+        s.graph.create_group("News", None);
+        assert_eq!(effective_row_order(&s)[..6], ["group:g1", "continue", "apps", "group:g2", "group:g3", "group:g4"]);
     }
 
     #[test]

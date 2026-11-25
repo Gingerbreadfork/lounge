@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="groups_title">Groupes d’applis</string>
+    <string name="groups_subtitle">Des rangées d’applis que vous composez et nommez.</string>
+    <string name="groups_subtitle_app">OK met %1$s dans un groupe ou l’en retire.</string>
+    <string name="groups_none">Aucun groupe pour l’instant. Saisissez un nom ci-dessous pour en créer un.</string>
+    <string name="groups_new_label">Nouveau groupe</string>
+    <string name="groups_new_hint">Donnez-lui un nom, comme Enfants ou Sport</string>
+    <string name="groups_added">Ajoutée</string>
+    <string name="groups_not_added">Non ajoutée</string>
+    <string name="groups_no_apps">Aucune appli pour l’instant</string>
+    <plurals name="groups_apps">
+        <item quantity="one">%1$d appli</item>
+        <item quantity="many">%1$d applis</item>
+        <item quantity="other">%1$d applis</item>
+    </plurals>
+    <string name="groups_footnote">Un groupe qui contient une appli est une rangée de l’écran d’accueil. Paramètres, Rangées permet de la déplacer ou de la masquer.</string>
+    <string name="group_subtitle">Une rangée d’applis sur l’écran d’accueil.</string>
+    <string name="group_name_label">Nom</string>
+    <string name="group_apps_heading">Applis</string>
+    <string name="group_delete">Supprimer ce groupe</string>
+    <string name="group_delete_confirm">Oui, supprimer ce groupe</string>
+    <string name="group_delete_subtitle">Ses applis restent sur la TV</string>
+</resources>

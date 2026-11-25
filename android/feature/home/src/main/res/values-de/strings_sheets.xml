@@ -3,6 +3,12 @@
     <string name="sheets_group_home">Startbildschirm</string>
     <string name="sheets_rows_title">Reihen</string>
     <string name="sheets_rows_subtitle">Ein- und ausblenden, verschieben</string>
+    <string name="sheets_groups_subtitle">Reihen mit Apps, die du zusammenstellst</string>
+    <string name="sheets_groups_none">Keine</string>
+    <plurals name="sheets_groups_count">
+        <item quantity="one">%1$d Gruppe</item>
+        <item quantity="other">%1$d Gruppen</item>
+    </plurals>
     <string name="sheets_your_apps_title">Deine Apps</string>
     <string name="sheets_your_apps_subtitle">Angeheftete Apps, dann zuletzt geöffnete</string>
     <string name="sheets_your_apps_pinned_only">Nur angeheftete</string>

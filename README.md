@@ -110,6 +110,10 @@ one, and holding OK picks it up to move. Empty rows stay off the screen. The sam
 every app and plugin that Continue watching draws on, with how many titles each brings. All of
 them are shown unless you hide one.
 
+You can also make rows of your own. Hold OK on any app, choose Add to a group and name it, such
+as Kids or Sport. A group is a row like any other, to move or hide, and Settings, App groups
+renames one, changes its apps or deletes it.
+
 Streaming apps such as Netflix only appear in Continue watching if they publish Watch Next
 entries Lounge is allowed to read, so turn on TV listings in Settings.
 [TV listings troubleshooting](docs/TV_LISTINGS.md) shows how to check what an app publishes.
@@ -203,7 +207,8 @@ the TV shows a fresh one as soon as it is used.
   the TV controls, which need Power Setup too: on a box plugged into a TV, wake the TV, turn it
   or everything off and switch its input, as the TV controls on the TV do; on a television,
   turn it off.
-- **Layout** shows, hides and reorders rows, pins and orders the apps at the front of Your apps,
+- **Layout** shows, hides and reorders rows, makes and names groups of apps and orders the apps
+  in each, pins and orders the apps at the front of Your apps,
   unpins things from the Stage, shows or hides each source of Continue watching, and brings back
   anything you hid.
 - **Plugins** sets up the installed plugins and installs new ones from a file or a link.

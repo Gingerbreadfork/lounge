@@ -22,4 +22,9 @@
     <string name="tile_menu_hide_all_from_detail">Fora de Continuar assistindo até você mostrar</string>
     <string name="tile_menu_hide_row">Ocultar esta fileira</string>
     <string name="tile_menu_hide_row_detail">Traga de volta em Configurações, Fileiras</string>
+    <string name="tile_menu_groups">Adicionar a um grupo</string>
+    <string name="tile_menu_groups_detail">Uma fileira de apps com o nome que você escolher</string>
+    <string name="tile_menu_remove_from_group">Remover de %1$s</string>
+    <string name="tile_menu_edit_group">Editar este grupo</string>
+    <string name="tile_menu_edit_group_detail">Renomeie ou mude os apps</string>
 </resources>

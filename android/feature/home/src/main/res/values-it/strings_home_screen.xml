@@ -37,4 +37,6 @@
     <string name="home_screen_notifications_dismissed">Notifiche rimosse</string>
     <string name="home_screen_notification_dismissed">Rimossa</string>
     <string name="home_screen_notifications_app_hidden">Notifiche di %1$s nascoste. Per riaverle: Impostazioni, Notifiche</string>
+    <string name="home_screen_removed_from_group">Rimossa da %1$s</string>
+    <string name="home_screen_group_deleted">%1$s eliminato</string>
 </resources>

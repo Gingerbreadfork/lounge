@@ -37,4 +37,6 @@
     <string name="home_screen_notifications_dismissed">Notificações dispensadas</string>
     <string name="home_screen_notification_dismissed">Dispensada</string>
     <string name="home_screen_notifications_app_hidden">Notificações de %1$s ocultas. Traga de volta em Configurações, Notificações</string>
+    <string name="home_screen_removed_from_group">Removido de %1$s</string>
+    <string name="home_screen_group_deleted">%1$s excluído</string>
 </resources>

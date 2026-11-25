@@ -3,6 +3,13 @@
     <string name="sheets_group_home">Ecrã principal</string>
     <string name="sheets_rows_title">Linhas</string>
     <string name="sheets_rows_subtitle">Mostrar, ocultar e mover linhas</string>
+    <string name="sheets_groups_subtitle">Linhas de apps que junta</string>
+    <string name="sheets_groups_none">Nenhum</string>
+    <plurals name="sheets_groups_count">
+        <item quantity="one">%1$d grupo</item>
+        <item quantity="many">%1$d grupos</item>
+        <item quantity="other">%1$d grupos</item>
+    </plurals>
     <string name="sheets_your_apps_title">As suas apps</string>
     <string name="sheets_your_apps_subtitle">As apps fixadas e, depois, as recentes</string>
     <string name="sheets_your_apps_pinned_only">Só as fixadas</string>

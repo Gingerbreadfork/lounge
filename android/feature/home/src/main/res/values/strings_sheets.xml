@@ -4,6 +4,13 @@
     <string name="sheets_group_home">Home screen</string>
     <string name="sheets_rows_title">Rows</string>
     <string name="sheets_rows_subtitle">Show, hide and move rows</string>
+    <!-- The row that opens the groups of apps, and how many there are. -->
+    <string name="sheets_groups_subtitle">Rows of apps you put together</string>
+    <string name="sheets_groups_none">None</string>
+    <plurals name="sheets_groups_count">
+        <item quantity="one">%1$d group</item>
+        <item quantity="other">%1$d groups</item>
+    </plurals>
     <!-- Your apps is the row of apps on the home screen. -->
     <string name="sheets_your_apps_title">Your apps</string>
     <string name="sheets_your_apps_subtitle">Pinned apps, then recent ones</string>

@@ -53,4 +53,7 @@
     <string name="home_screen_notifications_dismissed">Notifications dismissed</string>
     <string name="home_screen_notification_dismissed">Dismissed</string>
     <string name="home_screen_notifications_app_hidden">Notifications from %1$s hidden. Settings, Notifications brings them back</string>
+    <!-- Said after a choice in a tile's menu or in a group's sheet. %1$s is the group's name. -->
+    <string name="home_screen_removed_from_group">Removed from %1$s</string>
+    <string name="home_screen_group_deleted">%1$s deleted</string>
 </resources>

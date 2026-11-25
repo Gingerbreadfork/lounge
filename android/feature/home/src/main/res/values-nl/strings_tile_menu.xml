@@ -22,4 +22,9 @@
     <string name="tile_menu_hide_all_from_detail">Uit Verder kijken tot je het weer toont</string>
     <string name="tile_menu_hide_row">Deze rij verbergen</string>
     <string name="tile_menu_hide_row_detail">Terughalen kan via Instellingen, Rijen</string>
+    <string name="tile_menu_groups">Aan een groep toevoegen</string>
+    <string name="tile_menu_groups_detail">Een rij apps die je zelf een naam geeft</string>
+    <string name="tile_menu_remove_from_group">Uit %1$s halen</string>
+    <string name="tile_menu_edit_group">Deze groep bewerken</string>
+    <string name="tile_menu_edit_group_detail">Andere naam of andere apps</string>
 </resources>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="groups_title">Grupos de apps</string>
+    <string name="groups_subtitle">Filas de apps que reúnes y nombras.</string>
+    <string name="groups_subtitle_app">OK pone %1$s en un grupo o la quita.</string>
+    <string name="groups_none">Aún no hay grupos. Escribe un nombre abajo para crear uno.</string>
+    <string name="groups_new_label">Nuevo grupo</string>
+    <string name="groups_new_hint">Ponle un nombre, como Niños o Deportes</string>
+    <string name="groups_added">Añadida</string>
+    <string name="groups_not_added">No añadida</string>
+    <string name="groups_no_apps">Aún sin apps</string>
+    <plurals name="groups_apps">
+        <item quantity="one">%1$d app</item>
+        <item quantity="many">%1$d apps</item>
+        <item quantity="other">%1$d apps</item>
+    </plurals>
+    <string name="groups_footnote">Un grupo con alguna app es una fila en la pantalla de inicio. Ajustes, Filas la mueve o la oculta.</string>
+    <string name="group_subtitle">Una fila de apps en la pantalla de inicio.</string>
+    <string name="group_name_label">Nombre</string>
+    <string name="group_apps_heading">Apps</string>
+    <string name="group_delete">Eliminar este grupo</string>
+    <string name="group_delete_confirm">Sí, eliminar este grupo</string>
+    <string name="group_delete_subtitle">Sus apps siguen en la TV</string>
+</resources>

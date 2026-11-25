@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="groups_title">Groepen apps</string>
+    <string name="groups_subtitle">Rijen apps die je zelf samenstelt en een naam geeft.</string>
+    <string name="groups_subtitle_app">OK zet %1$s in een groep of haalt die eruit.</string>
+    <string name="groups_none">Nog geen groepen. Typ hieronder een naam om er een te maken.</string>
+    <string name="groups_new_label">Nieuwe groep</string>
+    <string name="groups_new_hint">Geef een naam, zoals Kinderen of Sport</string>
+    <string name="groups_added">Toegevoegd</string>
+    <string name="groups_not_added">Niet toegevoegd</string>
+    <string name="groups_no_apps">Nog geen apps</string>
+    <plurals name="groups_apps">
+        <item quantity="one">%1$d app</item>
+        <item quantity="other">%1$d apps</item>
+    </plurals>
+    <string name="groups_footnote">Een groep met een app erin is een rij op het startscherm. Via Instellingen, Rijen verplaats of verberg je die.</string>
+    <string name="group_subtitle">Een rij apps op het startscherm.</string>
+    <string name="group_name_label">Naam</string>
+    <string name="group_apps_heading">Apps</string>
+    <string name="group_delete">Deze groep verwijderen</string>
+    <string name="group_delete_confirm">Ja, deze groep verwijderen</string>
+    <string name="group_delete_subtitle">De apps blijven op de tv</string>
+</resources>

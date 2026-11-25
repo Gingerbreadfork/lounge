@@ -3,6 +3,12 @@
     <string name="sheets_group_home">Startscherm</string>
     <string name="sheets_rows_title">Rijen</string>
     <string name="sheets_rows_subtitle">Rijen tonen, verbergen en verplaatsen</string>
+    <string name="sheets_groups_subtitle">Rijen apps die je zelf samenstelt</string>
+    <string name="sheets_groups_none">Geen</string>
+    <plurals name="sheets_groups_count">
+        <item quantity="one">%1$d groep</item>
+        <item quantity="other">%1$d groepen</item>
+    </plurals>
     <string name="sheets_your_apps_title">Je apps</string>
     <string name="sheets_your_apps_subtitle">Vastgemaakte apps, daarna recente</string>
     <string name="sheets_your_apps_pinned_only">Alleen vastgemaakte</string>

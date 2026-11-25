@@ -3,6 +3,13 @@
     <string name="sheets_group_home">Écran d’accueil</string>
     <string name="sheets_rows_title">Rangées</string>
     <string name="sheets_rows_subtitle">Afficher, masquer et déplacer les rangées</string>
+    <string name="sheets_groups_subtitle">Des rangées d’applis que vous composez</string>
+    <string name="sheets_groups_none">Aucun</string>
+    <plurals name="sheets_groups_count">
+        <item quantity="one">%1$d groupe</item>
+        <item quantity="many">%1$d groupes</item>
+        <item quantity="other">%1$d groupes</item>
+    </plurals>
     <string name="sheets_your_apps_title">Vos applis</string>
     <string name="sheets_your_apps_subtitle">Les applis épinglées, puis les récentes</string>
     <string name="sheets_your_apps_pinned_only">Épinglées seulement</string>

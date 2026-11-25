@@ -364,6 +364,16 @@ pub struct RowInfo {
     pub detail: String,
 }
 
+/// A group of apps the person put together, for the editors. Its row on the home is `group:<id>`.
+#[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupInfo {
+    pub id: String,
+    pub name: String,
+    /// Packages in the group's order, with any whose app is not on the TV now.
+    pub apps: Vec<String>,
+}
+
 /// An app or plugin that Continue watching draws on, for the editors: how much it brings and
 /// whether it is shown.
 #[derive(Clone, Debug, PartialEq, uniffi::Record, Serialize, Deserialize)]
@@ -736,6 +746,14 @@ pub enum LayoutCommand {
     MoveRow { row_id: String, to_index: u32 },
     /// How many recently opened apps follow the pins in Your apps; zero keeps the row to pins.
     SetRecentApps { count: u32 },
+    /// Starts a group of apps, a row of its own, with `package` in it if one is given.
+    CreateGroup { name: String, package: Option<String> },
+    RenameGroup { group_id: String, name: String },
+    DeleteGroup { group_id: String },
+    AddToGroup { group_id: String, package: String },
+    RemoveFromGroup { group_id: String, package: String },
+    /// Moves an app to `to_index` in its group as the group's row shows it.
+    MoveInGroup { group_id: String, package: String, to_index: u32 },
     ResetLayout,
     DismissNotice { id: String },
     EnableChannel { channel_id: i64 },
@@ -1125,6 +1143,14 @@ impl Core {
         engine::wait_for_graph(&self.inner);
         let state = self.inner.state.lock();
         engine::row_infos(&state, &self.inner.config)
+    }
+
+    /// The groups of apps the person made, in the order they were made.
+    pub fn app_groups(&self) -> Vec<GroupInfo> {
+        self.count();
+        engine::wait_for_graph(&self.inner);
+        let state = self.inner.state.lock();
+        engine::group_infos(&state)
     }
 
     /// How many recently opened apps follow the pins in Your apps.

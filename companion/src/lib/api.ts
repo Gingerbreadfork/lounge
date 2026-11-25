@@ -55,6 +55,8 @@ export type State = { device: { name: string; model: string; version: string; ti
 export type RowRef = { id: string; title: string; shown: boolean; chosen: boolean; count: number; detail: string };
 export type NamedRef = { id: string; title: string; iconPath?: string | null };
 export type AppRef = { package: string; title: string; iconPath?: string | null; pinned: boolean };
+/** A group of apps: a row of its own on the TV, holding these packages in this order. */
+export type GroupRef = { id: string; name: string; apps: string[] };
 /** An app or plugin Continue watching draws on: how many titles it brings and whether it is shown. */
 export type SourceRef = { id: string; title: string; iconPath?: string | null; count: number; shown: boolean };
 export type Layout = {
@@ -68,7 +70,11 @@ export type Layout = {
   mutedProviders: string[]; continueSources: SourceRef[];
   /** Notice tiles the person chose not to see again, by id. */
   dismissedNotices: string[];
+  /** The groups of apps the person made. */
+  groups: GroupRef[];
 };
+/** A change to the layout. `groups` holds only the groups made or changed, and `deletedGroups` the ids of those deleted. */
+export type LayoutPatch = Partial<Layout> & { deletedGroups?: string[] };
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
 /** A step a plugin waits on the person for, such as a sign-in. */
 export type PluginAsk = { say: string; link?: string | null; linkText?: string | null; code?: string | null; after?: string | null; newCode?: boolean; watched?: boolean };
@@ -209,7 +215,7 @@ export const api = {
   launch: (pkg: string) => call<void>('POST', '/api/launch', { package: pkg }),
   search: (query: string) => call<void>('POST', '/api/search', { query }),
   layout: () => call<Layout>('GET', '/api/layout'),
-  setLayout: (l: Partial<Layout>) => call<Layout>('PUT', '/api/layout', l),
+  setLayout: (l: LayoutPatch) => call<Layout>('PUT', '/api/layout', l),
   plugins: () => call<Plugin[]>('GET', '/api/plugins'),
   pluginCommand: (id: string, cmd: 'enable' | 'disable' | 'refresh' | 'new-code' | 'watch' | 'remove') => call<void>('POST', `/api/plugins/${encodeURIComponent(id)}/${cmd}`),
   pluginSetting: (id: string, key: string, value: string | null) => call<void>('PUT', `/api/plugins/${encodeURIComponent(id)}/settings`, { key, value }),

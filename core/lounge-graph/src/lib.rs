@@ -284,6 +284,37 @@ pub struct Layout {
     /// Apps and plugins left out of Continue watching, each by [Item::provider].
     #[serde(default)]
     pub muted_providers: HashSet<String>,
+    /// Rows of apps the person put together, each shown as the row `group:<id>`.
+    #[serde(default)]
+    pub groups: Vec<AppGroup>,
+}
+
+/// A row of apps the person put together and named.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppGroup {
+    pub id: String,
+    pub name: String,
+    /// Packages in the order they are shown. One whose app is gone keeps its place for its return.
+    pub apps: Vec<String>,
+}
+
+impl AppGroup {
+    /// The most groups a layout keeps, and the longest a name may be in characters.
+    pub const MAX_GROUPS: usize = 24;
+    pub const MAX_NAME: usize = 40;
+    /// The most apps a group keeps.
+    pub const MAX_APPS: usize = 200;
+
+    /// The id of the row that shows this group.
+    pub fn row_id(&self) -> String {
+        format!("group:{}", self.id)
+    }
+
+    /// A name as it is kept: trimmed, on one line and no longer than [Self::MAX_NAME].
+    pub fn tidy_name(name: &str) -> String {
+        let one_line: String = name.split_whitespace().collect::<Vec<_>>().join(" ");
+        one_line.chars().take(Self::MAX_NAME).collect()
+    }
 }
 
 pub const DEFAULT_RECENT_APPS: u32 = 5;
@@ -304,6 +335,7 @@ impl Default for Layout {
             row_visibility: HashMap::new(),
             recent_apps: DEFAULT_RECENT_APPS,
             muted_providers: HashSet::new(),
+            groups: Vec::new(),
         }
     }
 }
@@ -318,7 +350,8 @@ impl Layout {
     ];
 
     /// Drop repeats from the ordered lists, keeping each entry's first place; the home keys rows
-    /// and tiles by id, so a repeat must never reach it.
+    /// and tiles by id, so a repeat must never reach it. Groups are held to their limits, and a
+    /// group that has gone takes its row's place and choice with it.
     pub fn normalise(&mut self) {
         fn dedupe(v: &mut Vec<String>) {
             let mut seen = HashSet::new();
@@ -327,6 +360,19 @@ impl Layout {
         dedupe(&mut self.row_order);
         dedupe(&mut self.pinned_apps);
         dedupe(&mut self.stage_pins);
+        let mut ids = HashSet::new();
+        self.groups.retain_mut(|g| {
+            g.name = AppGroup::tidy_name(&g.name);
+            dedupe(&mut g.apps);
+            g.apps.truncate(AppGroup::MAX_APPS);
+            let plain = !g.id.is_empty() && g.id.len() <= 32 && g.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+            plain && !g.name.is_empty() && ids.insert(g.id.clone())
+        });
+        self.groups.truncate(AppGroup::MAX_GROUPS);
+        let groups = &self.groups;
+        let kept = |row: &String| row.strip_prefix("group:").is_none_or(|id| groups.iter().any(|g| g.id == id));
+        self.row_order.retain(kept);
+        self.row_visibility.retain(|row, _| kept(row));
     }
 
     pub fn row_order_or_default(&self) -> Vec<String> {
@@ -444,6 +490,73 @@ impl Graph {
         order.truncate(last + 1);
         order.extend(stale);
         self.layout.pinned_apps = order;
+    }
+
+    /// A group by id.
+    pub fn group(&self, id: &str) -> Option<&AppGroup> {
+        self.layout.groups.iter().find(|g| g.id == id)
+    }
+
+    /// The apps a group shows: its apps that are installed and not hidden, in its order.
+    pub fn group_apps(&self, id: &str) -> Vec<&Item> {
+        let Some(group) = self.group(id) else { return Vec::new() };
+        group.apps.iter().filter_map(|p| self.get(&format!("app:{p}"))).filter(|it| !self.is_hidden(&it.id)).collect()
+    }
+
+    /// Starts a group named `name`, with `package` in it if one is given. Nothing happens once
+    /// the layout holds as many groups as it may, or when the name is empty.
+    pub fn create_group(&mut self, name: &str, package: Option<&str>) {
+        let name = AppGroup::tidy_name(name);
+        if name.is_empty() || self.layout.groups.len() >= AppGroup::MAX_GROUPS {
+            return;
+        }
+        let next = self.layout.groups.iter().filter_map(|g| g.id.strip_prefix('g')?.parse::<u32>().ok()).max().map_or(1, |n| n + 1);
+        self.layout.groups.push(AppGroup { id: format!("g{next}"), name, apps: package.map(str::to_string).into_iter().collect() });
+    }
+
+    pub fn rename_group(&mut self, id: &str, name: &str) {
+        let name = AppGroup::tidy_name(name);
+        if name.is_empty() {
+            return;
+        }
+        if let Some(g) = self.layout.groups.iter_mut().find(|g| g.id == id) {
+            g.name = name;
+        }
+    }
+
+    pub fn delete_group(&mut self, id: &str) {
+        self.layout.groups.retain(|g| g.id != id);
+        self.layout.normalise();
+    }
+
+    pub fn add_to_group(&mut self, id: &str, package: &str) {
+        if let Some(g) = self.layout.groups.iter_mut().find(|g| g.id == id) {
+            if !g.apps.iter().any(|p| p == package) {
+                g.apps.push(package.to_string());
+            }
+        }
+    }
+
+    pub fn remove_from_group(&mut self, id: &str, package: &str) {
+        if let Some(g) = self.layout.groups.iter_mut().find(|g| g.id == id) {
+            g.apps.retain(|p| p != package);
+        }
+    }
+
+    /// Moves an app to `to_index` in its group as the group is shown. Apps not shown now, such
+    /// as an uninstalled one, go to the end so they come back after the rest.
+    pub fn move_in_group(&mut self, id: &str, package: &str, to_index: usize) {
+        let mut order: Vec<String> = self.group_apps(id).iter().filter_map(|it| it.package()).map(str::to_string).collect();
+        if !order.iter().any(|p| p == package) {
+            return;
+        }
+        order.retain(|p| p != package);
+        order.insert(to_index.min(order.len()), package.to_string());
+        if let Some(g) = self.layout.groups.iter_mut().find(|g| g.id == id) {
+            let unseen: Vec<String> = g.apps.iter().filter(|p| !order.contains(p)).cloned().collect();
+            order.extend(unseen);
+            g.apps = order;
+        }
     }
 
     pub fn set_row_order(&mut self, rows: Vec<String>) {
@@ -910,6 +1023,70 @@ mod tests {
         assert_eq!(g.every_app().len(), 1);
         g.unhide("app:a");
         assert_eq!(g.all_apps().len(), 1);
+    }
+
+    #[test]
+    fn a_group_shows_its_apps_in_its_own_order() {
+        let mut g = Graph::default();
+        g.replace_source("apps", vec![app("a", "Alpha", Some(10)), app("b", "Bravo", Some(30)), app("c", "Charlie", None)]);
+        g.create_group("  Kids\n ", Some("b"));
+        g.create_group("", Some("a"));
+        assert_eq!(g.layout.groups.len(), 1);
+        let id = g.layout.groups[0].id.clone();
+        assert_eq!(g.layout.groups[0].name, "Kids");
+        g.add_to_group(&id, "gone");
+        g.add_to_group(&id, "a");
+        g.add_to_group(&id, "a");
+        g.add_to_group(&id, "c");
+        let shown = |g: &Graph| g.group_apps(&id).iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+        assert_eq!(shown(&g), vec!["app:b", "app:a", "app:c"]);
+        // A move counts the apps as shown, and one not on the TV keeps to the end.
+        g.move_in_group(&id, "c", 0);
+        assert_eq!(g.layout.groups[0].apps, vec!["c", "b", "a", "gone"]);
+        g.hide("app:b");
+        assert_eq!(shown(&g), vec!["app:c", "app:a"]);
+        g.remove_from_group(&id, "c");
+        g.rename_group(&id, "Little ones");
+        g.rename_group(&id, "   ");
+        assert_eq!(g.group(&id).map(|x| (x.name.as_str(), x.apps.len())), Some(("Little ones", 3)));
+    }
+
+    #[test]
+    fn a_deleted_group_takes_its_row_s_place_and_choice_with_it() {
+        let mut g = Graph::default();
+        g.create_group("Kids", None);
+        g.create_group("Sport", None);
+        let (kids, sport) = (g.layout.groups[0].row_id(), g.layout.groups[1].row_id());
+        g.set_row_order(vec!["apps".into(), sport.clone(), kids.clone()]);
+        g.set_row_shown(&kids, false);
+        g.delete_group(&g.layout.groups[0].id.clone());
+        assert_eq!(g.layout.row_order, vec!["apps".to_string(), sport]);
+        assert!(g.row_choice(&kids).is_none());
+        // A new group never takes an id still in use.
+        g.create_group("Music", None);
+        assert_eq!(g.layout.groups.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(), vec!["g2", "g3"]);
+    }
+
+    #[test]
+    fn groups_from_outside_are_held_to_the_limits() {
+        let group = |id: &str, name: &str| AppGroup { id: id.into(), name: name.into(), apps: vec!["a".into(), "a".into()] };
+        let mut layout = Layout { groups: vec![group("one", "Kids"), group("one", "Again"), group("two words", "Sport"), group("three", " ")], ..Layout::default() };
+        layout.groups.extend((0..40).map(|i| group(&format!("n{i}"), &"x".repeat(90))));
+        layout.normalise();
+        assert_eq!(layout.groups.len(), AppGroup::MAX_GROUPS);
+        assert_eq!((layout.groups[0].name.as_str(), layout.groups[0].apps.len()), ("Kids", 1));
+        assert_eq!(layout.groups[1].id, "n0");
+        assert_eq!(layout.groups[1].name.chars().count(), AppGroup::MAX_NAME);
+    }
+
+    #[test]
+    fn a_layout_saved_before_groups_still_reads() {
+        let old = serde_json::to_value(Layout::default()).map(|mut v| {
+            v.as_object_mut().unwrap().remove("groups");
+            v
+        });
+        let layout: Layout = serde_json::from_value(old.unwrap()).unwrap();
+        assert!(layout.groups.is_empty());
     }
 
     #[test]

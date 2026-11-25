@@ -22,4 +22,9 @@
     <string name="tile_menu_hide_all_from_detail">Fuori da Continua a guardare finché non lo mostri</string>
     <string name="tile_menu_hide_row">Nascondi questa riga</string>
     <string name="tile_menu_hide_row_detail">Per riaverla: Impostazioni, Righe</string>
+    <string name="tile_menu_groups">Aggiungi a un gruppo</string>
+    <string name="tile_menu_groups_detail">Una riga di app con il nome che scegli</string>
+    <string name="tile_menu_remove_from_group">Rimuovi da %1$s</string>
+    <string name="tile_menu_edit_group">Modifica questo gruppo</string>
+    <string name="tile_menu_edit_group_detail">Rinominalo o cambia le sue app</string>
 </resources>

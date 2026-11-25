@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="groups_title">Gruppi di app</string>
+    <string name="groups_subtitle">Righe di app che componi e a cui dai un nome.</string>
+    <string name="groups_subtitle_app">OK mette %1$s in un gruppo o la toglie.</string>
+    <string name="groups_none">Ancora nessun gruppo. Scrivi un nome qui sotto per crearne uno.</string>
+    <string name="groups_new_label">Nuovo gruppo</string>
+    <string name="groups_new_hint">Dagli un nome, come Bambini o Sport</string>
+    <string name="groups_added">Aggiunta</string>
+    <string name="groups_not_added">Non aggiunta</string>
+    <string name="groups_no_apps">Ancora nessuna app</string>
+    <plurals name="groups_apps">
+        <item quantity="one">%1$d app</item>
+        <item quantity="many">%1$d app</item>
+        <item quantity="other">%1$d app</item>
+    </plurals>
+    <string name="groups_footnote">Un gruppo con almeno un\'app è una riga della schermata Home. Impostazioni, Righe la sposta o la nasconde.</string>
+    <string name="group_subtitle">Una riga di app nella schermata Home.</string>
+    <string name="group_name_label">Nome</string>
+    <string name="group_apps_heading">App</string>
+    <string name="group_delete">Elimina questo gruppo</string>
+    <string name="group_delete_confirm">Sì, elimina questo gruppo</string>
+    <string name="group_delete_subtitle">Le sue app restano sulla TV</string>
+</resources>

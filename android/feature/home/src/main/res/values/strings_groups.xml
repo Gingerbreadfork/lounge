@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The sheet that lists the groups of apps, each a row of its own on the home screen. Also the title of its row in Settings. -->
+    <string name="groups_title">App groups</string>
+    <string name="groups_subtitle">Rows of apps you put together and name.</string>
+    <!-- %1$s is an app's name. OK on a group in the list puts that app in it or takes it out. -->
+    <string name="groups_subtitle_app">OK puts %1$s in a group or takes it out.</string>
+    <!-- The field under this line names a new group. -->
+    <string name="groups_none">No groups yet. Name one below to make it.</string>
+    <!-- The label over the field that names a new group, and the words shown in it while it is empty. -->
+    <string name="groups_new_label">New group</string>
+    <string name="groups_new_hint">Name it, such as Kids or Sport</string>
+    <!-- Whether an app is in a group. -->
+    <string name="groups_added">Added</string>
+    <string name="groups_not_added">Not added</string>
+    <!-- How many apps a group holds. -->
+    <string name="groups_no_apps">No apps yet</string>
+    <plurals name="groups_apps">
+        <item quantity="one">%1$d app</item>
+        <item quantity="other">%1$d apps</item>
+    </plurals>
+    <!-- "Settings, Rows" is the way to the setting. -->
+    <string name="groups_footnote">A group with an app in it is a row on the home screen. Settings, Rows moves or hides it.</string>
+    <!-- The sheet for one group: its name, the apps on the TV to put in it, and the way to delete it. -->
+    <string name="group_subtitle">A row of apps on the home screen.</string>
+    <string name="group_name_label">Name</string>
+    <string name="group_apps_heading">Apps</string>
+    <!-- The row that deletes a group, its second press, and the line under both. -->
+    <string name="group_delete">Delete this group</string>
+    <string name="group_delete_confirm">Yes, delete this group</string>
+    <string name="group_delete_subtitle">Its apps stay on the TV</string>
+</resources>

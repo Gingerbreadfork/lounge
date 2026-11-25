@@ -572,6 +572,36 @@ msgid_plural "Your apps shows {n} recent apps"
 msgstr[0] "„Deine Apps“ zeigt {n} zuletzt geöffnete App"
 msgstr[1] "„Deine Apps“ zeigt {n} zuletzt geöffnete Apps"
 
+#. {group} is the name of a group of apps just made; its apps are chosen next
+#: src/pages/Layout.svelte
+msgid "{group} made. Now choose its apps."
+msgstr "{group} angelegt. Wähle jetzt ihre Apps."
+
+#. {group} is the new name of a group of apps
+#: src/pages/Layout.svelte
+msgid "Renamed to {group}"
+msgstr "In {group} umbenannt"
+
+#. {app} is an app's name and {group} the name of a group of apps
+#: src/pages/Layout.svelte
+msgid "{app} added to {group}"
+msgstr "{app} in {group} aufgenommen"
+
+#. {app} is an app's name and {group} the name of a group of apps
+#: src/pages/Layout.svelte
+msgid "{app} removed from {group}"
+msgstr "{app} aus {group} entfernt"
+
+#. the apps in a group are in a new order
+#: src/pages/Layout.svelte
+msgid "Group reordered"
+msgstr "Gruppe neu angeordnet"
+
+#. {group} is the name of a group of apps
+#: src/pages/Layout.svelte
+msgid "{group} deleted"
+msgstr "{group} gelöscht"
+
 #. {source} is an app or plugin that brings titles to the Continue watching row
 #: src/pages/Layout.svelte
 msgid "{source} is back in Continue watching"
@@ -720,6 +750,73 @@ msgstr "Anheften"
 #: src/pages/Layout.svelte
 msgid "No app called “{query}”."
 msgstr "Keine App namens „{query}“."
+
+#. the heading over the groups of apps, each a row of its own on the TV
+#: src/pages/Layout.svelte
+msgid "App groups"
+msgstr "App-Gruppen"
+
+#: src/pages/Layout.svelte
+msgid "A group is a row of apps on the TV under a name you give it, such as Kids or Sport. Drag it into place among the rows at the top of this page."
+msgstr "Eine Gruppe ist eine Reihe mit Apps auf dem Fernseher, unter einem Namen, den du ihr gibst, zum Beispiel Kinder oder Sport. Zieh sie bei den Reihen oben auf dieser Seite an ihren Platz."
+
+#: src/pages/Layout.svelte
+msgid "No apps yet"
+msgstr "Noch keine Apps"
+
+#: src/pages/Layout.svelte
+msgid "{n} app"
+msgid_plural "{n} apps"
+msgstr[0] "{n} App"
+msgstr[1] "{n} Apps"
+
+#. buttons that open and close a group of apps for change
+#: src/pages/Layout.svelte
+msgid "Done"
+msgstr "Fertig"
+
+#. buttons that open and close a group of apps for change
+#: src/pages/Layout.svelte
+msgid "Edit"
+msgstr "Bearbeiten"
+
+#. the label of the field that holds a group's name
+#: src/pages/Layout.svelte
+msgid "Name"
+msgstr "Name"
+
+#. a button that takes an app out of a group
+#: src/pages/Layout.svelte
+msgid "Remove"
+msgstr "Entfernen"
+
+#. a button that puts an app in a group
+#: src/pages/Layout.svelte
+msgid "Add"
+msgstr "Hinzufügen"
+
+#. the button that deletes a group of apps, and the question it asks first
+#: src/pages/Layout.svelte
+msgid "Delete this group"
+msgstr "Diese Gruppe löschen"
+
+#. the button that deletes a group of apps, and the question it asks first
+#: src/pages/Layout.svelte
+msgid "Yes, delete this group"
+msgstr "Ja, diese Gruppe löschen"
+
+#: src/pages/Layout.svelte
+msgid "Its apps stay on the TV."
+msgstr "Ihre Apps bleiben auf dem Fernseher."
+
+#. the field that names a new group of apps, and the button that makes it
+#: src/pages/Layout.svelte
+msgid "Name a new group"
+msgstr "Neue Gruppe benennen"
+
+#: src/pages/Layout.svelte
+msgid "Make it"
+msgstr "Anlegen"
 
 #. the heading over the list of things hidden from every row
 #: src/pages/Layout.svelte

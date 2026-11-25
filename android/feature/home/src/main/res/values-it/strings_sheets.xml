@@ -3,6 +3,13 @@
     <string name="sheets_group_home">Schermata Home</string>
     <string name="sheets_rows_title">Righe</string>
     <string name="sheets_rows_subtitle">Mostra, nascondi e sposta le righe</string>
+    <string name="sheets_groups_subtitle">Righe di app che componi</string>
+    <string name="sheets_groups_none">Nessuno</string>
+    <plurals name="sheets_groups_count">
+        <item quantity="one">%1$d gruppo</item>
+        <item quantity="many">%1$d gruppi</item>
+        <item quantity="other">%1$d gruppi</item>
+    </plurals>
     <string name="sheets_your_apps_title">Le tue app</string>
     <string name="sheets_your_apps_subtitle">Prima le app fissate, poi le recenti</string>
     <string name="sheets_your_apps_pinned_only">Solo fissate</string>

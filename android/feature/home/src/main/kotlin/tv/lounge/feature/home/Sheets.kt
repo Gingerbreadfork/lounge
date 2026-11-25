@@ -383,6 +383,9 @@ fun QuickSettingsSheet(
     onRows: () -> Unit,
     /** "All shown" or "2 hidden": what the row editor would say first. */
     rowsSummary: String,
+    onGroups: () -> Unit,
+    /** "None" or "2 groups". */
+    groupsSummary: String,
     /** How many recently opened apps follow the pins in Your apps. */
     recentApps: Int,
     onSetRecentApps: (Int) -> Unit,
@@ -432,7 +435,7 @@ fun QuickSettingsSheet(
     val networkSettings = remember { networkSettingsIntent(context) }
     val link by rememberLink()
     // Back from one of its pages puts focus on the row that opened it.
-    val pages = listOf(Overlay.Rows, Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.Language, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate)
+    val pages = listOf(Overlay.Rows, Overlay.AppGroups(), Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.Language, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate)
     val returnTo = cameFrom?.takeIf { it in pages }
     fun focusFor(page: Overlay?) = firstFocus.takeIf { page == returnTo }
 
@@ -446,6 +449,14 @@ fun QuickSettingsSheet(
             value = rowsSummary,
             onClick = onRows,
             focusRequester = focusFor(Overlay.Rows) ?: focusFor(null),
+        )
+        SheetRow(
+            icon = LoungeIcons.Apps,
+            title = stringResource(R.string.groups_title),
+            subtitle = stringResource(R.string.sheets_groups_subtitle),
+            value = groupsSummary,
+            onClick = onGroups,
+            focusRequester = focusFor(Overlay.AppGroups()),
         )
         val steps = listOf(0, 5, 10, 15)
         val at = steps.indexOf(recentApps).let { if (it < 0) 1 else it }

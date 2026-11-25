@@ -22,4 +22,9 @@
     <string name="tile_menu_hide_all_from_detail">Nicht mehr unter „Weiterschauen“, bis du es einblendest</string>
     <string name="tile_menu_hide_row">Diese Reihe ausblenden</string>
     <string name="tile_menu_hide_row_detail">Über Einstellungen, Reihen kommt sie zurück</string>
+    <string name="tile_menu_groups">In eine Gruppe aufnehmen</string>
+    <string name="tile_menu_groups_detail">Eine Reihe mit Apps, die du benennst</string>
+    <string name="tile_menu_remove_from_group">Aus „%1$s“ entfernen</string>
+    <string name="tile_menu_edit_group">Diese Gruppe bearbeiten</string>
+    <string name="tile_menu_edit_group_detail">Umbenennen oder Apps ändern</string>
 </resources>

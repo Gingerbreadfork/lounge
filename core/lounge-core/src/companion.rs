@@ -2,7 +2,7 @@
 //! failure it hands the phone is a sentence with the cause and the fix.
 
 use crate::{engine, now_ms, plugins, worker, CompanionStatus, CoreError, Inner, PairingInfo};
-use lounge_companion::{reads_as_sentence, sentence_or, AppRef, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, LiveRef, NamedRef, Pressed, RowRef, SheetRef, SourceRef};
+use lounge_companion::{reads_as_sentence, sentence_or, AppRef, CompanionActions, DeviceInfo, GroupRef, LayoutDoc, LayoutPatch, LiveRef, NamedRef, Pressed, RowRef, SheetRef, SourceRef};
 use lounge_graph::Layout;
 use lounge_plugins::http::{Fetcher, Reach};
 use lounge_words::{mark, t, tr};
@@ -217,6 +217,7 @@ fn layout_doc(inner: &Inner) -> LayoutDoc {
         muted_providers: l.muted_providers.iter().cloned().collect(),
         continue_sources: engine::continue_sources(&state).into_iter().map(|s| SourceRef { id: s.id, title: s.title, icon_path: s.icon_path, count: s.count, shown: s.shown }).collect(),
         dismissed_notices: l.dismissed_notices.iter().cloned().collect(),
+        groups: l.groups.iter().map(|g| GroupRef { id: g.id.clone(), name: g.name.clone(), apps: g.apps.clone() }).collect(),
     }
 }
 
@@ -394,6 +395,21 @@ impl CompanionActions for CoreActions {
             }
             if let Some(dismissed) = patch.dismissed_notices {
                 layout.dismissed_notices = dismissed.into_iter().collect();
+            }
+            for g in patch.groups.unwrap_or_default() {
+                match layout.groups.iter_mut().find(|known| known.id == g.id) {
+                    Some(known) => {
+                        // A name that would not be kept leaves the group its old one.
+                        if !lounge_graph::AppGroup::tidy_name(&g.name).is_empty() {
+                            known.name = g.name;
+                        }
+                        known.apps = g.apps;
+                    }
+                    None => layout.groups.push(lounge_graph::AppGroup { id: g.id, name: g.name, apps: g.apps }),
+                }
+            }
+            if let Some(gone) = patch.deleted_groups {
+                layout.groups.retain(|g| !gone.contains(&g.id));
             }
             layout.normalise();
             state.store.save_layout(&layout).map_err(|e| {
@@ -1202,6 +1218,29 @@ mod tests {
         let saved = core.inner.state.lock().graph.layout.row_order.clone();
         assert_eq!(saved.first().map(String::as_str), Some("apps"));
         assert!(saved.contains(&"plugin:gone:recent".to_string()), "{saved:?}");
+    }
+
+    #[test]
+    fn the_phone_changes_one_group_and_leaves_those_it_has_not_heard_of() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(test_config(dir.path()), Arc::new(Quiet)).unwrap();
+        put_apps(&core, &[("tv.a", true), ("tv.b", true)]);
+        rows_when(&core, |ids| ids.iter().any(|r| r == "apps"));
+        let actions = CoreActions { inner: Arc::downgrade(&core.inner) };
+        let group = |id: &str, name: &str, apps: &[&str]| GroupRef { id: id.into(), name: name.into(), apps: apps.iter().map(|a| a.to_string()).collect() };
+        let send = |groups: Vec<GroupRef>, gone: Vec<&str>| {
+            let patch = LayoutPatch { groups: Some(groups), deleted_groups: Some(gone.into_iter().map(String::from).collect()), ..LayoutPatch::default() };
+            actions.set_layout(patch).unwrap().groups
+        };
+        assert_eq!(send(vec![group("p1", "Sport", &["tv.a"])], vec![]), vec![group("p1", "Sport", &["tv.a"])]);
+        // One made on the TV since the phone last read the layout.
+        core.inner.state.lock().graph.create_group("Kids", None);
+        let after = send(vec![group("p1", " ", &["tv.a", "tv.b"])], vec![]);
+        assert_eq!(after, vec![group("p1", "Sport", &["tv.a", "tv.b"]), group("g1", "Kids", &[])]);
+        // Its row is listed for the phone's own editor, and deleting takes it away.
+        assert!(actions.layout().available_rows.iter().any(|r| r.id == "group:p1" && r.title == "Sport"));
+        assert_eq!(send(vec![], vec!["p1"]), vec![group("g1", "Kids", &[])]);
+        assert!(!actions.layout().row_order.contains(&"group:p1".to_string()));
     }
 
     #[test]

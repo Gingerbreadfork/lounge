@@ -859,6 +859,7 @@ fun HomeScreen(
                             openSheet(next)
                         },
                         forget = { gone -> state.sheetTrail.removeAll { it == gone } },
+                        back = { from -> backFrom(from) },
                         notices = notices,
                         notifications = notifications,
                         notificationIndex = { state.notificationIndex },
@@ -950,6 +951,24 @@ fun HomeScreen(
             val pkg = ov.tile.id.removePrefix("app:")
             // Search keeps the home's row ids; hiding a row from there would be a surprise.
             val homeRow = if (ov.under == Overlay.Search) null else snapshot.rows.firstOrNull { it.id == ov.rowId }
+            // The group whose row the tile sits in, where it sits in one.
+            val group = homeRow?.let { groupOfRow(it.id) }
+            fun moveTo(index: Int) = if (group != null) LayoutCommand.MoveInGroup(group, pkg, index.toUInt()) else LayoutCommand.MoveApp(pkg, index.toUInt())
+            // The tile takes focus back before a sheet opens, so closing the sheet returns to it.
+            // Over All apps, Back from the sheet returns there.
+            fun fromMenu(sheet: Overlay) {
+                uiSounds?.open()
+                state.overlay = ov.under
+                scope.launch {
+                    ov.returnFocus.requestWhenReady(6)
+                    if (ov.under == Overlay.AllApps) {
+                        openOverlay(sheet)
+                        state.sheetTrail += ov.under
+                    } else {
+                        openOverlay(sheet, from = ov.returnFocus)
+                    }
+                }
+            }
             TileMenuPopover(
                 tile = ov.tile,
                 anchor = ov.anchor,
@@ -960,7 +979,17 @@ fun HomeScreen(
                     isPinned = ov.tile.pinned,
                     // Moves stay among the pins: hopping past a recent app would pin it unasked.
                     canMoveLeft = indexInRow(ov.rowId, ov.tile.id) > 0,
-                    canMoveRight = indexInRow(ov.rowId, ov.tile.id).let { at -> at >= 0 && (homeRow?.tiles?.getOrNull(at + 1)?.pinned == true) },
+                    // In a group every app can be moved past.
+                    canMoveRight = indexInRow(ov.rowId, ov.tile.id).let { at ->
+                        at >= 0 && homeRow?.tiles?.getOrNull(at + 1)?.let { next -> next.pinned || group != null } == true
+                    },
+                    groupName = homeRow?.title.takeIf { group != null },
+                    onGroups = { fromMenu(Overlay.AppGroups(ov.tile)) },
+                    onRemoveFromGroup = {
+                        group?.let { core.command(LayoutCommand.RemoveFromGroup(it, pkg)) }
+                        say(R.string.home_screen_removed_from_group, homeRow?.title.orEmpty())
+                    },
+                    onEditGroup = { group?.let { fromMenu(Overlay.GroupEdit(it)) } },
                     isStagePinned = ov.tile.stagePinned,
                     onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say(R.string.home_screen_hidden) },
                     onShow = { core.command(LayoutCommand.UnhideItem(ov.tile.id)); say(R.string.home_screen_shown) },
@@ -975,14 +1004,14 @@ fun HomeScreen(
                     },
                     onPin = { core.command(LayoutCommand.PinApp(pkg)); say(R.string.home_screen_pinned_app) },
                     onUnpin = { core.command(LayoutCommand.UnpinApp(pkg)); say(R.string.home_screen_unpinned_app) },
-                    // The tile's place in Your apps now, wherever its menu was opened from.
+                    // The tile's place in its row now, wherever its menu was opened from.
                     onMoveLeft = {
                         val at = indexInRow(ov.rowId, ov.tile.id)
-                        if (at >= 0) core.command(LayoutCommand.MoveApp(pkg, (at - 1).coerceAtLeast(0).toUInt()))
+                        if (at >= 0) core.command(moveTo((at - 1).coerceAtLeast(0)))
                     },
                     onMoveRight = {
                         val at = indexInRow(ov.rowId, ov.tile.id)
-                        if (at >= 0) core.command(LayoutCommand.MoveApp(pkg, (at + 1).toUInt()))
+                        if (at >= 0) core.command(moveTo(at + 1))
                     },
                     onPinStage = { core.command(LayoutCommand.PinToStage(ov.tile.id)); say(R.string.home_screen_pinned_stage) },
                     onUnpinStage = { core.command(LayoutCommand.UnpinFromStage(ov.tile.id)); say(R.string.home_screen_unpinned_stage) },
@@ -1127,6 +1156,7 @@ private fun Overlay.isSheet(): Boolean = when (this) {
     Overlay.QuickSettings, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels, Overlay.Rows,
     Overlay.Plugins, is Overlay.PluginDetail, is Overlay.PluginSheet, Overlay.HomeRole, Overlay.Language, Overlay.Companion, Overlay.Updates,
     Overlay.Notifications, is Overlay.NotificationDetail, Overlay.NotificationSettings,
+    is Overlay.AppGroups, is Overlay.GroupEdit,
     -> true
     else -> false
 }
@@ -1134,7 +1164,7 @@ private fun Overlay.isSheet(): Boolean = when (this) {
 /** How deep a sheet sits, for the direction of the content shift between sheets. */
 private fun Overlay.sheetDepth(): Int = when (this) {
     Overlay.QuickSettings, Overlay.TvControls, Overlay.Notifications -> 0
-    is Overlay.PluginDetail, Overlay.PowerSetup -> 2
+    is Overlay.PluginDetail, Overlay.PowerSetup, is Overlay.GroupEdit -> 2
     else -> 1
 }
 
@@ -1221,6 +1251,8 @@ private fun SheetContent(
     open: (Overlay) -> Unit,
     /** Takes a sheet that no longer has anything to show out of the way back. */
     forget: (Overlay) -> Unit,
+    /** Leaves a sheet as Back would: for the one that opened it, or for the home. */
+    back: (Overlay) -> Unit,
     notices: StateFlow<NotificationsShown>,
     notifications: NotificationSource,
     /** The place in the list of the notification last opened. */
@@ -1245,6 +1277,7 @@ private fun SheetContent(
             // Read again with each snapshot, so a change made on the phone shows here too.
             LaunchedEffect(Unit) { core.snapshots.collect { recentApps = withContext(Dispatchers.IO) { core.recentApps().toInt() } } }
             // Only rows the person hid count.
+            val groupCount by produceState<Int?>(null) { value = withContext(Dispatchers.IO) { core.appGroups().size } }
             val rowsHidden by produceState<Int?>(null) { value = withContext(Dispatchers.IO) { core.homeRows().count { !it.shown && it.chosen } } }
             QuickSettingsSheet(
                 prefs = prefs,
@@ -1267,6 +1300,12 @@ private fun SheetContent(
                 say = say,
                 onChannels = { open(Overlay.Channels) },
                 onRows = { open(Overlay.Rows) },
+                onGroups = { open(Overlay.AppGroups()) },
+                groupsSummary = when (val count = groupCount) {
+                    null -> ""
+                    0 -> stringResource(R.string.sheets_groups_none)
+                    else -> pluralStringResource(R.plurals.sheets_groups_count, count, count)
+                },
                 rowsSummary = when (val hidden = rowsHidden) {
                     null -> ""
                     0 -> stringResource(R.string.home_screen_rows_all_shown)
@@ -1394,6 +1433,91 @@ private fun SheetContent(
                 },
                 firstFocus = first,
             )
+        }
+        is Overlay.AppGroups -> {
+            var groups by remember { mutableStateOf<List<tv.lounge.core.GroupInfo>?>(null) }
+            val edits = remember { intArrayOf(0) }
+            suspend fun reload() {
+                val began = edits[0]
+                val read = withContext(Dispatchers.IO) { core.appGroups() }
+                if (edits[0] == began) groups = read
+            }
+            LaunchedEffect(Unit) { core.snapshots.collect { reload() } }
+            fun edited() {
+                edits[0]++
+                scope.launch { kotlinx.coroutines.delay(400); reload() }
+            }
+            val pkg = overlay.app?.id?.removePrefix("app:")
+            val snapshot by core.snapshots.collectAsStateWithLifecycle()
+            // A group counts the apps its row would show, as the row editor does.
+            val onTv = remember(snapshot.allApps) { snapshot.allApps.filter { !it.hidden }.map { it.id.removePrefix("app:") }.toSet().takeIf { it.isNotEmpty() } }
+            GroupsSheet(
+                app = overlay.app,
+                groups = groups,
+                onTv = onTv,
+                onToggle = { group, add ->
+                    if (pkg != null) {
+                        edited()
+                        core.command(if (add) LayoutCommand.AddToGroup(group.id, pkg) else LayoutCommand.RemoveFromGroup(group.id, pkg))
+                        groups = groups?.map { if (it.id == group.id) it.copy(apps = if (add) it.apps + pkg else it.apps - pkg) else it }
+                    }
+                },
+                onOpen = { group -> open(Overlay.GroupEdit(group.id)) },
+                onCreate = { name ->
+                    edited()
+                    core.command(LayoutCommand.CreateGroup(name, pkg))
+                },
+                firstFocus = first,
+                returnTo = (cameFrom as? Overlay.GroupEdit)?.groupId,
+            )
+        }
+        is Overlay.GroupEdit -> {
+            var group by remember { mutableStateOf<tv.lounge.core.GroupInfo?>(null) }
+            var read by remember { mutableStateOf(false) }
+            val edits = remember { intArrayOf(0) }
+            val snapshot by core.snapshots.collectAsStateWithLifecycle()
+            suspend fun reload() {
+                val began = edits[0]
+                val found = withContext(Dispatchers.IO) { core.appGroups() }.firstOrNull { it.id == overlay.groupId }
+                if (edits[0] == began) {
+                    group = found
+                    read = true
+                }
+            }
+            LaunchedEffect(Unit) { core.snapshots.collect { reload() } }
+            fun edited() {
+                edits[0]++
+                scope.launch { kotlinx.coroutines.delay(400); reload() }
+            }
+            var deleting by remember { mutableStateOf(false) }
+            // A group deleted from the phone leaves nothing to edit here.
+            LaunchedEffect(read, group == null) {
+                if (read && group == null && !deleting) back(overlay)
+            }
+            group?.let { shown ->
+                GroupSheet(
+                    group = shown,
+                    apps = snapshot.allApps,
+                    onRename = { name ->
+                        edited()
+                        core.command(LayoutCommand.RenameGroup(shown.id, name))
+                        group = group?.copy(name = name.trim())
+                    },
+                    onToggle = { app, add ->
+                        val pkg = app.id.removePrefix("app:")
+                        edited()
+                        core.command(if (add) LayoutCommand.AddToGroup(shown.id, pkg) else LayoutCommand.RemoveFromGroup(shown.id, pkg))
+                        group = group?.let { now -> now.copy(apps = if (add) now.apps + pkg else now.apps - pkg) }
+                    },
+                    onDelete = {
+                        deleting = true
+                        core.command(LayoutCommand.DeleteGroup(shown.id))
+                        say(context.getString(R.string.home_screen_group_deleted, shown.name))
+                        back(overlay)
+                    },
+                    firstFocus = first,
+                )
+            }
         }
         Overlay.Rows -> {
             var rows by remember { mutableStateOf<List<tv.lounge.core.RowInfo>?>(null) }

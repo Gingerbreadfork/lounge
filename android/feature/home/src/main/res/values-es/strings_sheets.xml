@@ -3,6 +3,13 @@
     <string name="sheets_group_home">Pantalla de inicio</string>
     <string name="sheets_rows_title">Filas</string>
     <string name="sheets_rows_subtitle">Mostrar, ocultar y mover filas</string>
+    <string name="sheets_groups_subtitle">Filas de apps que reúnes</string>
+    <string name="sheets_groups_none">Ninguno</string>
+    <plurals name="sheets_groups_count">
+        <item quantity="one">%1$d grupo</item>
+        <item quantity="many">%1$d grupos</item>
+        <item quantity="other">%1$d grupos</item>
+    </plurals>
     <string name="sheets_your_apps_title">Tus apps</string>
     <string name="sheets_your_apps_subtitle">Apps fijadas y luego las recientes</string>
     <string name="sheets_your_apps_pinned_only">Solo fijadas</string>

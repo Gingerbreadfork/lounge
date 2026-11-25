@@ -213,6 +213,11 @@ fun menuItemsFor(
     onDismissNotice: () -> Unit,
     onGuide: () -> Unit,
     onAdjust: () -> Unit = {},
+    /** The name of the group whose row the tile sits in, or null in any other row. */
+    groupName: String? = null,
+    onGroups: () -> Unit = {},
+    onRemoveFromGroup: () -> Unit = {},
+    onEditGroup: () -> Unit = {},
 ): List<MenuItem> {
     val isApp = tile.id.startsWith("app:")
     val items = mutableListOf<MenuItem>()
@@ -243,9 +248,14 @@ fun menuItemsFor(
         } else {
             MenuItem(PinWords.PIN_APP, LoungeIcons.Pin, detail = PinWords.PIN_APP_DETAIL, onSelect = onPin)
         }
+    } else if (isApp && groupName != null) {
+        if (canMoveLeft) items += MenuItem(R.string.tile_menu_move_left, LoungeIcons.Move, onSelect = onMoveLeft)
+        if (canMoveRight) items += MenuItem(R.string.tile_menu_move_right, LoungeIcons.Move, onSelect = onMoveRight)
+        items += MenuItem(R.string.tile_menu_remove_from_group, LoungeIcons.Apps, named = groupName, onSelect = onRemoveFromGroup)
     }
     // What a control's one press does not reach is a sheet away, and comes first.
     if (tile.more != null) items += MenuItem(R.string.tile_menu_adjust, LoungeIcons.Settings, onSelect = onAdjust)
+    if (isApp) items += MenuItem(R.string.tile_menu_groups, LoungeIcons.Apps, detail = R.string.tile_menu_groups_detail, onSelect = onGroups)
     if (tile.id.startsWith("chan:")) items += MenuItem(DesignR.string.common_tv_guide, LoungeIcons.Guide, onSelect = onGuide)
     if (isStagePinned) {
         items += MenuItem(PinWords.UNPIN_STAGE, LoungeIcons.Pin, detail = PinWords.UNPIN_STAGE_DETAIL, onSelect = onUnpinStage)
@@ -259,6 +269,7 @@ fun menuItemsFor(
         items += MenuItem(R.string.tile_menu_hide_all_from, LoungeIcons.Hide, detail = PinWords.HIDE_ALL_FROM_DETAIL, named = name, onSelect = onHideAllFrom)
     }
     if (rowTitle != null) items += MenuItem(PinWords.HIDE_ROW, LoungeIcons.Rows, detail = PinWords.HIDE_ROW_DETAIL, onSelect = onHideRow)
+    if (groupName != null) items += MenuItem(R.string.tile_menu_edit_group, LoungeIcons.Rows, detail = R.string.tile_menu_edit_group_detail, onSelect = onEditGroup)
     if (isApp) {
         items += MenuItem(R.string.tile_menu_app_info, LoungeIcons.Info, onSelect = onAppInfo)
         items += MenuItem(R.string.tile_menu_play_store, LoungeIcons.Play, onSelect = onPlay)

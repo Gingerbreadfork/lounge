@@ -460,11 +460,18 @@ internal fun shortHelp(resources: Resources, text: String): String {
 /**
  * A plugin setting as a row: label above, value in `title`, and a toggle as a switch row. OK opens
  * the keyboard on it, and Done, Back or leaving saves what was typed. Text typed on the phone goes
- * into the focused field.
+ * into the focused field. [hint] stands in an empty field in place of the setting's own words.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusRequester, alsoFocus: FocusRequester?, onCommit: (String?) -> Unit, onToggle: (Boolean) -> Unit) {
+internal fun SettingField(
+    setting: PluginSettingInfo,
+    focusRequester: FocusRequester,
+    alsoFocus: FocusRequester?,
+    onCommit: (String?) -> Unit,
+    onToggle: (Boolean) -> Unit,
+    hint: String? = null,
+) {
     val colors = LoungeTheme.colors
     val visuals = LoungeTheme.visuals
     val also = if (alsoFocus != null) Modifier.focusRequester(alsoFocus) else Modifier
@@ -549,6 +556,7 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
         onDispose { if (sheetBack.handler === handler) sheetBack.handler = null }
     }
     val placeholder = when {
+        hint != null -> hint
         secret && setting.hasValue -> stringResource(R.string.plugins_setting_secret_saved)
         setting.defaultValue != null -> setting.defaultValue!!
         else -> stringResource(R.string.plugins_setting_not_set)
@@ -556,6 +564,7 @@ private fun SettingField(setting: PluginSettingInfo, focusRequester: FocusReques
     // What TalkBack says after the label while the field is empty.
     val state = when {
         field.text.isNotEmpty() -> null
+        hint != null -> hint
         secret && setting.hasValue -> stringResource(R.string.plugins_setting_saved)
         setting.defaultValue != null -> stringResource(R.string.plugins_setting_not_set_uses, setting.defaultValue!!)
         else -> stringResource(R.string.plugins_setting_not_set)

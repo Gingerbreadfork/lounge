@@ -22,4 +22,9 @@
     <string name="tile_menu_hide_all_from_detail">Fora de Continuar a ver até voltar a mostrar</string>
     <string name="tile_menu_hide_row">Ocultar esta linha</string>
     <string name="tile_menu_hide_row_detail">Para repor: Definições, Linhas</string>
+    <string name="tile_menu_groups">Adicionar a um grupo</string>
+    <string name="tile_menu_groups_detail">Uma linha de apps com o nome que escolher</string>
+    <string name="tile_menu_remove_from_group">Remover de %1$s</string>
+    <string name="tile_menu_edit_group">Editar este grupo</string>
+    <string name="tile_menu_edit_group_detail">Mude o nome ou as apps</string>
 </resources>

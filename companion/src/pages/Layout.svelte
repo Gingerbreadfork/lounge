@@ -2,7 +2,8 @@
   // The home screen's shape, from the phone: which rows show and in what order, what sits on
   // the Stage, which apps stay at the front, and everything that is hidden.
   import { untrack } from 'svelte';
-  import { api, art, type AppRef, type Layout, type NamedRef, type RowRef, type SourceRef } from '../lib/api';
+  import { api, art, type AppRef, type GroupRef, type Layout, type LayoutPatch, type NamedRef, type RowRef, type SourceRef } from '../lib/api';
+  import Confirm from '../lib/Confirm.svelte';
   import Icon from '../lib/Icon.svelte';
   import { t, tc, tn } from '../lib/lang.svelte';
   import Reorder from '../lib/Reorder.svelte';
@@ -32,7 +33,7 @@
   // last move. When that save fails, the page reads the TV again.
   let queue: Promise<void> = Promise.resolve();
   let waiting = 0;
-  function save(patch: Partial<Layout>, message = t('Saved to the TV')) {
+  function save(patch: LayoutPatch, message = t('Saved to the TV')) {
     edits++;
     busy = true;
     waiting++;
@@ -133,6 +134,86 @@
     if (!layout || layout.recentApps === n) return;
     // Translators: "Your apps" is the row's name; {n} is how many recently opened apps follow the pinned ones
     change({ recentApps: n }, n === 0 ? t('Your apps shows pinned apps only') : tn(n, 'Your apps shows {n} recent app', 'Your apps shows {n} recent apps'));
+  }
+
+  // App groups
+  /** The group whose name and apps are open for change, by id. */
+  let openGroup = $state<string | null>(null);
+  let newGroup = $state('');
+  let renamed = $state('');
+  /** The name the field held when the group was opened; only a name typed since then is saved. */
+  let renamedFrom = '';
+  // The TV keeps no more groups than this.
+  const MOST_GROUPS = 24;
+  let known = $derived(new Set(layout?.apps.map((a) => a.package)));
+  let groupApps = $derived.by(() => {
+    const group = layout?.groups.find((g) => g.id === openGroup);
+    if (!layout || !group) return { inside: [] as AppRef[], outside: [] as AppRef[] };
+    const byPkg = new Map(layout.apps.map((a) => [a.package, a]));
+    return { inside: group.apps.flatMap((p) => byPkg.get(p) ?? []), outside: layout.apps.filter((a) => !group.apps.includes(a.package)) };
+  });
+  // The TV is sent the one group that changed, so a group made there meanwhile is left alone.
+  function setGroup(group: GroupRef, next: Partial<GroupRef>, message: string) {
+    if (!layout) return;
+    const changed = { ...group, ...next };
+    layout = { ...layout, groups: layout.groups.map((g) => (g.id === group.id ? changed : g)) };
+    save({ groups: [changed] }, message);
+  }
+  function makeGroup() {
+    const name = newGroup.trim();
+    if (!layout || !name) return;
+    const id = `p${Date.now().toString(36)}`;
+    newGroup = '';
+    const made = { id, name, apps: [] };
+    edit(made);
+    layout = { ...layout, groups: [...layout.groups, made] };
+    // Translators: {group} is the name of a group of apps just made; its apps are chosen next
+    save({ groups: [made] }, t('{group} made. Now choose its apps.', { group: name }));
+  }
+  function edit(group: GroupRef) {
+    openGroup = openGroup === group.id ? null : group.id;
+    renamed = renamedFrom = group.name;
+  }
+  function renameGroup(group: GroupRef) {
+    const name = renamed.trim();
+    if (!name || name === renamedFrom) return;
+    renamedFrom = name;
+    // Translators: {group} is the new name of a group of apps
+    setGroup(group, { name }, t('Renamed to {group}', { group: name }));
+  }
+  function addToGroup(group: GroupRef, a: AppRef) {
+    // Translators: {app} is an app's name and {group} the name of a group of apps
+    setGroup(group, { apps: [...group.apps, a.package] }, t('{app} added to {group}', { app: a.title, group: group.name }));
+  }
+  function removeFromGroup(group: GroupRef, a: AppRef) {
+    // Translators: {app} is an app's name and {group} the name of a group of apps
+    setGroup(group, { apps: group.apps.filter((p) => p !== a.package) }, t('{app} removed from {group}', { app: a.title, group: group.name }));
+  }
+  // Moves count the apps listed, so one that is no longer on the TV keeps to the end.
+  function moveInGroup(group: GroupRef, from: number, to: number) {
+    if (!layout) return;
+    const listed = groupApps.inside.map((a) => a.package);
+    const [p] = listed.splice(from, 1);
+    listed.splice(to, 0, p);
+    const apps = [...listed, ...group.apps.filter((x) => !listed.includes(x))];
+    edits++;
+    layout = { ...layout, groups: layout.groups.map((g) => (g.id === group.id ? { ...g, apps } : g)) };
+  }
+  function saveGroup(id: string) {
+    const group = layout?.groups.find((g) => g.id === id);
+    // Translators: the apps in a group are in a new order
+    if (group) save({ groups: [group] }, t('Group reordered'));
+  }
+  function deleteGroup(group: GroupRef) {
+    if (!layout) return;
+    openGroup = null;
+    layout = { ...layout, groups: layout.groups.filter((g) => g.id !== group.id) };
+    // Translators: {group} is the name of a group of apps
+    save({ deletedGroups: [group.id] }, t('{group} deleted', { group: group.name }));
+  }
+  /** How many of a group's apps are on the TV now. */
+  function onTv(group: GroupRef) {
+    return group.apps.filter((p) => known.has(p)).length;
   }
 
   // Hidden
@@ -253,6 +334,66 @@
     </section>
 
     <section class="section">
+      <!-- Translators: the heading over the groups of apps, each a row of its own on the TV -->
+      <div class="section-head"><h3>{t('App groups')}</h3></div>
+      <p class="caption">{t('A group is a row of apps on the TV under a name you give it, such as Kids or Sport. Drag it into place among the rows at the top of this page.')}</p>
+      {#if layout.groups.length}
+        <div class="list">
+          {#each layout.groups as group (group.id)}
+            <div class="list-row">
+              <span class="glyph"><Icon name="apps" size={24} /></span>
+              <div class="grow">
+                <div class="title">{group.name}</div>
+                <div class="caption">{onTv(group) === 0 ? t('No apps yet') : tn(onTv(group), '{n} app', '{n} apps')}</div>
+              </div>
+              <!-- Translators: buttons that open and close a group of apps for change -->
+              <button class="btn ghost" aria-expanded={openGroup === group.id} onclick={() => edit(group)}>{openGroup === group.id ? t('Done') : t('Edit')}</button>
+            </div>
+            {#if openGroup === group.id}
+              <div class="group">
+                <form class="field" onsubmit={(e) => { e.preventDefault(); renameGroup(group); }}>
+                  <!-- Translators: the label of the field that holds a group's name -->
+                  <label for="group-name">{t('Name')}</label>
+                  <input id="group-name" maxlength="40" autocomplete="off" bind:value={renamed} onblur={() => renameGroup(group)} />
+                </form>
+                {#if groupApps.inside.length}
+                  <Reorder items={groupApps.inside} keyOf={(a) => a.package} nameOf={(a) => a.title} onmove={(from, to) => moveInGroup(group, from, to)} ondone={() => saveGroup(group.id)}>
+                    {#snippet children(a)}
+                      {#if a.iconPath}<img class="row-icon" src={art(a.iconPath)} alt="" />{/if}
+                      <div class="grow title">{a.title}</div>
+                      <!-- Translators: a button that takes an app out of a group -->
+                      <button class="btn ghost" onclick={() => removeFromGroup(group, a)}>{t('Remove')}</button>
+                    {/snippet}
+                  </Reorder>
+                {/if}
+                <div class="list">
+                  {#each groupApps.outside as a (a.package)}
+                    <div class="list-row">
+                      {#if a.iconPath}<img class="row-icon" src={art(a.iconPath)} alt="" />{:else}<span class="glyph"><Icon name="apps" size={24} /></span>{/if}
+                      <div class="grow title">{a.title}</div>
+                      <!-- Translators: a button that puts an app in a group -->
+                      <button class="btn ghost" onclick={() => addToGroup(group, a)}>{t('Add')}</button>
+                    </div>
+                  {/each}
+                </div>
+                <!-- Translators: the button that deletes a group of apps, and the question it asks first -->
+                <Confirm quiet label={t('Delete this group')} confirm={t('Yes, delete this group')} onconfirm={() => deleteGroup(group)} />
+                <p class="caption center">{t('Its apps stay on the TV.')}</p>
+              </div>
+            {/if}
+          {/each}
+        </div>
+      {/if}
+      {#if layout.groups.length < MOST_GROUPS}
+        <form class="new-group" onsubmit={(e) => { e.preventDefault(); makeGroup(); }}>
+          <!-- Translators: the field that names a new group of apps, and the button that makes it -->
+          <div class="field"><input maxlength="40" autocomplete="off" placeholder={t('Name a new group')} aria-label={t('Name a new group')} bind:value={newGroup} /></div>
+          <button class="btn" disabled={!newGroup.trim()}>{t('Make it')}</button>
+        </form>
+      {/if}
+    </section>
+
+    <section class="section">
       <!-- Translators: the heading over the list of things hidden from every row -->
       <div class="section-head"><h3>{tc('heading', 'Hidden from every row')}</h3></div>
       {#if layout.hiddenItems.length === 0}
@@ -310,4 +451,8 @@
   .center { text-align: center; margin-top: -10px; }
   .one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .section > .caption { margin-top: -4px; }
+  .group { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 12px 16px; border-left: 2px solid var(--curtain-edge); margin-left: 12px; }
+  .group .center { margin-top: -6px; }
+  .new-group { display: flex; gap: 10px; align-items: center; }
+  .new-group .field { flex: 1; }
 </style>

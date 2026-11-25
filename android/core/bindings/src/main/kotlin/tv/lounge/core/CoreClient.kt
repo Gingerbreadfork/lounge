@@ -121,6 +121,9 @@ class CoreClient(val core: Core) : SnapshotListener {
     /** Every row the home could show, in order; waits for the core to load, so call it off the main thread. */
     fun homeRows(): List<RowInfo> = core.homeRows()
 
+    /** The groups of apps the person made; waits like [homeRows]. */
+    fun appGroups(): List<GroupInfo> = core.appGroups()
+
     /** Items hidden from every row, by title; waits like [homeRows]. */
     fun hiddenItems(): List<ItemRef> = core.hiddenItems()
 

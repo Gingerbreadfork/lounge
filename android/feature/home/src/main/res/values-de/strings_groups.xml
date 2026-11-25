@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="groups_title">App-Gruppen</string>
+    <string name="groups_subtitle">Reihen mit Apps, die du zusammenstellst und benennst.</string>
+    <string name="groups_subtitle_app">OK nimmt %1$s in eine Gruppe auf oder wieder heraus.</string>
+    <string name="groups_none">Noch keine Gruppen. Gib unten einen Namen ein, um eine anzulegen.</string>
+    <string name="groups_new_label">Neue Gruppe</string>
+    <string name="groups_new_hint">Name, zum Beispiel Kinder oder Sport</string>
+    <string name="groups_added">Enthalten</string>
+    <string name="groups_not_added">Nicht enthalten</string>
+    <string name="groups_no_apps">Noch keine Apps</string>
+    <plurals name="groups_apps">
+        <item quantity="one">%1$d App</item>
+        <item quantity="other">%1$d Apps</item>
+    </plurals>
+    <string name="groups_footnote">Eine Gruppe mit mindestens einer App ist eine Reihe auf dem Startbildschirm. Über Einstellungen, Reihen verschiebst du sie oder blendest sie aus.</string>
+    <string name="group_subtitle">Eine Reihe mit Apps auf dem Startbildschirm.</string>
+    <string name="group_name_label">Name</string>
+    <string name="group_apps_heading">Apps</string>
+    <string name="group_delete">Diese Gruppe löschen</string>
+    <string name="group_delete_confirm">Ja, diese Gruppe löschen</string>
+    <string name="group_delete_subtitle">Ihre Apps bleiben auf dem Fernseher</string>
+</resources>

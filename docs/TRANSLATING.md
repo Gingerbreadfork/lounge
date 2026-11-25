@@ -188,6 +188,7 @@ does.
 | Continue watching | the row of things to resume | Weiterschauen | Seguir viendo | Reprendre la lecture | Continua a guardare | Verder kijken | Continuar assistindo | Continuar a ver |
 | Your apps | the row of pinned and recent apps | Deine Apps | Tus apps | Vos applis | Le tue app | Je apps | Seus apps | As suas apps |
 | All apps | the screen listing every app | Alle Apps | Todas las apps | Toutes les applis | Tutte le app | Alle apps | Todos os apps | Todas as apps |
+| group | a row of apps the person put together and named; "App groups", "Add to a group" | Gruppe | grupo | groupe | gruppo | groep | grupo | grupo |
 | Games | row | Spiele | Juegos | Jeux | Giochi | Games | Jogos | Jogos |
 | Live now | the row of channels on air | Jetzt live | En directo ahora | En direct | In diretta | Nu live | Ao vivo agora | Em direto agora |
 | Inputs | the TV's HDMI and other inputs | Eingänge | Entradas | Entrées | Ingressi | Ingangen | Entradas | Entradas |

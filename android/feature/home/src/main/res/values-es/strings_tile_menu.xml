@@ -22,4 +22,9 @@
     <string name="tile_menu_hide_all_from_detail">Fuera de Seguir viendo hasta que lo muestres</string>
     <string name="tile_menu_hide_row">Ocultar esta fila</string>
     <string name="tile_menu_hide_row_detail">Se recupera en Ajustes, Filas</string>
+    <string name="tile_menu_groups">Añadir a un grupo</string>
+    <string name="tile_menu_groups_detail">Una fila de apps con el nombre que elijas</string>
+    <string name="tile_menu_remove_from_group">Quitar de %1$s</string>
+    <string name="tile_menu_edit_group">Editar este grupo</string>
+    <string name="tile_menu_edit_group_detail">Cambia su nombre o sus apps</string>
 </resources>

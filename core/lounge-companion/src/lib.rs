@@ -117,6 +117,17 @@ pub struct LayoutDoc {
     /// Notice tiles the person chose not to see again, by id.
     #[serde(default)]
     pub dismissed_notices: Vec<String>,
+    /// The groups of apps the person made, in the order they were made.
+    #[serde(default)]
+    pub groups: Vec<GroupRef>,
+}
+
+/// A group of apps: a row of its own, `group:<id>`, holding these packages in this order.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct GroupRef {
+    pub id: String,
+    pub name: String,
+    pub apps: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -131,6 +142,11 @@ pub struct LayoutPatch {
     pub recent_apps: Option<u32>,
     pub muted_providers: Option<Vec<String>>,
     pub dismissed_notices: Option<Vec<String>>,
+    /// Groups to make or change, each by id. A group not named here is left as it is, so a
+    /// page that has not heard of one cannot delete it.
+    pub groups: Option<Vec<GroupRef>>,
+    /// Groups to delete, by id.
+    pub deleted_groups: Option<Vec<String>>,
 }
 
 /// What a press from the phone did: words to show, or something for the phone itself to open.

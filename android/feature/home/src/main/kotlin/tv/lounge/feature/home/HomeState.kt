@@ -40,6 +40,10 @@ sealed interface Overlay {
     data object Channels : Overlay
     /** The row editor: which rows show and in what order, and what is hidden. */
     data object Rows : Overlay
+    /** The groups of apps the person made. With [app], OK puts that app in a group or takes it out. */
+    data class AppGroups(val app: Tile? = null) : Overlay
+    /** One group of apps: its name, what is in it, and the way to delete it. */
+    data class GroupEdit(val groupId: String) : Overlay
     data object Guide : Overlay
     data object Plugins : Overlay
     data class PluginDetail(val id: String) : Overlay

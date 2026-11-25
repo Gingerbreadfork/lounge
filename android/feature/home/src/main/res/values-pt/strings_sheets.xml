@@ -3,6 +3,13 @@
     <string name="sheets_group_home">Tela inicial</string>
     <string name="sheets_rows_title">Fileiras</string>
     <string name="sheets_rows_subtitle">Mostrar, ocultar e mover fileiras</string>
+    <string name="sheets_groups_subtitle">Fileiras de apps que você monta</string>
+    <string name="sheets_groups_none">Nenhum</string>
+    <plurals name="sheets_groups_count">
+        <item quantity="one">%1$d grupo</item>
+        <item quantity="many">%1$d grupos</item>
+        <item quantity="other">%1$d grupos</item>
+    </plurals>
     <string name="sheets_your_apps_title">Seus apps</string>
     <string name="sheets_your_apps_subtitle">Apps fixados, depois os recentes</string>
     <string name="sheets_your_apps_pinned_only">Só os fixados</string>
