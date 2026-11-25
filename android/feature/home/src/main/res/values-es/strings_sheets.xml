@@ -85,6 +85,7 @@
     <string name="sheets_network_connected">Conectada</string>
     <string name="sheets_accessories_title">Controles remotos y accesorios</string>
     <string name="sheets_accessories_subtitle">Vincula un control de juegos, auriculares o un control remoto</string>
+    <string name="sheets_accessories_subtitle_ask">Necesita Dispositivos cercanos para abrir la pantalla de vinculación de la TV. OK lo pide.</string>
     <string name="sheets_accessories_in_settings">Esta TV vincula dispositivos desde sus propios ajustes. Busca ahí los controles remotos y accesorios.</string>
     <string name="sheets_tv_settings_title">Ajustes de la TV</string>
     <string name="sheets_tv_settings_subtitle">Imagen, sonido, cuentas y el resto de los ajustes propios de la TV</string>

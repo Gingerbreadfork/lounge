@@ -103,9 +103,11 @@
     <string name="sheets_network_wifi">Wi-Fi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Connected</string>
-    <!-- The row that opens the TV's screen for pairing a remote, a game controller or headphones. The third is said where only the TV's settings as a whole can be opened. -->
+    <!-- The row that opens the TV's screen for pairing a remote, a game controller or headphones. The last is said where only the TV's settings as a whole can be opened. -->
     <string name="sheets_accessories_title">Remotes and accessories</string>
     <string name="sheets_accessories_subtitle">Pair a controller, headphones or a remote</string>
+    <!-- Under the row on a TV that keeps its pairing screen to apps allowed Nearby devices, which is Android's own name for the permission. -->
+    <string name="sheets_accessories_subtitle_ask">Needs Nearby devices to open the TV\'s pairing screen. OK asks.</string>
     <string name="sheets_accessories_in_settings">This TV pairs things in its own settings. Look for remotes and accessories there.</string>
     <string name="sheets_tv_settings_title">TV settings</string>
     <string name="sheets_tv_settings_subtitle">Picture, sound, accounts and the rest of the TV\'s own settings</string>

@@ -35,7 +35,8 @@ class TvSettingsScreensTest {
         )
     }
 
-    private fun opened(): Pair<String?, Boolean>? = accessoryScreen(context)?.let { it.intent.action to it.direct }
+    /** The actions of the screen that opens now, the one that wants Nearby devices first, and the settings to fall back on. */
+    private fun found(): List<String?>? = accessoryScreen(context)?.let { listOf(it.open?.action, it.locked?.action, it.settings?.action) }
 
     @Test
     fun aTvWithNoScreenHasNoRow() {
@@ -48,9 +49,9 @@ class TvSettingsScreensTest {
     fun theListOfAccessoriesComesBeforeThePairingScreen() {
         tvHas(Settings.ACTION_SETTINGS)
         tvHas(pairing)
-        assertEquals(pairing to true, opened())
+        assertEquals(listOf(pairing, null, Settings.ACTION_SETTINGS), found())
         tvHas(list)
-        assertEquals(list to true, opened())
+        assertEquals(listOf(list, null, Settings.ACTION_SETTINGS), found())
     }
 
     @Test
@@ -61,12 +62,19 @@ class TvSettingsScreensTest {
     }
 
     @Test
-    fun aScreenLoungeMayNotOpenGivesWayToTheTvsSettings() {
+    fun aPairingScreenKeptToNearbyDevicesOpensOnceThatIsAllowed() {
         tvHas(Settings.ACTION_SETTINGS)
-        tvHas(pairing, permission = android.Manifest.permission.BLUETOOTH_CONNECT)
+        tvHas(pairing, permission = NEARBY_DEVICES)
         tvHas(list, exported = false)
-        assertEquals(Settings.ACTION_SETTINGS to false, opened())
-        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(android.Manifest.permission.BLUETOOTH_CONNECT)
-        assertEquals(pairing to true, opened())
+        assertEquals(listOf(null, pairing, Settings.ACTION_SETTINGS), found())
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(NEARBY_DEVICES)
+        assertEquals(listOf(pairing, null, Settings.ACTION_SETTINGS), found())
+    }
+
+    @Test
+    fun aScreenKeptToAPermissionLoungeNeverAsksForIsLeftAlone() {
+        tvHas(Settings.ACTION_SETTINGS)
+        tvHas(pairing, permission = "android.permission.BLUETOOTH_PRIVILEGED")
+        assertEquals(listOf(null, null, Settings.ACTION_SETTINGS), found())
     }
 }

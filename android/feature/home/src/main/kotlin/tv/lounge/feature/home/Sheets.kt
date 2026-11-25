@@ -36,6 +36,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +81,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tv.lounge.core.ChannelInfo
@@ -433,7 +436,27 @@ fun QuickSettingsSheet(
     val context = LocalContext.current
     val tvSettings = remember { tvSettingsIntent(context) }
     val networkSettings = remember { networkSettingsIntent(context) }
-    val accessories = remember { accessoryScreen(context) }
+    var accessories by remember { mutableStateOf(accessoryScreen(context)) }
+    val accessoryScope = rememberCoroutineScope()
+    var leavingForSettings by remember { mutableStateOf(false) }
+    // Says what to look for and leaves it on screen a moment, since the TV's settings cover it.
+    fun findInTvSettings(settings: Intent?) {
+        if (settings == null || leavingForSettings) return
+        leavingForSettings = true
+        say(resources.getString(R.string.sheets_accessories_in_settings))
+        accessoryScope.launch {
+            delay(2_000)
+            leavingForSettings = false
+            runCatching { context.startActivity(settings) }
+        }
+    }
+    // Asked on the row's press where the TV wants it. Refused, the TV's settings open instead.
+    val askNearby = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val now = accessoryScreen(context)
+        accessories = now
+        val screen = now?.open.takeIf { granted }
+        if (screen != null) runCatching { context.startActivity(screen) } else findInTvSettings(now?.settings)
+    }
     val link by rememberLink()
     // Back from one of its pages puts focus on the row that opened it.
     val pages = listOf(Overlay.Rows, Overlay.AppGroups(), Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.Language, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate)
@@ -643,11 +666,13 @@ fun QuickSettingsSheet(
             SheetRow(
                 icon = LoungeIcons.Bluetooth,
                 title = stringResource(R.string.sheets_accessories_title),
-                subtitle = stringResource(R.string.sheets_accessories_subtitle),
+                subtitle = stringResource(if (screen.open == null && screen.locked != null) R.string.sheets_accessories_subtitle_ask else R.string.sheets_accessories_subtitle),
                 onClick = {
-                    // Where only the TV's settings open, a word on what to look for there.
-                    if (!screen.direct) say(resources.getString(R.string.sheets_accessories_in_settings))
-                    runCatching { context.startActivity(screen.intent) }
+                    when {
+                        screen.open != null -> runCatching { context.startActivity(screen.open) }
+                        screen.locked != null -> askNearby.launch(NEARBY_DEVICES)
+                        else -> findInTvSettings(screen.settings)
+                    }
                 },
             )
         }

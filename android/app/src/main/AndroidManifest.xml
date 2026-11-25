@@ -18,6 +18,8 @@
     <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Some TVs keep their pairing screen to apps that hold this. Asked for when Remotes and accessories is pressed on one. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- The TV provider library asks to write the guide; Lounge only reads it. -->
     <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" tools:node="remove" />
 
