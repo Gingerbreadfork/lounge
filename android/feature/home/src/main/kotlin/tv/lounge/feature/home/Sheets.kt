@@ -438,17 +438,21 @@ fun QuickSettingsSheet(
     val networkSettings = remember { networkSettingsIntent(context) }
     var accessories by remember { mutableStateOf(accessoryScreen(context)) }
     val accessoryScope = rememberCoroutineScope()
-    var leavingForSettings by remember { mutableStateOf(false) }
+    var leavingForSettings by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     // Says what to look for and leaves it on screen a moment, since the TV's settings cover it.
     fun findInTvSettings(settings: Intent?) {
-        if (settings == null || leavingForSettings) return
-        leavingForSettings = true
+        if (settings == null || leavingForSettings != null) return
         say(resources.getString(R.string.sheets_accessories_in_settings))
-        accessoryScope.launch {
+        leavingForSettings = accessoryScope.launch {
             delay(2_000)
-            leavingForSettings = false
+            leavingForSettings = null
             runCatching { context.startActivity(settings) }
         }
+    }
+    // Another screen opened in the meantime takes its place.
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        leavingForSettings?.cancel()
+        leavingForSettings = null
     }
     // Asked on the row's press where the TV wants it. Refused, the TV's settings open instead.
     val askNearby = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
