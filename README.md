@@ -120,7 +120,8 @@ entries Lounge is allowed to read, so turn on TV listings in Settings.
 
 **The hold-OK menu.** Hold OK on any tile to pin it to the Stage, hide it, or hide its whole
 row. A light or anything else you switch offers Adjust first, which opens its panel. An app can also be pinned to the front of Your apps and moved, and gets app info, the store
-page and uninstall. On something in Continue watching you can hide everything from its app,
+page and uninstall. On something in Continue watching you can mark it as watched, which takes it away until you
+watch more of it, or hide everything from its app,
 which keeps that app out of the row and off the Stage until you show it again in Settings, Rows.
 
 **All apps.** The last tile in Your apps opens every app on the TV as one grid, sorted A to Z,

@@ -41,4 +41,5 @@
     <string name="home_screen_group_deleted">%1$s supprimé</string>
     <string name="home_screen_cant_listen">La TV n’a pas pu commencer à écouter. Réessayez.</string>
     <string name="home_screen_accessory_low">La batterie de %1$s est faible : %2$s.</string>
+    <string name="home_screen_marked_watched">Marqué comme vu</string>
 </resources>

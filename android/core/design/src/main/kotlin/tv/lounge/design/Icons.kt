@@ -275,6 +275,13 @@ object LoungeIcons {
         }
     }
 
+    /** A tick: done with, as something marked as watched. */
+    val Check: ImageVector by lazy {
+        icon("check") {
+            stroke { moveTo(5.5f, 14.5f); lineTo(11.5f, 20.5f); lineTo(22.5f, 8.5f) }
+        }
+    }
+
     /** A crescent moon: the sleep timer. */
     val Sleep: ImageVector by lazy {
         icon("sleep") {

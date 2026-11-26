@@ -734,6 +734,9 @@ pub enum LayoutCommand {
     /// Leaves an app's or plugin's titles out of Continue watching, by a tile's `provider`.
     MuteProvider { provider: String },
     UnmuteProvider { provider: String },
+    /// Leaves something out of Continue watching and off the Stage until it is watched some more.
+    MarkWatched { id: String },
+    UnmarkWatched { id: String },
     PinApp { package: String },
     UnpinApp { package: String },
     MoveApp { package: String, to_index: u32 },

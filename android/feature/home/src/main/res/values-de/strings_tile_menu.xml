@@ -27,4 +27,6 @@
     <string name="tile_menu_remove_from_group">Aus „%1$s“ entfernen</string>
     <string name="tile_menu_edit_group">Diese Gruppe bearbeiten</string>
     <string name="tile_menu_edit_group_detail">Umbenennen oder Apps ändern</string>
+    <string name="tile_menu_mark_watched">Als gesehen markieren</string>
+    <string name="tile_menu_mark_watched_detail">Nicht mehr unter „Weiterschauen“, bis du weiterschaust</string>
 </resources>

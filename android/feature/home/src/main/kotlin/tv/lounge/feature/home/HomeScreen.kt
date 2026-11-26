@@ -1113,6 +1113,7 @@ fun HomeScreen(
                         say(R.string.home_screen_removed_from_group, homeRow?.title.orEmpty())
                     },
                     onEditGroup = { group?.let { fromMenu(Overlay.GroupEdit(it)) } },
+                    onMarkWatched = { core.command(LayoutCommand.MarkWatched(ov.tile.id)); say(R.string.home_screen_marked_watched) },
                     isStagePinned = ov.tile.stagePinned,
                     onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say(R.string.home_screen_hidden) },
                     onShow = { core.command(LayoutCommand.UnhideItem(ov.tile.id)); say(R.string.home_screen_shown) },

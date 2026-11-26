@@ -50,7 +50,7 @@ fn reach(it: &Item) -> u8 {
     }
 }
 
-fn normalise(title: &str) -> String {
+pub(crate) fn normalise(title: &str) -> String {
     title
         .chars()
         .filter(|c| c.is_alphanumeric() || c.is_whitespace())

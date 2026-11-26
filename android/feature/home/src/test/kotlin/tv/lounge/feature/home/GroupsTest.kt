@@ -80,6 +80,15 @@ class GroupsTest {
         assertEquals(null, groupOfRow("apps"))
     }
 
+    @Test
+    fun onlySomethingToContinueCanBeMarkedAsWatched() {
+        val resume = testTile("plugin:jf:resume:1", title = "The Bear", provider = "plugin:jf")
+        val items = menu(resume, "continue")
+        assertTrue(items.indexOf("Mark as watched") == items.indexOf("Hide") - 1)
+        assertFalse("Mark as watched" in menu(netflix, "apps"))
+        assertFalse("Mark as watched" in menu(testTile("plugin:jf:latest:1"), "plugin:jf:latest"))
+    }
+
     private fun press(key: Key) {
         rule.onNode(isFocused()).performKeyInput { pressKey(key) }
         rule.waitForIdle()

@@ -60,4 +60,5 @@
     <string name="home_screen_cant_listen">The TV couldn\'t start listening. Try again.</string>
     <!-- Said once when a remote, controller or pair of headphones is nearly out of charge. %1$s is its name and %2$s its charge, such as 12%. -->
     <string name="home_screen_accessory_low">%1$s is running low on battery, at %2$s.</string>
+    <string name="home_screen_marked_watched">Marked as watched</string>
 </resources>

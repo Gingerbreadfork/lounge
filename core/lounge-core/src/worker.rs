@@ -1305,6 +1305,8 @@ fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::
         LayoutCommand::UnhideItem { id } => state.graph.unhide(&id),
         LayoutCommand::MuteProvider { provider } => state.graph.mute_provider(&provider),
         LayoutCommand::UnmuteProvider { provider } => state.graph.unmute_provider(&provider),
+        LayoutCommand::MarkWatched { id } => state.graph.mark_watched(&id),
+        LayoutCommand::UnmarkWatched { id } => state.graph.unmark_watched(&id),
         LayoutCommand::PinApp { package } => state.graph.pin_app(&package),
         LayoutCommand::UnpinApp { package } => state.graph.unpin_app(&package),
         LayoutCommand::MoveApp { package, to_index } => state.graph.move_app(&package, to_index as usize),

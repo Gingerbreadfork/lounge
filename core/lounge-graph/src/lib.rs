@@ -287,6 +287,10 @@ pub struct Layout {
     /// Rows of apps the person put together, each shown as the row `group:<id>`.
     #[serde(default)]
     pub groups: Vec<AppGroup>,
+    /// Things to continue that the person marked as watched, each with when it was last
+    /// watched then. One watched again since is no longer marked.
+    #[serde(default)]
+    pub watched: HashMap<String, i64>,
 }
 
 /// A row of apps the person put together and named.
@@ -319,6 +323,9 @@ impl AppGroup {
 
 pub const DEFAULT_RECENT_APPS: u32 = 5;
 
+/// How many watched marks a layout keeps before those for things no longer listed are let go.
+const MAX_WATCHED: usize = 500;
+
 fn default_recent_apps() -> u32 {
     DEFAULT_RECENT_APPS
 }
@@ -336,6 +343,7 @@ impl Default for Layout {
             recent_apps: DEFAULT_RECENT_APPS,
             muted_providers: HashSet::new(),
             groups: Vec::new(),
+            watched: HashMap::new(),
         }
     }
 }
@@ -460,6 +468,42 @@ impl Graph {
 
     pub fn unmute_provider(&mut self, provider: &str) {
         self.layout.muted_providers.remove(provider);
+    }
+
+    /// Leaves something out of Continue watching until it is watched some more.
+    pub fn mark_watched(&mut self, id: &str) {
+        let marks: Vec<(String, i64)> = self.same_to_continue(id).map(|it| (it.id.clone(), it.last_used_ms.unwrap_or(0))).collect();
+        if marks.is_empty() {
+            return;
+        }
+        // Marks for things no longer listed are let go once there are many.
+        if self.layout.watched.len() >= MAX_WATCHED {
+            let listed: HashSet<String> = self.items.keys().cloned().collect();
+            self.layout.watched.retain(|id, _| listed.contains(id));
+        }
+        self.layout.watched.extend(marks);
+    }
+
+    pub fn unmark_watched(&mut self, id: &str) {
+        let ids: Vec<String> = self.same_to_continue(id).map(|it| it.id.clone()).collect();
+        self.layout.watched.remove(id);
+        for id in ids {
+            self.layout.watched.remove(&id);
+        }
+    }
+
+    /// The item and every other source's entry to continue the same title. The row shows one
+    /// of them for all, so a mark on it is a mark on each.
+    fn same_to_continue<'a>(&'a self, id: &str) -> impl Iterator<Item = &'a Item> + 'a {
+        let marked = self.get(id);
+        let title = marked.map(|it| rank::normalise(&it.title));
+        let id = id.to_string();
+        self.items().filter(move |it| marked.is_some() && (it.id == id || (it.continues() && Some(rank::normalise(&it.title)) == title)))
+    }
+
+    /// Whether the person marked this as watched and has not watched it since.
+    fn is_watched(&self, it: &Item) -> bool {
+        self.layout.watched.get(&it.id) == Some(&it.last_used_ms.unwrap_or(0))
     }
 
     fn is_muted(&self, it: &Item) -> bool {
@@ -637,7 +681,7 @@ impl Graph {
     /// titles it brings and one of them.
     pub fn continue_providers(&self) -> Vec<(&str, usize, &Item)> {
         let mut by_provider: HashMap<&str, (usize, &Item)> = HashMap::new();
-        for it in self.items().filter(|it| it.continues() && !self.is_hidden(&it.id)) {
+        for it in self.items().filter(|it| it.continues() && !self.is_hidden(&it.id) && !self.is_watched(it)) {
             if let Some(provider) = it.provider() {
                 by_provider.entry(provider).or_insert((0, it)).0 += 1;
             }
@@ -646,10 +690,10 @@ impl Graph {
     }
 
     /// Resume points and Watch Next entries, newest first, one per title, without those from
-    /// apps and plugins the user left out.
+    /// apps and plugins the user left out or marked as watched.
     pub fn continue_watching(&self) -> Vec<&Item> {
         let mut v: Vec<&Item> = self.items()
-            .filter(|it| it.continues() && !self.is_hidden(&it.id) && !self.is_muted(it))
+            .filter(|it| it.continues() && !self.is_hidden(&it.id) && !self.is_muted(it) && !self.is_watched(it))
             .collect();
         rank::by_recency_then_title(&mut v);
         rank::dedupe_by_title(&mut v);
@@ -825,7 +869,7 @@ impl Graph {
             }
             if let Some(it) = self.get(id) {
                 // A control has nothing to show on the Stage.
-                if !self.is_hidden(&it.id) && !it.is_control() {
+                if !self.is_hidden(&it.id) && !self.is_watched(it) && !it.is_control() {
                     out.push(it);
                 }
             }
@@ -1023,6 +1067,53 @@ mod tests {
         assert_eq!(g.every_app().len(), 1);
         g.unhide("app:a");
         assert_eq!(g.all_apps().len(), 1);
+    }
+
+    #[test]
+    fn something_marked_as_watched_stays_away_until_it_is_watched_again() {
+        let mut g = Graph::default();
+        let resume = |id: &str, title: &str, at: i64| {
+            let mut it = Item::content(id, ItemKind::Resume, "plugin:jf", title, DeepLink::None);
+            it.last_used_ms = Some(at);
+            it
+        };
+        g.replace_source("plugin:jf", vec![resume("r1", "Severance", 100), resume("r2", "The Bear", 200)]);
+        let titles = |g: &Graph| g.continue_watching().iter().map(|i| i.title.clone()).collect::<Vec<_>>();
+        g.mark_watched("r2");
+        g.mark_watched("gone");
+        assert_eq!(titles(&g), vec!["Severance"]);
+        // The same entry read again changes nothing. Watched some more, it is back.
+        g.replace_source("plugin:jf", vec![resume("r1", "Severance", 100), resume("r2", "The Bear", 200)]);
+        assert_eq!(titles(&g), vec!["Severance"]);
+        g.replace_source("plugin:jf", vec![resume("r1", "Severance", 100), resume("r2", "The Bear", 300)]);
+        assert_eq!(titles(&g), vec!["The Bear", "Severance"]);
+        g.mark_watched("r1");
+        g.unmark_watched("r1");
+        assert_eq!(titles(&g).len(), 2);
+    }
+
+    #[test]
+    fn a_title_marked_as_watched_is_gone_from_every_source_and_from_the_stage() {
+        let mut g = Graph::default();
+        g.replace_source("tvprovider", vec![watching("wn:1", "tv.canal", "The Bear", 200), watching("wn:2", "tv.canal", "Severance", 100)]);
+        let mut server = Item::content("jf:1", ItemKind::Resume, "plugin:jf", "the bear", DeepLink::None);
+        server.last_used_ms = Some(150);
+        g.replace_source("plugin:jf", vec![server.clone()]);
+        g.layout.stage_pins = vec!["wn:1".into()];
+        let titles = |g: &Graph| g.continue_watching().iter().map(|i| i.title.clone()).collect::<Vec<_>>();
+        assert_eq!(titles(&g), vec!["The Bear", "Severance"]);
+        g.mark_watched("wn:1");
+        // The other source's entry for it does not take its place.
+        assert_eq!(titles(&g), vec!["Severance"]);
+        assert!(g.stage_candidates(8).iter().all(|it| it.title != "The Bear"));
+        assert_eq!(g.continue_providers().iter().map(|(_, count, _)| count).sum::<usize>(), 1);
+        // Watched some more on the server, it is back from there.
+        server.last_used_ms = Some(400);
+        g.replace_source("plugin:jf", vec![server]);
+        assert_eq!(titles(&g), vec!["the bear", "Severance"]);
+        g.mark_watched("jf:1");
+        g.unmark_watched("wn:1");
+        assert_eq!(titles(&g).len(), 2);
     }
 
     #[test]

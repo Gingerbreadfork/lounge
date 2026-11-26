@@ -218,6 +218,7 @@ fun menuItemsFor(
     onGroups: () -> Unit = {},
     onRemoveFromGroup: () -> Unit = {},
     onEditGroup: () -> Unit = {},
+    onMarkWatched: () -> Unit = {},
 ): List<MenuItem> {
     val isApp = tile.id.startsWith("app:")
     val items = mutableListOf<MenuItem>()
@@ -263,6 +264,8 @@ fun menuItemsFor(
         // The Stage is for what can be opened, which a tile to read and a control cannot.
         items += MenuItem(PinWords.PIN_STAGE, LoungeIcons.Pin, detail = PinWords.PIN_STAGE_DETAIL, onSelect = onPinStage)
     }
+    // Only something to continue can be done with.
+    if (tile.provider != null) items += MenuItem(R.string.tile_menu_mark_watched, LoungeIcons.Check, detail = R.string.tile_menu_mark_watched_detail, onSelect = onMarkWatched)
     items += MenuItem(DesignR.string.common_hide, LoungeIcons.Hide, detail = PinWords.HIDE_DETAIL, onSelect = onHide)
     // Only something to continue says where it comes from.
     tile.providerName?.let { name ->

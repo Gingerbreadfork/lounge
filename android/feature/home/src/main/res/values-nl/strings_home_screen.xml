@@ -40,4 +40,5 @@
     <string name="home_screen_group_deleted">%1$s verwijderd</string>
     <string name="home_screen_cant_listen">De tv kon niet gaan luisteren. Probeer het opnieuw.</string>
     <string name="home_screen_accessory_low">De batterij van %1$s is bijna leeg: %2$s.</string>
+    <string name="home_screen_marked_watched">Gemarkeerd als bekeken</string>
 </resources>

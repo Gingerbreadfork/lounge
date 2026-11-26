@@ -27,4 +27,6 @@
     <string name="tile_menu_remove_from_group">Quitar de %1$s</string>
     <string name="tile_menu_edit_group">Editar este grupo</string>
     <string name="tile_menu_edit_group_detail">Cambia su nombre o sus apps</string>
+    <string name="tile_menu_mark_watched">Marcar como visto</string>
+    <string name="tile_menu_mark_watched_detail">Fuera de Seguir viendo hasta que veas más</string>
 </resources>

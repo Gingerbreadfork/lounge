@@ -41,4 +41,5 @@
     <string name="home_screen_group_deleted">%1$s excluído</string>
     <string name="home_screen_cant_listen">A TV não conseguiu começar a ouvir. Tente novamente.</string>
     <string name="home_screen_accessory_low">A bateria de %1$s está acabando: %2$s.</string>
+    <string name="home_screen_marked_watched">Marcado como assistido</string>
 </resources>

@@ -27,4 +27,6 @@
     <string name="tile_menu_remove_from_group">Uit %1$s halen</string>
     <string name="tile_menu_edit_group">Deze groep bewerken</string>
     <string name="tile_menu_edit_group_detail">Andere naam of andere apps</string>
+    <string name="tile_menu_mark_watched">Markeren als bekeken</string>
+    <string name="tile_menu_mark_watched_detail">Uit Verder kijken tot je verder kijkt</string>
 </resources>
