@@ -65,6 +65,7 @@
     <string name="power_control_sent">Gesendet</string>
     <string name="power_control_didnt_work">Hat nicht geklappt</string>
     <string name="power_controls_sound_heading">Ton und Wiedergabe</string>
+    <string name="power_controls_sound_output">Tonausgabe</string>
     <string name="power_controls_volume_up">Lauter</string>
     <string name="power_controls_volume_down">Leiser</string>
     <string name="power_controls_mute">Stumm</string>

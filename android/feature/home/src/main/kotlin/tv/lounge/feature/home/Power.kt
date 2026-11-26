@@ -361,7 +361,15 @@ class PhoneTvControls(private val power: PowerSetup, private val context: Contex
  * playback working even without it.
  */
 @Composable
-fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Unit, onPowerSetup: () -> Unit, firstFocus: FocusRequester) {
+fun TvControlsSheet(
+    power: PowerSetup,
+    deviceName: String,
+    onKey: (String) -> Unit,
+    onPowerSetup: () -> Unit,
+    firstFocus: FocusRequester,
+    /** Where the TV's sound comes out now, as the home already knows it. */
+    soundOutput: () -> SoundOutput? = { null },
+) {
     val colors = LoungeTheme.colors
     val resources = LocalResources.current
     val scope = rememberCoroutineScope()
@@ -444,6 +452,18 @@ fun TvControlsSheet(power: PowerSetup, deviceName: String, onKey: (String) -> Un
         }
         Spacer(Modifier.height(12.dp))
         Text(stringResource(R.string.power_controls_sound_heading), style = LoungeTheme.typography.meta, color = colors.dust)
+        // Where the sound is going now. OK opens the TV's own sound screen, where it is changed.
+        val context = LocalContext.current
+        val soundSettings = remember { soundSettingsIntent(context) }
+        val output = soundOutput()
+        if (output != null && soundSettings != null) {
+            SheetRow(
+                icon = LoungeIcons.Soundbar,
+                title = stringResource(R.string.power_controls_sound_output),
+                value = output.label(resources),
+                onClick = { runCatching { context.startActivity(soundSettings) } },
+            )
+        }
         SheetRow(icon = LoungeIcons.Volume, title = stringResource(R.string.power_controls_volume_up), onClick = { onKey("volume_up") })
         SheetRow(icon = LoungeIcons.Volume, title = stringResource(R.string.power_controls_volume_down), onClick = { onKey("volume_down") })
         SheetRow(icon = LoungeIcons.Mute, title = stringResource(R.string.power_controls_mute), onClick = { onKey("mute") })

@@ -79,6 +79,8 @@
     <string name="sheets_network_wifi">WLAN</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Verbunden</string>
+    <string name="sheets_sound_title">Ton</string>
+    <string name="sheets_sound_subtitle">In den Einstellungen des Fernsehers</string>
     <string name="sheets_accessories_title">Fernbedienungen und Zubehör</string>
     <string name="sheets_accessories_subtitle">Controller, Kopfhörer oder Fernbedienung koppeln</string>
     <string name="sheets_accessories_subtitle_ask">Braucht „Geräte in der Nähe“, um den Kopplungsbildschirm des Fernsehers zu öffnen. OK fragt danach.</string>

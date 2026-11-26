@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- What the TV's sound comes out of, as a value beside Sound and Sound output. -->
+    <string name="sound_output_speakers">TV speakers</string>
+    <string name="sound_output_hdmi" translatable="false">HDMI</string>
+    <string name="sound_output_hdmi_arc" translatable="false">HDMI ARC</string>
+    <string name="sound_output_bluetooth" translatable="false">Bluetooth</string>
+    <string name="sound_output_optical">Optical</string>
+    <string name="sound_output_line">Line out</string>
+    <string name="sound_output_headphones">Headphones</string>
+    <string name="sound_output_usb">USB audio</string>
+</resources>

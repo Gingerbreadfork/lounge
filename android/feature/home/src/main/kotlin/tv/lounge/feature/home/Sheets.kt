@@ -389,6 +389,8 @@ fun QuickSettingsSheet(
     onGroups: () -> Unit,
     /** "None" or "2 groups". */
     groupsSummary: String,
+    /** Where the TV's sound comes out now, as the home already knows it. */
+    soundOutput: () -> SoundOutput? = { null },
     /** How many recently opened apps follow the pins in Your apps. */
     recentApps: Int,
     onSetRecentApps: (Int) -> Unit,
@@ -436,6 +438,7 @@ fun QuickSettingsSheet(
     val context = LocalContext.current
     val tvSettings = remember { tvSettingsIntent(context) }
     val networkSettings = remember { networkSettingsIntent(context) }
+    val soundSettings = remember { soundSettingsIntent(context) }
     var accessories by remember { mutableStateOf(accessoryScreen(context)) }
     val accessoryScope = rememberCoroutineScope()
     var leavingForSettings by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
@@ -663,6 +666,15 @@ fun QuickSettingsSheet(
                     },
                 ),
                 accent = if (link == Link.None) colors.ember else colors.signal,
+                onClick = { runCatching { context.startActivity(screen) } },
+            )
+        }
+        soundSettings?.let { screen ->
+            SheetRow(
+                icon = LoungeIcons.Soundbar,
+                title = stringResource(R.string.sheets_sound_title),
+                subtitle = stringResource(R.string.sheets_sound_subtitle),
+                value = soundOutput()?.label(resources),
                 onClick = { runCatching { context.startActivity(screen) } },
             )
         }

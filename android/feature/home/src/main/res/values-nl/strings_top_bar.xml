@@ -2,4 +2,5 @@
 <resources>
     <string name="top_bar_now_playing">Speelt nu, %1$s</string>
     <string name="top_bar_no_connection">Geen verbinding</string>
+    <string name="top_bar_sound_through">Geluid via %1$s</string>
 </resources>

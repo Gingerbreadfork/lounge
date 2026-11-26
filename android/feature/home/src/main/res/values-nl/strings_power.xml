@@ -65,6 +65,7 @@
     <string name="power_control_sent">Verzonden</string>
     <string name="power_control_didnt_work">Niet gelukt</string>
     <string name="power_controls_sound_heading">Geluid en afspelen</string>
+    <string name="power_controls_sound_output">Geluidsuitvoer</string>
     <string name="power_controls_volume_up">Volume omhoog</string>
     <string name="power_controls_volume_down">Volume omlaag</string>
     <string name="power_controls_mute">Dempen</string>

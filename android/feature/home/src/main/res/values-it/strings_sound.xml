@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sound_output_speakers">Altoparlanti della TV</string>
+    <string name="sound_output_optical">Ottica</string>
+    <string name="sound_output_line">Uscita di linea</string>
+    <string name="sound_output_headphones">Cuffie</string>
+    <string name="sound_output_usb">Audio USB</string>
+</resources>

@@ -85,8 +85,9 @@ import java.time.LocalTime
 
 /**
  * Top bar (DESIGN.md §5.1): the mark on the left; Search, Speak, TV controls, Settings and the clock on
- * the right, with what is playing, what apps have posted and a missing network between them while
- * there is any. Left off Search and Right off Settings nudge the button instead of leaving the bar.
+ * the right, with what is playing, what apps have posted, a missing network and a Bluetooth device
+ * the sound is going to between them while there is any. Left off Search and Right off Settings
+ * nudge the button instead of leaving the bar.
  */
 @Composable
 fun TopBar(
@@ -109,6 +110,9 @@ fun TopBar(
     modifier: Modifier = Modifier,
     /** Starts the TV listening for something to search for. Null on a TV that cannot listen. */
     onVoice: (() -> Unit)? = null,
+    /** The Bluetooth device the sound is going to, by name, or null while it plays in the room. */
+    soundThrough: () -> String? = { null },
+    onSound: () -> Unit = {},
 ) {
     val motion = LoungeTheme.motion
     // Read here, so a notification coming or going recomposes the bar and not the home.
@@ -166,6 +170,18 @@ fun TopBar(
             if (offline()) {
                 TopBarButton(LoungeIcons.NoNetwork, stringResource(R.string.top_bar_no_connection), onOffline, focus, focus.offline, takesFocus = offline)
             }
+            soundThrough()?.let { name ->
+                TopBarButton(
+                    icon = LoungeIcons.Bluetooth,
+                    label = name,
+                    onClick = onSound,
+                    focus = focus,
+                    requester = focus.sound,
+                    description = stringResource(R.string.top_bar_sound_through, name),
+                    takesFocus = { soundThrough() != null },
+                    narrow = true,
+                )
+            }
             TopBarButton(LoungeIcons.Settings, stringResource(DesignR.string.common_settings), onSettings, focus, focus.settings)
             Spacer(Modifier.width(12.dp))
             Clock()
@@ -215,6 +231,8 @@ private fun TopBarButton(
     counts: Boolean = false,
     description: String? = null,
     takesFocus: () -> Boolean = { true },
+    /** Keeps a label that is someone's own words, such as a device's name, to one short line. */
+    narrow: Boolean = false,
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -265,6 +283,8 @@ private fun TopBarButton(
         val labelColor = if (focused) colors.limelight else colors.dust
         if (counts) {
             Swap(label, rise = 6.dp, durationMs = 180) { text -> Text(text, style = LoungeTheme.typography.meta, color = labelColor, maxLines = 1) }
+        } else if (narrow) {
+            Text(label, style = LoungeTheme.typography.meta, color = labelColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
         } else {
             Text(label, style = LoungeTheme.typography.meta, color = labelColor)
         }

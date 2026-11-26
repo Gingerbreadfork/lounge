@@ -150,8 +150,9 @@ show them on the TV, keeps none of them and sends none anywhere. Settings turns 
 a TV set up before Lounge had this it stays off until you turn it on there.
 
 **The TV's own settings.** Settings has a row for the TV's network screen, which shows whether
-the TV is on Wi-Fi or Ethernet, one for pairing a remote, a game controller or headphones, and
-one for the rest of the TV's settings. Some TVs keep their pairing screen to apps allowed Nearby
+the TV is on Wi-Fi or Ethernet, one for its sound screen, which shows where the sound comes out,
+one for pairing a remote, a game controller or headphones, and one for the rest of the TV's
+settings. While the sound goes to Bluetooth headphones or a speaker, the top bar names them. Some TVs keep their pairing screen to apps allowed Nearby
 devices. There the row asks for it first, and if you say no it opens the TV's settings and says
 what to look for. When the TV has been without a
 network for ten seconds, the top bar says so, and OK there opens the network screen.

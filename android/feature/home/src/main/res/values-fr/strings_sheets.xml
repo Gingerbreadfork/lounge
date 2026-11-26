@@ -83,6 +83,8 @@
     <string name="sheets_network_wifi">Wi-Fi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Connecté</string>
+    <string name="sheets_sound_title">Son</string>
+    <string name="sheets_sound_subtitle">Dans les paramètres de la TV</string>
     <string name="sheets_accessories_title">Télécommandes et accessoires</string>
     <string name="sheets_accessories_subtitle">Associer une manette, un casque ou une télécommande</string>
     <string name="sheets_accessories_subtitle_ask">Nécessite Appareils à proximité pour ouvrir l’écran d’association de la TV. OK le demande.</string>

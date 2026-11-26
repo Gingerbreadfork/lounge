@@ -83,6 +83,8 @@
     <string name="sheets_network_wifi">Wi-Fi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Ligada</string>
+    <string name="sheets_sound_title">Som</string>
+    <string name="sheets_sound_subtitle">Nas definições da TV</string>
     <string name="sheets_accessories_title">Comandos e acessórios</string>
     <string name="sheets_accessories_subtitle">Emparelhe um comando de jogos, auscultadores ou um comando</string>
     <string name="sheets_accessories_subtitle_ask">Precisa de Dispositivos próximos para abrir o ecrã de emparelhamento da TV. OK pede-o.</string>

@@ -83,6 +83,8 @@
     <string name="sheets_network_wifi">Wi-Fi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Conectada</string>
+    <string name="sheets_sound_title">Som</string>
+    <string name="sheets_sound_subtitle">Nas configurações da TV</string>
     <string name="sheets_accessories_title">Controles remotos e acessórios</string>
     <string name="sheets_accessories_subtitle">Pareie um controle de jogo, fones de ouvido ou um controle remoto</string>
     <string name="sheets_accessories_subtitle_ask">Precisa de Dispositivos por perto para abrir a tela de pareamento da TV. OK pede.</string>

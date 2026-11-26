@@ -97,6 +97,8 @@
     <string name="power_control_sent">Sent</string>
     <string name="power_control_didnt_work">Didn\'t work</string>
     <string name="power_controls_sound_heading">Sound and playback</string>
+    <!-- A row that says where the sound comes out now. OK opens the TV's sound screen. -->
+    <string name="power_controls_sound_output">Sound output</string>
     <string name="power_controls_volume_up">Volume up</string>
     <string name="power_controls_volume_down">Volume down</string>
     <string name="power_controls_mute">Mute</string>

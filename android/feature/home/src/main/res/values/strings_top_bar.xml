@@ -4,4 +4,6 @@
     <string name="top_bar_now_playing">Now playing, %1$s</string>
     <!-- The top bar's button while the TV has no network, and the Network row's value in Settings then. -->
     <string name="top_bar_no_connection">No connection</string>
+    <!-- The top bar's button while the sound goes to a Bluetooth device, as a screen reader says it. %1$s is the device's name. -->
+    <string name="top_bar_sound_through">Sound through %1$s</string>
 </resources>

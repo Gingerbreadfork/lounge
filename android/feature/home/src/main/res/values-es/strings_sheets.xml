@@ -83,6 +83,8 @@
     <string name="sheets_network_wifi">Wi-Fi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Conectada</string>
+    <string name="sheets_sound_title">Sonido</string>
+    <string name="sheets_sound_subtitle">En los ajustes de la TV</string>
     <string name="sheets_accessories_title">Controles remotos y accesorios</string>
     <string name="sheets_accessories_subtitle">Vincula un control de juegos, auriculares o un control remoto</string>
     <string name="sheets_accessories_subtitle_ask">Necesita Dispositivos cercanos para abrir la pantalla de vinculación de la TV. OK lo pide.</string>

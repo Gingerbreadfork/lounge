@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sound_output_speakers">Tv-luidsprekers</string>
+    <string name="sound_output_optical">Optisch</string>
+    <string name="sound_output_line">Lijnuitgang</string>
+    <string name="sound_output_headphones">Koptelefoon</string>
+    <string name="sound_output_usb">USB-audio</string>
+</resources>

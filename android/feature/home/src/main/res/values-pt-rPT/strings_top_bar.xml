@@ -2,4 +2,5 @@
 <resources>
     <string name="top_bar_now_playing">A reproduzir, %1$s</string>
     <string name="top_bar_no_connection">Sem ligação</string>
+    <string name="top_bar_sound_through">Som por %1$s</string>
 </resources>

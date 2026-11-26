@@ -31,11 +31,17 @@ private fun Context.findScreen(action: String): Pair<Intent, String?>? {
 /** A screen of the TV's own settings that Lounge can open now, or null. */
 private fun Context.settingsScreen(action: String): Intent? = findScreen(action)?.takeIf { it.second == null }?.first
 
+/** Any screen of the TV's own settings by its action, or null where Lounge cannot open it now. */
+internal fun tvScreen(context: Context, action: String): Intent? = context.settingsScreen(action)
+
 /** The TV's own settings, or null on a TV with no such screen. */
 internal fun tvSettingsIntent(context: Context): Intent? = context.settingsScreen(Settings.ACTION_SETTINGS)
 
 /** The TV's network screen, or null on a TV with no such screen. */
 internal fun networkSettingsIntent(context: Context): Intent? = context.settingsScreen(Settings.ACTION_WIFI_SETTINGS)
+
+/** The TV's list of the accessories paired with it, or null on a TV with none Lounge may open. */
+internal fun pairedAccessoriesIntent(context: Context): Intent? = context.settingsScreen(ACTION_CONNECTED_ACCESSORIES)
 
 /**
  * Where the TV pairs remotes, controllers and headphones. [open] is its own screen for them, when

@@ -65,6 +65,7 @@
     <string name="power_control_sent">Inviato</string>
     <string name="power_control_didnt_work">Non ha funzionato</string>
     <string name="power_controls_sound_heading">Audio e riproduzione</string>
+    <string name="power_controls_sound_output">Uscita audio</string>
     <string name="power_controls_volume_up">Alza il volume</string>
     <string name="power_controls_volume_down">Abbassa il volume</string>
     <string name="power_controls_mute">Muto</string>

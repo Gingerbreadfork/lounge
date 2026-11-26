@@ -103,6 +103,9 @@
     <string name="sheets_network_wifi">Wi-Fi</string>
     <string name="sheets_network_ethernet">Ethernet</string>
     <string name="sheets_network_connected">Connected</string>
+    <!-- The row that opens the TV's sound screen. Its value says where the sound comes out now. -->
+    <string name="sheets_sound_title">Sound</string>
+    <string name="sheets_sound_subtitle">In the TV\'s settings</string>
     <!-- The row that opens the TV's screen for pairing a remote, a game controller or headphones. The last is said where only the TV's settings as a whole can be opened. -->
     <string name="sheets_accessories_title">Remotes and accessories</string>
     <string name="sheets_accessories_subtitle">Pair a controller, headphones or a remote</string>

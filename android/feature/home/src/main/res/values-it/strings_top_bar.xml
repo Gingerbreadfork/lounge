@@ -2,4 +2,5 @@
 <resources>
     <string name="top_bar_now_playing">In riproduzione, %1$s</string>
     <string name="top_bar_no_connection">Nessuna connessione</string>
+    <string name="top_bar_sound_through">Audio da %1$s</string>
 </resources>

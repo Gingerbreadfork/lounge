@@ -287,11 +287,16 @@ fun HomeScreen(
     val noNetwork = rememberOffline()
     fun offline() = networkSettings != null && noNetwork.value
 
+    // The top bar names a Bluetooth device while the sound goes to it and not into the room.
+    val sound = rememberSoundOutput()
+    fun soundThrough(): String? = sound.value?.takeIf { it.wireless }?.label(context.resources)
+
     /** Whether [button] is a top-bar chip that has left with what it showed. */
     fun chipGone(button: FocusRequester?): Boolean =
         (button === state.topBar.nowPlaying && snapshot.nowPlaying == null) ||
             (button === state.topBar.notifications && notices.value.list.isEmpty()) ||
-            (button === state.topBar.offline && !offline())
+            (button === state.topBar.offline && !offline()) ||
+            (button === state.topBar.sound && soundThrough() == null)
 
     /** Focus back on the home where it was, or as near as the current rows allow. */
     suspend fun focusHome() {
@@ -598,6 +603,12 @@ fun HomeScreen(
             if (state.overlay == Overlay.None && state.region == FocusRegion.TopBar && chipGone(state.topBar.last)) focusHome()
         }
     }
+    // The same for the chip that names a Bluetooth device, when the sound comes back to the room.
+    LaunchedEffect(Unit) {
+        snapshotFlow { sound.value }.collect {
+            if (state.overlay == Overlay.None && state.region == FocusRegion.TopBar && chipGone(state.topBar.last)) focusHome()
+        }
+    }
     // What is listed when the panel opens, and whatever arrives while it is open, has been seen.
     val panelOpen = overlay == Overlay.Notifications || overlay is Overlay.NotificationDetail
     LaunchedEffect(panelOpen) {
@@ -717,6 +728,12 @@ fun HomeScreen(
                 onNowPlaying = { uiSounds?.open(); openOverlay(Overlay.NowPlaying) },
                 onNotifications = { uiSounds?.open(); openOverlay(Overlay.Notifications) },
                 onOffline = { uiSounds?.open(); networkSettings?.let { runCatching { context.startActivity(it) } } },
+                soundThrough = { soundThrough() },
+                // To the TV's list of what is paired, or its sound screen, or its settings, whichever it has.
+                onSound = {
+                    uiSounds?.open()
+                    (pairedAccessoriesIntent(context) ?: soundSettingsIntent(context) ?: tvSettingsIntent(context))?.let { runCatching { context.startActivity(it) } }
+                },
                 onSettings = { uiSounds?.open(); openOverlay(Overlay.QuickSettings) },
                 modifier = Modifier.graphicsLayer { alpha = roomAlpha.value },
             )
@@ -884,6 +901,7 @@ fun HomeScreen(
                         },
                         forget = { gone -> state.sheetTrail.removeAll { it == gone } },
                         back = { from -> if (state.overlay == from) backFrom(from) },
+                        soundOutput = { sound.value },
                         notices = notices,
                         notifications = notifications,
                         notificationIndex = { state.notificationIndex },
@@ -1314,6 +1332,8 @@ private fun SheetContent(
     forget: (Overlay) -> Unit,
     /** Leaves a sheet as Back would: for the one that opened it, or for the home. */
     back: (Overlay) -> Unit,
+    /** Where the TV's sound comes out now. */
+    soundOutput: () -> SoundOutput?,
     notices: StateFlow<NotificationsShown>,
     notifications: NotificationSource,
     /** The place in the list of the notification last opened. */
@@ -1362,6 +1382,7 @@ private fun SheetContent(
                 onChannels = { open(Overlay.Channels) },
                 onRows = { open(Overlay.Rows) },
                 onGroups = { open(Overlay.AppGroups()) },
+                soundOutput = soundOutput,
                 groupsSummary = when (val count = groupCount) {
                     null -> ""
                     0 -> stringResource(R.string.sheets_groups_none)
@@ -1482,6 +1503,7 @@ private fun SheetContent(
             onKey = { key -> runCatching { platform.sendKey(key) } },
             onPowerSetup = { open(Overlay.PowerSetup) },
             firstFocus = first,
+            soundOutput = soundOutput,
         )
         Overlay.Channels -> {
             var channels by remember { mutableStateOf<List<tv.lounge.core.ChannelInfo>?>(null) }

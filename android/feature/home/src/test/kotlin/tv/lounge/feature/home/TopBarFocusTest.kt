@@ -49,6 +49,8 @@ class TopBarFocusTest {
     private val offline = mutableStateOf(false)
     private var networkOpened = 0
     private var canListen = false
+    private val soundThrough = mutableStateOf<String?>(null)
+    private var soundOpened = 0
     private var listened = 0
 
     private fun notice(key: String) = AppNotification(key, "tv.shop", "Shop", "Title $key", "", postedAt = 0, dismissible = true, opens = true)
@@ -79,6 +81,8 @@ class TopBarFocusTest {
                         onNotifications = { opened++ },
                         onOffline = { networkOpened++ },
                         onVoice = if (canListen) ({ listened++ }) else null,
+                        soundThrough = { soundThrough.value },
+                        onSound = { soundOpened++ },
                         onSettings = {},
                     )
                 }
@@ -224,6 +228,25 @@ class TopBarFocusTest {
         press(Key.DirectionLeft)
         press(Key.DirectionLeft)
         assertFocusedButton("Search")
+    }
+
+    @Test
+    fun aBluetoothDeviceTheSoundGoesToIsNamedBeforeSettings() {
+        showTopBar()
+        rule.runOnIdle { focus.settings.requestFocus() }
+        soundThrough.value = "WH-1000XM4"
+        rule.waitForIdle()
+        press(Key.DirectionLeft)
+        rule.onNode(isFocused()).assert(hasContentDescription("Sound through WH-1000XM4"))
+        press(Key.DirectionCenter)
+        rule.runOnIdle { assertEquals(1, soundOpened) }
+        // It leaves when the sound is back in the room.
+        press(Key.DirectionRight)
+        soundThrough.value = null
+        rule.waitForIdle()
+        rule.onNode(hasContentDescription("Sound through WH-1000XM4")).assertDoesNotExist()
+        press(Key.DirectionLeft)
+        assertFocusedButton("TV controls")
     }
 
     @Test
