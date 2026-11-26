@@ -22,6 +22,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- For the listening panel of voice search. Asked for there, the first time someone speaks. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- For pop-ups from the home over another app. Android TV has no screen to allow it, so Power Setup does. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- The TV provider library asks to write the guide; Lounge only reads it. -->
     <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" tools:node="remove" />
 

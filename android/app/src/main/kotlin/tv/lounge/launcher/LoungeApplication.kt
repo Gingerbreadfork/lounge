@@ -14,7 +14,9 @@ import tv.lounge.core.DeviceTier
 import tv.lounge.core.setStorageAside
 import tv.lounge.design.GlowMasks
 import tv.lounge.design.LoungeFonts
+import tv.lounge.design.LoungeThemeVariant
 import tv.lounge.design.SpillMask
+import tv.lounge.design.colors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import tv.lounge.platform.AndroidPlatform
@@ -29,6 +31,13 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory, tv.lounge
         private set
     private val coreReady = java.util.concurrent.CountDownLatch(1)
     override val power: tv.lounge.power.PowerSetup by lazy { tv.lounge.power.PowerSetup(this) }
+    /** Pop-ups from the home, in the theme chosen when the app started. */
+    val alerts: tv.lounge.feature.home.AlertPopups by lazy {
+        tv.lounge.feature.home.AlertPopups(this) {
+            val theme = startPrefs?.theme?.name ?: Prefs.Theme.Dusk.name
+            runCatching { LoungeThemeVariant.valueOf(theme) }.getOrDefault(LoungeThemeVariant.Dusk).colors()
+        }
+    }
     private val appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
     val updates: tv.lounge.update.UpdateManager by lazy {
         val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "0.0.0"
@@ -51,6 +60,7 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory, tv.lounge
         startedAt = android.os.SystemClock.uptimeMillis()
         super.onCreate()
         platform = AndroidPlatform(this)
+        platform.showAlert = { alert -> alerts.show(alert) }
         // Open the core and warm the fonts on their own threads now, so the first composition finds
         // both ready.
         Thread({

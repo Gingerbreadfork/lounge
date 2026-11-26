@@ -90,6 +90,9 @@ pub struct TokenStore {
     revoked: tokio::sync::watch::Sender<()>,
     /// Set while the file is behind the list in memory; every authentication retries the save.
     unsaved: AtomicBool,
+    /// The hash of the key the home shows pop-ups with, when one has been made.
+    alert_key: Mutex<Option<String>>,
+    alert_path: PathBuf,
 }
 
 impl TokenStore {
@@ -106,7 +109,18 @@ impl TokenStore {
             Err(_) => Vec::new(),
         };
         let revoked = tokio::sync::watch::channel(()).0;
-        TokenStore { path, devices: Mutex::new(devices), pending: Mutex::new(Live::default()), lockouts: Mutex::new(Lockouts::default()), revoked, unsaved: AtomicBool::new(false) }
+        let alert_path = data_dir.join("companion-alert-key");
+        let alert_key = std::fs::read_to_string(&alert_path).ok().map(|k| k.trim().to_string()).filter(|k| !k.is_empty());
+        TokenStore {
+            path,
+            devices: Mutex::new(devices),
+            pending: Mutex::new(Live::default()),
+            lockouts: Mutex::new(Lockouts::default()),
+            revoked,
+            unsaved: AtomicBool::new(false),
+            alert_key: Mutex::new(alert_key),
+            alert_path,
+        }
     }
 
     fn save(&self, devices: &[Device]) -> Result<(), String> {
@@ -126,6 +140,43 @@ impl TokenStore {
             }
         }
         result
+    }
+
+    /// Whether a key for pop-ups has been made.
+    pub fn has_alert_key(&self) -> bool {
+        self.alert_key.lock().is_some()
+    }
+
+    /// A new key for pop-ups in place of any before it. It is given once and only its hash kept.
+    pub fn new_alert_key(&self) -> Result<String, String> {
+        let key = random_token().ok_or_else(|| "the TV's random number source failed, so no key was made".to_string())?;
+        let hashed = hash(&key);
+        // Written under the lock and in one step, so the file and the key in use never differ.
+        let mut kept = self.alert_key.lock();
+        let tmp = self.alert_path.with_extension("tmp");
+        std::fs::write(&tmp, &hashed).and_then(|_| std::fs::rename(&tmp, &self.alert_path)).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp);
+            e.to_string()
+        })?;
+        *kept = Some(hashed);
+        Ok(key)
+    }
+
+    /// Takes the key away, so nothing can show pop-ups until another is made.
+    pub fn clear_alert_key(&self) -> Result<(), String> {
+        let mut kept = self.alert_key.lock();
+        if self.alert_path.exists() {
+            std::fs::remove_file(&self.alert_path).map_err(|e| e.to_string())?;
+        }
+        *kept = None;
+        Ok(())
+    }
+
+    /// Whether `key` is the one made for pop-ups.
+    pub fn alert_allowed(&self, key: &str) -> bool {
+        let given = hash(key);
+        // Both are hashes of one length, compared without stopping at the first difference.
+        self.alert_key.lock().as_deref().is_some_and(|kept| kept.len() == given.len() && kept.bytes().zip(given.bytes()).fold(0u8, |d, (a, b)| d | (a ^ b)) == 0)
     }
 
     /// The paired devices, marking the one whose id is `current`.
@@ -319,7 +370,8 @@ impl TokenStore {
     pub fn revoke_all(&self) -> Result<(), String> {
         let mut devices = self.devices.lock();
         devices.clear();
-        let saved = self.save(&devices);
+        // A phone could have made the key for pop-ups, so it goes with the phones.
+        let saved = self.save(&devices).and(self.clear_alert_key());
         let mut live = self.pending.lock();
         live.codes.clear();
         self.renew(&mut live, now_ms());
@@ -388,6 +440,29 @@ mod tests {
 
     const PHONE: IpAddr = IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 0, 20));
     const PEST: IpAddr = IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 0, 66));
+
+    #[test]
+    fn the_key_for_pop_ups_is_given_once_and_outlives_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = TokenStore::open(dir.path());
+        assert!(!store.has_alert_key() && !store.alert_allowed(""));
+        let key = store.new_alert_key().unwrap();
+        assert!(store.alert_allowed(&key) && !store.alert_allowed("guess"));
+        // Only its hash is on disk.
+        assert!(!std::fs::read_to_string(dir.path().join("companion-alert-key")).unwrap().contains(&key));
+        let again = TokenStore::open(dir.path());
+        assert!(again.has_alert_key() && again.alert_allowed(&key));
+        // A new key retires the old one, and taking it away leaves none.
+        let newer = again.new_alert_key().unwrap();
+        assert!(again.alert_allowed(&newer) && !again.alert_allowed(&key));
+        again.clear_alert_key().unwrap();
+        assert!(!again.has_alert_key() && !again.alert_allowed(&newer));
+        assert!(!TokenStore::open(dir.path()).has_alert_key());
+        // Forgetting every phone takes the key with them.
+        let last = again.new_alert_key().unwrap();
+        again.revoke_all().unwrap();
+        assert!(!again.alert_allowed(&last) && !TokenStore::open(dir.path()).has_alert_key());
+    }
 
     #[test]
     fn pairing_code_exchanges_once() {

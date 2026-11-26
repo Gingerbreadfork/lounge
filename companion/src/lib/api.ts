@@ -225,6 +225,12 @@ export const api = {
   diagnostics: () => call<Diagnostics>('GET', '/api/diagnostics'),
   devices: () => call<Device[]>('GET', '/api/devices'),
   revokeDevice: (id: string) => call<void>('DELETE', `/api/devices/${encodeURIComponent(id)}`),
+  /** Whether a key for pop-ups from the home has been made. */
+  alerts: () => call<{ keySet: boolean }>('GET', '/api/alerts'),
+  /** A new key for pop-ups, shown this once. It retires any key before it. */
+  newAlertKey: () => call<{ key: string }>('POST', '/api/alerts/key'),
+  clearAlertKey: () => call<void>('DELETE', '/api/alerts/key'),
+  testAlert: () => call<void>('POST', '/api/alerts/test'),
   backupUrl: () => '/api/backup',
   restore: (json: string) => call<void>('POST', '/api/restore', undefined, json, UPLOAD_WAIT_MS),
 };

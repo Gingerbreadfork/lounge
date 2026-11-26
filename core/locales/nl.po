@@ -154,6 +154,36 @@ msgid "The TV didn't answer. Check that HDMI-CEC is on in the TV's settings, the
 msgstr "De tv reageerde niet. Controleer of HDMI-CEC aanstaat in de instellingen van de tv en probeer het dan opnieuw."
 
 #: lounge-companion/src/server.rs
+msgid "That isn't the key the TV made for pop-ups. Make a new one in the phone companion, under More."
+msgstr "Dat is niet de sleutel die de tv voor pop-ups heeft gemaakt. Maak een nieuwe in Lounge op je telefoon, onder Meer."
+
+#: lounge-companion/src/server.rs
+msgid "A pop-up needs a title to show."
+msgstr "Een pop-up heeft een titel nodig om te tonen."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't show that pop-up. Try again."
+msgstr "De tv kon die pop-up niet tonen. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't make a key. Check it has free space, then try again."
+msgstr "De tv kon geen sleutel maken. Controleer of er vrije ruimte is en probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't remove the key. Try again."
+msgstr "De tv kon de sleutel niet verwijderen. Probeer het opnieuw."
+
+#. the title and the line under it of a pop-up sent to the TV as a test.
+#: lounge-companion/src/server.rs
+msgid "This is a pop-up from your home"
+msgstr "Dit is een pop-up vanuit je huis"
+
+#. the title and the line under it of a pop-up sent to the TV as a test.
+#: lounge-companion/src/server.rs
+msgid "A ring at the door would show here."
+msgstr "Als er wordt aangebeld, zie je dat hier."
+
+#: lounge-companion/src/server.rs
 msgid "The TV couldn't do that with the plugin. Try again."
 msgstr "De tv kon dat niet doen met de plug-in. Probeer het opnieuw."
 

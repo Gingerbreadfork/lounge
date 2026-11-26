@@ -1,6 +1,6 @@
 //! The server over a real socket: what an unpaired client gets, and what the cookie opens.
 
-use lounge_companion::{Companion, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, LiveRef, Pressed, SheetRef};
+use lounge_companion::{Alert, Companion, CompanionActions, DeviceInfo, LayoutDoc, LayoutPatch, LiveRef, Pressed, SheetRef};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
@@ -9,7 +9,18 @@ use std::time::{Duration, Instant};
 
 struct Fake;
 
+/// The pop-ups the fake TV was asked to show.
+static SHOWN: std::sync::Mutex<Vec<Alert>> = std::sync::Mutex::new(Vec::new());
+
 impl CompanionActions for Fake {
+    /// A title of `behind` is refused the way a TV that may not draw over other apps refuses.
+    fn alert(&self, alert: Alert) -> Result<(), String> {
+        if alert.title == "behind" {
+            return Err("Lounge can't show this over another app yet.".into());
+        }
+        SHOWN.lock().unwrap().push(alert);
+        Ok(())
+    }
     fn device_info(&self) -> DeviceInfo {
         DeviceInfo { name: "TV".into(), model: "TV".into(), version: "0".into(), tier: "a".into(), lang: "en".into() }
     }
@@ -389,6 +400,41 @@ fn a_phone_is_handed_sheets_and_live_pictures_to_show_itself() {
     for path in ["/api/plugins/lamps/sheet?id=room", "/api/plugins/lamps/picture?url=http%3A%2F%2Fcamera.local%2Fshown.jpg", "/api/tv"] {
         assert_eq!(status(&get(path, "not-a-token")), 401, "{path}");
     }
+}
+
+#[test]
+fn the_home_shows_a_pop_up_with_its_own_key_and_nothing_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let phone = pair(&companion, &host);
+    let call = |method: &str, path: &str, key: &str, body: &str| {
+        exchange(port, &format!("{method} {path} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {key}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()))
+    };
+    let ring = r#"{"title":"  Someone is at\n the door ","message":"Front door","image":"http://ha.local:8123/api/camera_proxy/camera.door?token=abc","duration":900}"#;
+    // No key has been made, and a phone's token is not one.
+    assert_eq!(json_body(&call("GET", "/api/alerts", &phone, ""))["keySet"], false);
+    assert_eq!(status(&call("POST", "/api/alert", &phone, ring)), 401);
+    let key = json_body(&call("POST", "/api/alerts/key", &phone, ""))["key"].as_str().unwrap().to_string();
+    assert_eq!(json_body(&call("GET", "/api/alerts", &phone, ""))["keySet"], true);
+    assert_eq!(status(&call("POST", "/api/alert", "guess", ring)), 401);
+    assert_eq!(status(&call("POST", "/api/alert", &key, ring)), 204);
+    let shown = SHOWN.lock().unwrap().last().cloned().unwrap();
+    assert_eq!((shown.title.as_str(), shown.message.as_deref(), shown.seconds), ("Someone is at the door", Some("Front door"), Alert::MAX_SECONDS));
+    assert!(shown.image.unwrap().starts_with("http://ha.local:8123/"));
+    // The key opens nothing but pop-ups.
+    assert_eq!(status(&call("GET", "/api/layout", &key, "")), 401);
+    // No title is nothing to show, a picture must be a web address, and the TV's own refusal is passed on.
+    assert_eq!(status(&call("POST", "/api/alert", &key, r#"{"title":"  "}"#)), 400);
+    assert_eq!(status(&call("POST", "/api/alert", &key, r#"{"title":"Post","image":"file:///sdcard/x.png"}"#)), 204);
+    assert_eq!(SHOWN.lock().unwrap().last().unwrap().image, None);
+    let refused = call("POST", "/api/alert", &key, r#"{"title":"behind"}"#);
+    assert_eq!((status(&refused), json_body(&refused)["error"].as_str()), (400, Some("Lounge can't show this over another app yet.")));
+    // The phone can send a test, and taking the key away shuts the door again.
+    assert_eq!(status(&call("POST", "/api/alerts/test", &phone, "")), 204);
+    assert_eq!(status(&call("DELETE", "/api/alerts/key", &phone, "")), 204);
+    assert_eq!(status(&call("POST", "/api/alert", &key, ring)), 401);
 }
 
 #[test]

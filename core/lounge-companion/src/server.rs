@@ -40,6 +40,8 @@ struct App {
 const SESSION_COOKIE: &str = "lounge_session";
 /// The live socket's close code for a phone the TV has forgotten; the page unpairs on it.
 const CLOSE_UNPAIRED: u16 = 4401;
+/// An alert is a line or two of text and an address.
+const ALERT_LIMIT: usize = 8 * 1024;
 /// Request bodies are small JSON except on the two upload routes.
 const BODY_LIMIT: usize = 64 * 1024;
 /// A setting may hold a pasted list, such as another podcast app's OPML export.
@@ -275,9 +277,13 @@ fn routes(app: Shared) -> Router {
         .route("/api/backup", get(backup))
         .route("/api/restore", post(restore).layer(DefaultBodyLimit::max(BACKUP_LIMIT)))
         .route("/api/art", get(art))
+        .route("/api/alerts", get(alerts))
+        .route("/api/alerts/key", post(new_alert_key).delete(clear_alert_key))
+        .route("/api/alerts/test", post(test_alert))
         .route_layer(middleware::from_fn_with_state(Arc::clone(&app), require_token));
     Router::new()
         .route("/api/pair", post(pair).layer(DefaultBodyLimit::max(1024)))
+        .route("/api/alert", post(alert).layer(DefaultBodyLimit::max(ALERT_LIMIT)))
         .route("/signin/{plugin}/{key}", get(signed_in))
         .merge(paired)
         .fallback(get(static_file))
@@ -753,6 +759,58 @@ struct TvControlBody {
 }
 async fn tv_control(State(app): State<Shared>, Json(b): Json<TvControlBody>) -> Result<StatusCode, ApiError> {
     on_core(&app, move |a| a.tv_control(&b.id)).await?.map_err(refused(mark!("The TV didn't answer. Check that HDMI-CEC is on in the TV's settings, then try again.")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct AlertBody {
+    title: String,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    image: Option<String>,
+    #[serde(default, alias = "duration")]
+    seconds: Option<u32>,
+}
+
+/// A pop-up from the home. It is let in by its own key and not by a phone's, so what rings the
+/// bell can do nothing else on the TV.
+async fn alert(State(app): State<Shared>, headers: HeaderMap, Json(b): Json<AlertBody>) -> Result<StatusCode, ApiError> {
+    if !bearer(&headers).is_some_and(|key| app.tokens.alert_allowed(&key)) {
+        return Err(ApiError(StatusCode::UNAUTHORIZED, t!("That isn't the key the TV made for pop-ups. Make a new one in the phone companion, under More.")));
+    }
+    let Some(alert) = crate::Alert::tidy(&b.title, b.message.as_deref(), b.image.as_deref(), b.seconds) else {
+        return Err(bad(t!("A pop-up needs a title to show.")));
+    };
+    on_core(&app, move |a| a.alert(alert)).await?.map_err(refused(mark!("The TV couldn't show that pop-up. Try again.")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn alerts(State(app): State<Shared>) -> Response {
+    Json(serde_json::json!({ "keySet": app.tokens.has_alert_key() })).into_response()
+}
+
+async fn new_alert_key(State(app): State<Shared>) -> Result<Response, ApiError> {
+    let key = app.tokens.new_alert_key().map_err(|e| {
+        tracing::warn!("companion: no key for pop-ups ({e})");
+        ApiError(StatusCode::INTERNAL_SERVER_ERROR, t!("The TV couldn't make a key. Check it has free space, then try again."))
+    })?;
+    Ok(Json(serde_json::json!({ "key": key })).into_response())
+}
+
+async fn clear_alert_key(State(app): State<Shared>) -> Result<StatusCode, ApiError> {
+    app.tokens.clear_alert_key().map_err(|e| {
+        tracing::warn!("companion: the key for pop-ups was not removed ({e})");
+        ApiError(StatusCode::INTERNAL_SERVER_ERROR, t!("The TV couldn't remove the key. Try again."))
+    })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Shows a pop-up from the phone, to see where and how one appears.
+async fn test_alert(State(app): State<Shared>) -> Result<StatusCode, ApiError> {
+    // Translators: the title and the line under it of a pop-up sent to the TV as a test.
+    let alert = crate::Alert::tidy(&t!("This is a pop-up from your home"), Some(&t!("A ring at the door would show here.")), None, Some(10)).unwrap_or_default();
+    on_core(&app, move |a| a.alert(alert)).await?.map_err(refused(mark!("The TV couldn't show that pop-up. Try again.")))?;
     Ok(StatusCode::NO_CONTENT)
 }
 

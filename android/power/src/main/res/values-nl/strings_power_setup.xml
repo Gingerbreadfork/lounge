@@ -19,6 +19,8 @@
     <string name="power_setup_notifications_detail">Laat Lounge zien wat er speelt, dat bedienen en tonen wat apps je willen laten weten.</string>
     <string name="power_setup_usage_title">Gebruikstoegang toestaan</string>
     <string name="power_setup_usage_detail">Laat Je apps volgen wat je opent.</string>
+    <string name="power_setup_overlay_title">Pop-ups boven andere apps tonen</string>
+    <string name="power_setup_overlay_detail">Zodat je ziet dat er wordt aangebeld terwijl je iets anders kijkt.</string>
     <string name="power_setup_animations_title">Snellere systeemanimaties</string>
     <string name="power_setup_animations_detail">Halveert de animaties van de tv zelf, zodat menu\'s en apps sneller openen.</string>
     <string name="power_setup_animations_reset_title">Normale systeemanimaties</string>

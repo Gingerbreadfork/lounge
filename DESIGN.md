@@ -435,6 +435,14 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
 
 Bottom-left (x 96, 54 from the bottom), `curtain` card, 1 px hairline, radius 16, `title` text, never cut short; it stays 4 s, longer for a longer sentence (50 ms a character past 60, up to 10 s) and as long as the TV's accessibility setting asks; at most one at a time. Enter: rise 16 px with a fade over `proscenium`; exit: fade over `settle`. Used for confirmations ("Hidden from every row"), for what a press did where nothing on screen shows it ("Movie time set", in the plugin's words) and for errors written as sentences ("Nothing on this TV can open Alien: Earth. Is its app still installed?"), never an exception's text. The system toast is never used.
 
+### 7.5 Pop-ups from the home
+
+A ring at the door, or anything else the home wants said now. Bottom-right, 5% in from each edge, a quarter of the screen wide: a `curtain` card with a 1 px `curtainEdge` line and radius 20, a 16:9 picture on top where one was sent, then the title in `limelight` on at most two lines and the message in `dust` on at most three. It takes no focus and no keys, makes no sound, goes at a click from a pointer, and goes after the time it was sent with, 20 s unless said and never past 120 s. A new one replaces the one that is up. The picture is fetched again every 1.5 s, so a camera is seen as it is now. The toast keeps the bottom-left corner, so the two never meet.
+
+It is drawn in a window over whatever app is on screen where Lounge may draw over other apps, which on a TV only Power Setup can allow, and in the home's own window otherwise. With neither, the caller is told in a sentence what to run on the TV. Android keeps every app's overlays off the TV's own settings screens, so a pop-up sent while those are in front is not seen, and with the screen off none is shown. A picture is scaled down to the card as it is read.
+
+A pop-up is asked for at `POST /api/alert` on the phone companion's port, with a title and optionally a message, a picture's web address and a time in seconds. Its key is one made on the phone under More and opens nothing else; a phone's own token does not open it. Only the key's hash is kept, a new key retires the old, and forgetting every phone removes it.
+
 ## 8. States
 
 - **Loading**: never a spinner on the home screen. The persisted snapshot renders first; tiles whose artwork isn't on disk yet show their dominant colour as a flat tile and fade the image in over 180 ms when it arrives. Before the first index the Stage says "Setting up your home screen"; "Let's set up your home screen", with its Start button, is only for a TV that has been indexed and really has nothing.

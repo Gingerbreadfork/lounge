@@ -154,6 +154,36 @@ msgid "The TV didn't answer. Check that HDMI-CEC is on in the TV's settings, the
 msgstr "Der Fernseher hat nicht geantwortet. Prüfe, ob HDMI-CEC in den Einstellungen des Fernsehers an ist, und versuche es dann erneut."
 
 #: lounge-companion/src/server.rs
+msgid "That isn't the key the TV made for pop-ups. Make a new one in the phone companion, under More."
+msgstr "Das ist nicht der Schlüssel, den der Fernseher für Pop-ups erstellt hat. Erstelle in Lounge fürs Handy unter „Mehr“ einen neuen."
+
+#: lounge-companion/src/server.rs
+msgid "A pop-up needs a title to show."
+msgstr "Ein Pop-up braucht einen Titel, den es zeigen kann."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't show that pop-up. Try again."
+msgstr "Der Fernseher konnte dieses Pop-up nicht zeigen. Versuche es erneut."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't make a key. Check it has free space, then try again."
+msgstr "Der Fernseher konnte keinen Schlüssel erstellen. Prüfe, ob er freien Speicher hat, und versuche es erneut."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't remove the key. Try again."
+msgstr "Der Fernseher konnte den Schlüssel nicht entfernen. Versuche es erneut."
+
+#. the title and the line under it of a pop-up sent to the TV as a test.
+#: lounge-companion/src/server.rs
+msgid "This is a pop-up from your home"
+msgstr "Das ist ein Pop-up aus deinem Zuhause"
+
+#. the title and the line under it of a pop-up sent to the TV as a test.
+#: lounge-companion/src/server.rs
+msgid "A ring at the door would show here."
+msgstr "Ein Klingeln an der Tür würde hier erscheinen."
+
+#: lounge-companion/src/server.rs
 msgid "The TV couldn't do that with the plugin. Try again."
 msgstr "Der Fernseher konnte das mit dem Plugin nicht ausführen. Versuche es erneut."
 

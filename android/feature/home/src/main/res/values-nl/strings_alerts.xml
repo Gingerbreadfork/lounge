@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="alerts_not_over_apps">Lounge kan dit nog niet boven een andere app tonen. Open op de tv Instellingen, dan Geavanceerde configuratie, en voer ‘Pop-ups boven andere apps tonen’ uit.</string>
+</resources>

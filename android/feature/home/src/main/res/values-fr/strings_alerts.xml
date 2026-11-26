@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="alerts_not_over_apps">Lounge ne peut pas encore afficher cela par-dessus une autre appli. Sur la TV, ouvrez Paramètres, puis Configuration avancée, et lancez « Afficher les alertes par-dessus les autres applis ».</string>
+</resources>

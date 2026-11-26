@@ -30,6 +30,9 @@
     <string name="power_setup_usage_title">Allow usage access</string>
     <!-- "Your apps" is the row of apps on the home screen. -->
     <string name="power_setup_usage_detail">Lets Your apps follow what you open.</string>
+    <!-- Lets Lounge draw a pop-up from the home, such as a doorbell, over whatever app is on screen. -->
+    <string name="power_setup_overlay_title">Show pop-ups over other apps</string>
+    <string name="power_setup_overlay_detail">Lets a ring at the door show while you watch something else.</string>
     <string name="power_setup_animations_title">Faster system animations</string>
     <string name="power_setup_animations_detail">Halves the TV\'s own animations, so its menus and apps open quicker.</string>
     <string name="power_setup_animations_reset_title">Normal system animations</string>

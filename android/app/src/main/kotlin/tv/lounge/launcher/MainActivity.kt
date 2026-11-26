@@ -89,9 +89,16 @@ class MainActivity : ComponentActivity() {
     override fun getResources(): android.content.res.Resources = spoken.over(super.getResources())
     private val soundsState = mutableStateOf<UiSounds?>(null)
 
+    /** This window's content while it is on screen, for a pop-up from the home. */
+    private val homeWindow: () -> android.view.ViewGroup? = { if (started && !isDestroyed) findViewById(android.R.id.content) else null }
+
     private val tvListingsRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) { pushPermissions() }
 
     override fun onDestroy() {
+        (application as LoungeApplication).alerts.let { alerts ->
+            alerts.homeGone()
+            if (alerts.homeWindow === homeWindow) alerts.homeWindow = { null }
+        }
         uiSounds?.release()
         uiSounds = null
         super.onDestroy()
@@ -211,6 +218,8 @@ class MainActivity : ComponentActivity() {
         // refuses them with the reason when neither is there.
         platform.inFront = { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
         platform.onScreen = { started }
+        // Without leave to draw over other apps, a pop-up from the home shows in this window while it is on screen.
+        (application as LoungeApplication).alerts.homeWindow = homeWindow
         platform.keysForOtherApps = { power.status.value is tv.lounge.power.PowerStatus.Ready }
         // The phone's TV controls are the TV controls sheet's own rows.
         val phoneTv = tv.lounge.feature.home.PhoneTvControls(power, applicationContext)

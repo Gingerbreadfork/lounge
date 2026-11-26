@@ -852,6 +852,23 @@ msgid "Loading the layout…"
 msgstr "Indeling laden…"
 
 #: src/pages/More.svelte
+msgid "Key removed. Nothing can show pop-ups now."
+msgstr "Sleutel verwijderd. Niets kan nu nog pop-ups tonen."
+
+#. the example title of a doorbell pop-up
+#: src/pages/More.svelte
+msgid "Someone is at the door"
+msgstr "Er staat iemand voor de deur"
+
+#: src/pages/More.svelte
+msgid "Copied"
+msgstr "Gekopieerd"
+
+#: src/pages/More.svelte
+msgid "Couldn't copy it. Press and hold the text to copy it."
+msgstr "Kopiëren is niet gelukt. Houd de tekst ingedrukt om hem te kopiëren."
+
+#: src/pages/More.svelte
 msgid "Layout and settings restored on the TV"
 msgstr "Indeling en instellingen teruggezet op de tv"
 
@@ -1018,6 +1035,60 @@ msgstr "Vergeten"
 #: src/pages/More.svelte
 msgid "Yes, forget it"
 msgstr "Ja, vergeten"
+
+#: src/pages/More.svelte
+msgid "Pop-ups from your home"
+msgstr "Pop-ups vanuit je huis"
+
+#: src/pages/More.svelte
+msgid "Home Assistant, or anything in your home that can call an address, can put a pop-up on the TV: the camera's picture when someone rings the door, say. It needs a key made here, which lets it show pop-ups and nothing else."
+msgstr "Home Assistant, of iets anders in huis dat een adres kan aanroepen, kan een pop-up op de tv zetten: het beeld van de camera als er wordt aangebeld, bijvoorbeeld. Daarvoor is een hier gemaakte sleutel nodig, waarmee het pop-ups kan tonen en verder niets."
+
+#: src/pages/More.svelte
+msgid "This key is shown once. Put this in configuration.yaml in Home Assistant, then restart it."
+msgstr "Deze sleutel wordt één keer getoond. Zet dit in configuration.yaml in Home Assistant en start het daarna opnieuw."
+
+#: src/pages/More.svelte
+msgid "Copy"
+msgstr "Kopiëren"
+
+#: src/pages/More.svelte
+msgid "Then add this to the actions of an automation that runs when the bell rings, with your Home Assistant's address and your camera in place of the ones here."
+msgstr "Voeg dit daarna toe aan de acties van een automatisering die start als de bel gaat, met het adres van je Home Assistant en je eigen camera in plaats van die hier staan."
+
+#: src/pages/More.svelte
+msgid "Sent. Look at the TV."
+msgstr "Verstuurd. Kijk naar de tv."
+
+#: src/pages/More.svelte
+msgid "Send a test pop-up"
+msgstr "Testpop-up versturen"
+
+#. buttons under Pop-ups from your home, and the question each asks first
+#: src/pages/More.svelte
+msgid "Make a new key"
+msgstr "Nieuwe sleutel maken"
+
+#. buttons under Pop-ups from your home, and the question each asks first
+#: src/pages/More.svelte
+msgid "Yes, the old key stops working"
+msgstr "Ja, de oude sleutel werkt dan niet meer"
+
+#: src/pages/More.svelte
+msgid "Remove the key"
+msgstr "Sleutel verwijderen"
+
+#: src/pages/More.svelte
+msgid "Yes, remove it"
+msgstr "Ja, verwijderen"
+
+#: src/pages/More.svelte
+msgid "Make a key"
+msgstr "Sleutel maken"
+
+#: src/pages/More.svelte
+msgid "A pop-up shows over whatever is on the TV once Power Setup on the TV has run “Show pop-ups over other apps”. Until then it shows on the home screen only."
+msgstr "Een pop-up verschijnt boven alles wat op de tv te zien is zodra Geavanceerde configuratie op de tv ‘Pop-ups boven andere apps tonen’ heeft uitgevoerd. Tot dan verschijnt hij alleen op het startscherm."
 
 #: src/pages/More.svelte
 msgid "Diagnostics"

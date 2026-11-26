@@ -245,6 +245,13 @@ struct BackupPlugin {
 }
 
 impl CompanionActions for CoreActions {
+    fn alert(&self, alert: lounge_companion::Alert) -> Result<(), String> {
+        let inner = self.inner()?;
+        let said = serde_json::to_string(&alert).map_err(|e| e.to_string())?;
+        // The shell words its own refusal, such as having no leave to draw over another app.
+        inner.platform.control(format!("alert:{said}")).map_err(|e| e.to_string())
+    }
+
     fn device_info(&self) -> DeviceInfo {
         let (name, model, tier) = match self.inner() {
             Ok(i) => (i.config.device_name.clone(), i.config.device_name.clone(), format!("{:?}", i.config.tier).to_lowercase()),

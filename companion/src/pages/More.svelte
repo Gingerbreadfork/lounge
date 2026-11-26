@@ -12,6 +12,12 @@
   let chosen = $state<File | null>(null);
   let restoring = $state(false);
   let picker = $state<HTMLInputElement>();
+  /** Whether the TV holds a key for pop-ups, once it has said. */
+  let keySet = $state<boolean | null>(null);
+  /** A key just made, held only until the page is left. */
+  let newKey = $state<string | null>(null);
+  /** Counts the times a key was made or removed here, so an older answer from the TV is not believed. */
+  let keyChanges = 0;
 
   $effect(() => {
     load();
@@ -21,6 +27,51 @@
   async function load() {
     diag = (await quiet(() => api.diagnostics())) ?? diag;
     devices = (await quiet(() => api.devices())) ?? devices;
+    const asked = keyChanges;
+    const said = (await quiet(() => api.alerts()))?.keySet;
+    if (said !== undefined && asked === keyChanges) keySet = said;
+  }
+  async function makeKey() {
+    const made = await act('', () => api.newAlertKey());
+    if (!made) return;
+    keyChanges++;
+    newKey = made.key;
+    keySet = true;
+  }
+  async function removeKey() {
+    if (!(await done(t('Key removed. Nothing can show pop-ups now.'), () => api.clearAlertKey()))) return;
+    keyChanges++;
+    newKey = null;
+    keySet = false;
+  }
+  /** What Home Assistant needs in configuration.yaml to show a pop-up on this TV. */
+  let recipe = $derived(
+    newKey == null
+      ? ''
+      : [
+          'rest_command:',
+          '  lounge_popup:',
+          `    url: "${location.origin}/api/alert"`,
+          '    method: post',
+          '    headers:',
+          `      authorization: "Bearer ${newKey}"`,
+          '    content_type: "application/json"',
+          '    payload: >-',
+          '      {"title": {{ title | tojson }}, "message": {{ message | default("") | tojson }}, "image": {{ image | default("") | tojson }}}',
+        ].join('\n'),
+  );
+  /** An automation's action that rings the TV with the camera's picture. */
+  let ring = $derived(
+    [
+      '- action: rest_command.lounge_popup',
+      '  data:',
+      // Translators: the example title of a doorbell pop-up
+      `    title: ${JSON.stringify(t('Someone is at the door'))}`,
+      `    image: "http://192.168.1.10:8123{{ state_attr('camera.front_door', 'entity_picture') }}"`,
+    ].join('\n'),
+  );
+  async function copyRecipe(text: string) {
+    toast((await copyText(text)) ? t('Copied') : t("Couldn't copy it. Press and hold the text to copy it."));
   }
   function choose(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -129,6 +180,32 @@
   </section>
 
   <section class="section">
+    <div class="section-head"><h3>{t('Pop-ups from your home')}</h3></div>
+    <p class="caption">{t("Home Assistant, or anything in your home that can call an address, can put a pop-up on the TV: the camera's picture when someone rings the door, say. It needs a key made here, which lets it show pop-ups and nothing else.")}</p>
+    {#if newKey}
+      <div class="card recipe">
+        <p class="caption">{t('This key is shown once. Put this in configuration.yaml in Home Assistant, then restart it.')}</p>
+        <pre class="yaml">{recipe}</pre>
+        <button class="btn small" onclick={() => copyRecipe(recipe)}>{t('Copy')}</button>
+        <p class="caption">{t("Then add this to the actions of an automation that runs when the bell rings, with your Home Assistant's address and your camera in place of the ones here.")}</p>
+        <pre class="yaml">{ring}</pre>
+        <button class="btn small" onclick={() => copyRecipe(ring)}>{t('Copy')}</button>
+      </div>
+    {/if}
+    <div class="actions">
+      {#if keySet}
+        <button class="btn" onclick={() => done(t('Sent. Look at the TV.'), () => api.testAlert())}>{t('Send a test pop-up')}</button>
+        <!-- Translators: buttons under Pop-ups from your home, and the question each asks first -->
+        <Confirm quiet label={t('Make a new key')} confirm={t('Yes, the old key stops working')} onconfirm={makeKey} />
+        <Confirm quiet label={t('Remove the key')} confirm={t('Yes, remove it')} onconfirm={removeKey} />
+      {:else if keySet === false}
+        <button class="btn" onclick={makeKey}>{t('Make a key')}</button>
+      {/if}
+    </div>
+    <p class="caption">{t('A pop-up shows over whatever is on the TV once Power Setup on the TV has run “Show pop-ups over other apps”. Until then it shows on the home screen only.')}</p>
+  </section>
+
+  <section class="section">
     <div class="section-head"><h3>{t('Diagnostics')}</h3><span class="caption">{t('updates every 5 seconds')}</span></div>
     {#if diag}
       <div class="card diag">
@@ -200,6 +277,8 @@
   /* The address is one thing to copy: a hold on it selects all of it. */
   .address { font-variant-numeric: tabular-nums; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
   .coin a { color: var(--limelight); text-decoration: underline; }
+  .recipe { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+  .yaml { align-self: stretch; margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--velvet); color: var(--limelight); font: 13px/1.5 ui-monospace, monospace; white-space: pre; overflow-x: auto; user-select: all; -webkit-user-select: all; }
   .lockup { display: flex; align-items: flex-end; gap: 12px; }
   .lockup .name { font-family: var(--display); font-size: 30px; font-weight: 650; line-height: 1; }
   .list-row .grow { display: flex; flex-direction: column; gap: 2px; }

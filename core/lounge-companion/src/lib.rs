@@ -178,10 +178,54 @@ pub struct LiveRef {
     pub url: String,
 }
 
+/// Something the home wants said on the TV now, such as a ring at the door: a pop-up over
+/// whatever is on screen.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Alert {
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// The address of a picture to show and keep fetching, such as a camera's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    /// How long the pop-up stays up.
+    pub seconds: u32,
+}
+
+impl Alert {
+    pub const DEFAULT_SECONDS: u32 = 20;
+    pub const MAX_SECONDS: u32 = 120;
+    const MAX_TITLE: usize = 120;
+    const MAX_MESSAGE: usize = 240;
+    const MAX_ADDRESS: usize = 2048;
+
+    /// The alert as it will be shown: text on one line and no longer than it has room for, a
+    /// picture only from a web address, and a time within what a pop-up may take. None when
+    /// there is no title to show.
+    pub fn tidy(title: &str, message: Option<&str>, image: Option<&str>, seconds: Option<u32>) -> Option<Alert> {
+        fn line(text: &str, most: usize) -> String {
+            text.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(most).collect()
+        }
+        let title = line(title, Self::MAX_TITLE);
+        if title.is_empty() {
+            return None;
+        }
+        let image = image.map(str::trim).filter(|a| a.len() <= Self::MAX_ADDRESS && (a.starts_with("http://") || a.starts_with("https://")));
+        Some(Alert {
+            title,
+            message: message.map(|m| line(m, Self::MAX_MESSAGE)).filter(|m| !m.is_empty()),
+            image: image.map(str::to_string),
+            seconds: seconds.unwrap_or(Self::DEFAULT_SECONDS).clamp(5, Self::MAX_SECONDS),
+        })
+    }
+}
+
 /// Everything the API can do, provided by the core. An `Err` is a sentence the page shows as it
 /// is, so the implementer words every failure; see [`sentence_or`] for text it did not write.
 pub trait CompanionActions: Send + Sync {
     fn device_info(&self) -> DeviceInfo;
+    /// Shows a pop-up on the TV, over whatever is on screen where the TV allows that.
+    fn alert(&self, alert: Alert) -> Result<(), String>;
     /// The current `HomeSnapshot` as JSON.
     fn snapshot_json(&self) -> String;
     /// Does what a tile's action says, and gives back anything the press has to say.

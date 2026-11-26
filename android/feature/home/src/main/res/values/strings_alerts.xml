@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sent back to what asked for a pop-up, such as Home Assistant or the phone, when Lounge is behind another app and may not draw over it. Settings and Power Setup are places on the TV. -->
+    <string name="alerts_not_over_apps">Lounge can\'t show this over another app yet. On the TV, open Settings, then Power Setup, and run “Show pop-ups over other apps”.</string>
+</resources>

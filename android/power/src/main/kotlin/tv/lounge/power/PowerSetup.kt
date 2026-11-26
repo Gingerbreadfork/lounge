@@ -270,6 +270,7 @@ class PowerSetup(private val context: Context) {
                     ops.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
                 } == android.app.AppOpsManager.MODE_ALLOWED
             }
+            OVERLAY -> Settings.canDrawOverlays(context)
             ANIMATIONS -> scales().all { it == 0.5f }
             ANIMATIONS_RESET -> scales().all { it == 1f }
             else -> null
@@ -288,6 +289,7 @@ class PowerSetup(private val context: Context) {
     val tvListings: PowerAction get() = action(TV_LISTINGS, R.string.power_setup_tv_listings_title, R.string.power_setup_tv_listings_detail, grantCommand(context.packageName, "android.permission.READ_TV_LISTINGS", userId))
     val notificationAccess: PowerAction get() = action(NOTIFICATIONS, R.string.power_setup_notifications_title, R.string.power_setup_notifications_detail, "cmd notification allow_listener ${context.packageName}/tv.lounge.collector.media.NowPlayingListener")
     val usageAccess: PowerAction get() = action(USAGE, R.string.power_setup_usage_title, R.string.power_setup_usage_detail, "appops set ${context.packageName} GET_USAGE_STATS allow")
+    val drawOverApps: PowerAction get() = action(OVERLAY, R.string.power_setup_overlay_title, R.string.power_setup_overlay_detail, "appops set ${context.packageName} SYSTEM_ALERT_WINDOW allow")
     val quickAnimations: PowerAction get() = action(ANIMATIONS, R.string.power_setup_animations_title, R.string.power_setup_animations_detail, "settings put global window_animation_scale 0.5; settings put global transition_animation_scale 0.5; settings put global animator_duration_scale 0.5")
     val normalAnimations: PowerAction get() = action(ANIMATIONS_RESET, R.string.power_setup_animations_reset_title, R.string.power_setup_animations_reset_detail, "settings put global window_animation_scale 1.0; settings put global transition_animation_scale 1.0; settings put global animator_duration_scale 1.0")
     val optimise: PowerAction get() = action("optimise", R.string.power_setup_optimise_title, R.string.power_setup_optimise_detail, "cmd package compile -r bg-dexopt ${context.packageName}", timeoutMs = 5 * 60_000)
@@ -310,7 +312,7 @@ class PowerSetup(private val context: Context) {
         return PowerAction("key_$name", "Remote: $name", "Presses a remote key for the app in front.", command, timeoutMs = 5_000)
     }
 
-    val setupActions: List<PowerAction> get() = listOf(homeRole, tvListings, notificationAccess, usageAccess, quickAnimations, optimise)
+    val setupActions: List<PowerAction> get() = listOf(homeRole, tvListings, notificationAccess, usageAccess, drawOverApps, quickAnimations, optimise)
 
     // ----- home screens that come before Lounge -----
 
@@ -424,6 +426,7 @@ class PowerSetup(private val context: Context) {
         private const val TV_LISTINGS = "tv_listings"
         private const val NOTIFICATIONS = "notifications"
         private const val USAGE = "usage"
+        private const val OVERLAY = "overlay"
         private const val ANIMATIONS = "animations"
         private const val ANIMATIONS_RESET = "animations_reset"
 

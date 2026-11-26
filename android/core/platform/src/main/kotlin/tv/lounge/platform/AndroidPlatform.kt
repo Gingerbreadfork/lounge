@@ -19,6 +19,9 @@ import tv.lounge.core.Platform
 import tv.lounge.core.PlatformException
 import tv.lounge.core.TvControls
 
+/** A pop-up the home asked for, such as a ring at the door, with a picture to show by its address. */
+data class HomeAlert(val title: String, val message: String?, val image: String?, val seconds: Int)
+
 /** Commands the core asks the shell to show in its own UI rather than hand to Android. */
 sealed interface UiCommand {
     data object OpenTvControls : UiCommand
@@ -166,6 +169,11 @@ class AndroidPlatform(private val context: Context) : Platform {
             command == "allapps" -> _commands.tryEmit(UiCommand.OpenAllApps)
             command.startsWith("plugin:") -> _commands.tryEmit(UiCommand.OpenPlugin(command.removePrefix("plugin:")))
             command.startsWith("search:") -> _commands.tryEmit(UiCommand.Search(command.removePrefix("search:")))
+            command.startsWith("alert:") -> {
+                val said = runCatching { org.json.JSONObject(command.removePrefix("alert:")) }.getOrNull() ?: throw PlatformException.Failed("Unknown control: alert")
+                fun text(name: String) = said.optString(name).takeIf { it.isNotBlank() && !said.isNull(name) }
+                showAlert(HomeAlert(said.optString("title"), text("message"), text("image"), said.optInt("seconds", 20)))
+            }
             command.startsWith("sheet:") || command.startsWith("live:") -> {
                 val screen = pluginScreen(command) ?: throw PlatformException.Failed("Unknown control: $command")
                 // A press that would open one of Lounge's own screens behind another app is told so.
@@ -175,6 +183,9 @@ class AndroidPlatform(private val context: Context) : Platform {
             else -> throw PlatformException.Failed("Unknown control: $command")
         }
     }
+
+    /** Set by the shell: shows a pop-up, or throws a sentence saying why it cannot. */
+    @Volatile var showAlert: (HomeAlert) -> Unit = { throw PlatformException.Failed("Unknown control: alert") }
 
     /** Set by the shell: whether Lounge's own window is in front. */
     @Volatile var inFront: () -> Boolean = { true }

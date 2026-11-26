@@ -143,6 +143,13 @@ colour. Holding OK opens a panel beside the home screen to dim it, change its co
 heating or reach everything else in the room, and unlocking a door asks before it does it. A
 camera opens full screen.
 
+**A ring at the door.** Home Assistant, or anything else in the home that can call an address,
+can put a pop-up in the corner of the TV: a title, a line under it and a camera's picture that
+keeps renewing while it is up. It takes no focus, so what you were watching carries on, and it
+goes by itself. More on the phone makes the key for it and writes out what to paste into Home
+Assistant. Once Power Setup has run "Show pop-ups over other apps" the pop-up shows over
+whatever app is on screen; until then it shows on Lounge's home screen only.
+
 **Now playing.** Music or a podcast playing in the background gets a chip in the top bar and a
 card with play, pause and skip.
 
@@ -229,7 +236,9 @@ the TV shows a fresh one as soon as it is used.
   theme, the background and whether notifications show, to one file and restores it, asking first
   before a restore replaces anything. Passwords and sign-ins stay out of the file. It also lists
   the paired phones with when each was last seen, shows the TV's diagnostics, and has the ways
-  to support Lounge and the links to this repository a tap away.
+  to support Lounge and the links to this repository a tap away. Pop-ups from your home makes
+  the key that lets Home Assistant show a pop-up on the TV, sends a test one, and takes the key
+  away again.
 
 ## Plugins
 
@@ -356,8 +365,8 @@ adb shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
 
 Power Setup does all of this from the TV as well, and can undo it, including the faster
 animations it offers. It also grants the optional
-permissions, drives the TV over HDMI-CEC, sets the screensaver and compiles Lounge ahead of
-time. It shows each command before running it.
+permissions, lets pop-ups from the home show over other apps, drives the TV over HDMI-CEC, sets
+the screensaver and compiles Lounge ahead of time. It shows each command before running it.
 
 ### Updates
 

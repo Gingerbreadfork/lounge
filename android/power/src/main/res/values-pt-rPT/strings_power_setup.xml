@@ -19,6 +19,8 @@
     <string name="power_setup_notifications_detail">Permite ao Lounge ver o que está a reproduzir, controlá-lo e mostrar o que as apps lhe querem dizer.</string>
     <string name="power_setup_usage_title">Permitir o acesso de utilização</string>
     <string name="power_setup_usage_detail">Permite à linha As suas apps seguir o que abre.</string>
+    <string name="power_setup_overlay_title">Mostrar avisos sobre outras apps</string>
+    <string name="power_setup_overlay_detail">Para a campainha aparecer enquanto vê outra coisa.</string>
     <string name="power_setup_animations_title">Animações do sistema mais rápidas</string>
     <string name="power_setup_animations_detail">Reduz a metade as animações da própria TV, para os menus e as apps abrirem mais depressa.</string>
     <string name="power_setup_animations_reset_title">Animações do sistema normais</string>

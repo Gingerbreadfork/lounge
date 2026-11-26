@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="alerts_not_over_apps">Lounge aún no puede mostrar esto sobre otra app. En la TV, abre Ajustes, luego Configuración avanzada, y ejecuta «Mostrar avisos sobre otras apps».</string>
+</resources>

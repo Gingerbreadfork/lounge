@@ -852,6 +852,23 @@ msgid "Loading the layout…"
 msgstr "Caricamento della disposizione…"
 
 #: src/pages/More.svelte
+msgid "Key removed. Nothing can show pop-ups now."
+msgstr "Chiave rimossa. Ora niente può mostrare avvisi."
+
+#. the example title of a doorbell pop-up
+#: src/pages/More.svelte
+msgid "Someone is at the door"
+msgstr "C'è qualcuno alla porta"
+
+#: src/pages/More.svelte
+msgid "Copied"
+msgstr "Copiato"
+
+#: src/pages/More.svelte
+msgid "Couldn't copy it. Press and hold the text to copy it."
+msgstr "Impossibile copiarlo. Tieni premuto il testo per copiarlo."
+
+#: src/pages/More.svelte
 msgid "Layout and settings restored on the TV"
 msgstr "Disposizione e impostazioni ripristinate sulla TV"
 
@@ -1018,6 +1035,60 @@ msgstr "Dimentica"
 #: src/pages/More.svelte
 msgid "Yes, forget it"
 msgstr "Sì, dimenticalo"
+
+#: src/pages/More.svelte
+msgid "Pop-ups from your home"
+msgstr "Avvisi da casa tua"
+
+#: src/pages/More.svelte
+msgid "Home Assistant, or anything in your home that can call an address, can put a pop-up on the TV: the camera's picture when someone rings the door, say. It needs a key made here, which lets it show pop-ups and nothing else."
+msgstr "Home Assistant, o qualunque cosa in casa tua possa chiamare un indirizzo, può mostrare un avviso sulla TV: per esempio l'immagine della telecamera quando qualcuno suona alla porta. Serve una chiave creata qui, che permette di mostrare avvisi e nient'altro."
+
+#: src/pages/More.svelte
+msgid "This key is shown once. Put this in configuration.yaml in Home Assistant, then restart it."
+msgstr "Questa chiave viene mostrata una volta sola. Metti questo in configuration.yaml in Home Assistant, poi riavvialo."
+
+#: src/pages/More.svelte
+msgid "Copy"
+msgstr "Copia"
+
+#: src/pages/More.svelte
+msgid "Then add this to the actions of an automation that runs when the bell rings, with your Home Assistant's address and your camera in place of the ones here."
+msgstr "Poi aggiungi questo alle azioni di un'automazione che parte quando suona il campanello, con l'indirizzo del tuo Home Assistant e la tua telecamera al posto di quelli indicati qui."
+
+#: src/pages/More.svelte
+msgid "Sent. Look at the TV."
+msgstr "Inviato. Guarda la TV."
+
+#: src/pages/More.svelte
+msgid "Send a test pop-up"
+msgstr "Invia un avviso di prova"
+
+#. buttons under Pop-ups from your home, and the question each asks first
+#: src/pages/More.svelte
+msgid "Make a new key"
+msgstr "Crea una nuova chiave"
+
+#. buttons under Pop-ups from your home, and the question each asks first
+#: src/pages/More.svelte
+msgid "Yes, the old key stops working"
+msgstr "Sì, la vecchia chiave smette di funzionare"
+
+#: src/pages/More.svelte
+msgid "Remove the key"
+msgstr "Rimuovi la chiave"
+
+#: src/pages/More.svelte
+msgid "Yes, remove it"
+msgstr "Sì, rimuovila"
+
+#: src/pages/More.svelte
+msgid "Make a key"
+msgstr "Crea una chiave"
+
+#: src/pages/More.svelte
+msgid "A pop-up shows over whatever is on the TV once Power Setup on the TV has run “Show pop-ups over other apps”. Until then it shows on the home screen only."
+msgstr "Un avviso compare sopra qualunque cosa ci sia sulla TV dopo che la Configurazione avanzata sulla TV ha eseguito \"Mostra gli avvisi sopra le altre app\". Fino ad allora compare solo nella schermata Home."
 
 #: src/pages/More.svelte
 msgid "Diagnostics"
