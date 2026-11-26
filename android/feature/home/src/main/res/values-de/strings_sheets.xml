@@ -36,7 +36,6 @@
     </plurals>
     <string name="sheets_notifications_subtitle">Was dir Apps mitteilen wollen</string>
     <string name="sheets_not_allowed">Nicht erlaubt</string>
-    <string name="sheets_group_look">Aussehen und Klang</string>
     <string name="sheets_theme_title">Design</string>
     <string name="sheets_background_title">Hintergrund</string>
     <string name="sheets_background_still">Unbewegt</string>
@@ -175,4 +174,20 @@
     <string name="sheets_language_tv_not_shipped">%1$s gibt es in Lounge noch nicht, daher erscheint Englisch</string>
     <string name="sheets_language_in_use">Aktiv</string>
     <string name="sheets_language_footnote">Titel und Beschreibungen kommen von deinen Apps und Diensten, in der Sprache, in der sie dort vorliegen.</string>
+    <string name="sheets_section_home_about">Reihen, App-Gruppen, die Bühne und was zuerst geöffnet wird</string>
+    <string name="sheets_section_look">Aussehen</string>
+    <string name="sheets_section_look_about">Design, Hintergrund, Größen, die Uhr und der Bildschirmschoner</string>
+    <string name="sheets_section_remote">Fernbedienung und Töne</string>
+    <string name="sheets_section_remote_about">OK gedrückt halten, die Töne von Lounge, Koppeln und Akkustände</string>
+    <string name="sheets_section_access_about">Was Lounge auf diesem Fernseher sehen und tun darf</string>
+    <string name="sheets_section_this_tv_about">Sprache, Netzwerk, Ton und die Einstellungen des Fernsehers</string>
+    <string name="sheets_section_lounge">Info und Updates</string>
+    <string name="sheets_section_lounge_about">Neue Versionen, Einrichtung und Diagnose</string>
+    <string name="sheets_companion_row_subtitle">Eine Seite auf dem Handy, um den Fernseher zu bedienen und den Startbildschirm einzurichten</string>
+    <string name="sheets_theme_subtitle">Die Farben von Lounge</string>
+    <string name="sheets_screensaver_subtitle">Was erscheint, wenn der Fernseher eine Weile nicht benutzt wird, und nach welcher Zeit</string>
+    <string name="sheets_reduce_motion_subtitle">Weniger Bewegung, wenn sich etwas öffnet oder ändert</string>
+    <string name="sheets_sounds_subtitle">Die leisen Klicks beim Bewegen und Öffnen</string>
+    <string name="sheets_updates_subtitle">Neue Versionen von Lounge und ob danach gesucht wird</string>
+    <string name="sheets_setup_again_subtitle">Die Schritte vom ersten Start von Lounge</string>
 </resources>

@@ -26,6 +26,8 @@ sealed interface Overlay {
     /** The listening panel; [under] is the screen it opened over, which stays open beneath it. */
     data class Voice(val under: Overlay = None, val returnFocus: FocusRequester) : Overlay
     data object QuickSettings : Overlay
+    /** One page of Settings, opened from its list. */
+    data class SettingsPage(val section: SettingsSection) : Overlay
     data object HomeRole : Overlay
     /** The languages Lounge is written in, to choose one over the TV's own. */
     data object Language : Overlay

@@ -36,7 +36,6 @@
     </plurals>
     <string name="sheets_notifications_subtitle">Wat apps je willen laten weten</string>
     <string name="sheets_not_allowed">Niet toegestaan</string>
-    <string name="sheets_group_look">Uiterlijk en geluid</string>
     <string name="sheets_theme_title">Thema</string>
     <string name="sheets_background_title">Achtergrond</string>
     <string name="sheets_background_still">Stilstaand</string>
@@ -175,4 +174,20 @@
     <string name="sheets_language_tv_not_shipped">%1$s, waarin Lounge nog niet beschikbaar is; daarom zie je Engels</string>
     <string name="sheets_language_in_use">In gebruik</string>
     <string name="sheets_language_footnote">Titels en beschrijvingen komen van je apps en diensten, in de taal waarin zij ze hebben.</string>
+    <string name="sheets_section_home_about">Rijen, groepen apps, het Podium en wat als eerste opent</string>
+    <string name="sheets_section_look">Uiterlijk</string>
+    <string name="sheets_section_look_about">Thema, achtergrond, groottes, de klok en de screensaver</string>
+    <string name="sheets_section_remote">Afstandsbediening en geluiden</string>
+    <string name="sheets_section_remote_about">OK ingedrukt houden, de geluiden van Lounge, koppelen en batterijen</string>
+    <string name="sheets_section_access_about">Wat Lounge op deze tv mag zien en doen</string>
+    <string name="sheets_section_this_tv_about">Taal, netwerk, geluid en de eigen instellingen van de tv</string>
+    <string name="sheets_section_lounge">Over en updates</string>
+    <string name="sheets_section_lounge_about">Nieuwe versies, instellen en diagnose</string>
+    <string name="sheets_companion_row_subtitle">Een pagina op je telefoon om de tv te bedienen en het startscherm in te delen</string>
+    <string name="sheets_theme_subtitle">De kleuren van Lounge</string>
+    <string name="sheets_screensaver_subtitle">Wat verschijnt als de tv even niet wordt gebruikt, en hoe snel</string>
+    <string name="sheets_reduce_motion_subtitle">Minder beweging als dingen openen en veranderen</string>
+    <string name="sheets_sounds_subtitle">De zachte klikjes bij het bewegen en openen</string>
+    <string name="sheets_updates_subtitle">Nieuwe versies van Lounge, en of ernaar wordt gezocht</string>
+    <string name="sheets_setup_again_subtitle">De stappen van de eerste keer dat Lounge opende</string>
 </resources>

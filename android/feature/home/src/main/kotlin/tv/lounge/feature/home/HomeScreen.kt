@@ -1218,7 +1218,7 @@ fun HomeScreen(
                     if (again) {
                         // Opened from Settings, so it ends on the row that started it.
                         state.sheetLeft = Overlay.Onboarding
-                        state.overlay = Overlay.QuickSettings
+                        state.overlay = Overlay.SettingsPage(SettingsSection.Lounge)
                     } else {
                         clearOverlays()
                         goToStage()
@@ -1284,7 +1284,7 @@ private data class TopInsetShape(val top: Float) : androidx.compose.ui.graphics.
 }
 
 private fun Overlay.isSheet(): Boolean = when (this) {
-    Overlay.QuickSettings, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels, Overlay.Rows,
+    Overlay.QuickSettings, is Overlay.SettingsPage, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels, Overlay.Rows,
     Overlay.Plugins, is Overlay.PluginDetail, is Overlay.PluginSheet, Overlay.HomeRole, Overlay.Language, Overlay.Companion, Overlay.Updates,
     Overlay.Notifications, is Overlay.NotificationDetail, Overlay.NotificationSettings,
     is Overlay.AppGroups, is Overlay.GroupEdit,
@@ -1295,8 +1295,9 @@ private fun Overlay.isSheet(): Boolean = when (this) {
 /** How deep a sheet sits, for the direction of the content shift between sheets. */
 private fun Overlay.sheetDepth(): Int = when (this) {
     Overlay.QuickSettings, Overlay.TvControls, Overlay.Notifications -> 0
-    is Overlay.PluginDetail, Overlay.PowerSetup, is Overlay.GroupEdit -> 2
-    else -> 1
+    is Overlay.SettingsPage -> 1
+    is Overlay.PluginDetail, Overlay.PowerSetup, is Overlay.GroupEdit -> 3
+    else -> 2
 }
 
 /**
@@ -1400,7 +1401,7 @@ private fun SheetContent(
     val updateState by updates.state.collectAsStateWithLifecycle()
     val updateAuto by updates.autoCheck.collectAsStateWithLifecycle()
     when (overlay) {
-        Overlay.QuickSettings -> {
+        Overlay.QuickSettings, is Overlay.SettingsPage -> {
             val backdrops by produceState(emptyList<ShaderStyle>()) { value = withContext(Dispatchers.IO) { ShaderStyles.all(context, core) } }
             val liveBackdrops = LoungeTheme.visuals.shaderWallpaper && !LoungeTheme.motion.reducedMotion
             // Both wait on the core, which may still be loading, so they are read off the main thread.
@@ -1421,6 +1422,8 @@ private fun SheetContent(
             val rowsHidden by produceState<Int?>(null) { value = withContext(Dispatchers.IO) { core.homeRows().count { !it.shown && it.chosen } } }
             QuickSettingsSheet(
                 prefs = prefs,
+                section = (overlay as? Overlay.SettingsPage)?.section,
+                onSection = { open(Overlay.SettingsPage(it)) },
                 theme = theme,
                 sounds = sounds,
                 lite = lite,

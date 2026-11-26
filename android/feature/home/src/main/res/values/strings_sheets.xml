@@ -46,8 +46,6 @@
     <string name="sheets_notifications_subtitle">What apps want to tell you</string>
     <!-- A row's value when Android has not given Lounge the access it needs. -->
     <string name="sheets_not_allowed">Not allowed</string>
-
-    <string name="sheets_group_look">Look and sound</string>
     <string name="sheets_theme_title">Theme</string>
     <!-- The picture behind the home screen: a moving scene, or Still for none. -->
     <string name="sheets_background_title">Background</string>
@@ -231,4 +229,24 @@
     <!-- The value beside the language Lounge is shown in now. -->
     <string name="sheets_language_in_use">In use</string>
     <string name="sheets_language_footnote">Titles and descriptions come from your apps and services in the language they have them in.</string>
+    <!-- What the Home screen page of Settings holds, as a list. -->
+    <string name="sheets_section_home_about">Rows, groups of apps, the Stage and what opens first</string>
+    <!-- A page of Settings: how Lounge looks. -->
+    <string name="sheets_section_look">Look</string>
+    <string name="sheets_section_look_about">Theme, background, sizes, the clock and the screensaver</string>
+    <!-- A page of Settings: the remote control and the sounds Lounge makes. -->
+    <string name="sheets_section_remote">Remote and sounds</string>
+    <string name="sheets_section_remote_about">Holding OK, Lounge\'s own sounds, pairing and batteries</string>
+    <string name="sheets_section_access_about">What Lounge may see and do on this TV</string>
+    <string name="sheets_section_this_tv_about">Language, network, sound and the TV\'s own settings</string>
+    <!-- A page of Settings: Lounge itself, its new versions and who makes it. -->
+    <string name="sheets_section_lounge">About and updates</string>
+    <string name="sheets_section_lounge_about">New versions, setup and diagnostics</string>
+    <string name="sheets_companion_row_subtitle">A page on your phone to work the TV and arrange the home screen</string>
+    <string name="sheets_theme_subtitle">Lounge\'s colours</string>
+    <string name="sheets_screensaver_subtitle">What shows when the TV is left alone, and how soon</string>
+    <string name="sheets_reduce_motion_subtitle">Less movement as things open and change</string>
+    <string name="sheets_sounds_subtitle">The soft clicks as you move and open things</string>
+    <string name="sheets_updates_subtitle">New versions of Lounge, and whether to look for them</string>
+    <string name="sheets_setup_again_subtitle">The steps from the first time Lounge opened</string>
 </resources>

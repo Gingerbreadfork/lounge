@@ -159,6 +159,10 @@ its buttons or dismiss it. An app that nags can be hidden. Lounge reads notifica
 show them on the TV, keeps none of them and sends none anywhere. Settings turns it off, and on
 a TV set up before Lounge had this it stays off until you turn it on there.
 
+**Settings.** A short list of pages: Home screen, Look, Remote and sounds, Access, This TV and
+About and updates, with Plugins, Notifications and Phone companion beside them. Every row says
+in a line what it does.
+
 **The TV's own settings.** Settings has a row for the TV's network screen, which shows whether
 the TV is on Wi-Fi or Ethernet, one for its sound screen, which shows where the sound comes out,
 one for pairing a remote, a game controller or headphones, and one for the rest of the TV's

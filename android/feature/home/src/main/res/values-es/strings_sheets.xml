@@ -40,7 +40,6 @@
     </plurals>
     <string name="sheets_notifications_subtitle">Lo que las apps quieren decirte</string>
     <string name="sheets_not_allowed">Sin permiso</string>
-    <string name="sheets_group_look">Aspecto y sonido</string>
     <string name="sheets_theme_title">Tema</string>
     <string name="sheets_background_title">Fondo</string>
     <string name="sheets_background_still">Estático</string>
@@ -185,4 +184,20 @@
     <string name="sheets_language_tv_not_shipped">%1$s; Lounge aún no está en ese idioma, así que se muestra en inglés</string>
     <string name="sheets_language_in_use">En uso</string>
     <string name="sheets_language_footnote">Los títulos y las descripciones vienen de tus apps y servicios, en el idioma en que los tengan.</string>
+    <string name="sheets_section_home_about">Filas, grupos de apps, el Escenario y lo que se abre primero</string>
+    <string name="sheets_section_look">Aspecto</string>
+    <string name="sheets_section_look_about">Tema, fondo, tamaños, el reloj y el salvapantallas</string>
+    <string name="sheets_section_remote">Control remoto y sonidos</string>
+    <string name="sheets_section_remote_about">Mantener pulsado OK, los sonidos de Lounge, emparejar y baterías</string>
+    <string name="sheets_section_access_about">Lo que Lounge puede ver y hacer en esta TV</string>
+    <string name="sheets_section_this_tv_about">Idioma, red, sonido y los ajustes propios de la TV</string>
+    <string name="sheets_section_lounge">Acerca de y actualizaciones</string>
+    <string name="sheets_section_lounge_about">Versiones nuevas, configuración y diagnóstico</string>
+    <string name="sheets_companion_row_subtitle">Una página en tu teléfono para manejar la TV y organizar la pantalla de inicio</string>
+    <string name="sheets_theme_subtitle">Los colores de Lounge</string>
+    <string name="sheets_screensaver_subtitle">Lo que aparece cuando nadie usa la TV, y al cabo de cuánto</string>
+    <string name="sheets_reduce_motion_subtitle">Menos movimiento al abrir y cambiar cosas</string>
+    <string name="sheets_sounds_subtitle">Los clics suaves al moverte y abrir cosas</string>
+    <string name="sheets_updates_subtitle">Versiones nuevas de Lounge y si se buscan solas</string>
+    <string name="sheets_setup_again_subtitle">Los pasos de la primera vez que se abrió Lounge</string>
 </resources>

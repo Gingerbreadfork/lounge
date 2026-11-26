@@ -360,9 +360,12 @@ private fun Boolean?.stepTri(by: Int): Boolean? = when (this) {
     false -> if (by > 0) null else true
 }
 
+/** The pages of Settings. Settings itself lists them, with the three places that have a page of their own already. */
+enum class SettingsSection { Home, Look, Remote, Access, ThisTv, Lounge }
+
 /**
- * Quick settings: the home screen, look and sound, what Lounge may see, and this TV. Essentials
- * only; the rest lives in the companion. Values cycle with Left and Right.
+ * Settings: with no [section], the list of its pages; with one, that page's rows. Values cycle
+ * with Left and Right, and a row with more behind it opens its own sheet.
  */
 @Composable
 fun QuickSettingsSheet(
@@ -393,6 +396,9 @@ fun QuickSettingsSheet(
     groupsSummary: String,
     /** Where the TV's sound comes out now, as the home already knows it. */
     soundOutput: () -> SoundOutput? = { null },
+    /** The page to show, or null for the list of pages. */
+    section: SettingsSection? = null,
+    onSection: (SettingsSection) -> Unit = {},
     /** Whether the home keeps to apps alone. */
     appsOnly: Boolean? = false,
     onSetAppsOnly: (Boolean) -> Unit = {},
@@ -476,287 +482,362 @@ fun QuickSettingsSheet(
     }
     val link by rememberLink()
     // Back from one of its pages puts focus on the row that opened it.
-    val pages = listOf(Overlay.Rows, Overlay.AppGroups(), Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient, Overlay.Language, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate)
+    val pages = SettingsSection.entries.map { Overlay.SettingsPage(it) } + listOf(
+        Overlay.Rows, Overlay.AppGroups(), Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient,
+        Overlay.Language, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate,
+    )
     val returnTo = cameFrom?.takeIf { it in pages }
     fun focusFor(page: Overlay?) = firstFocus.takeIf { page == returnTo }
 
-    SheetHeading(stringResource(DesignR.string.common_settings))
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SheetGroup(stringResource(R.string.sheets_group_home))
-        SheetRow(
-            icon = LoungeIcons.Rows,
-            title = stringResource(R.string.sheets_rows_title),
-            subtitle = stringResource(R.string.sheets_rows_subtitle),
-            value = rowsSummary,
-            onClick = onRows,
-            focusRequester = focusFor(Overlay.Rows) ?: focusFor(null),
-        )
-        SheetRow(
-            icon = LoungeIcons.Apps,
-            title = stringResource(R.string.groups_title),
-            subtitle = stringResource(R.string.sheets_groups_subtitle),
-            value = groupsSummary,
-            onClick = onGroups,
-            focusRequester = focusFor(Overlay.AppGroups()),
-        )
-        val steps = listOf(0, 5, 10, 15)
-        val at = steps.indexOf(recentApps).let { if (it < 0) 1 else it }
-        SheetRow(
-            icon = LoungeIcons.Apps,
-            title = stringResource(R.string.sheets_your_apps_title),
-            subtitle = stringResource(R.string.sheets_your_apps_subtitle),
-            value = if (recentApps == 0) stringResource(R.string.sheets_your_apps_pinned_only) else pluralStringResource(R.plurals.sheets_your_apps_recent, recentApps, recentApps),
-            onClick = { sounds0?.tick(); onSetRecentApps(steps[(at + 1) % steps.size]) },
-            onCycle = { by -> sounds0?.tick(); onSetRecentApps(steps[(at + by).mod(steps.size)]) },
-        )
-        SheetRow(
-            icon = LoungeIcons.Apps,
-            title = stringResource(R.string.sheets_apps_only_title),
-            subtitle = stringResource(R.string.sheets_apps_only_subtitle),
-            // Nothing is said, and a press does nothing, until the core has answered.
-            value = appsOnly?.let { if (it) on else off }.orEmpty(),
-            accent = if (appsOnly == true) colors.signal else colors.dust,
-            onClick = { appsOnly?.let { sounds0?.tick(); onSetAppsOnly(!it) } },
-            onCycle = { appsOnly?.let { sounds0?.tick(); onSetAppsOnly(!it) } },
-        )
-        SheetRow(
-            icon = SettingsGlyphs.PhoneApps,
-            title = stringResource(R.string.sheets_phone_apps_title),
-            subtitle = stringResource(R.string.sheets_phone_apps_subtitle),
-            value = if (showMobileApps) on else off,
-            accent = if (showMobileApps) colors.signal else colors.dust,
-            onClick = { sounds0?.tick(); onSetShowMobileApps(!showMobileApps) },
-            onCycle = { sounds0?.tick(); onSetShowMobileApps(!showMobileApps) },
-        )
-        SheetRow(
-            icon = LoungeIcons.Guide,
-            title = stringResource(R.string.sheets_channels_title),
-            subtitle = stringResource(R.string.sheets_channels_subtitle),
-            value = if (enabledChannels == 0) stringResource(R.string.sheets_channels_none) else pluralStringResource(R.plurals.sheets_channels_on, enabledChannels, enabledChannels),
-            onClick = onChannels,
-            focusRequester = focusFor(Overlay.Channels),
-        )
-        SheetRow(
-            icon = SettingsGlyphs.Plugin,
-            title = stringResource(R.string.sheets_plugins_title),
-            subtitle = stringResource(R.string.sheets_plugins_subtitle),
-            value = if (enabledPlugins == 0) stringResource(R.string.sheets_plugins_none_on) else pluralStringResource(R.plurals.sheets_plugins_on, enabledPlugins, enabledPlugins),
-            onClick = onPlugins,
-            focusRequester = focusFor(Overlay.Plugins),
-        )
-        val notificationsAllowed = access.isOn(Access.NowPlaying)
-        SheetRow(
-            icon = LoungeIcons.Bell,
-            title = stringResource(DesignR.string.common_notifications),
-            subtitle = stringResource(R.string.sheets_notifications_subtitle),
-            value = if (!notificationsAllowed) stringResource(R.string.sheets_not_allowed) else if (notificationsOn) on else off,
-            accent = if (notificationsAllowed && notificationsOn) colors.signal else colors.dust,
-            onClick = onNotifications,
-            focusRequester = focusFor(Overlay.NotificationSettings),
-        )
-        Spacer(Modifier.height(16.dp))
-        Hairline(Modifier.fillMaxWidth())
-        SheetGroup(stringResource(R.string.sheets_group_look))
-        SheetRow(
-            icon = LoungeIcons.Theme,
-            title = stringResource(R.string.sheets_theme_title),
-            value = stringResource(theme.title),
-            onClick = { sounds0?.tick(); onSetTheme(theme.step(1)) },
-            onCycle = { by -> sounds0?.tick(); onSetTheme(theme.step(by)) },
-        )
-        val scenes = listOf(Triple(Prefs.STILL_BACKDROP, stringResource(R.string.sheets_background_still), stringResource(R.string.sheets_background_still_about))) +
-            backdrops.map { Triple(it.id, it.nameIn(resources), it.aboutIn(resources)) }
-        val sceneAt = scenes.indexOfFirst { it.first == backdrop }.coerceAtLeast(0)
-        SheetRow(
-            icon = SettingsGlyphs.Scene,
-            title = stringResource(R.string.sheets_background_title),
-            value = scenes[sceneAt].second,
-            subtitle = if (!liveBackdrops && sceneAt > 0) stringResource(R.string.sheets_background_still_for_now) else scenes[sceneAt].third,
-            onClick = { sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + 1).mod(scenes.size)].first) },
-            onCycle = { by -> sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + by).mod(scenes.size)].first) },
-        )
-        SheetRow(
-            icon = LoungeIcons.Frame,
-            title = stringResource(DesignR.string.common_screensaver),
-            value = saver.words(),
-            accent = if (saver == TvScreensaver.Lounge) colors.signal else colors.dust,
-            onClick = onAmbient,
-            focusRequester = focusFor(Overlay.Ambient),
-        )
-        SheetRow(
-            icon = LoungeIcons.Volume,
-            title = stringResource(R.string.sheets_sounds_title),
-            value = if (sounds) on else off,
-            accent = if (sounds) colors.signal else colors.dust,
-            onClick = { sounds0?.tick(); onSetSounds(!sounds) },
-            onCycle = { sounds0?.tick(); onSetSounds(!sounds) },
-        )
-        SheetRow(
-            icon = SettingsGlyphs.Gauge,
-            title = stringResource(R.string.sheets_lite_title),
-            subtitle = stringResource(
-                when (lite) {
-                    null -> if (liteNow) R.string.sheets_lite_auto_on else R.string.sheets_lite_auto_off
-                    true -> R.string.sheets_lite_on
-                    false -> R.string.sheets_lite_off
-                },
-            ),
-            subtitleLines = WHOLE,
-            value = when (lite) { null -> stringResource(R.string.sheets_automatic); true -> on; false -> off },
-            onClick = { sounds0?.tick(); onSetLite(lite.stepTri(1)) },
-            onCycle = { by -> sounds0?.tick(); onSetLite(lite.stepTri(by)) },
-        )
-        SheetRow(
-            icon = LoungeIcons.Move,
-            title = stringResource(R.string.sheets_reduce_motion_title),
-            value = when (reducedMotion) { null -> stringResource(R.string.sheets_follow_system); true -> on; false -> off },
-            onClick = { sounds0?.tick(); onSetReducedMotion(reducedMotion.stepTri(1)) },
-            onCycle = { by -> sounds0?.tick(); onSetReducedMotion(reducedMotion.stepTri(by)) },
-        )
-        Spacer(Modifier.height(16.dp))
-        Hairline(Modifier.fillMaxWidth())
-        SheetGroup(stringResource(R.string.sheets_group_access))
-        Access.entries.forEach { a -> AccessRow(a, access) }
-        Spacer(Modifier.height(16.dp))
-        Hairline(Modifier.fillMaxWidth())
-        SheetGroup(stringResource(R.string.sheets_group_this_tv))
-        SheetRow(
-            icon = SettingsGlyphs.Language,
-            title = stringResource(R.string.sheets_language_title),
-            value = Language.shipped.firstOrNull { it.tag == language }?.name ?: stringResource(R.string.sheets_language_same_as_tv),
-            onClick = onLanguage,
-            focusRequester = focusFor(Overlay.Language),
-        )
-        SheetRow(
-            icon = SettingsGlyphs.Home,
-            title = stringResource(R.string.sheets_default_home_title),
-            subtitle = stringResource(R.string.sheets_default_home_subtitle),
-            value = if (isDefaultHome) "Lounge" else stringResource(R.string.sheets_default_home_set_up),
-            accent = if (isDefaultHome) colors.signal else colors.dust,
-            onClick = onRecheckHome,
-            focusRequester = focusFor(Overlay.HomeRole),
-        )
-        SheetRow(
-            icon = LoungeIcons.Power,
-            title = stringResource(DesignR.string.common_power_setup),
-            subtitle = stringResource(R.string.sheets_power_subtitle),
-            value = stringResource(
-                when (powerStatus) {
-                    is tv.lounge.power.PowerStatus.Ready -> R.string.sheets_power_connected
-                    tv.lounge.power.PowerStatus.WaitingForApproval -> R.string.sheets_power_waiting
-                    else -> R.string.sheets_power_not_connected
-                },
-            ),
-            accent = if (powerStatus is tv.lounge.power.PowerStatus.Ready) colors.signal else colors.dust,
-            onClick = onPowerSetup,
-            focusRequester = focusFor(Overlay.PowerSetup),
-        )
-        SheetRow(
-            icon = LoungeIcons.Phone,
-            title = stringResource(DesignR.string.common_phone_companion),
-            value = if (companionOn) on else off,
-            accent = if (companionOn) colors.signal else colors.dust,
-            onClick = onCompanion,
-            focusRequester = focusFor(Overlay.Companion),
-        )
-        SheetRow(
-            icon = SettingsGlyphs.Download,
-            title = stringResource(R.string.sheets_updates_title),
-            value = updateStatus.shown(),
-            accent = when (updateStatus.text) {
-                R.string.updates_word_up_to_date -> colors.signal
-                R.string.updates_word_problem -> colors.ember
-                R.string.updates_word_available, R.string.updates_word_ready -> colors.houselight
-                else -> colors.dust
+    if (section == null) {
+        SheetHeading(stringResource(DesignR.string.common_settings))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            @Composable
+            fun page(to: SettingsSection, icon: ImageVector, title: Int, about: Int, value: String? = null, accent: Color = colors.dust, first: Boolean = false) = SheetRow(
+                icon = icon,
+                title = stringResource(title),
+                subtitle = stringResource(about),
+                subtitleLines = WHOLE,
+                value = value,
+                accent = accent,
+                onClick = { onSection(to) },
+                focusRequester = focusFor(Overlay.SettingsPage(to)) ?: if (first) focusFor(null) else null,
+            )
+            page(SettingsSection.Home, SettingsGlyphs.Home, R.string.sheets_group_home, R.string.sheets_section_home_about, first = true)
+            page(SettingsSection.Look, LoungeIcons.Theme, R.string.sheets_section_look, R.string.sheets_section_look_about)
+            page(SettingsSection.Remote, LoungeIcons.Controller, R.string.sheets_section_remote, R.string.sheets_section_remote_about)
+            SheetRow(
+                icon = SettingsGlyphs.Plugin,
+                title = stringResource(R.string.sheets_plugins_title),
+                subtitle = stringResource(R.string.sheets_plugins_subtitle),
+                subtitleLines = WHOLE,
+                value = if (enabledPlugins == 0) stringResource(R.string.sheets_plugins_none_on) else pluralStringResource(R.plurals.sheets_plugins_on, enabledPlugins, enabledPlugins),
+                onClick = onPlugins,
+                focusRequester = focusFor(Overlay.Plugins),
+            )
+            val notificationsAllowed = access.isOn(Access.NowPlaying)
+            SheetRow(
+                icon = LoungeIcons.Bell,
+                title = stringResource(DesignR.string.common_notifications),
+                subtitle = stringResource(R.string.sheets_notifications_subtitle),
+                subtitleLines = WHOLE,
+                value = if (!notificationsAllowed) stringResource(R.string.sheets_not_allowed) else if (notificationsOn) on else off,
+                accent = if (notificationsAllowed && notificationsOn) colors.signal else colors.dust,
+                onClick = onNotifications,
+                focusRequester = focusFor(Overlay.NotificationSettings),
+            )
+            SheetRow(
+                icon = LoungeIcons.Phone,
+                title = stringResource(DesignR.string.common_phone_companion),
+                subtitle = stringResource(R.string.sheets_companion_row_subtitle),
+                subtitleLines = WHOLE,
+                value = if (companionOn) on else off,
+                accent = if (companionOn) colors.signal else colors.dust,
+                onClick = onCompanion,
+                focusRequester = focusFor(Overlay.Companion),
+            )
+            page(SettingsSection.Access, LoungeIcons.Show, R.string.sheets_group_access, R.string.sheets_section_access_about)
+            page(SettingsSection.ThisTv, LoungeIcons.Tv, R.string.sheets_group_this_tv, R.string.sheets_section_this_tv_about)
+            page(
+                SettingsSection.Lounge,
+                SettingsGlyphs.Sofa,
+                R.string.sheets_section_lounge,
+                R.string.sheets_section_lounge_about,
+                // A new version waiting is said here, so it is seen without opening the page.
+                value = updateStatus.shown().takeIf { updateStatus.text == R.string.updates_word_available || updateStatus.text == R.string.updates_word_ready || updateStatus.text == R.string.updates_word_problem },
+                accent = if (updateStatus.text == R.string.updates_word_problem) colors.ember else colors.houselight,
+            )
+        }
+        return
+    }
+
+    SheetHeading(
+        stringResource(
+            when (section) {
+                SettingsSection.Home -> R.string.sheets_group_home
+                SettingsSection.Look -> R.string.sheets_section_look
+                SettingsSection.Remote -> R.string.sheets_section_remote
+                SettingsSection.Access -> R.string.sheets_group_access
+                SettingsSection.ThisTv -> R.string.sheets_group_this_tv
+                SettingsSection.Lounge -> R.string.sheets_section_lounge
             },
-            onClick = onUpdates,
-            focusRequester = focusFor(Overlay.Updates),
-        )
-        networkSettings?.let { screen ->
-            SheetRow(
-                icon = if (link == Link.Ethernet) LoungeIcons.Ethernet else LoungeIcons.Network,
-                title = stringResource(R.string.sheets_network_title),
-                subtitle = stringResource(R.string.sheets_network_subtitle),
-                value = stringResource(
-                    when (link) {
-                        Link.Wifi -> R.string.sheets_network_wifi
-                        Link.Ethernet -> R.string.sheets_network_ethernet
-                        Link.Other -> R.string.sheets_network_connected
-                        Link.None -> R.string.top_bar_no_connection
+        ),
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        when (section) {
+            SettingsSection.Home -> {
+                SheetRow(
+                    icon = LoungeIcons.Rows,
+                    title = stringResource(R.string.sheets_rows_title),
+                    subtitle = stringResource(R.string.sheets_rows_subtitle),
+                    value = rowsSummary,
+                    onClick = onRows,
+                    focusRequester = focusFor(Overlay.Rows) ?: focusFor(null),
+                )
+                SheetRow(
+                    icon = LoungeIcons.Apps,
+                    title = stringResource(R.string.groups_title),
+                    subtitle = stringResource(R.string.sheets_groups_subtitle),
+                    value = groupsSummary,
+                    onClick = onGroups,
+                    focusRequester = focusFor(Overlay.AppGroups()),
+                )
+                val steps = listOf(0, 5, 10, 15)
+                val at = steps.indexOf(recentApps).let { if (it < 0) 1 else it }
+                SheetRow(
+                    icon = LoungeIcons.Apps,
+                    title = stringResource(R.string.sheets_your_apps_title),
+                    subtitle = stringResource(R.string.sheets_your_apps_subtitle),
+                    value = if (recentApps == 0) stringResource(R.string.sheets_your_apps_pinned_only) else pluralStringResource(R.plurals.sheets_your_apps_recent, recentApps, recentApps),
+                    onClick = { sounds0?.tick(); onSetRecentApps(steps[(at + 1) % steps.size]) },
+                    onCycle = { by -> sounds0?.tick(); onSetRecentApps(steps[(at + by).mod(steps.size)]) },
+                )
+                SheetRow(
+                    icon = LoungeIcons.Apps,
+                    title = stringResource(R.string.sheets_apps_only_title),
+                    subtitle = stringResource(R.string.sheets_apps_only_subtitle),
+                    // Nothing is said, and a press does nothing, until the core has answered.
+                    value = appsOnly?.let { if (it) on else off }.orEmpty(),
+                    accent = if (appsOnly == true) colors.signal else colors.dust,
+                    onClick = { appsOnly?.let { sounds0?.tick(); onSetAppsOnly(!it) } },
+                    onCycle = { appsOnly?.let { sounds0?.tick(); onSetAppsOnly(!it) } },
+                )
+                SheetRow(
+                    icon = SettingsGlyphs.PhoneApps,
+                    title = stringResource(R.string.sheets_phone_apps_title),
+                    subtitle = stringResource(R.string.sheets_phone_apps_subtitle),
+                    value = if (showMobileApps) on else off,
+                    accent = if (showMobileApps) colors.signal else colors.dust,
+                    onClick = { sounds0?.tick(); onSetShowMobileApps(!showMobileApps) },
+                    onCycle = { sounds0?.tick(); onSetShowMobileApps(!showMobileApps) },
+                )
+                SheetRow(
+                    icon = LoungeIcons.Guide,
+                    title = stringResource(R.string.sheets_channels_title),
+                    subtitle = stringResource(R.string.sheets_channels_subtitle),
+                    value = if (enabledChannels == 0) stringResource(R.string.sheets_channels_none) else pluralStringResource(R.plurals.sheets_channels_on, enabledChannels, enabledChannels),
+                    onClick = onChannels,
+                    focusRequester = focusFor(Overlay.Channels),
+                )
+            }
+            SettingsSection.Look -> {
+                SheetRow(
+                    icon = LoungeIcons.Theme,
+                    title = stringResource(R.string.sheets_theme_title),
+                    subtitle = stringResource(R.string.sheets_theme_subtitle),
+                    subtitleLines = WHOLE,
+                    value = stringResource(theme.title),
+                    onClick = { sounds0?.tick(); onSetTheme(theme.step(1)) },
+                    onCycle = { by -> sounds0?.tick(); onSetTheme(theme.step(by)) },
+                    focusRequester = focusFor(null),
+                )
+                val scenes = listOf(Triple(Prefs.STILL_BACKDROP, stringResource(R.string.sheets_background_still), stringResource(R.string.sheets_background_still_about))) +
+                    backdrops.map { Triple(it.id, it.nameIn(resources), it.aboutIn(resources)) }
+                val sceneAt = scenes.indexOfFirst { it.first == backdrop }.coerceAtLeast(0)
+                SheetRow(
+                    icon = SettingsGlyphs.Scene,
+                    title = stringResource(R.string.sheets_background_title),
+                    value = scenes[sceneAt].second,
+                    subtitle = if (!liveBackdrops && sceneAt > 0) stringResource(R.string.sheets_background_still_for_now) else scenes[sceneAt].third,
+                    onClick = { sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + 1).mod(scenes.size)].first) },
+                    onCycle = { by -> sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + by).mod(scenes.size)].first) },
+                )
+                SheetRow(
+                    icon = LoungeIcons.Frame,
+                    title = stringResource(DesignR.string.common_screensaver),
+                    subtitle = stringResource(R.string.sheets_screensaver_subtitle),
+                    subtitleLines = WHOLE,
+                    value = saver.words(),
+                    accent = if (saver == TvScreensaver.Lounge) colors.signal else colors.dust,
+                    onClick = onAmbient,
+                    focusRequester = focusFor(Overlay.Ambient),
+                )
+                SheetRow(
+                    icon = SettingsGlyphs.Gauge,
+                    title = stringResource(R.string.sheets_lite_title),
+                    subtitle = stringResource(
+                        when (lite) {
+                            null -> if (liteNow) R.string.sheets_lite_auto_on else R.string.sheets_lite_auto_off
+                            true -> R.string.sheets_lite_on
+                            false -> R.string.sheets_lite_off
+                        },
+                    ),
+                    subtitleLines = WHOLE,
+                    value = when (lite) { null -> stringResource(R.string.sheets_automatic); true -> on; false -> off },
+                    onClick = { sounds0?.tick(); onSetLite(lite.stepTri(1)) },
+                    onCycle = { by -> sounds0?.tick(); onSetLite(lite.stepTri(by)) },
+                )
+                SheetRow(
+                    icon = LoungeIcons.Move,
+                    title = stringResource(R.string.sheets_reduce_motion_title),
+                    subtitle = stringResource(R.string.sheets_reduce_motion_subtitle),
+                    subtitleLines = WHOLE,
+                    value = when (reducedMotion) { null -> stringResource(R.string.sheets_follow_system); true -> on; false -> off },
+                    onClick = { sounds0?.tick(); onSetReducedMotion(reducedMotion.stepTri(1)) },
+                    onCycle = { by -> sounds0?.tick(); onSetReducedMotion(reducedMotion.stepTri(by)) },
+                )
+            }
+            SettingsSection.Remote -> {
+                SheetRow(
+                    icon = LoungeIcons.Volume,
+                    title = stringResource(R.string.sheets_sounds_title),
+                    subtitle = stringResource(R.string.sheets_sounds_subtitle),
+                    subtitleLines = WHOLE,
+                    value = if (sounds) on else off,
+                    accent = if (sounds) colors.signal else colors.dust,
+                    onClick = { sounds0?.tick(); onSetSounds(!sounds) },
+                    onCycle = { sounds0?.tick(); onSetSounds(!sounds) },
+                    focusRequester = focusFor(null),
+                )
+                accessories?.let { screen ->
+                    SheetRow(
+                        icon = LoungeIcons.Bluetooth,
+                        title = stringResource(R.string.sheets_accessories_title),
+                        subtitle = stringResource(if (screen.open == null && screen.locked != null) R.string.sheets_accessories_subtitle_ask else R.string.sheets_accessories_subtitle),
+                        lines = if (batteries.isEmpty()) {
+                            null
+                        } else {
+                            {
+                                batteries.forEach { battery ->
+                                    Text(
+                                        stringResource(R.string.sheets_accessories_battery, battery.name, stringResource(R.string.updates_percent, battery.percent)),
+                                        style = LoungeTheme.typography.caption,
+                                        color = if (battery.low) colors.ember else colors.dust,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            when {
+                                screen.open != null -> runCatching { context.startActivity(screen.open) }
+                                screen.locked != null -> askNearby.launch(NEARBY_DEVICES)
+                                else -> findInTvSettings(screen.settings)
+                            }
+                        },
+                    )
+                }
+            }
+            SettingsSection.Access -> {
+                Access.entries.forEachIndexed { i, a -> AccessRow(a, access, focusFor(null).takeIf { i == 0 }) }
+                SheetRow(
+                    icon = SettingsGlyphs.Home,
+                    title = stringResource(R.string.sheets_default_home_title),
+                    subtitle = stringResource(R.string.sheets_default_home_subtitle),
+                    value = if (isDefaultHome) "Lounge" else stringResource(R.string.sheets_default_home_set_up),
+                    accent = if (isDefaultHome) colors.signal else colors.dust,
+                    onClick = onRecheckHome,
+                    focusRequester = focusFor(Overlay.HomeRole),
+                )
+                SheetRow(
+                    icon = LoungeIcons.Power,
+                    title = stringResource(DesignR.string.common_power_setup),
+                    subtitle = stringResource(R.string.sheets_power_subtitle),
+                    value = stringResource(
+                        when (powerStatus) {
+                            is tv.lounge.power.PowerStatus.Ready -> R.string.sheets_power_connected
+                            tv.lounge.power.PowerStatus.WaitingForApproval -> R.string.sheets_power_waiting
+                            else -> R.string.sheets_power_not_connected
+                        },
+                    ),
+                    accent = if (powerStatus is tv.lounge.power.PowerStatus.Ready) colors.signal else colors.dust,
+                    onClick = onPowerSetup,
+                    focusRequester = focusFor(Overlay.PowerSetup),
+                )
+            }
+            SettingsSection.ThisTv -> {
+                SheetRow(
+                    icon = SettingsGlyphs.Language,
+                    title = stringResource(R.string.sheets_language_title),
+                    subtitle = stringResource(R.string.sheets_language_subtitle),
+                    subtitleLines = WHOLE,
+                    value = Language.shipped.firstOrNull { it.tag == language }?.name ?: stringResource(R.string.sheets_language_same_as_tv),
+                    onClick = onLanguage,
+                    focusRequester = focusFor(Overlay.Language) ?: focusFor(null),
+                )
+                networkSettings?.let { screen ->
+                    SheetRow(
+                        icon = if (link == Link.Ethernet) LoungeIcons.Ethernet else LoungeIcons.Network,
+                        title = stringResource(R.string.sheets_network_title),
+                        subtitle = stringResource(R.string.sheets_network_subtitle),
+                        value = stringResource(
+                            when (link) {
+                                Link.Wifi -> R.string.sheets_network_wifi
+                                Link.Ethernet -> R.string.sheets_network_ethernet
+                                Link.Other -> R.string.sheets_network_connected
+                                Link.None -> R.string.top_bar_no_connection
+                            },
+                        ),
+                        accent = if (link == Link.None) colors.ember else colors.signal,
+                        onClick = { runCatching { context.startActivity(screen) } },
+                    )
+                }
+                soundSettings?.let { screen ->
+                    SheetRow(
+                        icon = LoungeIcons.Soundbar,
+                        title = stringResource(R.string.sheets_sound_title),
+                        subtitle = stringResource(R.string.sheets_sound_subtitle),
+                        value = soundOutput()?.label(resources),
+                        onClick = { runCatching { context.startActivity(screen) } },
+                    )
+                }
+                tvSettings?.let { screen ->
+                    SheetRow(
+                        icon = SettingsGlyphs.Cog,
+                        title = stringResource(R.string.sheets_tv_settings_title),
+                        subtitle = stringResource(R.string.sheets_tv_settings_subtitle),
+                        onClick = { runCatching { context.startActivity(screen) } },
+                    )
+                }
+            }
+            SettingsSection.Lounge -> {
+                SheetRow(
+                    icon = SettingsGlyphs.Download,
+                    title = stringResource(R.string.sheets_updates_title),
+                    subtitle = stringResource(R.string.sheets_updates_subtitle),
+                    subtitleLines = WHOLE,
+                    value = updateStatus.shown(),
+                    accent = when (updateStatus.text) {
+                        R.string.updates_word_up_to_date -> colors.signal
+                        R.string.updates_word_problem -> colors.ember
+                        R.string.updates_word_available, R.string.updates_word_ready -> colors.houselight
+                        else -> colors.dust
                     },
-                ),
-                accent = if (link == Link.None) colors.ember else colors.signal,
-                onClick = { runCatching { context.startActivity(screen) } },
-            )
-        }
-        soundSettings?.let { screen ->
-            SheetRow(
-                icon = LoungeIcons.Soundbar,
-                title = stringResource(R.string.sheets_sound_title),
-                subtitle = stringResource(R.string.sheets_sound_subtitle),
-                value = soundOutput()?.label(resources),
-                onClick = { runCatching { context.startActivity(screen) } },
-            )
-        }
-        accessories?.let { screen ->
-            SheetRow(
-                icon = LoungeIcons.Bluetooth,
-                title = stringResource(R.string.sheets_accessories_title),
-                subtitle = stringResource(if (screen.open == null && screen.locked != null) R.string.sheets_accessories_subtitle_ask else R.string.sheets_accessories_subtitle),
-                lines = if (batteries.isEmpty()) {
-                    null
-                } else {
-                    {
-                        batteries.forEach { battery ->
-                            Text(
-                                stringResource(R.string.sheets_accessories_battery, battery.name, stringResource(R.string.updates_percent, battery.percent)),
-                                style = LoungeTheme.typography.caption,
-                                color = if (battery.low) colors.ember else colors.dust,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                    onClick = onUpdates,
+                    focusRequester = focusFor(Overlay.Updates) ?: focusFor(null),
+                )
+                SheetRow(icon = SettingsGlyphs.Sofa, title = stringResource(R.string.sheets_about_title), subtitle = stringResource(R.string.sheets_about_subtitle), onClick = onAbout, focusRequester = focusFor(Overlay.About))
+                SheetRow(icon = SettingsGlyphs.Heart, title = stringResource(R.string.sheets_support_title), subtitle = stringResource(R.string.sheets_support_subtitle), onClick = onDonate, focusRequester = focusFor(Overlay.Donate))
+                SheetRow(
+                    icon = LoungeIcons.Refresh,
+                    title = stringResource(R.string.sheets_setup_again),
+                    subtitle = stringResource(R.string.sheets_setup_again_subtitle),
+                    subtitleLines = WHOLE,
+                    onClick = onSetupAgain,
+                    focusRequester = focusFor(Overlay.Onboarding),
+                )
+                SheetRow(
+                    icon = LoungeIcons.Info,
+                    title = stringResource(R.string.sheets_diagnostics_title),
+                    subtitle = stringResource(R.string.sheets_diagnostics_subtitle),
+                    value = stringResource(if (showDiagnostics) DesignR.string.common_hide else DesignR.string.common_show),
+                    onClick = { showDiagnostics = !showDiagnostics },
+                )
+                if (showDiagnostics) {
+                    diag?.let { d ->
+                        Column(Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            DiagLine(stringResource(R.string.sheets_diagnostics_items), d.items.toString())
+                            DiagLine(stringResource(R.string.sheets_diagnostics_revision), d.revision.toString())
+                            DiagLine(stringResource(R.string.sheets_diagnostics_requests), d.ffiCalls.toString())
+                            DiagLine(stringResource(R.string.sheets_diagnostics_rebuild), stringResource(R.string.sheets_diagnostics_ms, (d.lastBuildMicros / 1000u).toString()))
+                            DiagLine(stringResource(R.string.sheets_diagnostics_saved), stringResource(R.string.sheets_diagnostics_kb, (d.dbBytes / 1024u).toString()))
+                            DiagLine(stringResource(R.string.sheets_diagnostics_waiting), d.queueDepth.toString())
                         }
                     }
-                },
-                onClick = {
-                    when {
-                        screen.open != null -> runCatching { context.startActivity(screen.open) }
-                        screen.locked != null -> askNearby.launch(NEARBY_DEVICES)
-                        else -> findInTvSettings(screen.settings)
-                    }
-                },
-            )
-        }
-        tvSettings?.let { screen ->
-            SheetRow(
-                icon = SettingsGlyphs.Cog,
-                title = stringResource(R.string.sheets_tv_settings_title),
-                subtitle = stringResource(R.string.sheets_tv_settings_subtitle),
-                onClick = { runCatching { context.startActivity(screen) } },
-            )
-        }
-        SheetRow(
-            icon = LoungeIcons.Info,
-            title = stringResource(R.string.sheets_diagnostics_title),
-            subtitle = stringResource(R.string.sheets_diagnostics_subtitle),
-            value = stringResource(if (showDiagnostics) DesignR.string.common_hide else DesignR.string.common_show),
-            onClick = { showDiagnostics = !showDiagnostics },
-        )
-        if (showDiagnostics) {
-            diag?.let { d ->
-                Column(Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    DiagLine(stringResource(R.string.sheets_diagnostics_items), d.items.toString())
-                    DiagLine(stringResource(R.string.sheets_diagnostics_revision), d.revision.toString())
-                    DiagLine(stringResource(R.string.sheets_diagnostics_requests), d.ffiCalls.toString())
-                    DiagLine(stringResource(R.string.sheets_diagnostics_rebuild), stringResource(R.string.sheets_diagnostics_ms, (d.lastBuildMicros / 1000u).toString()))
-                    DiagLine(stringResource(R.string.sheets_diagnostics_saved), stringResource(R.string.sheets_diagnostics_kb, (d.dbBytes / 1024u).toString()))
-                    DiagLine(stringResource(R.string.sheets_diagnostics_waiting), d.queueDepth.toString())
                 }
             }
         }
-        SheetRow(icon = LoungeIcons.Refresh, title = stringResource(R.string.sheets_setup_again), onClick = onSetupAgain, focusRequester = focusFor(Overlay.Onboarding))
-        SheetRow(icon = SettingsGlyphs.Sofa, title = stringResource(R.string.sheets_about_title), subtitle = stringResource(R.string.sheets_about_subtitle), onClick = onAbout, focusRequester = focusFor(Overlay.About))
-        SheetRow(icon = SettingsGlyphs.Heart, title = stringResource(R.string.sheets_support_title), subtitle = stringResource(R.string.sheets_support_subtitle), onClick = onDonate, focusRequester = focusFor(Overlay.Donate))
     }
     SheetFootnote(stringResource(R.string.sheets_footnote))
 }
