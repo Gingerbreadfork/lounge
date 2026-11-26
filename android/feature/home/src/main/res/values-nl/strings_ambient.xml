@@ -24,4 +24,11 @@
     <string name="ambient_preview_subtitle">Met elke toets ga je terug</string>
     <string name="ambient_footnote_pictures">Afbeeldingen komen van wat al op je startscherm staat en abstracte scènes worden op de tv getekend; hiervoor wordt niets gedownload.</string>
     <string name="ambient_footnote_when">De tv bepaalt wanneer de screensaver start. Wil je dat aanpassen, open dan in de instellingen van de tv Systeem en dan Screensaver.</string>
+    <string name="ambient_after_title">Start na</string>
+    <string name="ambient_after_subtitle">Hoe lang de tv ongebruikt blijft voordat de screensaver verschijnt</string>
+    <string name="ambient_after_needs_power">Wijzigen kan alleen met Geavanceerde configuratie. OK opent die.</string>
+    <plurals name="ambient_after_minutes">
+        <item quantity="one">%1$d minuut</item>
+        <item quantity="other">%1$d minuten</item>
+    </plurals>
 </resources>

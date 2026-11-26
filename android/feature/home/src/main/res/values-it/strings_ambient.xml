@@ -24,4 +24,12 @@
     <string name="ambient_preview_subtitle">Premi un tasto qualsiasi per tornare</string>
     <string name="ambient_footnote_pictures">Le immagini vengono da ciò che è già nella tua schermata Home e le scene astratte sono disegnate dalla TV; non viene scaricato nulla.</string>
     <string name="ambient_footnote_when">È la TV a decidere quando parte il salvaschermo. Per cambiarlo, nelle impostazioni della TV apri Sistema, poi Salvaschermo.</string>
+    <string name="ambient_after_title">Parte dopo</string>
+    <string name="ambient_after_subtitle">Per quanto la TV resta inutilizzata prima che compaia il salvaschermo</string>
+    <string name="ambient_after_needs_power">Per cambiarlo serve la Configurazione avanzata. OK la apre.</string>
+    <plurals name="ambient_after_minutes">
+        <item quantity="one">%1$d minuto</item>
+        <item quantity="many">%1$d minuti</item>
+        <item quantity="other">%1$d minuti</item>
+    </plurals>
 </resources>

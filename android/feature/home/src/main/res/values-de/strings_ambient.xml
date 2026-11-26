@@ -24,4 +24,11 @@
     <string name="ambient_preview_subtitle">Jede Taste bringt dich zurück</string>
     <string name="ambient_footnote_pictures">Bilder stammen von dem, was schon auf deinem Startbildschirm ist, und abstrakte Szenen werden auf dem Fernseher gezeichnet; dafür wird nichts heruntergeladen.</string>
     <string name="ambient_footnote_when">Der Fernseher bestimmt, wann der Bildschirmschoner startet. Um das zu ändern, öffne in den Einstellungen des Fernsehers „System“ und dann „Bildschirmschoner“.</string>
+    <string name="ambient_after_title">Startet nach</string>
+    <string name="ambient_after_subtitle">Wie lange der Fernseher unbenutzt bleibt, bevor der Bildschirmschoner erscheint</string>
+    <string name="ambient_after_needs_power">Zum Ändern ist die Erweiterte Einrichtung nötig. OK öffnet sie.</string>
+    <plurals name="ambient_after_minutes">
+        <item quantity="one">%1$d Minute</item>
+        <item quantity="other">%1$d Minuten</item>
+    </plurals>
 </resources>

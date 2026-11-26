@@ -47,4 +47,6 @@
     <string name="power_setup_tv_sound_detail">Speelt het geluid af via de eigen luidsprekers van de tv.</string>
     <string name="power_setup_select_title">Schakelen naar %1$s</string>
     <string name="power_setup_select_detail">Schakelt de tv naar %1$s.</string>
+    <string name="power_setup_saver_after_title">Wijzigen wanneer de screensaver start</string>
+    <string name="power_setup_saver_after_detail">Stelt in hoe lang de tv wacht als er niets wordt ingedrukt.</string>
 </resources>

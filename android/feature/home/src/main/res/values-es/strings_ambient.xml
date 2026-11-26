@@ -24,4 +24,12 @@
     <string name="ambient_preview_subtitle">Cualquier tecla te trae de vuelta</string>
     <string name="ambient_footnote_pictures">Las imágenes salen de lo que ya hay en tu pantalla de inicio y las escenas abstractas se dibujan en la TV; no se descarga nada para esto.</string>
     <string name="ambient_footnote_when">La TV decide cuándo empieza el salvapantallas. Para cambiarlo, en los ajustes de la TV abre Sistema y luego Salvapantallas.</string>
+    <string name="ambient_after_title">Empieza tras</string>
+    <string name="ambient_after_subtitle">Cuánto tiempo pasa sin usar la TV antes de que aparezca el salvapantallas</string>
+    <string name="ambient_after_needs_power">Para cambiarlo hace falta la Configuración avanzada. OK la abre.</string>
+    <plurals name="ambient_after_minutes">
+        <item quantity="one">%1$d minuto</item>
+        <item quantity="many">%1$d minutos</item>
+        <item quantity="other">%1$d minutos</item>
+    </plurals>
 </resources>

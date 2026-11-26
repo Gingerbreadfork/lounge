@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -616,8 +617,11 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
     val viaTv = !ours && status is PowerStatus.Unavailable && tvHasSettings && !tvDidNotTake
 
     LaunchedEffect(Unit) { power.refresh() }
+    // How long the TV waits before any screensaver, read again on coming back from the TV's own settings.
+    var after by remember { mutableStateOf(power.screensaverMinutes()) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         name = screensaverName(power, context)
+        after = power.screensaverMinutes()
         if (sentToTv && name != TvScreensaver.Lounge) tvDidNotTake = true
         sentToTv = false
     }
@@ -694,6 +698,26 @@ fun AmbientSheet(power: PowerSetup, prefs: Prefs, core: CoreClient, onPowerSetup
             accent = if (ours) colors.signal else colors.dust,
             onClick = { if (!busy) switch() },
             focusRequester = firstFocus.takeUnless { fromPreview },
+        )
+        // The wait is the TV's own setting, which only Power Setup may change.
+        fun stepAfter(by: Int) {
+            if (!ready) return onPowerSetup()
+            val next = power.screensaverAfter(PowerSetup.nextWait(after, forward = by > 0)) ?: return
+            sounds?.tick()
+            run {
+                val r = power.run(next)
+                after = power.screensaverMinutes()
+                if (r.ok) null else notTaken
+            }
+        }
+        SheetRow(
+            icon = SettingsGlyphs.Clock,
+            title = stringResource(R.string.ambient_after_title),
+            subtitle = stringResource(if (ready) R.string.ambient_after_subtitle else R.string.ambient_after_needs_power),
+            subtitleLines = WHOLE,
+            value = after?.let { pluralStringResource(R.plurals.ambient_after_minutes, it, it) },
+            onClick = { if (!busy) stepAfter(1) },
+            onCycle = if (ready) { by -> if (!busy) stepAfter(by) } else null,
         )
         val scene = choices[at].second
         SheetRow(

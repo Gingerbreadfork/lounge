@@ -47,4 +47,6 @@
     <string name="power_setup_tv_sound_detail">Reproduz o som pelos alto-falantes da própria TV.</string>
     <string name="power_setup_select_title">Mudar para %1$s</string>
     <string name="power_setup_select_detail">Muda a TV para %1$s.</string>
+    <string name="power_setup_saver_after_title">Mudar quando o protetor de tela começa</string>
+    <string name="power_setup_saver_after_detail">Define quanto a TV espera sem nada ser pressionado.</string>
 </resources>

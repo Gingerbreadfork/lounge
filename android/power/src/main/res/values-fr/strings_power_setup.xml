@@ -47,4 +47,6 @@
     <string name="power_setup_tv_sound_detail">Diffuse le son sur les haut-parleurs de la TV.</string>
     <string name="power_setup_select_title">Basculer sur %1$s</string>
     <string name="power_setup_select_detail">Bascule la TV sur %1$s.</string>
+    <string name="power_setup_saver_after_title">Changer le délai de l’économiseur d’écran</string>
+    <string name="power_setup_saver_after_detail">Règle le temps d’attente de la TV sans appui sur une touche.</string>
 </resources>

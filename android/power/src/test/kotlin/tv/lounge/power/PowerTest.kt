@@ -68,6 +68,35 @@ class PowerTest {
     }
 
     @Test
+    fun onlyTheWaitsOfferedBecomeACommand() {
+        assertEquals("settings put system screen_off_timeout 600000", PowerSetup.screensaverCommand(10))
+        assertNull(PowerSetup.screensaverCommand(7))
+        assertNull(PowerSetup.screensaverCommand(-1))
+    }
+
+    @Test
+    fun theScreensaversWaitIsReadInMinutesAndNeverIsNotAWait() {
+        assertEquals(10, PowerSetup.waitInMinutes(600_000))
+        assertEquals(1, PowerSetup.waitInMinutes(15_000))
+        assertNull(PowerSetup.waitInMinutes(Int.MAX_VALUE))
+        assertNull(PowerSetup.waitInMinutes(-1))
+        assertNull(PowerSetup.waitInMinutes(0))
+    }
+
+    @Test
+    fun aPressStepsToTheNextWaitOfferedFromWhereverTheTvIs() {
+        assertEquals(15, PowerSetup.nextWait(10, forward = true))
+        assertEquals(5, PowerSetup.nextWait(10, forward = false))
+        // A wait the TV was given elsewhere moves to its neighbours, and the ends go round.
+        assertEquals(5, PowerSetup.nextWait(3, forward = true))
+        assertEquals(2, PowerSetup.nextWait(3, forward = false))
+        assertEquals(1, PowerSetup.nextWait(120, forward = true))
+        assertEquals(60, PowerSetup.nextWait(120, forward = false))
+        assertEquals(60, PowerSetup.nextWait(1, forward = false))
+        assertEquals(1, PowerSetup.nextWait(null, forward = true))
+    }
+
+    @Test
     fun theScreensaverFlagIsReadFromTheActionOutput() {
         assertEquals("0", PowerSetup.previousScreensaverEnabled("0"))
         assertEquals("null", PowerSetup.previousScreensaverEnabled("null\n"))

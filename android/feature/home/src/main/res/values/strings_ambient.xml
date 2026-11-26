@@ -33,4 +33,13 @@
     <string name="ambient_preview_subtitle">Any key brings you back</string>
     <string name="ambient_footnote_pictures">Pictures come from what is already on your home screen and abstract scenes are drawn on the TV; nothing is downloaded for this.</string>
     <string name="ambient_footnote_when">The TV decides when the screensaver starts. To change when, in the TV\'s settings open System, then Screensaver.</string>
+    <!-- A row on the Screensaver sheet: how long the TV waits before the screensaver starts. Its value is a number of minutes. -->
+    <string name="ambient_after_title">Starts after</string>
+    <string name="ambient_after_subtitle">How long the TV is left alone before the screensaver shows</string>
+    <!-- Power Setup is a place in Lounge's settings. -->
+    <string name="ambient_after_needs_power">Changing this needs Power Setup. OK opens it.</string>
+    <plurals name="ambient_after_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
 </resources>

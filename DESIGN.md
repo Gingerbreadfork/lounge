@@ -408,6 +408,9 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
   starts with them off and is told once, in a toast, that Settings, Notifications turns them on.
 - **Screensaver sheet**: one row naming the current screensaver (Lounge in `signal`, Off, or the
   other app's name), whose OK makes Lounge the screensaver or goes back to the previous one; a
+  Starts after row that reads how long the TV waits before any screensaver and steps it through
+  1, 2, 5, 10, 15, 30 and 60 minutes with Left and Right, through Power Setup, or says that it
+  needs Power Setup and opens it; a
   Style row that cycles Pictures, Mix and the abstract scenes with Left and Right and names the
   current one underneath, or says why this TV shows Pictures in its place; and See it full
   screen, which puts the sheet away until any key and comes back to its own row. The chosen

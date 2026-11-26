@@ -47,4 +47,6 @@
     <string name="power_setup_tv_sound_detail">Reproduz o som pelas colunas da própria TV.</string>
     <string name="power_setup_select_title">Mudar para %1$s</string>
     <string name="power_setup_select_detail">Muda a TV para %1$s.</string>
+    <string name="power_setup_saver_after_title">Alterar quando a proteção de ecrã começa</string>
+    <string name="power_setup_saver_after_detail">Define quanto a TV espera sem nada ser premido.</string>
 </resources>

@@ -65,4 +65,7 @@
     <string name="power_setup_select_title">Switch to %1$s</string>
     <!-- %1$s is the name of a device plugged into the TV, such as PlayStation 5. -->
     <string name="power_setup_select_detail">Switches the TV to %1$s.</string>
+    <!-- An action Power Setup runs when the person changes how soon the screensaver starts. -->
+    <string name="power_setup_saver_after_title">Change when the screensaver starts</string>
+    <string name="power_setup_saver_after_detail">Sets how long the TV waits with nothing pressed.</string>
 </resources>

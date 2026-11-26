@@ -47,4 +47,6 @@
     <string name="power_setup_tv_sound_detail">Spielt den Ton über die eigenen Lautsprecher des Fernsehers.</string>
     <string name="power_setup_select_title">Auf %1$s umschalten</string>
     <string name="power_setup_select_detail">Schaltet den Fernseher auf %1$s um.</string>
+    <string name="power_setup_saver_after_title">Start des Bildschirmschoners ändern</string>
+    <string name="power_setup_saver_after_detail">Legt fest, wie lange der Fernseher ohne Tastendruck wartet.</string>
 </resources>

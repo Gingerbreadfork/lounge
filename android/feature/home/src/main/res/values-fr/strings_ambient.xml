@@ -24,4 +24,12 @@
     <string name="ambient_preview_subtitle">N’importe quelle touche vous ramène ici</string>
     <string name="ambient_footnote_pictures">Les images viennent de ce qui est déjà sur votre écran d’accueil et les décors abstraits sont dessinés par la TV ; rien n’est téléchargé pour cela.</string>
     <string name="ambient_footnote_when">C’est la TV qui décide quand l’économiseur d’écran démarre. Pour changer ce délai, dans les paramètres de la TV, ouvrez Système, puis Économiseur d’écran.</string>
+    <string name="ambient_after_title">Démarre après</string>
+    <string name="ambient_after_subtitle">Le temps d’inactivité de la TV avant que l’économiseur d’écran s’affiche</string>
+    <string name="ambient_after_needs_power">Pour le modifier, il faut la Configuration avancée. OK l’ouvre.</string>
+    <plurals name="ambient_after_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="many">%1$d minutes</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
 </resources>

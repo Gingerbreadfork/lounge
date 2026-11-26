@@ -47,4 +47,6 @@
     <string name="power_setup_tv_sound_detail">Riproduce l\'audio dagli altoparlanti della TV.</string>
     <string name="power_setup_select_title">Passa a %1$s</string>
     <string name="power_setup_select_detail">Passa la TV a %1$s.</string>
+    <string name="power_setup_saver_after_title">Cambia quando parte il salvaschermo</string>
+    <string name="power_setup_saver_after_detail">Imposta quanto aspetta la TV senza che venga premuto nulla.</string>
 </resources>

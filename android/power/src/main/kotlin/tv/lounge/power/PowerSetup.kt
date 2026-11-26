@@ -289,6 +289,14 @@ class PowerSetup(private val context: Context) {
     val tvListings: PowerAction get() = action(TV_LISTINGS, R.string.power_setup_tv_listings_title, R.string.power_setup_tv_listings_detail, grantCommand(context.packageName, "android.permission.READ_TV_LISTINGS", userId))
     val notificationAccess: PowerAction get() = action(NOTIFICATIONS, R.string.power_setup_notifications_title, R.string.power_setup_notifications_detail, "cmd notification allow_listener ${context.packageName}/tv.lounge.collector.media.NowPlayingListener")
     val usageAccess: PowerAction get() = action(USAGE, R.string.power_setup_usage_title, R.string.power_setup_usage_detail, "appops set ${context.packageName} GET_USAGE_STATS allow")
+    /** Starts the screensaver after [minutes] with nothing pressed. Only the times in [SCREENSAVER_MINUTES] are taken. */
+    fun screensaverAfter(minutes: Int): PowerAction? = screensaverCommand(minutes)?.let {
+        action("saver_after", R.string.power_setup_saver_after_title, R.string.power_setup_saver_after_detail, it)
+    }
+
+    /** How long the TV waits before its screensaver, to the nearest minute, or null where it does not say. */
+    fun screensaverMinutes(): Int? = runCatching { waitInMinutes(Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_OFF_TIMEOUT)) }.getOrNull()
+
     val drawOverApps: PowerAction get() = action(OVERLAY, R.string.power_setup_overlay_title, R.string.power_setup_overlay_detail, "appops set ${context.packageName} SYSTEM_ALERT_WINDOW allow")
     val quickAnimations: PowerAction get() = action(ANIMATIONS, R.string.power_setup_animations_title, R.string.power_setup_animations_detail, "settings put global window_animation_scale 0.5; settings put global transition_animation_scale 0.5; settings put global animator_duration_scale 0.5")
     val normalAnimations: PowerAction get() = action(ANIMATIONS_RESET, R.string.power_setup_animations_reset_title, R.string.power_setup_animations_reset_detail, "settings put global window_animation_scale 1.0; settings put global transition_animation_scale 1.0; settings put global animator_duration_scale 1.0")
@@ -425,6 +433,25 @@ class PowerSetup(private val context: Context) {
         private const val HOME = "home"
         private const val TV_LISTINGS = "tv_listings"
         private const val NOTIFICATIONS = "notifications"
+        /** The waits, in minutes, that the screensaver can be given. */
+        val SCREENSAVER_MINUTES = listOf(1, 2, 5, 10, 15, 30, 60)
+
+        /** A wait in milliseconds to the nearest minute. Null for none set and for a TV told never to start one. */
+        fun waitInMinutes(ms: Int): Int? = ms.takeIf { it in 1..NEVER_MS }?.let { ((it + 30_000L) / 60_000L).toInt().coerceAtLeast(1) }
+
+        /** The wait a press moves to from [minutes]: the next one offered that is longer, or shorter, going round at the ends. */
+        fun nextWait(minutes: Int?, forward: Boolean): Int = when {
+            minutes == null -> SCREENSAVER_MINUTES.first()
+            forward -> SCREENSAVER_MINUTES.firstOrNull { it > minutes } ?: SCREENSAVER_MINUTES.first()
+            else -> SCREENSAVER_MINUTES.lastOrNull { it < minutes } ?: SCREENSAVER_MINUTES.last()
+        }
+
+        /** A day. A wait longer than this is how a TV writes never. */
+        private const val NEVER_MS = 24 * 60 * 60_000
+
+        /** The command that makes the TV wait [minutes] before its screensaver, or null for a wait not offered. */
+        fun screensaverCommand(minutes: Int): String? =
+            minutes.takeIf { it in SCREENSAVER_MINUTES }?.let { "settings put system screen_off_timeout ${it * 60_000}" }
         private const val USAGE = "usage"
         private const val OVERLAY = "overlay"
         private const val ANIMATIONS = "animations"

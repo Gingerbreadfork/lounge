@@ -24,4 +24,12 @@
     <string name="ambient_preview_subtitle">Qualquer tecla traz você de volta</string>
     <string name="ambient_footnote_pictures">As imagens vêm do que já está na sua tela inicial e as cenas abstratas são desenhadas na própria TV; nada é baixado para isso.</string>
     <string name="ambient_footnote_when">A TV decide quando o protetor de tela começa. Para mudar isso, nas configurações da TV, abra Sistema e depois Protetor de tela.</string>
+    <string name="ambient_after_title">Começa após</string>
+    <string name="ambient_after_subtitle">Quanto tempo a TV fica sem uso antes de o protetor de tela aparecer</string>
+    <string name="ambient_after_needs_power">Para mudar isso é preciso a Configuração avançada. OK abre.</string>
+    <plurals name="ambient_after_minutes">
+        <item quantity="one">%1$d minuto</item>
+        <item quantity="many">%1$d minutos</item>
+        <item quantity="other">%1$d minutos</item>
+    </plurals>
 </resources>
