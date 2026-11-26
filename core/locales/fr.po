@@ -446,6 +446,19 @@ msgstr "Un titre qui n’est plus proposé"
 msgid "Plugins for your apps"
 msgstr "Des plugins pour vos applis"
 
+#: lounge-core/src/engine.rs
+msgid "Notifications"
+msgstr "Notifications"
+
+#. the title of a tile with room for about 265 pixels, roughly what "Turn on TV listings" takes; the line under it says why.
+#: lounge-core/src/engine.rs
+msgid "Turn on notifications"
+msgstr "Notifications"
+
+#: lounge-core/src/engine.rs
+msgid "See what your apps tell you"
+msgstr "Activez-les pour voir ce que disent vos applis"
+
 #. {version} is a version number, as in "Lounge 1.2 is ready".
 #: lounge-core/src/engine.rs
 msgid "Lounge {version} is ready"

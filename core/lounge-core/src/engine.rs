@@ -60,6 +60,8 @@ pub(crate) const STAGE_CAP: usize = 6;
 const NOTICE_TV_LISTINGS: &str = "notice:tv_listings";
 /// The row of plugins suggested for the apps on the TV.
 const NOTICE_PLUGINS: &str = "notice:plugins";
+/// The tile that says notifications are not shown, until access is given or it is dismissed.
+const NOTICE_NOTIFICATIONS: &str = "notice:notifications";
 /// Beside the header of a plugin's row while its last refresh failed (DESIGN.md §8).
 const OFFLINE_NOTE: &str = mark!("Offline, showing what we have");
 
@@ -362,6 +364,21 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
         // Under Continue watching, which is where what they bring would show.
         let at = rows.iter().position(|r| r.id == "continue" || r.id == NOTICE_TV_LISTINGS).map_or(0, |i| i + 1);
         rows.insert(at, Row { id: NOTICE_PLUGINS.to_string(), title: t!("Plugins for your apps"), kind: TileKind::Compact, size: RowSize::L, badge: None, tiles: suggested, note: None });
+    }
+    if !state.permissions.notifications && !graph.layout.dismissed_notices.contains(NOTICE_NOTIFICATIONS) {
+        // Under the apps, so it is seen without standing over what the home is for.
+        let at = rows.iter().rposition(|r| r.id == "apps" || r.id.starts_with("group:")).map_or(rows.len(), |i| i + 1);
+        rows.insert(
+            at,
+            notice_row(
+                NOTICE_NOTIFICATIONS,
+                &t!("Notifications"),
+                // Translators: the title of a tile with room for about 265 pixels, roughly what "Turn on TV listings" takes; the line under it says why.
+                &t!("Turn on notifications"),
+                &t!("See what your apps tell you"),
+                "permission:notifications",
+            ),
+        );
     }
     if let Some(version) = &state.update {
         let id = format!("notice:update:{version}");
@@ -1633,6 +1650,22 @@ mod tests {
         assert_eq!(item_ref(&g, "plugin:tv.lounge.plex:deck:41").title, "A title that is no longer listed");
         assert_eq!(item_ref(&g, "app:com.example.removed").title, "com.example.removed");
         assert_eq!(item_ref(&g, "app:org.jellyfin.androidtv").title, "Jellyfin");
+    }
+
+    #[test]
+    fn notifications_not_shown_are_said_under_the_apps_until_dismissed_or_allowed() {
+        let mut g = Graph::default();
+        g.replace_source("apps", vec![Item::app("tv.a", "Main", "Alpha")]);
+        g.create_group("Kids", Some("tv.a"));
+        let mut s = state(g, Vec::new());
+        let ids = |s: &State| build(s, &config(), 0).rows.iter().map(|r| r.id.clone()).collect::<Vec<_>>();
+        assert!(!ids(&s).contains(&NOTICE_NOTIFICATIONS.to_string()));
+        s.permissions.notifications = false;
+        assert_eq!(ids(&s), ["apps", "group:g1", NOTICE_NOTIFICATIONS]);
+        let tile = build(&s, &config(), 0).rows.into_iter().find(|r| r.id == NOTICE_NOTIFICATIONS).unwrap().tiles.remove(0);
+        assert_eq!((tile.title.as_str(), tile.action.as_str()), ("Turn on notifications", "permission:notifications"));
+        s.graph.layout.dismissed_notices.insert(NOTICE_NOTIFICATIONS.to_string());
+        assert!(!ids(&s).contains(&NOTICE_NOTIFICATIONS.to_string()));
     }
 
     #[test]
