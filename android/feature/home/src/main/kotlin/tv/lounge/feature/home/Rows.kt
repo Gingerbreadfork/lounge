@@ -133,7 +133,7 @@ fun ContentRow(
     val tiles = rememberUpdatedState(row.tiles)
     val focusedIndex = remember(row.id) { derivedStateOf { tiles.value.indexOfFirst { it.id == focusedId.value } } }
     val focusedRow = remember(isFocusedRow) { derivedStateOf { isFocusedRow() } }
-    val size = tileSize(row.kind, row.size)
+    val size = tileSize(row.kind, if (LocalLargeTiles.current) row.size.larger() else row.size)
     val safeXPx = with(LocalDensity.current) { Dimens.safeX.toPx() }
     // The header follows the light without recomposing the row: its alpha eases as the layer reads it.
     val light = LoungeTheme.lightState

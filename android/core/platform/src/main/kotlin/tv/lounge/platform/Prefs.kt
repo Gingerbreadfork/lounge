@@ -49,6 +49,12 @@ class Prefs(private val context: Context) {
 
     enum class Theme { Dusk, House, Hearth, Opera, Marquee, GreenRoom, Moonlight, Graphite, Cabaret, Aquarium, Absinthe, Ultraviolet, Blackout, HighContrast }
 
+    /** How long OK is held before it opens a tile's options. Normal follows the TV's own time. */
+    enum class HoldTime(val ms: Long?) { Short(300L), Normal(null), Long(900L) }
+
+    /** How large the home's words are drawn, as a multiple of their designed size. */
+    enum class TextSize(val scale: Float) { Normal(1f), Large(1.15f), Largest(1.3f) }
+
     /** Every UI preference at once, so the screen recomposes once per change rather than once per key. */
     data class UiPrefs(
         val theme: Theme = Theme.Dusk,
@@ -70,6 +76,19 @@ class Prefs(private val context: Context) {
         val language: String? = null,
         /** How many more times the home says that holding OK on a tile opens its options. */
         val holdHintsLeft: Int = HOLD_HINTS,
+        /** Whether the hint about holding OK may show at all. */
+        val holdHints: Boolean = true,
+        /** Whether the Stage sits at the top of the home. Without it the home opens on the rows. */
+        val showStage: Boolean = true,
+        /** Whether the top bar shows the time. */
+        val showClock: Boolean = true,
+        val holdTime: HoldTime = HoldTime.Normal,
+        val textSize: TextSize = TextSize.Normal,
+        /** Whether each row's tiles are drawn a size up. */
+        val largeTiles: Boolean = false,
+        /** What opens when the TV starts or wakes on the home: a tile's action and its title, or null for the home. */
+        val startAction: String? = null,
+        val startTitle: String? = null,
         /** False only for the placeholder used before the store has been read. */
         val loaded: Boolean = false,
     )
@@ -89,6 +108,14 @@ class Prefs(private val context: Context) {
             notifications = notificationsShown(p[NOTIFICATIONS], p[ONBOARDING_DONE] ?: false),
             language = p[LANGUAGE],
             holdHintsLeft = p[HOLD_HINTS_LEFT] ?: HOLD_HINTS,
+            holdHints = p[HOLD_HINTS_ON] ?: true,
+            showStage = p[SHOW_STAGE] ?: true,
+            showClock = p[SHOW_CLOCK] ?: true,
+            holdTime = named(p[HOLD_TIME], HoldTime.Normal),
+            textSize = named(p[TEXT_SIZE], TextSize.Normal),
+            largeTiles = p[LARGE_TILES] ?: false,
+            startAction = p[START_ACTION],
+            startTitle = p[START_TITLE],
             loaded = true,
         )
     }
@@ -178,12 +205,39 @@ class Prefs(private val context: Context) {
     suspend fun setPreviousScreensaverEnabled(value: String?) {
         context.dataStore.edit { if (value == null) it.remove(PREVIOUS_SCREENSAVER_ENABLED) else it[PREVIOUS_SCREENSAVER_ENABLED] = value }
     }
+    /** Turns the hint about holding OK off, or on again with every showing still owed. */
+    suspend fun setHoldHints(on: Boolean) {
+        context.dataStore.edit {
+            it[HOLD_HINTS_ON] = on
+            if (on) it.remove(HOLD_HINTS_LEFT)
+        }
+    }
+
     /** One fewer hint about holding OK is owed, or none once the person has done it. */
     suspend fun useHoldHint(learned: Boolean = false) {
         try {
             context.dataStore.edit { it[HOLD_HINTS_LEFT] = if (learned) 0 else ((it[HOLD_HINTS_LEFT] ?: HOLD_HINTS) - 1).coerceAtLeast(0) }
         } catch (e: IOException) {
             android.util.Log.w("Lounge", "the hint about holding OK was not counted", e)
+        }
+    }
+
+    suspend fun setShowStage(on: Boolean) { context.dataStore.edit { it[SHOW_STAGE] = on } }
+    suspend fun setShowClock(on: Boolean) { context.dataStore.edit { it[SHOW_CLOCK] = on } }
+    suspend fun setHoldTime(time: HoldTime) { context.dataStore.edit { it[HOLD_TIME] = time.name } }
+    suspend fun setTextSize(size: TextSize) { context.dataStore.edit { it[TEXT_SIZE] = size.name } }
+    suspend fun setLargeTiles(on: Boolean) { context.dataStore.edit { it[LARGE_TILES] = on } }
+
+    /** Chooses what opens when the TV starts, by a tile's action and title; null opens the home. */
+    suspend fun setStartWith(action: String?, title: String?) {
+        context.dataStore.edit {
+            if (action == null) {
+                it.remove(START_ACTION)
+                it.remove(START_TITLE)
+            } else {
+                it[START_ACTION] = action
+                it[START_TITLE] = title.orEmpty()
+            }
         }
     }
 
@@ -215,6 +269,12 @@ class Prefs(private val context: Context) {
             LITE_MODE.name to (p[LITE_MODE]?.toString() ?: AUTOMATIC),
             REDUCED_MOTION.name to (p[REDUCED_MOTION]?.toString() ?: AUTOMATIC),
             SHOW_MOBILE_APPS.name to (p[SHOW_MOBILE_APPS] ?: false).toString(),
+            HOLD_HINTS_ON.name to (p[HOLD_HINTS_ON] ?: true).toString(),
+            SHOW_STAGE.name to (p[SHOW_STAGE] ?: true).toString(),
+            SHOW_CLOCK.name to (p[SHOW_CLOCK] ?: true).toString(),
+            HOLD_TIME.name to named(p[HOLD_TIME], HoldTime.Normal).name,
+            TEXT_SIZE.name to named(p[TEXT_SIZE], TextSize.Normal).name,
+            LARGE_TILES.name to (p[LARGE_TILES] ?: false).toString(),
             BACKDROP.name to (p[BACKDROP] ?: STILL_BACKDROP),
             AMBIENT_STYLE.name to (p[AMBIENT_STYLE] ?: PICTURES),
             ALL_APPS_SORT.name to (p[ALL_APPS_SORT] ?: SORT_AZ),
@@ -232,6 +292,12 @@ class Prefs(private val context: Context) {
             values[THEME.name]?.takeIf { name -> Theme.entries.any { it.name == name } }?.let { p[THEME] = it }
             values[SOUNDS.name]?.toBooleanStrictOrNull()?.let { p[SOUNDS] = it }
             values[SHOW_MOBILE_APPS.name]?.toBooleanStrictOrNull()?.let { p[SHOW_MOBILE_APPS] = it }
+            values[HOLD_HINTS_ON.name]?.toBooleanStrictOrNull()?.let { p[HOLD_HINTS_ON] = it }
+            values[SHOW_STAGE.name]?.toBooleanStrictOrNull()?.let { p[SHOW_STAGE] = it }
+            values[SHOW_CLOCK.name]?.toBooleanStrictOrNull()?.let { p[SHOW_CLOCK] = it }
+            values[LARGE_TILES.name]?.toBooleanStrictOrNull()?.let { p[LARGE_TILES] = it }
+            values[HOLD_TIME.name]?.takeIf { name -> HoldTime.entries.any { it.name == name } }?.let { p[HOLD_TIME] = it }
+            values[TEXT_SIZE.name]?.takeIf { name -> TextSize.entries.any { it.name == name } }?.let { p[TEXT_SIZE] = it }
             values[NOTIFICATIONS.name]?.toBooleanStrictOrNull()?.let { p[NOTIFICATIONS] = it }
             values[NOTIFICATIONS_HIDDEN.name]?.let { list ->
                 val apps = list.split(',').map { it.trim() }.filter { it.isNotEmpty() }
@@ -281,5 +347,16 @@ class Prefs(private val context: Context) {
         private val NOTIFICATIONS_HIDDEN = stringSetPreferencesKey("notifications_hidden")
         private val NOTIFICATIONS_SEEN_AT = longPreferencesKey("notifications_seen_at")
         private val HOLD_HINTS_LEFT = intPreferencesKey("hold_hints_left")
+        private val HOLD_HINTS_ON = booleanPreferencesKey("hold_hints")
+        private val SHOW_STAGE = booleanPreferencesKey("show_stage")
+        private val SHOW_CLOCK = booleanPreferencesKey("show_clock")
+        private val HOLD_TIME = stringPreferencesKey("hold_time")
+        private val TEXT_SIZE = stringPreferencesKey("text_size")
+        private val LARGE_TILES = booleanPreferencesKey("large_tiles")
+        private val START_ACTION = stringPreferencesKey("start_action")
+        private val START_TITLE = stringPreferencesKey("start_title")
+
+        /** The value of [E] saved under [name], or [fallback] for none and for one this version does not know. */
+        private inline fun <reified E : Enum<E>> named(name: String?, fallback: E): E = enumValues<E>().firstOrNull { it.name == name } ?: fallback
     }
 }

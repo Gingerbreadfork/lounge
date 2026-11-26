@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="start_with_about">Si apre da solo quando la TV si accende o si riattiva con Lounge sullo schermo. Il tasto Home ti riporta sempre a Lounge.</string>
+    <string name="start_with_home">La schermata Home di Lounge</string>
+    <string name="start_with_home_about">Non si apre nulla da solo</string>
+    <string name="start_with_inputs">Ingressi</string>
+    <string name="start_with_apps">App</string>
+    <string name="start_with_missing">Al momento non è su questa TV</string>
+</resources>

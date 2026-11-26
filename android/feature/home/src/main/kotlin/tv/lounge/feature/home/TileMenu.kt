@@ -206,6 +206,8 @@ fun menuItemsFor(
     onMoveLeft: () -> Unit,
     onMoveRight: () -> Unit,
     onPinStage: () -> Unit,
+    /** Whether the home has its Stage. Without it nothing new is pinned there. */
+    stageShown: Boolean = true,
     onUnpinStage: () -> Unit,
     onAppInfo: () -> Unit,
     onUninstall: () -> Unit,
@@ -260,7 +262,7 @@ fun menuItemsFor(
     if (tile.id.startsWith("chan:")) items += MenuItem(DesignR.string.common_tv_guide, LoungeIcons.Guide, onSelect = onGuide)
     if (isStagePinned) {
         items += MenuItem(PinWords.UNPIN_STAGE, LoungeIcons.Pin, detail = PinWords.UNPIN_STAGE_DETAIL, onSelect = onUnpinStage)
-    } else if (tile.action.isNotEmpty() && tile.glyph == null) {
+    } else if (stageShown && tile.action.isNotEmpty() && tile.glyph == null) {
         // The Stage is for what can be opened, which a tile to read and a control cannot.
         items += MenuItem(PinWords.PIN_STAGE, LoungeIcons.Pin, detail = PinWords.PIN_STAGE_DETAIL, onSelect = onPinStage)
     }

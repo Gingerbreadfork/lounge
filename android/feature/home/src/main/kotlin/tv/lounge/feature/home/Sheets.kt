@@ -399,6 +399,10 @@ fun QuickSettingsSheet(
     /** The page to show, or null for the list of pages. */
     section: SettingsSection? = null,
     onSection: (SettingsSection) -> Unit = {},
+    /** The settings kept on this TV, as they are now. */
+    ui: Prefs.UiPrefs = Prefs.UiPrefs(),
+    /** Opens the list of what the TV may start with. */
+    onStartWith: () -> Unit = {},
     /** Whether the home keeps to apps alone. */
     appsOnly: Boolean? = false,
     onSetAppsOnly: (Boolean) -> Unit = {},
@@ -483,11 +487,15 @@ fun QuickSettingsSheet(
     val link by rememberLink()
     // Back from one of its pages puts focus on the row that opened it.
     val pages = SettingsSection.entries.map { Overlay.SettingsPage(it) } + listOf(
-        Overlay.Rows, Overlay.AppGroups(), Overlay.Channels, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient,
+        Overlay.Rows, Overlay.AppGroups(), Overlay.Channels, Overlay.StartWith, Overlay.Plugins, Overlay.NotificationSettings, Overlay.Companion, Overlay.Ambient,
         Overlay.Language, Overlay.HomeRole, Overlay.PowerSetup, Overlay.Updates, Overlay.Onboarding, Overlay.About, Overlay.Donate,
     )
     val returnTo = cameFrom?.takeIf { it in pages }
     fun focusFor(page: Overlay?) = firstFocus.takeIf { page == returnTo }
+    fun save(change: suspend Prefs.() -> Unit) {
+        sounds0?.tick()
+        accessoryScope.launch { prefs.change() }
+    }
 
     if (section == null) {
         SheetHeading(stringResource(DesignR.string.common_settings))
@@ -593,6 +601,16 @@ fun QuickSettingsSheet(
                     onCycle = { by -> sounds0?.tick(); onSetRecentApps(steps[(at + by).mod(steps.size)]) },
                 )
                 SheetRow(
+                    icon = LoungeIcons.Frame,
+                    title = stringResource(R.string.sheets_stage_title),
+                    subtitle = stringResource(R.string.sheets_stage_subtitle),
+                    subtitleLines = WHOLE,
+                    value = if (ui.showStage) on else off,
+                    accent = if (ui.showStage) colors.signal else colors.dust,
+                    onClick = { save { setShowStage(!ui.showStage) } },
+                    onCycle = { save { setShowStage(!ui.showStage) } },
+                )
+                SheetRow(
                     icon = LoungeIcons.Apps,
                     title = stringResource(R.string.sheets_apps_only_title),
                     subtitle = stringResource(R.string.sheets_apps_only_subtitle),
@@ -619,6 +637,16 @@ fun QuickSettingsSheet(
                     onClick = onChannels,
                     focusRequester = focusFor(Overlay.Channels),
                 )
+                SheetRow(
+                    icon = LoungeIcons.Power,
+                    title = stringResource(R.string.sheets_start_title),
+                    subtitle = stringResource(R.string.sheets_start_subtitle),
+                    subtitleLines = WHOLE,
+                    value = ui.startTitle?.takeIf { ui.startAction != null } ?: stringResource(R.string.sheets_start_home),
+                    accent = if (ui.startAction != null) colors.signal else colors.dust,
+                    onClick = onStartWith,
+                    focusRequester = focusFor(Overlay.StartWith),
+                )
             }
             SettingsSection.Look -> {
                 SheetRow(
@@ -641,6 +669,43 @@ fun QuickSettingsSheet(
                     subtitle = if (!liveBackdrops && sceneAt > 0) stringResource(R.string.sheets_background_still_for_now) else scenes[sceneAt].third,
                     onClick = { sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + 1).mod(scenes.size)].first) },
                     onCycle = { by -> sounds0?.tick(); onSetBackdrop(scenes[(sceneAt + by).mod(scenes.size)].first) },
+                )
+                val textSizes = Prefs.TextSize.entries
+                SheetRow(
+                    icon = LoungeIcons.Text,
+                    title = stringResource(R.string.sheets_text_size_title),
+                    subtitle = stringResource(R.string.sheets_text_size_subtitle),
+                    subtitleLines = WHOLE,
+                    value = stringResource(
+                        when (ui.textSize) {
+                            Prefs.TextSize.Normal -> R.string.sheets_size_normal
+                            Prefs.TextSize.Large -> R.string.sheets_size_large
+                            Prefs.TextSize.Largest -> R.string.sheets_size_largest
+                        },
+                    ),
+                    accent = if (ui.textSize != Prefs.TextSize.Normal) colors.signal else colors.dust,
+                    onClick = { save { setTextSize(textSizes[(ui.textSize.ordinal + 1).mod(textSizes.size)]) } },
+                    onCycle = { by -> save { setTextSize(textSizes[(ui.textSize.ordinal + by).mod(textSizes.size)]) } },
+                )
+                SheetRow(
+                    icon = LoungeIcons.Size,
+                    title = stringResource(R.string.sheets_tile_size_title),
+                    subtitle = stringResource(R.string.sheets_tile_size_subtitle),
+                    subtitleLines = WHOLE,
+                    value = stringResource(if (ui.largeTiles) R.string.sheets_size_large else R.string.sheets_size_normal),
+                    accent = if (ui.largeTiles) colors.signal else colors.dust,
+                    onClick = { save { setLargeTiles(!ui.largeTiles) } },
+                    onCycle = { save { setLargeTiles(!ui.largeTiles) } },
+                )
+                SheetRow(
+                    icon = SettingsGlyphs.Clock,
+                    title = stringResource(R.string.sheets_clock_title),
+                    subtitle = stringResource(R.string.sheets_clock_subtitle),
+                    subtitleLines = WHOLE,
+                    value = if (ui.showClock) on else off,
+                    accent = if (ui.showClock) colors.signal else colors.dust,
+                    onClick = { save { setShowClock(!ui.showClock) } },
+                    onCycle = { save { setShowClock(!ui.showClock) } },
                 )
                 SheetRow(
                     icon = LoungeIcons.Frame,
@@ -678,6 +743,34 @@ fun QuickSettingsSheet(
                 )
             }
             SettingsSection.Remote -> {
+                val holdTimes = Prefs.HoldTime.entries
+                SheetRow(
+                    icon = SettingsGlyphs.Clock,
+                    title = stringResource(R.string.sheets_hold_time_title),
+                    subtitle = stringResource(R.string.sheets_hold_time_subtitle),
+                    subtitleLines = WHOLE,
+                    value = stringResource(
+                        when (ui.holdTime) {
+                            Prefs.HoldTime.Short -> R.string.sheets_hold_time_short
+                            Prefs.HoldTime.Normal -> R.string.sheets_hold_time_normal
+                            Prefs.HoldTime.Long -> R.string.sheets_hold_time_long
+                        },
+                    ),
+                    accent = if (ui.holdTime != Prefs.HoldTime.Normal) colors.signal else colors.dust,
+                    onClick = { save { setHoldTime(holdTimes[(ui.holdTime.ordinal + 1).mod(holdTimes.size)]) } },
+                    onCycle = { by -> save { setHoldTime(holdTimes[(ui.holdTime.ordinal + by).mod(holdTimes.size)]) } },
+                    focusRequester = focusFor(null),
+                )
+                SheetRow(
+                    icon = LoungeIcons.Info,
+                    title = stringResource(R.string.sheets_hold_hint_title),
+                    subtitle = stringResource(R.string.sheets_hold_hint_subtitle),
+                    subtitleLines = WHOLE,
+                    value = if (ui.holdHints) on else off,
+                    accent = if (ui.holdHints) colors.signal else colors.dust,
+                    onClick = { save { setHoldHints(!ui.holdHints) } },
+                    onCycle = { save { setHoldHints(!ui.holdHints) } },
+                )
                 SheetRow(
                     icon = LoungeIcons.Volume,
                     title = stringResource(R.string.sheets_sounds_title),
@@ -687,7 +780,6 @@ fun QuickSettingsSheet(
                     accent = if (sounds) colors.signal else colors.dust,
                     onClick = { sounds0?.tick(); onSetSounds(!sounds) },
                     onCycle = { sounds0?.tick(); onSetSounds(!sounds) },
-                    focusRequester = focusFor(null),
                 )
                 accessories?.let { screen ->
                     SheetRow(

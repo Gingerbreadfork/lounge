@@ -100,13 +100,15 @@ fun LoungeTheme(
     variant: LoungeThemeVariant = LoungeThemeVariant.Dusk,
     reducedMotion: Boolean = false,
     visuals: LoungeVisuals = LoungeVisuals.TierA,
+    /** How much larger than designed the words are drawn, as Settings has it. */
+    textScale: Float = 1f,
     content: @Composable () -> Unit,
 ) {
     val colors = variant.colors()
     val lit = if (colors.focusRing) visuals.copy(glowAlpha = (visuals.glowAlpha * 2f).coerceAtMost(1f)) else visuals
     val type = if (colors.focusRing) LoungeTypography.Bold else LoungeTypography.Default
     val motion = if (reducedMotion) LoungeMotion.Reduced else LoungeMotion.Default
-    val designDensity = designDensity()
+    val designDensity = designDensity(textScale)
     // Read through the configuration, so turning bold text on or off reaches the text at once.
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
@@ -130,14 +132,18 @@ fun LoungeTheme(
 
 /**
  * Every number in DESIGN.md is a pixel on a 1920-wide canvas. This density makes one design pixel
- * one physical pixel at 1080p and two at 4K. Font scale is kept.
+ * one physical pixel at 1080p and two at 4K. The TV's font scale is kept. [textScale] multiplies
+ * it, up to the most the layouts are drawn for or the TV's own scale where that is more.
  */
+/** The largest font scale the layouts keep whole (DESIGN.md §4.1). */
+private const val MAX_TEXT_SCALE = 1.3f
+
 @Composable
-private fun designDensity(): Density {
+private fun designDensity(textScale: Float): Density {
     val system = LocalDensity.current
     val widthPx = LocalWindowInfo.current.containerSize.width
     val scale = if (widthPx > 0) widthPx / 1920f else system.density / 2f
-    return Density(density = scale, fontScale = system.fontScale)
+    return Density(density = scale, fontScale = (system.fontScale * textScale).coerceAtMost(maxOf(system.fontScale, MAX_TEXT_SCALE)))
 }
 
 /** Reads the system's reduced-motion preference (animator duration scale of 0). */

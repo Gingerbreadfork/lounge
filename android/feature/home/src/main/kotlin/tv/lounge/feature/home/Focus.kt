@@ -35,6 +35,9 @@ import androidx.compose.ui.node.invalidateSemantics
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import tv.lounge.design.LoungeTheme
 
 /**
@@ -170,6 +173,9 @@ private class TilePressElement(
     override fun hashCode(): Int = (((31 * onClick.hashCode() + onLongPress.hashCode()) * 31 + clickLabel.hashCode()) * 31 + longPressLabel.hashCode()) * 31 + opens.hashCode()
 }
 
+/** How long OK is held before it counts as a hold, as Settings has it. Null follows the TV's own time. */
+@Volatile internal var holdTimeMs: Long? = null
+
 private class TilePressNode(
     var press: () -> Unit,
     var hold: () -> Unit,
@@ -184,12 +190,19 @@ private class TilePressNode(
 
     private var downAt = 0L
     private var longFired = false
+    // Counts a chosen hold time by itself, since key repeats only begin at the TV's own.
+    private var holdTimer: Job? = null
 
     override fun onFocusEvent(focusState: FocusState) {
         if (!focusState.isFocused) {
             downAt = 0L
             longFired = false
+            holdTimer?.cancel()
         }
+    }
+
+    override fun onDetach() {
+        holdTimer?.cancel()
     }
 
     override fun onPreKeyEvent(event: KeyEvent): Boolean {
@@ -206,11 +219,22 @@ private class TilePressNode(
                     event.nativeKeyEvent.repeatCount == 0 -> {
                         downAt = now
                         longFired = false
+                        holdTimer?.cancel()
+                        holdTimer = holdTimeMs?.let { wait ->
+                            coroutineScope.launch {
+                                delay(wait)
+                                if (downAt != 0L && !longFired) {
+                                    longFired = true
+                                    hold()
+                                }
+                            }
+                        }
                     }
                     // A repeat whose first press landed elsewhere (the tile whose menu just opened) is not ours.
                     downAt == 0L -> Unit
                     // The system flags the repeat at the person's own long-press time; failing that, 450 ms.
-                    !longFired && (event.nativeKeyEvent.isLongPress || now - downAt >= LONG_PRESS_MS) -> {
+                    // A time chosen in Settings stands in for both.
+                    !longFired && (holdTimeMs?.let { now - downAt >= it } ?: (event.nativeKeyEvent.isLongPress || now - downAt >= LONG_PRESS_MS)) -> {
                         longFired = true
                         hold()
                     }
@@ -219,6 +243,7 @@ private class TilePressNode(
             }
             isSelect && event.type == KeyEventType.KeyUp -> {
                 val armed = downAt != 0L
+                holdTimer?.cancel()
                 if (!longFired && armed) press()
                 downAt = 0L
                 longFired = false

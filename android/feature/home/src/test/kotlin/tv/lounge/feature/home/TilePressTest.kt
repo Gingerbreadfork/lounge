@@ -60,6 +60,37 @@ class TilePressTest {
     }
 
     @Test
+    fun aShortHoldTimeOpensTheMenuBeforeTheTvsOwnWouldHave() {
+        holdTimeMs = 300L
+        try {
+            show(testTile("app:tv.a", "Alpha"))
+            rule.onNode(isFocused()).performKeyInput { keyDown(Key.DirectionCenter) }
+            rule.mainClock.advanceTimeBy(350)
+            rule.runOnIdle { assertEquals(0 to 1, presses to menus) }
+            // Letting go after the menu has opened is not a press as well.
+            rule.onNode(isFocused()).performKeyInput { keyUp(Key.DirectionCenter) }
+            rule.runOnIdle { assertEquals(0 to 1, presses to menus) }
+        } finally {
+            holdTimeMs = null
+        }
+    }
+
+    @Test
+    fun aLongHoldTimeLeavesAnUnhurriedPressAPress() {
+        holdTimeMs = 900L
+        try {
+            show(testTile("app:tv.a", "Alpha"))
+            rule.onNode(isFocused()).performKeyInput { keyDown(Key.DirectionCenter) }
+            rule.mainClock.advanceTimeBy(600)
+            rule.onNode(isFocused()).performKeyInput { keyUp(Key.DirectionCenter) }
+            rule.mainClock.advanceTimeBy(600)
+            rule.runOnIdle { assertEquals(1 to 0, presses to menus) }
+        } finally {
+            holdTimeMs = null
+        }
+    }
+
+    @Test
     fun aHoldOpensTheMenuOfATileThatHasOne() {
         show(testTile("app:tv.a", "Alpha"))
         hold()

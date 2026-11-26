@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="start_with_about">S’ouvre tout seul quand la TV démarre ou se réveille avec Lounge à l’écran. La touche Accueil vous ramène toujours à Lounge.</string>
+    <string name="start_with_home">L’écran d’accueil de Lounge</string>
+    <string name="start_with_home_about">Rien ne s’ouvre tout seul</string>
+    <string name="start_with_inputs">Entrées</string>
+    <string name="start_with_apps">Applis</string>
+    <string name="start_with_missing">Pas sur cette TV pour le moment</string>
+</resources>

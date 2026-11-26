@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Under the heading of the list that chooses what opens when the TV starts. Home is the button on the remote. -->
+    <string name="start_with_about">Opens by itself when the TV starts or wakes with Lounge on screen. The Home button still brings you to Lounge.</string>
+    <!-- The first choice in that list: nothing opens, and the TV stays on Lounge. -->
+    <string name="start_with_home">Lounge\'s home screen</string>
+    <string name="start_with_home_about">Nothing opens by itself</string>
+    <!-- Labels over the two parts of the list: the TV's inputs, such as HDMI 1, and its apps. -->
+    <string name="start_with_inputs">Inputs</string>
+    <string name="start_with_apps">Apps</string>
+    <!-- Under the name of the app or input chosen to open at start, while the TV does not have it: uninstalled, or unplugged. -->
+    <string name="start_with_missing">Not on this TV at the moment</string>
+</resources>

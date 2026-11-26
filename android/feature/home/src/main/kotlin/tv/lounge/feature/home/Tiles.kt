@@ -1,5 +1,6 @@
 package tv.lounge.feature.home
 
+import androidx.compose.runtime.staticCompositionLocalOf
 import android.content.res.Resources
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -93,6 +94,15 @@ import tv.lounge.design.argb
 import tv.lounge.design.focusRim
 import tv.lounge.design.lightGlow
 import tv.lounge.design.lightState
+
+/** Whether rows draw their tiles a size up, as Settings has it. */
+val LocalLargeTiles = staticCompositionLocalOf { false }
+
+/** The next size up, where there is one. */
+internal fun RowSize.larger(): RowSize = when (this) {
+    RowSize.S -> RowSize.M
+    RowSize.M, RowSize.L -> RowSize.L
+}
 
 /** Tile sizes at 1080p (DESIGN.md §5.3). */
 fun tileSize(kind: TileKind, size: RowSize): DpSize = when (kind) {

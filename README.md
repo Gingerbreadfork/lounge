@@ -161,7 +161,10 @@ a TV set up before Lounge had this it stays off until you turn it on there.
 
 **Settings.** A short list of pages: Home screen, Look, Remote and sounds, Access, This TV and
 About and updates, with Plugins, Notifications and Phone companion beside them. Every row says
-in a line what it does.
+in a line what it does. Among them: turn the Stage off so the home opens on your rows, choose
+an app or an input that opens by itself when the TV starts, make the text or the tiles larger,
+hide the clock, and set how long OK is held before a tile's options open. The Screensaver sheet
+sets how long the TV waits before the screensaver starts, which needs Power Setup.
 
 **The TV's own settings.** Settings has a row for the TV's network screen, which shows whether
 the TV is on Wi-Fi or Ethernet, one for its sound screen, which shows where the sound comes out,

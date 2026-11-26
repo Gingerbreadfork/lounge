@@ -28,6 +28,8 @@ sealed interface Overlay {
     data object QuickSettings : Overlay
     /** One page of Settings, opened from its list. */
     data class SettingsPage(val section: SettingsSection) : Overlay
+    /** The list that chooses what opens when the TV starts. */
+    data object StartWith : Overlay
     data object HomeRole : Overlay
     /** The languages Lounge is written in, to choose one over the TV's own. */
     data object Language : Overlay

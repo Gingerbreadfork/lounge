@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="start_with_about">Abre sozinho quando a TV liga ou acorda com o Lounge na tela. O botão Início continua levando você ao Lounge.</string>
+    <string name="start_with_home">A tela inicial do Lounge</string>
+    <string name="start_with_home_about">Nada abre sozinho</string>
+    <string name="start_with_inputs">Entradas</string>
+    <string name="start_with_apps">Apps</string>
+    <string name="start_with_missing">Não está nesta TV no momento</string>
+</resources>

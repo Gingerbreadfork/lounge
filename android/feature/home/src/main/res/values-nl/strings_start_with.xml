@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="start_with_about">Opent vanzelf als de tv start of wakker wordt met Lounge in beeld. Met de Home-knop kom je nog steeds bij Lounge.</string>
+    <string name="start_with_home">Het startscherm van Lounge</string>
+    <string name="start_with_home_about">Er opent niets vanzelf</string>
+    <string name="start_with_inputs">Ingangen</string>
+    <string name="start_with_apps">Apps</string>
+    <string name="start_with_missing">Nu niet op deze tv</string>
+</resources>

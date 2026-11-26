@@ -22,7 +22,8 @@ class PrefsBackupTest {
         assertEquals(
             mapOf(
                 "theme" to "Dusk", "sounds" to "true", "lite_mode" to "auto", "reduced_motion" to "auto",
-                "show_mobile_apps" to "false", "backdrop" to "still", "ambient_style" to "pictures", "all_apps_sort" to "az",
+                "show_mobile_apps" to "false", "hold_hints" to "true", "show_stage" to "true", "show_clock" to "true",
+                "hold_time" to "Normal", "text_size" to "Normal", "large_tiles" to "false", "backdrop" to "still", "ambient_style" to "pictures", "all_apps_sort" to "az",
                 "notifications" to "true", "notifications_hidden" to "",
             ),
             platform.preferences(),
@@ -42,7 +43,8 @@ class PrefsBackupTest {
         prefs.setCompanionEnabled(true)
         val backup = mapOf(
             "theme" to "Opera", "sounds" to "false", "lite_mode" to "true", "reduced_motion" to "false",
-            "show_mobile_apps" to "true", "backdrop" to "silk", "ambient_style" to "plugin:tv.example.scenes:smoke", "all_apps_sort" to "opened",
+            "show_mobile_apps" to "true", "hold_hints" to "false", "show_stage" to "false", "show_clock" to "false",
+            "hold_time" to "Long", "text_size" to "Largest", "large_tiles" to "true", "backdrop" to "silk", "ambient_style" to "plugin:tv.example.scenes:smoke", "all_apps_sort" to "opened",
             "notifications" to "false", "notifications_hidden" to "android,tv.example.shop",
         )
         // What belongs to this TV alone is not a backup's to change, whatever the file says.
@@ -53,6 +55,8 @@ class PrefsBackupTest {
         assertEquals(true, restored.liteMode)
         assertEquals(false, restored.reducedMotion)
         assertEquals(true, restored.showMobileApps)
+        assertEquals(listOf(false, false, true), listOf(restored.showStage, restored.showClock, restored.largeTiles))
+        assertEquals(Prefs.HoldTime.Long to Prefs.TextSize.Largest, restored.holdTime to restored.textSize)
         assertEquals("silk", restored.backdrop)
         assertEquals(Prefs.SORT_OPENED, restored.allAppsSort)
         assertEquals("plugin:tv.example.scenes:smoke", prefs.ambientStyle.first())
@@ -61,7 +65,7 @@ class PrefsBackupTest {
         assertEquals(backup, platform.preferences())
 
         // A value that is not one of a setting's own is passed over, and so is a setting left out.
-        platform.restorePreferences(mapOf("theme" to "Neon", "sounds" to "loud", "lite_mode" to "sometimes", "backdrop" to " ", "all_apps_sort" to "size", "notifications_hidden" to "tv.a, not a package"))
+        platform.restorePreferences(mapOf("theme" to "Neon", "sounds" to "loud", "lite_mode" to "sometimes", "backdrop" to " ", "all_apps_sort" to "size", "notifications_hidden" to "tv.a, not a package", "hold_time" to "Forever", "text_size" to "Huge", "show_stage" to "maybe"))
         assertEquals(backup, platform.preferences())
 
         // Following the TV again is a value like any other.

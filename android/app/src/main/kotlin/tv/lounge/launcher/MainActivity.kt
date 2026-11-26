@@ -146,8 +146,9 @@ class MainActivity : ComponentActivity() {
                     variant = LoungeThemeVariant.valueOf(uiPrefs.theme.name),
                     reducedMotion = reduced,
                     visuals = visuals,
+                    textScale = uiPrefs.textSize.scale,
                 ) {
-                    CompositionLocalProvider(LocalUiSounds provides soundsState.value) {
+                    CompositionLocalProvider(LocalUiSounds provides soundsState.value, tv.lounge.feature.home.LocalLargeTiles provides uiPrefs.largeTiles) {
                         HomeScreen(core = core, platform = platform, prefs = prefs, uiPrefs = uiPrefs, power = power, updates = updates, notifications = NotificationFeed)
                     }
                 }

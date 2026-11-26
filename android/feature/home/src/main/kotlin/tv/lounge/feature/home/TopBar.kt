@@ -108,6 +108,8 @@ fun TopBar(
     onOffline: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Whether the time shows at the end of the bar. */
+    showClock: Boolean = true,
     /** Starts the TV listening for something to search for. Null on a TV that cannot listen. */
     onVoice: (() -> Unit)? = null,
     /** The Bluetooth device the sound is going to, by name, or null while it plays in the room. */
@@ -183,8 +185,10 @@ fun TopBar(
                 )
             }
             TopBarButton(LoungeIcons.Settings, stringResource(DesignR.string.common_settings), onSettings, focus, focus.settings)
-            Spacer(Modifier.width(12.dp))
-            Clock()
+            if (showClock) {
+                Spacer(Modifier.width(12.dp))
+                Clock()
+            }
         }
     }
 }

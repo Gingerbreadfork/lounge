@@ -1,5 +1,7 @@
 package tv.lounge.feature.home
 
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import android.content.Intent
 import android.content.res.Resources
 import androidx.annotation.StringRes
@@ -272,8 +274,33 @@ fun HomeScreen(
         uiSounds?.close()
     }
 
-    /** Home means the Stage: expand it, bring the rows back to the top and move focus there. */
+    val stageShown = rememberUpdatedState(uiPrefs.showStage)
+    val homeRows = rememberUpdatedState(snapshot.rows)
+    // With no Stage and no rows yet, focus waits on the top bar for the first row.
+    val awaitingRows = remember { mutableStateOf(false) }
+
+    /**
+     * Home means the Stage: expand it, bring the rows back to the top and move focus there. With
+     * the Stage turned off in Settings, home is the first tile of the first row.
+     */
     fun goToStage(snap: Boolean = false) {
+        if (!stageShown.value) {
+            val first = homeRows.value.firstOrNull()
+            scope.launch {
+                if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) listState.scrollToItem(0)
+                awaitingRows.value = first == null
+                if (first == null) {
+                    state.region = FocusRegion.TopBar
+                    state.topBarFocus.requestWhenReady()
+                } else {
+                    state.region = FocusRegion.Rows
+                    state.rowListState(first.id).scrollToItem(0)
+                    state.focusedTileIndex = 0
+                    state.focusRow(first.id)
+                }
+            }
+            return
+        }
         state.region = FocusRegion.Stage
         state.focusedRowId = null
         scope.launch { state.focusStrip() }
@@ -288,10 +315,11 @@ fun HomeScreen(
     fun offline() = networkSettings != null && noNetwork.value
 
     // The first few times the home is used, a row says that holding OK opens a tile's options: once
-    // each time Lounge starts, when focus has rested on a tile that has some.
+    // each time Lounge starts, when focus has rested on a tile that has some. Settings turns it off.
     val holdHint = stringResource(R.string.rows_hold_hint)
     val hintedRow = remember { mutableStateOf<String?>(null) }
-    val hintsLeft = rememberUpdatedState(uiPrefs.holdHintsLeft)
+    val hintsOn = rememberUpdatedState(uiPrefs.holdHints)
+    val hintsLeft = rememberUpdatedState(if (uiPrefs.holdHints) uiPrefs.holdHintsLeft else 0)
     val rowsNow = rememberUpdatedState(snapshot.rows)
     LaunchedEffect(Unit) {
         var said = false
@@ -310,6 +338,28 @@ fun HomeScreen(
             hintedRow.value = null
         }
     }
+
+    // What the person chose opens by itself when the TV starts or wakes with Lounge in front.
+    val prefsNow = rememberUpdatedState(uiPrefs)
+    val revisionNow = rememberUpdatedState(snapshot.revision)
+    val snapshotNow = rememberUpdatedState(snapshot)
+    LaunchedEffect(Unit) {
+        var startedAt = 0L
+        context.applicationContext.starts().collectLatest {
+            // A TV just switched on is still reading its settings and its apps.
+            withTimeoutOrNull(START_LOADS_MS) { snapshotFlow { prefsNow.value.loaded && revisionNow.value > 0uL }.first { it } } ?: return@collectLatest
+            // Waking behind another app, the TV stays on that app, and a later press of Home opens only Lounge.
+            withTimeoutOrNull(START_IN_FRONT_MS) { homeOwner.lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) } } ?: return@collectLatest
+            val ui = prefsNow.value
+            val action = ui.startAction ?: return@collectLatest
+            // One start is one opening, and something the TV no longer has is passed over without a word.
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (!ui.onboardingDone || state.overlay != Overlay.None || now - startedAt < START_ONCE_MS || !canStartWith(snapshotNow.value, action)) return@collectLatest
+            startedAt = now
+            perform(action, ui.startTitle.orEmpty())
+        }
+    }
+    SideEffect { holdTimeMs = uiPrefs.holdTime.ms }
 
     // A remote or controller running low is said once, the next time Lounge comes to the front.
     // One is said at a time, the lowest first, and only while Lounge is there to say it.
@@ -346,7 +396,8 @@ fun HomeScreen(
                 val last = if (chipGone(state.topBar.last)) state.topBar.settings else state.topBar.last
                 if (!last.requestWhenReady(6)) state.topBarFocus.requestWhenReady()
             }
-            FocusRegion.Stage -> if (!(state.playbillFocused && state.playbillFocus.requestWhenReady(6))) state.focusStrip()
+            // The Stage may have been turned off since it last had focus.
+            FocusRegion.Stage -> if (!stageShown.value) goToStage() else if (!(state.playbillFocused && state.playbillFocus.requestWhenReady(6))) state.focusStrip()
             FocusRegion.Rows -> {
                 val rows = snapshot.rows
                 val row = rows.firstOrNull { it.id == state.focusedRowId }
@@ -559,7 +610,7 @@ fun HomeScreen(
     fun indexInRow(rowId: String, tileId: String): Int =
         snapshot.rows.firstOrNull { it.id == rowId }?.tiles?.indexOfFirst { it.id == tileId } ?: -1
 
-    val hasStrip = snapshot.stage.strip.isNotEmpty()
+    val hasStrip = uiPrefs.showStage && snapshot.stage.strip.isNotEmpty()
     val nowPlaying = snapshot.nowPlaying
     LaunchedEffect(nowPlaying == null) {
         if (nowPlaying == null && state.overlay == Overlay.NowPlaying) closeOverlay(sound = false)
@@ -713,7 +764,8 @@ fun HomeScreen(
                     e.isBack() && state.overlay == Overlay.None -> {
                         if (e.type == KeyEventType.KeyUp) {
                             when (homeBack(state.region, state.playbillFocused)) {
-                                HomeBack.ToStage -> {
+                                // Already on the first tile of the first row with no Stage, the home is home.
+                                HomeBack.ToStage -> if (stageShown.value || state.region != FocusRegion.Rows || state.focusedTileIndex != 0 || state.focusedRowId != snapshot.rows.firstOrNull()?.id) {
                                     close()
                                     goToStage()
                                 }
@@ -762,7 +814,15 @@ fun HomeScreen(
                 notifications = notices,
                 offline = { offline() },
                 focus = state.topBar,
-                downFocus = { state.stripFocus() },
+                // Down lands on the Stage's strip, or with no Stage on the first row, where it last was.
+                downFocus = {
+                    val first = snapshot.rows.firstOrNull()
+                    when {
+                        uiPrefs.showStage -> state.stripFocus()
+                        first == null -> FocusRequester.Default
+                        else -> state.rowRequester(first.id, if (state.focusedRowId == first.id) state.focusedTileIndex.coerceIn(0, (first.tiles.size - 1).coerceAtLeast(0)) else 0)
+                    }
+                },
                 onFocused = { state.region = FocusRegion.TopBar; light.clear() },
                 onSearch = { uiSounds?.open(); openOverlay(Overlay.Search) },
                 onVoice = speak?.let { listen -> { listen(state.topBar.voice) } },
@@ -779,6 +839,7 @@ fun HomeScreen(
                 },
                 onSettings = { uiSounds?.open(); openOverlay(Overlay.QuickSettings) },
                 modifier = Modifier.graphicsLayer { alpha = roomAlpha.value },
+                showClock = uiPrefs.showClock,
             )
             Spacer(Modifier.height(34.dp))
             Box(Modifier.fillMaxSize()) {
@@ -789,7 +850,8 @@ fun HomeScreen(
                 val headerPx = with(density) { tv.lounge.design.Dimens.rowHeaderHeight.toPx() }
                 val collapsedPx = with(density) { StageCollapsedHeight.toPx() }
                 val belowStage = remember(collapsedPx) { TopInsetShape(collapsedPx) }
-                BandRise(state, firstRowId)
+                if (uiPrefs.showStage) BandRise(state, firstRowId)
+                val stageHidden = !uiPrefs.showStage
                 CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec(collapsedPx + headerPx), LocalPendingPresses provides state.pending) {
                     LazyColumn(
                         state = listState,
@@ -800,7 +862,8 @@ fun HomeScreen(
                             // Taller than its place by the band, so the rows still reach the foot of the screen once they have risen into it.
                             .tallerBy(collapsedPx.roundToInt())
                             .graphicsLayer {
-                                translationY = (state.stageHeight?.value?.toPx() ?: 0f) - collapsedPx * (1f + (state.bandRise?.value ?: 0f))
+                                // With no Stage the rows sit where they do once its lowered band has shut.
+                                translationY = if (stageHidden) -collapsedPx else (state.stageHeight?.value?.toPx() ?: 0f) - collapsedPx * (1f + (state.bandRise?.value ?: 0f))
                                 shape = belowStage
                                 clip = true
                             }
@@ -833,14 +896,14 @@ fun HomeScreen(
                             heldTileId = { heldHomeMenu()?.tile?.id },
                             heldRowId = { heldHomeMenu()?.rowId },
                             shown = { shown.value },
-                            hint = { holdHint.takeIf { hintedRow.value == row.id } },
+                            hint = { holdHint.takeIf { hintsOn.value && hintedRow.value == row.id } },
                         )
                     }
                 }
                 }
                 // Not a focus group: the box overlaps the rows, so as a group it would never count
                 // as above a focused row. The band and the strip are the candidates instead.
-                Box(
+                if (!stageHidden) Box(
                     Modifier
                         .graphicsLayer { alpha = roomAlpha.value }
                         .onFocusChanged { if (it.hasFocus) state.region = FocusRegion.Stage }
@@ -1115,6 +1178,7 @@ fun HomeScreen(
                     onEditGroup = { group?.let { fromMenu(Overlay.GroupEdit(it)) } },
                     onMarkWatched = { core.command(LayoutCommand.MarkWatched(ov.tile.id)); say(R.string.home_screen_marked_watched) },
                     isStagePinned = ov.tile.stagePinned,
+                    stageShown = uiPrefs.showStage,
                     onHide = { core.command(LayoutCommand.HideItem(ov.tile.id)); say(R.string.home_screen_hidden) },
                     onShow = { core.command(LayoutCommand.UnhideItem(ov.tile.id)); say(R.string.home_screen_shown) },
                     onHideAllFrom = {
@@ -1233,8 +1297,12 @@ fun HomeScreen(
     LaunchedEffect(hasStrip) {
         if (hasStrip && state.region == FocusRegion.Stage && state.overlay == Overlay.None) state.focusStrip()
     }
+    // The Stage turned off while focus was on it, or before the first rows had come to take its place.
+    LaunchedEffect(uiPrefs.showStage, snapshot.rows.isEmpty(), state.overlay == Overlay.None) {
+        if (!uiPrefs.showStage && state.overlay == Overlay.None && (state.region == FocusRegion.Stage || awaitingRows.value)) goToStage()
+    }
     // An empty home has no strip; its Start button takes focus instead.
-    val emptyHome = snapshot.revision > 0uL && snapshot.stage.spotlights.isEmpty()
+    val emptyHome = uiPrefs.showStage && snapshot.revision > 0uL && snapshot.stage.spotlights.isEmpty()
     LaunchedEffect(emptyHome) {
         if (emptyHome && state.region == FocusRegion.Stage && state.overlay == Overlay.None) state.playbillFocus.requestWhenReady()
     }
@@ -1270,6 +1338,13 @@ private fun Modifier.tallerBy(extra: Int): Modifier = layout { measurable, const
     layout(placeable.width, constraints.maxHeight) { placeable.place(0, 0) }
 }
 
+/** How long a TV just switched on may take to load before what it starts with is given up, and how long Lounge has to come to the front. */
+private const val START_LOADS_MS = 20_000L
+private const val START_IN_FRONT_MS = 2_000L
+
+/** Starts closer together than this are one start: a TV switched on says so twice. */
+private const val START_ONCE_MS = 10_000L
+
 /** How long focus rests on a tile before the hint about holding OK, and how long the hint stays. */
 private const val HOLD_HINT_REST_MS = 2_500L
 private const val HOLD_HINT_SHOWN_MS = 8_000L
@@ -1284,7 +1359,7 @@ private data class TopInsetShape(val top: Float) : androidx.compose.ui.graphics.
 }
 
 private fun Overlay.isSheet(): Boolean = when (this) {
-    Overlay.QuickSettings, is Overlay.SettingsPage, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels, Overlay.Rows,
+    Overlay.QuickSettings, is Overlay.SettingsPage, Overlay.StartWith, Overlay.Ambient, Overlay.PowerSetup, Overlay.TvControls, Overlay.Channels, Overlay.Rows,
     Overlay.Plugins, is Overlay.PluginDetail, is Overlay.PluginSheet, Overlay.HomeRole, Overlay.Language, Overlay.Companion, Overlay.Updates,
     Overlay.Notifications, is Overlay.NotificationDetail, Overlay.NotificationSettings,
     is Overlay.AppGroups, is Overlay.GroupEdit,
@@ -1424,6 +1499,8 @@ private fun SheetContent(
                 prefs = prefs,
                 section = (overlay as? Overlay.SettingsPage)?.section,
                 onSection = { open(Overlay.SettingsPage(it)) },
+                ui = uiPrefs,
+                onStartWith = { open(Overlay.StartWith) },
                 theme = theme,
                 sounds = sounds,
                 lite = lite,
@@ -1482,6 +1559,19 @@ private fun SheetContent(
                 onSetBackdrop = { id -> scope.launch { prefs.setBackdrop(id) } },
                 notificationsOn = uiPrefs.notifications,
                 onNotifications = { open(Overlay.NotificationSettings) },
+            )
+        }
+        Overlay.StartWith -> {
+            val snapshot by core.snapshots.collectAsStateWithLifecycle()
+            StartWithSheet(
+                snapshot = snapshot,
+                chosen = uiPrefs.startAction,
+                chosenTitle = uiPrefs.startTitle,
+                onChoose = { action, title ->
+                    scope.launch { prefs.setStartWith(action, title) }
+                    back(Overlay.StartWith)
+                },
+                firstFocus = first,
             )
         }
         Overlay.Notifications -> {

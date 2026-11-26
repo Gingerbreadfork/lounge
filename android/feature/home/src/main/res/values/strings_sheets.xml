@@ -26,6 +26,9 @@
     <string name="sheets_apps_only_subtitle">Leaves just your apps on the home screen. Search still finds the rest.</string>
     <string name="sheets_phone_apps_title">Phone apps in All apps</string>
     <string name="sheets_phone_apps_subtitle">Apps made for phones, which may not work well with a remote</string>
+    <!-- A switch in Settings. The words in quotation marks are the hint itself, as rows_hold_hint has them. -->
+    <string name="sheets_hold_hint_title">Hold OK hint</string>
+    <string name="sheets_hold_hint_subtitle">Says “Hold OK for more” beside a row the first few times</string>
     <!-- Channels are rows that other apps on the TV publish. -->
     <string name="sheets_channels_title">Channels from apps</string>
     <string name="sheets_channels_subtitle">Rows that apps on this TV publish</string>
@@ -243,9 +246,34 @@
     <string name="sheets_section_lounge">About and updates</string>
     <string name="sheets_section_lounge_about">New versions, setup and diagnostics</string>
     <string name="sheets_companion_row_subtitle">A page on your phone to work the TV and arrange the home screen</string>
+    <!-- A switch in Settings for the Stage, the large area at the top of the home screen. -->
+    <string name="sheets_stage_title">The Stage</string>
+    <string name="sheets_stage_subtitle">The large picture at the top, with what to watch next. Off, the home screen opens on your rows.</string>
+    <!-- A row in Settings that chooses what opens by itself when the TV is switched on or wakes. -->
+    <string name="sheets_start_title">When the TV starts</string>
+    <string name="sheets_start_subtitle">What opens when the TV wakes on Lounge: the home screen, an app or an input</string>
+    <!-- The value of When the TV starts while nothing is chosen. -->
+    <string name="sheets_start_home">Home screen</string>
     <string name="sheets_theme_subtitle">Lounge\'s colours</string>
+    <string name="sheets_text_size_title">Text size</string>
+    <string name="sheets_text_size_subtitle">How large Lounge\'s words are</string>
+    <!-- The three values of Text size and the two of Tile size. They describe a size. -->
+    <string name="sheets_size_normal">Normal</string>
+    <string name="sheets_size_large">Large</string>
+    <string name="sheets_size_largest">Largest</string>
+    <string name="sheets_tile_size_title">Tile size</string>
+    <string name="sheets_tile_size_subtitle">How large the tiles in each row are</string>
+    <string name="sheets_clock_title">Clock</string>
+    <string name="sheets_clock_subtitle">The time in the top corner</string>
     <string name="sheets_screensaver_subtitle">What shows when the TV is left alone, and how soon</string>
     <string name="sheets_reduce_motion_subtitle">Less movement as things open and change</string>
+    <!-- A setting for how long the OK button must be held down before it counts as a hold. -->
+    <string name="sheets_hold_time_title">Hold time for OK</string>
+    <string name="sheets_hold_time_subtitle">How long OK is held before a tile\'s options open</string>
+    <!-- The three values of Hold time for OK. They describe a length of time. -->
+    <string name="sheets_hold_time_short">Short</string>
+    <string name="sheets_hold_time_normal">Normal</string>
+    <string name="sheets_hold_time_long">Long</string>
     <string name="sheets_sounds_subtitle">The soft clicks as you move and open things</string>
     <string name="sheets_updates_subtitle">New versions of Lounge, and whether to look for them</string>
     <string name="sheets_setup_again_subtitle">The steps from the first time Lounge opened</string>

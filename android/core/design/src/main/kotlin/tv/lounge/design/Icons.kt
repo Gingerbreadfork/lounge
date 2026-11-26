@@ -282,6 +282,23 @@ object LoungeIcons {
         }
     }
 
+    /** A capital A: the size of the words. */
+    val Text: ImageVector by lazy {
+        icon("text") {
+            stroke { moveTo(6.5f, 22.5f); lineTo(14f, 5.5f); lineTo(21.5f, 22.5f) }
+            stroke { moveTo(9.5f, 16.5f); lineTo(18.5f, 16.5f) }
+        }
+    }
+
+    /** A small tile inside the corners of a larger one: the size of the tiles. */
+    val Size: ImageVector by lazy {
+        icon("size") {
+            stroke { moveTo(5f, 11f); lineTo(5f, 5f); lineTo(11f, 5f) }
+            stroke { moveTo(17f, 23f); lineTo(23f, 23f); lineTo(23f, 17f) }
+            stroke { moveTo(10f, 10f); lineTo(18f, 10f); lineTo(18f, 18f); lineTo(10f, 18f); close() }
+        }
+    }
+
     /** A crescent moon: the sleep timer. */
     val Sleep: ImageVector by lazy {
         icon("sleep") {
