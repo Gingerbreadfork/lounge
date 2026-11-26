@@ -309,22 +309,32 @@ internal fun switchable(devices: List<CecDevice>): List<CecDevice> =
  * power and input rows, each under the id of the action it runs. A television, or a box whose
  * cable carries no control, can only be put to sleep. Its words are in the language of [resources].
  */
-internal fun phoneTvControls(resources: Resources, ready: Boolean, hasCec: Boolean, isTelevision: Boolean, devices: List<CecDevice>): TvControls {
+internal fun phoneTvControls(resources: Resources, ready: Boolean, hasCec: Boolean, isTelevision: Boolean, devices: List<CecDevice>, sleepLeft: Int? = null): TvControls {
     fun text(@StringRes id: Int) = resources.getString(id)
-    if (!ready) return TvControls(note = text(R.string.power_phone_needs_power_setup), controls = emptyList())
-    if (isTelevision) return TvControls(note = null, controls = listOf(TvControl("sleep", text(R.string.power_phone_turn_tv_off), null, null, "power")))
-    if (!hasCec) return TvControls(note = null, controls = listOf(TvControl("sleep", text(R.string.power_phone_sleep), null, null, "power")))
+    // A press steps the timer on to its next time and then off, as OK does on the TV.
+    val timer = TvControl(SLEEP_TIMER, text(R.string.power_sleep_timer), sleepLeft?.let { resources.getQuantityString(R.plurals.power_sleep_timer_left, it, it) } ?: text(DesignR.string.common_off), null, "sleep")
+    // A timer left running while Power Setup is away is still listed, so it can be taken back.
+    if (!ready) return TvControls(note = text(R.string.power_phone_needs_power_setup), controls = if (sleepLeft != null) listOf(timer) else emptyList())
+    if (isTelevision) return TvControls(note = null, controls = listOf(TvControl("sleep", text(R.string.power_phone_turn_tv_off), null, null, "power"), timer))
+    if (!hasCec) return TvControls(note = null, controls = listOf(TvControl("sleep", text(R.string.power_phone_sleep), null, null, "power"), timer))
     val tv = devices.firstOrNull { it.isTv }
     val rows = buildList {
         add(TvControl("cec_otp", text(R.string.power_phone_wake), tv?.let { text(if (it.isOn) R.string.power_tv_is_on else R.string.power_tv_is_off) }, null, "tv"))
         add(TvControl("cec_tv_power", text(R.string.power_tv_power), text(R.string.power_tv_power_value), null, "power"))
         add(TvControl("sleep", text(R.string.power_everything_off), text(R.string.power_everything_off_value), null, "power"))
+        add(timer)
         switchable(devices).forEach { d ->
             add(TvControl("cec_select_${d.logicalAddress}", d.name, text(if (d.isOn) R.string.power_device_on else R.string.power_device_standby), text(R.string.power_switch_tv_to), "input"))
         }
     }
     return TvControls(note = null, controls = rows)
 }
+
+/** The id of the sleep timer among the phone's TV controls. */
+internal const val SLEEP_TIMER = "sleep_timer"
+
+/** The minutes a sleep timer ending at [endsAt] has left at [now], rounded up, or null with none running. */
+internal fun sleepMinutesLeft(endsAt: Long?, now: Long): Int? = endsAt?.let { ((it - now + 59_999) / 60_000).toInt().coerceAtLeast(1) }
 
 /** How long the phone's list waits for Power Setup, which is busy while it is being connected. */
 private const val PHONE_STATUS_WAIT_MS = 4_000L
@@ -336,11 +346,20 @@ class PhoneTvControls(private val power: PowerSetup, private val context: Contex
         val status = withTimeoutOrNull(PHONE_STATUS_WAIT_MS) { power.refresh() } ?: power.status.value
         val ready = status is PowerStatus.Ready
         val onCable = ready && power.hasTvControls
-        return phoneTvControls(context.resources, ready, power.hasCec, power.isTelevision, if (onCable) power.cecDevices() else emptyList())
+        return phoneTvControls(context.resources, ready, power.hasCec, power.isTelevision, if (onCable) power.cecDevices() else emptyList(), sleepLeft())
     }
+
+    private fun sleepLeft(): Int? = sleepMinutesLeft(power.sleepTimer.endsAt.value, System.currentTimeMillis())
 
     /** Runs the row with this id, if it is one the list holds now. A failure is thrown as a sentence saying what to check. */
     suspend fun run(id: String) {
+        if (id == SLEEP_TIMER) {
+            // Without Power Setup a press can only take a running timer back.
+            val ready = power.status.value is PowerStatus.Ready
+            if (!ready && sleepLeft() == null) throw PlatformException.Failed(context.getString(R.string.power_phone_needs_power_setup))
+            val minutes = if (ready) sleepStep(sleepLeft(), forward = true) else 0
+            return if (minutes == 0) power.sleepTimer.cancel() else power.sleepTimer.set(minutes)
+        }
         val devices = if (power.hasTvControls) power.cecDevices() else emptyList()
         val listed = phoneTvControls(context.resources, ready = true, power.hasCec, power.isTelevision, devices).controls.any { it.id == id }
         val action = when {

@@ -53,12 +53,14 @@ class SleepTimer(
         }
     }
 
+    @Synchronized
     fun set(minutes: Int) {
         val at = clock() + minutes * 60_000L
         store.edit().putLong(KEY, at).apply()
         arm(at)
     }
 
+    @Synchronized
     fun cancel() {
         store.edit().remove(KEY).apply()
         disarm()

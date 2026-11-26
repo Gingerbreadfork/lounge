@@ -46,22 +46,35 @@ class FocusRulesTest {
         // A box plugged into a TV: the sheet's power rows, then the inputs under their own label.
         val box = phoneTvControls(resources, ready = true, hasCec = true, isTelevision = false, devices = cable)
         assertEquals(null, box.note)
-        assertEquals(listOf("cec_otp", "cec_tv_power", "sleep", "cec_select_4", "cec_select_8"), box.controls.map { it.id })
-        assertEquals(listOf("TV is off", "On or off", "Sleep, TV follows", "On", "Standby"), box.controls.map { it.value })
-        assertEquals(listOf(null, null, null, "Switch the TV to", "Switch the TV to"), box.controls.map { it.group })
-        assertEquals(listOf("Streamer", "Console"), box.controls.drop(3).map { it.title })
+        assertEquals(listOf("cec_otp", "cec_tv_power", "sleep", "sleep_timer", "cec_select_4", "cec_select_8"), box.controls.map { it.id })
+        assertEquals(listOf("TV is off", "On or off", "Sleep, TV follows", "Off", "On", "Standby"), box.controls.map { it.value })
+        assertEquals(listOf(null, null, null, null, "Switch the TV to", "Switch the TV to"), box.controls.map { it.group })
+        assertEquals(listOf("Streamer", "Console"), box.controls.drop(4).map { it.title })
 
         // With nothing else on the cable there is nothing to switch to.
         val alone = phoneTvControls(resources, ready = true, hasCec = true, isTelevision = false, devices = listOf(lounge))
-        assertEquals(listOf("cec_otp", "cec_tv_power", "sleep"), alone.controls.map { it.id })
+        assertEquals(listOf("cec_otp", "cec_tv_power", "sleep", "sleep_timer"), alone.controls.map { it.id })
         assertEquals(null, alone.controls.first().value)
 
         // A television cannot wake or switch itself over the cable, and a box without control
         // on its cable cannot reach the TV: each can only sleep.
         val television = phoneTvControls(resources, ready = true, hasCec = true, isTelevision = true, devices = cable)
-        assertEquals(listOf("sleep" to "Turn the TV off"), television.controls.map { it.id to it.title })
+        assertEquals(listOf("sleep" to "Turn the TV off", "sleep_timer" to "Sleep timer"), television.controls.map { it.id to it.title })
         val deaf = phoneTvControls(resources, ready = true, hasCec = false, isTelevision = false, devices = cable)
-        assertEquals(listOf("sleep" to "Go to sleep"), deaf.controls.map { it.id to it.title })
+        assertEquals(listOf("sleep" to "Go to sleep", "sleep_timer" to "Sleep timer"), deaf.controls.map { it.id to it.title })
+    }
+
+    @Test
+    fun thePhonesSleepTimerSaysWhatIsLeftToTheMinuteAbove() {
+        assertEquals(null, sleepMinutesLeft(null, now = 1_000))
+        assertEquals(30, sleepMinutesLeft(1_000 + 30 * 60_000L, now = 1_000))
+        assertEquals(30, sleepMinutesLeft(1_000 + 29 * 60_000L + 1, now = 1_000))
+        assertEquals(1, sleepMinutesLeft(1_000, now = 5_000))
+        val running = phoneTvControls(resources, ready = true, hasCec = false, isTelevision = true, devices = emptyList(), sleepLeft = 28)
+        assertEquals("sleep" to "28 min left", running.controls.last().glyph to running.controls.last().value)
+        // A timer still running once Power Setup has gone is listed under the note, to be taken back.
+        val away = phoneTvControls(resources, ready = false, hasCec = false, isTelevision = true, devices = emptyList(), sleepLeft = 28)
+        assertEquals(true to listOf("sleep_timer"), (away.note != null) to away.controls.map { it.id })
     }
 
     @Test

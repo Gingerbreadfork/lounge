@@ -52,14 +52,15 @@
   }
   const ready = $derived(!!tv && !tv.note);
   // A box plugged into a TV reaches it through the cable; a TV on its own can only sleep.
-  const cable = $derived(!!tv?.controls.some((c) => c.id !== 'sleep'));
+  const cable = $derived(!!tv?.controls.some((c) => c.id !== 'sleep' && c.id !== 'sleep_timer'));
 </script>
 
 <BottomSheet title={t('TV controls')} subtitle={ready && cable ? t('Turn the TV on or off and switch its input.') : null} {onclose}>
   {#if tv?.note}
     <p class="note">{tv.note}</p>
     <p class="caption note">{t('Volume and playback are on the remote, and work without it.')}</p>
-  {:else if tv}
+  {/if}
+  {#if tv && (!tv.note || tv.controls.length)}
     <div class="list">
       {#each tv.controls as c, i (c.id)}
         {#if c.group && c.group !== tv.controls[i - 1]?.group}<p class="caption group">{c.group}</p>{/if}
@@ -74,7 +75,7 @@
       {/each}
     </div>
     {#if cable}<p class="caption note">{t('Lounge asks the TV through its HDMI cable; the TV decides what it does.')}</p>{/if}
-  {:else}
+  {:else if !tv}
     <!-- Translators: in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls -->
     <p class="caption note">{unread ? t("The TV isn't answering. Check it is on, then open this again.") : t('Reading them from the TV…')}</p>
   {/if}
