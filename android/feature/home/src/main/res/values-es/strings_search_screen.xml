@@ -2,6 +2,7 @@
 <resources>
     <string name="search_screen_field">Buscar en tu TV</string>
     <string name="search_screen_hint_empty">Escribe con el control remoto. Los resultados cambian mientras escribes.</string>
+    <string name="search_screen_hint_empty_voice">Escribe con el control remoto, o elige Hablar y dilo. Los resultados cambian mientras escribes.</string>
     <string name="search_screen_no_match">Todavía nada coincide con «%1$s».</string>
     <string name="search_screen_hint_results">La tecla de búsqueda del teclado, o Abajo, te lleva a los resultados.</string>
     <string name="search_screen_row_apps">Apps</string>

@@ -5,6 +5,8 @@
 
     <!-- The line under the search field. -->
     <string name="search_screen_hint_empty">Type with the remote. Results update as you type.</string>
+    <!-- The same line on a TV that can listen. Speak is the button beside the field. -->
+    <string name="search_screen_hint_empty_voice">Type with the remote, or choose Speak and say it. Results update as you type.</string>
     <!-- %1$s is what was typed. -->
     <string name="search_screen_no_match">Nothing matches “%1$s” yet.</string>
     <!-- Down is a key on the remote. -->

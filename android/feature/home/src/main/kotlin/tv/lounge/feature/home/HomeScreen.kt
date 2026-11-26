@@ -201,8 +201,9 @@ fun HomeScreen(
     RoomLights(light)
     val overlay = state.overlay
     val menu = overlay as? Overlay.TileMenu
-    // A menu opened from a search result keeps Search open beneath it.
-    val searchOpen = overlay == Overlay.Search || menu?.under == Overlay.Search
+    val voice = overlay as? Overlay.Voice
+    // A menu opened from a search result keeps Search open beneath it, and so does the listening panel.
+    val searchOpen = overlay == Overlay.Search || menu?.under == Overlay.Search || voice?.under == Overlay.Search
     val allAppsOpen = overlay == Overlay.AllApps || menu?.under == Overlay.AllApps
     val homeMenu = menu?.takeIf { it.under == Overlay.None }
     // The rows read the open menu through these, so opening one recomposes only the tile it came from.
@@ -320,6 +321,7 @@ fun HomeScreen(
         state.sheetTrail.clear()
         state.sheetLeft = null
         state.pendingSearch = null
+        state.pendingSpoken = false
         state.setupFromSettings = false
     }
 
@@ -341,6 +343,27 @@ fun HomeScreen(
         val back = state.opener?.takeUnless { chipGone(it) }
         clearOverlays()
         scope.launch { if (back == null || !back.requestWhenReady(6)) focusHome() }
+    }
+
+    // What is said goes to search as if typed, and search opens on what it found.
+    val tvListens = rememberVoiceSearch(
+        language = uiPrefs.language,
+        onHeard = { words ->
+            state.pendingSearch = words
+            state.pendingSpoken = true
+            if (state.overlay != Overlay.Search) openOverlay(Overlay.Search)
+        },
+        onFailed = { say(R.string.home_screen_cant_listen) },
+    )
+    val listensHere = remember { listensHere(context) }
+    // Lounge's own panel listens where the TV has a speech service, and the TV's own screen where it has not.
+    val speak: ((FocusRequester) -> Unit)? = if (!listensHere && tvListens == null) {
+        null
+    } else {
+        { from ->
+            uiSounds?.open()
+            if (listensHere) state.overlay = Overlay.Voice(state.overlay.takeIf { it == Overlay.Search } ?: Overlay.None, from) else tvListens?.invoke()
+        }
     }
 
     /** Back from a full page that a sheet or another page opened: to that one, or home when there was none. */
@@ -688,6 +711,7 @@ fun HomeScreen(
                 downFocus = { state.stripFocus() },
                 onFocused = { state.region = FocusRegion.TopBar; light.clear() },
                 onSearch = { uiSounds?.open(); openOverlay(Overlay.Search) },
+                onVoice = speak?.let { listen -> { listen(state.topBar.voice) } },
                 onTvControls = { uiSounds?.open(); openOverlay(Overlay.TvControls) },
                 onGuide = { uiSounds?.open(); openOverlay(Overlay.Guide) },
                 onNowPlaying = { uiSounds?.open(); openOverlay(Overlay.NowPlaying) },
@@ -916,8 +940,10 @@ fun HomeScreen(
                     snapshot = snapshot,
                     visibleState = visibleState,
                     pendingQuery = state.pendingSearch,
-                    onQueryTaken = { state.pendingSearch = null },
-                    covered = menu != null,
+                    pendingSpoken = state.pendingSpoken,
+                    onQueryTaken = { state.pendingSearch = null; state.pendingSpoken = false },
+                    onVoice = speak,
+                    covered = menu != null || voice != null,
                     heldTileId = { heldMenu()?.tile?.id },
                     heldRowId = { heldMenu()?.rowId },
                     onTileFocused = { _, _ -> },
@@ -944,6 +970,41 @@ fun HomeScreen(
                     onClose = { closeOverlay() },
                 )
             }
+        }
+
+        // The listening panel draws over the home, or over Search when it opened from there.
+        Presence(voice) { ov, visibleState ->
+            VoicePanel(
+                language = uiPrefs.language,
+                visibleState = visibleState,
+                onHeard = { words ->
+                    state.pendingSearch = words
+                    state.pendingSpoken = true
+                    if (ov.under == Overlay.None) {
+                        state.opener = ov.returnFocus
+                        state.sheetTrail.clear()
+                        state.sheetLeft = null
+                    }
+                    state.overlay = Overlay.Search
+                },
+                // Focus goes back to what opened the panel first, so it is there when the TV's screen closes.
+                onTvScreen = tvListens?.let { listen ->
+                    {
+                        if (state.overlay == ov) {
+                            state.overlay = ov.under
+                            scope.launch { ov.returnFocus.requestWhenReady() }
+                            listen()
+                        }
+                    }
+                },
+                onDismiss = {
+                    if (state.overlay == ov) {
+                        close()
+                        state.overlay = ov.under
+                        scope.launch { if (!ov.returnFocus.requestWhenReady(6) && ov.under == Overlay.None) focusHome() }
+                    }
+                },
+            )
         }
 
         // The menu draws over Search or All apps when it opened from one of their tiles.

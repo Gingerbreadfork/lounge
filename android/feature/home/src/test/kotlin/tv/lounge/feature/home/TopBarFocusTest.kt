@@ -48,6 +48,8 @@ class TopBarFocusTest {
     private var opened = 0
     private val offline = mutableStateOf(false)
     private var networkOpened = 0
+    private var canListen = false
+    private var listened = 0
 
     private fun notice(key: String) = AppNotification(key, "tv.shop", "Shop", "Title $key", "", postedAt = 0, dismissible = true, opens = true)
 
@@ -76,6 +78,7 @@ class TopBarFocusTest {
                         onNowPlaying = {},
                         onNotifications = { opened++ },
                         onOffline = { networkOpened++ },
+                        onVoice = if (canListen) ({ listened++ }) else null,
                         onSettings = {},
                     )
                 }
@@ -206,6 +209,21 @@ class TopBarFocusTest {
         }
         rule.waitForIdle()
         assertFocusedButton("Settings")
+    }
+
+    @Test
+    fun speakSitsAfterSearchOnATvThatCanListen() {
+        canListen = true
+        showTopBar()
+        rule.runOnIdle { focus.search.requestFocus() }
+        press(Key.DirectionRight)
+        rule.onNode(isFocused()).assert(hasContentDescription("Search by voice"))
+        press(Key.DirectionCenter)
+        rule.runOnIdle { assertEquals(1, listened) }
+        // Search is still the first button in the bar.
+        press(Key.DirectionLeft)
+        press(Key.DirectionLeft)
+        assertFocusedButton("Search")
     }
 
     @Test

@@ -39,4 +39,5 @@
     <string name="home_screen_notifications_app_hidden">Notifications masquées : %1$s. Pour les réafficher : Paramètres, Notifications</string>
     <string name="home_screen_removed_from_group">Retirée de %1$s</string>
     <string name="home_screen_group_deleted">%1$s supprimé</string>
+    <string name="home_screen_cant_listen">La TV n’a pas pu commencer à écouter. Réessayez.</string>
 </resources>

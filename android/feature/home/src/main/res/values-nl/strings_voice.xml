@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_starting">Een ogenblik…</string>
+    <string name="voice_listening">Aan het luisteren…</string>
+    <string name="voice_hint">Zeg wat je zoekt</string>
+    <string name="voice_not_heard">Dat was niet te verstaan</string>
+    <string name="voice_not_heard_hint">Zeg het nog eens, iets dichter bij de microfoon.</string>
+    <string name="voice_failed">De tv kon niet luisteren</string>
+    <string name="voice_failed_hint">Probeer het opnieuw of typ het met de afstandsbediening.</string>
+    <string name="voice_ask_title">Mag Lounge luisteren?</string>
+    <string name="voice_ask_body">Om hier te luisteren heeft Lounge de microfoon nodig. De spraakdienst van de tv luistert en kan wat je zegt naar zijn maker sturen. Lounge bewaart alleen de woorden.</string>
+    <string name="voice_ask_allow">Microfoon toestaan</string>
+    <string name="voice_ask_tv">Het scherm van de tv gebruiken</string>
+</resources>

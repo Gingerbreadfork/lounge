@@ -156,7 +156,11 @@ devices. There the row asks for it first, and if you say no it opens the TV's se
 what to look for. When the TV has been without a
 network for ten seconds, the top bar says so, and OK there opens the network screen.
 
-**Search.** One box for apps, what you've been watching and whatever the plugins can find.
+**Search.** One box for apps, what you've been watching and whatever the plugins can find. Speak,
+in the top bar and beside the box, lets you say it. A panel listens through the TV's own speech
+service, which may send what you say to its maker; Lounge keeps only the words. Lounge asks for
+the microphone before it listens. Say no, and the TV's own listening screen is used where it
+has one.
 
 **Screensaver.** Artwork from the Stage and the rows with a slow push-in, or one of nineteen
 abstract scenes drawn on the GPU in your theme's colours, or all of them in shuffled order.

@@ -38,4 +38,5 @@
     <string name="home_screen_notifications_app_hidden">Meldingen van %1$s verborgen. Terughalen kan via Instellingen, Meldingen</string>
     <string name="home_screen_removed_from_group">Uit %1$s gehaald</string>
     <string name="home_screen_group_deleted">%1$s verwijderd</string>
+    <string name="home_screen_cant_listen">De tv kon niet gaan luisteren. Probeer het opnieuw.</string>
 </resources>

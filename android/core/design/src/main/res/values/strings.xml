@@ -16,6 +16,9 @@
     <string name="common_try_again">Try again</string>
     <string name="common_settings">Settings</string>
     <string name="common_search">Search</string>
+    <!-- A button that starts the TV listening for something to search for, and what a screen reader calls it. -->
+    <string name="common_speak">Speak</string>
+    <string name="common_search_by_voice">Search by voice</string>
     <string name="common_all_apps">All apps</string>
     <string name="common_tv_guide">TV guide</string>
     <string name="common_tv_controls">TV controls</string>

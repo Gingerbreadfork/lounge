@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_starting">Un momento…</string>
+    <string name="voice_listening">Escuchando…</string>
+    <string name="voice_hint">Di lo que buscas</string>
+    <string name="voice_not_heard">No se entendió</string>
+    <string name="voice_not_heard_hint">Dilo otra vez, un poco más cerca del micrófono.</string>
+    <string name="voice_failed">La TV no pudo escuchar</string>
+    <string name="voice_failed_hint">Vuelve a intentarlo o escríbelo con el control remoto.</string>
+    <string name="voice_ask_title">¿Dejar que Lounge escuche?</string>
+    <string name="voice_ask_body">Para escuchar aquí, Lounge necesita el micrófono. El servicio de voz de la TV es el que escucha, y puede enviar lo que dices a su fabricante. Lounge se queda solo con las palabras.</string>
+    <string name="voice_ask_allow">Permitir el micrófono</string>
+    <string name="voice_ask_tv">Usar la pantalla de la TV</string>
+</resources>

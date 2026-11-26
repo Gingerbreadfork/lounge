@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_starting">Um momento…</string>
+    <string name="voice_listening">A ouvir…</string>
+    <string name="voice_hint">Diga o que procura</string>
+    <string name="voice_not_heard">Não se percebeu</string>
+    <string name="voice_not_heard_hint">Diga outra vez, um pouco mais perto do microfone.</string>
+    <string name="voice_failed">A TV não conseguiu ouvir</string>
+    <string name="voice_failed_hint">Tente novamente ou escreva com o comando.</string>
+    <string name="voice_ask_title">Deixar o Lounge ouvir?</string>
+    <string name="voice_ask_body">Para ouvir aqui, o Lounge precisa do microfone. Quem ouve é o serviço de voz da TV, que pode enviar o que diz ao seu fabricante. O Lounge fica apenas com as palavras.</string>
+    <string name="voice_ask_allow">Permitir o microfone</string>
+    <string name="voice_ask_tv">Usar o ecrã da TV</string>
+</resources>

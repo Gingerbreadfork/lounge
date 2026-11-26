@@ -56,4 +56,6 @@
     <!-- Said after a choice in a tile's menu or in a group's sheet. %1$s is the group's name. -->
     <string name="home_screen_removed_from_group">Removed from %1$s</string>
     <string name="home_screen_group_deleted">%1$s deleted</string>
+    <!-- Said when the TV's listening screen would not open. -->
+    <string name="home_screen_cant_listen">The TV couldn\'t start listening. Try again.</string>
 </resources>

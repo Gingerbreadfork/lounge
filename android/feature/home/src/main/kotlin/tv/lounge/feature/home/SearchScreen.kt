@@ -66,8 +66,10 @@ import tv.lounge.core.Row as CoreRow
 import tv.lounge.core.RowSize
 import tv.lounge.core.TileKind
 import tv.lounge.core.Tile
+import tv.lounge.design.ButtonKind
 import tv.lounge.design.Dimens
 import tv.lounge.design.Hairline
+import tv.lounge.design.LoungeButton
 import tv.lounge.design.LoungeIcons
 import tv.lounge.design.LoungeTheme
 import tv.lounge.design.R as DesignR
@@ -87,9 +89,13 @@ fun SearchScreen(
     onTileClick: (Tile) -> Unit,
     onTileLongPress: (Tile, String, Rect, FocusRequester) -> Unit,
     onClose: () -> Unit,
-    /** A query from the phone, handed back through [onQueryTaken] once it is in the field. */
+    /** A query from the phone or one that was spoken, handed back through [onQueryTaken] once it is in the field. */
     pendingQuery: String? = null,
     onQueryTaken: () -> Unit = {},
+    /** Whether [pendingQuery] was spoken. Focus then goes to what it found, and the keyboard stays away. */
+    pendingSpoken: Boolean = false,
+    /** Starts the TV listening for a query, and is told what to give focus back to. Null on a TV that cannot listen. */
+    onVoice: ((FocusRequester) -> Unit)? = null,
     /** A tile's menu sits over the screen. */
     covered: Boolean = false,
     heldTileId: () -> String? = { null },
@@ -104,6 +110,10 @@ fun SearchScreen(
     var field by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(pendingQuery.orEmpty(), TextRange(pendingQuery.orEmpty().length))) }
     val query = field.text
     val fieldFocus = remember { FocusRequester() }
+    val speakFocus = remember { FocusRequester() }
+    val openedSpoken = remember { pendingSpoken && pendingQuery != null && onVoice != null }
+    // Set by a spoken query until focus has reached its first result.
+    var landOnResults by remember { mutableStateOf(false) }
     var fieldFocused by remember { mutableStateOf(false) }
     var focusedRow by remember { mutableStateOf<String?>(null) }
     val lastResult = remember { LastResult() }
@@ -124,9 +134,16 @@ fun SearchScreen(
 
     LaunchedEffect(pendingQuery) {
         val q = pendingQuery ?: return@LaunchedEffect
+        val spoken = pendingSpoken && onVoice != null
         setQuery(q)
         onQueryTaken()
-        fieldFocus.requestWhenReady()
+        if (spoken) {
+            // On the button until there is a result to land on, so OK listens again.
+            landOnResults = true
+            speakFocus.requestWhenReady()
+        } else {
+            fieldFocus.requestWhenReady()
+        }
     }
     PhoneTextInput(active = !leaving && !covered) { text -> setQuery(field.text + text) }
 
@@ -153,6 +170,11 @@ fun SearchScreen(
     val results: List<CoreRow> = remember(local, fromPlugins) { mergedResults(local, fromPlugins) }
     val recent: List<CoreRow> = remember(snapshot, titles) { recentlyOpened(snapshot, titles) }
     val shown = if (query.isBlank()) recent else results
+    // Not while a menu or the listening panel sits over the screen, which holds focus then.
+    LaunchedEffect(landOnResults, results.firstOrNull()?.id, covered) {
+        val first = results.firstOrNull() ?: return@LaunchedEffect
+        if (landOnResults && interactive.value && requester(first.id, 0).requestWhenReady()) landOnResults = false
+    }
 
     // A result hidden or unpinned from its menu leaves the list: focus goes to its neighbour, or
     // the row that took its place, or the field.
@@ -217,18 +239,32 @@ fun SearchScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .focusRequester(fieldFocus)
+                                        .focusProperties { if (onVoice != null) right = speakFocus }
                                         .onFocusChanged {
                                             fieldFocused = it.isFocused
-                                            if (it.isFocused) lastResult.tileId = null
+                                            if (it.isFocused) {
+                                                lastResult.tileId = null
+                                                landOnResults = false
+                                            }
                                         }
                                         .semantics { contentDescription = fieldName },
+                                )
+                            }
+                            if (onVoice != null) {
+                                LoungeButton(
+                                    label = stringResource(DesignR.string.common_speak),
+                                    onClick = { onVoice(speakFocus) },
+                                    kind = ButtonKind.Secondary,
+                                    icon = LoungeIcons.Mic,
+                                    focusRequester = speakFocus,
+                                    modifier = Modifier.focusProperties { left = fieldFocus },
                                 )
                             }
                         }
                         Hairline(Modifier.fillMaxWidth())
                         Text(
                             when {
-                                query.isBlank() -> stringResource(R.string.search_screen_hint_empty)
+                                query.isBlank() -> stringResource(if (onVoice != null) R.string.search_screen_hint_empty_voice else R.string.search_screen_hint_empty)
                                 results.isEmpty() -> stringResource(R.string.search_screen_no_match, query)
                                 else -> stringResource(R.string.search_screen_hint_results)
                             },
@@ -268,7 +304,7 @@ fun SearchScreen(
             }
         }
     }
-    LaunchedEffect(Unit) { fieldFocus.requestWhenReady() }
+    LaunchedEffect(Unit) { if (!openedSpoken) fieldFocus.requestWhenReady() }
 }
 
 private const val PLUGIN_SEARCH_PAUSE_MS = 350L

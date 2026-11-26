@@ -13,6 +13,8 @@
     <string name="common_try_again">Réessayer</string>
     <string name="common_settings">Paramètres</string>
     <string name="common_search">Rechercher</string>
+    <string name="common_speak">Parler</string>
+    <string name="common_search_by_voice">Rechercher à la voix</string>
     <string name="common_all_apps">Toutes les applis</string>
     <string name="common_tv_guide">Guide TV</string>
     <string name="common_tv_controls">Commandes TV</string>

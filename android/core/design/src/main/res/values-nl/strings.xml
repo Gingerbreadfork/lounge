@@ -13,6 +13,8 @@
     <string name="common_try_again">Opnieuw proberen</string>
     <string name="common_settings">Instellingen</string>
     <string name="common_search">Zoeken</string>
+    <string name="common_speak">Spreken</string>
+    <string name="common_search_by_voice">Zoeken met je stem</string>
     <string name="common_all_apps">Alle apps</string>
     <string name="common_tv_guide">Tv-gids</string>
     <string name="common_tv_controls">Tv-bediening</string>

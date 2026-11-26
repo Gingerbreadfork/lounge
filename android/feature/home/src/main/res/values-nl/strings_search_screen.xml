@@ -2,6 +2,7 @@
 <resources>
     <string name="search_screen_field">Zoeken op je tv</string>
     <string name="search_screen_hint_empty">Typ met de afstandsbediening. De resultaten veranderen terwijl je typt.</string>
+    <string name="search_screen_hint_empty_voice">Typ met de afstandsbediening, of kies Spreken en zeg het. De resultaten veranderen terwijl je typt.</string>
     <string name="search_screen_no_match">Nog niets gevonden voor “%1$s”.</string>
     <string name="search_screen_hint_results">Met de zoektoets van het toetsenbord, of met Omlaag, ga je naar de resultaten.</string>
     <string name="search_screen_row_apps">Apps</string>

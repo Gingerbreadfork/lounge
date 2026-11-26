@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_starting">Einen Moment…</string>
+    <string name="voice_listening">Lounge hört zu…</string>
+    <string name="voice_hint">Sag, was du suchst</string>
+    <string name="voice_not_heard">Nicht verstanden</string>
+    <string name="voice_not_heard_hint">Sag es noch einmal, etwas näher am Mikrofon.</string>
+    <string name="voice_failed">Der Fernseher konnte nicht zuhören</string>
+    <string name="voice_failed_hint">Versuch es noch einmal oder tippe es mit der Fernbedienung.</string>
+    <string name="voice_ask_title">Darf Lounge zuhören?</string>
+    <string name="voice_ask_body">Um hier zuzuhören, braucht Lounge das Mikrofon. Der Sprachdienst des Fernsehers hört zu und kann das Gesagte an seinen Hersteller senden. Lounge behält nur die Wörter.</string>
+    <string name="voice_ask_allow">Mikrofon erlauben</string>
+    <string name="voice_ask_tv">Bildschirm des Fernsehers nutzen</string>
+</resources>

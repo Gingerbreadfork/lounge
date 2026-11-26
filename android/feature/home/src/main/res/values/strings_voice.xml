@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The listening panel of voice search: its heading, and the line under it, by what it is doing. -->
+    <string name="voice_starting">One moment…</string>
+    <string name="voice_listening">Listening…</string>
+    <string name="voice_hint">Say what you\'re looking for</string>
+    <!-- Nothing was made out of what was said. -->
+    <string name="voice_not_heard">Didn\'t catch that</string>
+    <string name="voice_not_heard_hint">Say it again, a little closer to the microphone.</string>
+    <!-- The TV's speech service would not start or stopped. -->
+    <string name="voice_failed">The TV couldn\'t listen</string>
+    <string name="voice_failed_hint">Try again, or type it with the remote.</string>
+    <!-- Shown before Android asks to allow the microphone. The last button opens the TV's own listening screen in place of this panel. -->
+    <string name="voice_ask_title">Let Lounge listen?</string>
+    <string name="voice_ask_body">To listen here, Lounge needs the microphone. The TV\'s speech service does the listening and may send what you say to its maker. Lounge keeps only the words.</string>
+    <string name="voice_ask_allow">Allow the microphone</string>
+    <string name="voice_ask_tv">Use the TV\'s own screen</string>
+</resources>

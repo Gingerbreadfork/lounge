@@ -84,7 +84,7 @@ import kotlin.math.sin
 import java.time.LocalTime
 
 /**
- * Top bar (DESIGN.md §5.1): the mark on the left; Search, TV controls, Settings and the clock on
+ * Top bar (DESIGN.md §5.1): the mark on the left; Search, Speak, TV controls, Settings and the clock on
  * the right, with what is playing, what apps have posted and a missing network between them while
  * there is any. Left off Search and Right off Settings nudge the button instead of leaving the bar.
  */
@@ -107,6 +107,8 @@ fun TopBar(
     onOffline: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Starts the TV listening for something to search for. Null on a TV that cannot listen. */
+    onVoice: (() -> Unit)? = null,
 ) {
     val motion = LoungeTheme.motion
     // Read here, so a notification coming or going recomposes the bar and not the home.
@@ -140,6 +142,9 @@ fun TopBar(
         // The buttons keep to the right. On a full bar the playing title is what gives way.
         Row(Modifier.weight(1f).padding(start = 28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.End)) {
             TopBarButton(LoungeIcons.Search, stringResource(DesignR.string.common_search), onSearch, focus, focus.search)
+            if (onVoice != null) {
+                TopBarButton(LoungeIcons.Mic, stringResource(DesignR.string.common_speak), onVoice, focus, focus.voice, description = stringResource(DesignR.string.common_search_by_voice))
+            }
             if (showGuide) TopBarButton(LoungeIcons.Guide, stringResource(DesignR.string.common_tv_guide), onGuide, focus, focus.guide)
             if (showTvControls) TopBarButton(LoungeIcons.Tv, stringResource(DesignR.string.common_tv_controls), onTvControls, focus, focus.tvControls)
             if (nowPlaying != null) NowPlayingChip(nowPlaying, onNowPlaying, focus, Modifier.weight(1f, fill = false))

@@ -39,4 +39,5 @@
     <string name="home_screen_notifications_app_hidden">Notificaciones de %1$s ocultas. Se recuperan en Ajustes, Notificaciones</string>
     <string name="home_screen_removed_from_group">Quitada de %1$s</string>
     <string name="home_screen_group_deleted">%1$s eliminado</string>
+    <string name="home_screen_cant_listen">La TV no pudo empezar a escuchar. Vuelve a intentarlo.</string>
 </resources>

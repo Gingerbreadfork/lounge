@@ -23,6 +23,8 @@ sealed interface Overlay {
     data object None : Overlay
     /** A tile's menu; [under] is the overlay it opened over, which stays open beneath it. */
     data class TileMenu(val tile: Tile, val rowId: String, val anchor: Rect, val returnFocus: FocusRequester, val under: Overlay = None) : Overlay
+    /** The listening panel; [under] is the screen it opened over, which stays open beneath it. */
+    data class Voice(val under: Overlay = None, val returnFocus: FocusRequester) : Overlay
     data object QuickSettings : Overlay
     data object HomeRole : Overlay
     /** The languages Lounge is written in, to choose one over the TV's own. */
@@ -111,6 +113,7 @@ enum class FocusRegion { TopBar, Stage, Rows }
 @Stable
 class TopBarFocus {
     val search = FocusRequester()
+    val voice = FocusRequester()
     val guide = FocusRequester()
     val tvControls = FocusRequester()
     val nowPlaying = FocusRequester()
@@ -153,6 +156,8 @@ class HomeState(private val tierA: Boolean = true) {
     val pending = PendingPresses()
     /** A query the companion asked us to search for, until the search screen takes it. */
     var pendingSearch by mutableStateOf<String?>(null)
+    /** Whether [pendingSearch] was spoken, so search opens on its results and not the keyboard. */
+    var pendingSpoken by mutableStateOf(false)
 
     /** What had focus on the home when the open overlay was opened over it. */
     var opener: FocusRequester? = null

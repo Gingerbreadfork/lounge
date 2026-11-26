@@ -2,6 +2,7 @@
 <resources>
     <string name="search_screen_field">Pesquisar na TV</string>
     <string name="search_screen_hint_empty">Digite com o controle remoto. Os resultados mudam enquanto você digita.</string>
+    <string name="search_screen_hint_empty_voice">Digite com o controle remoto, ou escolha Falar e diga. Os resultados mudam enquanto você digita.</string>
     <string name="search_screen_no_match">Nada corresponde a “%1$s” por enquanto.</string>
     <string name="search_screen_hint_results">A tecla de pesquisa do teclado, ou a seta para baixo, leva você aos resultados.</string>
     <string name="search_screen_row_apps">Apps</string>
