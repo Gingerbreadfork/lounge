@@ -132,7 +132,7 @@ schedule out by channel and time.
 
 **The TV itself.** HDMI inputs carry the names their devices announce over CEC and show whether
 anything is plugged in. On a streamer, a TV controls card turns the TV on, switches input, sends
-sound to a soundbar, changes the volume or turns everything off.
+sound to a soundbar, changes the volume or turns everything off, now or when a sleep timer ends.
 
 **The room.** With the Home Assistant plugin, the room the TV is in has a row of its own. OK
 switches a lamp, a blind or a scene, and the tile says what it now is, lit in the lamp's own

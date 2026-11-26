@@ -56,6 +56,13 @@
     <string name="power_tv_power_value">Allumer ou éteindre</string>
     <string name="power_everything_off">Tout éteindre</string>
     <string name="power_everything_off_value">Veille, la TV suit</string>
+    <string name="power_sleep_timer">Minuterie de veille</string>
+    <string name="power_sleep_timer_subtitle">Éteint tout à la fin</string>
+    <plurals name="power_sleep_timer_left">
+        <item quantity="one">%1$d min restante</item>
+        <item quantity="many">%1$d min restantes</item>
+        <item quantity="other">%1$d min restantes</item>
+    </plurals>
     <string name="power_controls_sound_soundbar">Son sur la barre de son</string>
     <string name="power_controls_sound_tv">Son sur la TV</string>
     <string name="power_switch_tv_to">Basculer la TV sur</string>

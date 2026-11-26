@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -28,6 +29,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +54,7 @@ import tv.lounge.power.PowerAction
 import tv.lounge.power.PowerSetup
 import tv.lounge.power.PowerStatus
 import tv.lounge.power.PrivilegedException
+import tv.lounge.power.sleepStep
 
 /** How one action went, under its row; `output` is what its command printed. */
 private sealed interface RunState {
@@ -436,6 +439,33 @@ fun TvControlsSheet(
         if (ready) {
             SheetRow(icon = LoungeIcons.Power, title = stringResource(R.string.power_tv_power), subtitle = reasonFor(power.tvPower), subtitleLines = WHOLE, value = valueFor(power.tvPower, stringResource(R.string.power_tv_power_value)), accent = accentFor(power.tvPower), onClick = { run(power.tvPower) })
             SheetRow(icon = LoungeIcons.Power, title = stringResource(R.string.power_everything_off), subtitle = reasonFor(power.everythingOff), subtitleLines = WHOLE, value = valueFor(power.everythingOff, stringResource(R.string.power_everything_off_value)), accent = if (runs[power.everythingOff.id] == null) colors.ember else accentFor(power.everythingOff), onClick = { run(power.everythingOff) })
+        }
+        // Left and Right step the time, and OK steps it on to the next and then off. A timer left
+        // running while Power Setup is away still shows, so it can be taken back.
+        val endsAt by power.sleepTimer.endsAt.collectAsStateWithLifecycle()
+        var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
+        LaunchedEffect(endsAt) {
+            while (endsAt != null) {
+                clock = System.currentTimeMillis()
+                delay(15_000)
+            }
+        }
+        val left = endsAt?.let { ((it - clock + 59_999) / 60_000).toInt().coerceAtLeast(1) }
+        fun step(forward: Boolean) {
+            val minutes = if (ready) sleepStep(left, forward) else 0
+            if (minutes == 0) power.sleepTimer.cancel() else power.sleepTimer.set(minutes)
+            clock = System.currentTimeMillis()
+        }
+        if (ready || endsAt != null) SheetRow(
+            icon = LoungeIcons.Sleep,
+            title = stringResource(R.string.power_sleep_timer),
+            subtitle = stringResource(R.string.power_sleep_timer_subtitle),
+            value = left?.let { pluralStringResource(R.plurals.power_sleep_timer_left, it, it) } ?: stringResource(DesignR.string.common_off),
+            accent = if (left != null) colors.houselight else colors.dust,
+            onClick = { step(forward = true) },
+            onCycle = { by -> step(forward = by > 0) },
+        )
+        if (ready) {
             if (power.isTelevision) {
                 SheetRow(icon = LoungeIcons.Soundbar, title = stringResource(R.string.power_controls_sound_soundbar), subtitle = reasonFor(power.systemAudioOn), subtitleLines = WHOLE, value = valueFor(power.systemAudioOn), accent = accentFor(power.systemAudioOn), onClick = { run(power.systemAudioOn) })
                 SheetRow(icon = LoungeIcons.Soundbar, title = stringResource(R.string.power_controls_sound_tv), subtitle = reasonFor(power.systemAudioOff), subtitleLines = WHOLE, value = valueFor(power.systemAudioOff), accent = accentFor(power.systemAudioOff), onClick = { run(power.systemAudioOff) })

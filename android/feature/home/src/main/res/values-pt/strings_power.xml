@@ -56,6 +56,13 @@
     <string name="power_tv_power_value">Ligar ou desligar</string>
     <string name="power_everything_off">Desligar tudo</string>
     <string name="power_everything_off_value">Suspende e desliga a TV</string>
+    <string name="power_sleep_timer">Timer de desligamento</string>
+    <string name="power_sleep_timer_subtitle">Desliga tudo quando termina</string>
+    <plurals name="power_sleep_timer_left">
+        <item quantity="one">Falta %1$d min</item>
+        <item quantity="many">Faltam %1$d min</item>
+        <item quantity="other">Faltam %1$d min</item>
+    </plurals>
     <string name="power_controls_sound_soundbar">Som pela soundbar</string>
     <string name="power_controls_sound_tv">Som pela TV</string>
     <string name="power_switch_tv_to">Mudar a TV para</string>

@@ -56,6 +56,12 @@
     <string name="power_tv_power_value">Aan of uit</string>
     <string name="power_everything_off">Alles uit</string>
     <string name="power_everything_off_value">Slaapstand, tv gaat mee uit</string>
+    <string name="power_sleep_timer">Slaaptimer</string>
+    <string name="power_sleep_timer_subtitle">Zet alles uit als hij afloopt</string>
+    <plurals name="power_sleep_timer_left">
+        <item quantity="one">Nog %1$d min</item>
+        <item quantity="other">Nog %1$d min</item>
+    </plurals>
     <string name="power_controls_sound_soundbar">Geluid via de soundbar</string>
     <string name="power_controls_sound_tv">Geluid via de tv</string>
     <string name="power_switch_tv_to">Tv schakelen naar</string>

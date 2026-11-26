@@ -23,12 +23,12 @@ import tv.lounge.platform.PanelSize
 import tv.lounge.platform.Prefs
 
 @HiltAndroidApp
-class LoungeApplication : Application(), SingletonImageLoader.Factory {
+class LoungeApplication : Application(), SingletonImageLoader.Factory, tv.lounge.power.PowerSetupOwner {
 
     lateinit var platform: AndroidPlatform
         private set
     private val coreReady = java.util.concurrent.CountDownLatch(1)
-    val power: tv.lounge.power.PowerSetup by lazy { tv.lounge.power.PowerSetup(this) }
+    override val power: tv.lounge.power.PowerSetup by lazy { tv.lounge.power.PowerSetup(this) }
     private val appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
     val updates: tv.lounge.update.UpdateManager by lazy {
         val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "0.0.0"
@@ -65,6 +65,8 @@ class LoungeApplication : Application(), SingletonImageLoader.Factory {
         }, "lounge-open").start()
         // Neither thread is needed to start, so a failure in one is logged rather than ending the process.
         Thread({
+            // A sleep timer set before the process ended carries on.
+            runCatching { power.sleepTimer.restore() }
             startPrefs = runCatching { kotlinx.coroutines.runBlocking { prefs.all.first() } }
                 .onFailure { android.util.Log.w("Lounge", "startup: preferences unreadable", it) }
                 .getOrNull()

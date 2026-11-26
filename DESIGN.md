@@ -387,8 +387,10 @@ On Tier A and B, the Stage artwork has three layers if the source provides them 
   its undo. Forget this connection sits last and asks again; the footnote shows the key fingerprint
   the device's prompt displays.
 - **TV controls sheet**: the privileged rows first (Wake the TV and switch to me, TV power,
-  Everything off in ember, soundbar or TV sound on televisions, then "Switch the TV to" with the CEC
-  devices on the bus). Each row's value flips to Sending…, then Sent for 2.5 s; a failure stays on
+  Everything off in ember, Sleep timer, soundbar or TV sound on televisions, then "Switch the TV
+  to" with the CEC devices on the bus). Sleep timer reads Off or the minutes left in `houselight`;
+  Left and Right step it through 15, 30, 45, 60, 90 and 120 minutes and OK steps it on and then
+  off. When it ends it does what Everything off does, whatever app is in front. Turning the screen off by hand ends the timer, and one whose time passed while the TV was off is dropped. Each row's value flips to Sending…, then Sent for 2.5 s; a failure stays on
   the row as a sentence with its fix until the row is pressed again. Under "Sound and playback",
   Sound output reads where the sound comes out now, as Settings does, and OK opens the TV's sound
   screen; a TV with no such screen has no such row. Volume, mute and play/pause follow and work without Power Setup. Without it the first row is the one

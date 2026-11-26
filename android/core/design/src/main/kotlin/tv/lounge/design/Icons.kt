@@ -275,6 +275,13 @@ object LoungeIcons {
         }
     }
 
+    /** A crescent moon: the sleep timer. */
+    val Sleep: ImageVector by lazy {
+        icon("sleep") {
+            stroke { moveTo(22.5f, 16.5f); arcTo(9.5f, 9.5f, 0f, true, true, 11.5f, 5.5f); arcTo(7.5f, 7.5f, 0f, false, false, 22.5f, 16.5f); close() }
+        }
+    }
+
     /** The Bluetooth rune: remotes, controllers and headphones paired with the TV. */
     val Bluetooth: ImageVector by lazy {
         icon("bluetooth") {

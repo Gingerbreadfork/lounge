@@ -85,6 +85,13 @@
     <!-- A row that puts this device to sleep, and its value: the TV turns off with it. -->
     <string name="power_everything_off">Everything off</string>
     <string name="power_everything_off_value">Sleep, TV follows</string>
+    <!-- A row that turns everything off after a while. Its value is the time left, or Off. -->
+    <string name="power_sleep_timer">Sleep timer</string>
+    <string name="power_sleep_timer_subtitle">Turns everything off when it ends</string>
+    <plurals name="power_sleep_timer_left">
+        <item quantity="one">%1$d min left</item>
+        <item quantity="other">%1$d min left</item>
+    </plurals>
     <string name="power_controls_sound_soundbar">Sound through the soundbar</string>
     <string name="power_controls_sound_tv">Sound through the TV</string>
     <!-- The heading over the other devices plugged into the TV; each row under it is a device's name. -->

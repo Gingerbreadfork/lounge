@@ -295,6 +295,9 @@ class PowerSetup(private val context: Context) {
     val oneTouchPlay: PowerAction get() = action("cec_otp", R.string.power_setup_wake_title, R.string.power_setup_wake_detail, "cmd hdmi_control onetouchplay")
     val tvPower: PowerAction get() = action("cec_tv_power", R.string.power_setup_tv_power_title, R.string.power_setup_tv_power_detail, "input keyevent KEYCODE_TV_POWER")
     val everythingOff: PowerAction get() = action("sleep", R.string.power_setup_sleep_title, R.string.power_setup_sleep_detail, "input keyevent KEYCODE_SLEEP")
+
+    /** Turns everything off after a while, as Everything off does when pressed. */
+    val sleepTimer: SleepTimer by lazy { SleepTimer(context) { run(everythingOff) } }
     val systemAudioOn: PowerAction get() = action("cec_sam_on", R.string.power_setup_soundbar_title, R.string.power_setup_soundbar_detail, "cmd hdmi_control setsystemaudiomode on")
     val systemAudioOff: PowerAction get() = action("cec_sam_off", R.string.power_setup_tv_sound_title, R.string.power_setup_tv_sound_detail, "cmd hdmi_control setsystemaudiomode off")
     fun selectDevice(d: CecDevice) = PowerAction("cec_select_${d.logicalAddress}", context.getString(R.string.power_setup_select_title, d.name), context.getString(R.string.power_setup_select_detail, d.name), "cmd hdmi_control deviceselect ${d.logicalAddress}")

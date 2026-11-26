@@ -56,6 +56,12 @@
     <string name="power_tv_power_value">An oder aus</string>
     <string name="power_everything_off">Alles aus</string>
     <string name="power_everything_off_value">Ruhezustand, Fernseher folgt</string>
+    <string name="power_sleep_timer">Ausschalttimer</string>
+    <string name="power_sleep_timer_subtitle">Schaltet am Ende alles aus</string>
+    <plurals name="power_sleep_timer_left">
+        <item quantity="one">Noch %1$d Min.</item>
+        <item quantity="other">Noch %1$d Min.</item>
+    </plurals>
     <string name="power_controls_sound_soundbar">Ton über die Soundbar</string>
     <string name="power_controls_sound_tv">Ton über den Fernseher</string>
     <string name="power_switch_tv_to">Fernseher umschalten auf</string>

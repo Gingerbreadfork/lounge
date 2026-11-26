@@ -56,6 +56,13 @@
     <string name="power_tv_power_value">Encender o apagar</string>
     <string name="power_everything_off">Apagar todo</string>
     <string name="power_everything_off_value">Suspender, y la TV también</string>
+    <string name="power_sleep_timer">Temporizador de apagado</string>
+    <string name="power_sleep_timer_subtitle">Apaga todo cuando termina</string>
+    <plurals name="power_sleep_timer_left">
+        <item quantity="one">Queda %1$d min</item>
+        <item quantity="many">Quedan %1$d min</item>
+        <item quantity="other">Quedan %1$d min</item>
+    </plurals>
     <string name="power_controls_sound_soundbar">Sonido por la barra de sonido</string>
     <string name="power_controls_sound_tv">Sonido por la TV</string>
     <string name="power_switch_tv_to">Cambiar la TV a</string>
