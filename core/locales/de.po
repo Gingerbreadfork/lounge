@@ -166,6 +166,10 @@ msgid "The TV couldn't show that pop-up. Try again."
 msgstr "Der Fernseher konnte dieses Pop-up nicht zeigen. Versuche es erneut."
 
 #: lounge-companion/src/server.rs
+msgid "Write something to show on the TV first."
+msgstr "Schreibe zuerst etwas, das auf dem Fernseher erscheinen soll."
+
+#: lounge-companion/src/server.rs
 msgid "The TV couldn't make a key. Check it has free space, then try again."
 msgstr "Der Fernseher konnte keinen Schlüssel erstellen. Prüfe, ob er freien Speicher hat, und versuche es erneut."
 

@@ -6,6 +6,16 @@
 
 
   let text = $state('');
+  /** A few words to show on the TV, and whether they are on their way. */
+  let words = $state('');
+  let saying = $state(false);
+  async function say() {
+    const said = words.trim();
+    if (!said || saying) return;
+    saying = true;
+    if (await done(t('Shown on the TV'), () => api.message(said))) words = '';
+    saying = false;
+  }
   let listening = $state(false);
   let recognition: any = null;
 
@@ -150,6 +160,16 @@
       {/if}
     </div>
     <p class="caption">{t('Paste a link to open it on the TV.')}</p>
+  </section>
+
+  <section class="card type">
+    <label class="caption" for="say">{t('Say it on the TV')}</label>
+    <div class="type-row">
+      <input id="say" bind:value={words} maxlength="120" placeholder={t('A few words to show on the TV')} enterkeyhint="send" onkeydown={(e) => { if (e.key === 'Enter') say(); }} />
+      <!-- Translators: a button that shows the words just typed as a pop-up on the TV -->
+      <button class="btn primary" onclick={say} disabled={!words.trim() || saying}>{t('Show')}</button>
+    </div>
+    <p class="caption">{t('It shows in the corner of the TV for a few seconds, over whatever is on.')}</p>
   </section>
 </main>
 

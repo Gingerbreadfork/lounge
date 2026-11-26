@@ -444,7 +444,7 @@ A ring at the door, or anything else the home wants said now. Bottom-right, 5% i
 
 It is drawn in a window over whatever app is on screen where Lounge may draw over other apps, which on a TV only Power Setup can allow, and in the home's own window otherwise. With neither, the caller is told in a sentence what to run on the TV. Android keeps every app's overlays off the TV's own settings screens, so a pop-up sent while those are in front is not seen, and with the screen off none is shown. A picture is scaled down to the card as it is read.
 
-A pop-up is asked for at `POST /api/alert` on the phone companion's port, with a title and optionally a message, a picture's web address and a time in seconds. Its key is one made on the phone under More and opens nothing else; a phone's own token does not open it. Only the key's hash is kept, a new key retires the old, and forgetting every phone removes it.
+A pop-up is asked for at `POST /api/alert` on the phone companion's port, with a title and optionally a message, a picture's web address and a time in seconds. Its key is one made on the phone under More and opens nothing else; a phone's own token does not open it. Only the key's hash is kept, a new key retires the old, and forgetting every phone removes it. A paired phone shows the same pop-up with a few words of its own, from its Remote page.
 
 ## 8. States
 

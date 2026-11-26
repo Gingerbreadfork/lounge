@@ -233,7 +233,8 @@ the TV shows a fresh one as soon as it is used.
   while Power Setup is connected; without it they work in Lounge alone. The power button opens
   the TV controls, which need Power Setup too: on a box plugged into a TV, wake the TV, turn it
   or everything off and switch its input, as the TV controls on the TV do; on a television,
-  turn it off. The sleep timer is there as well, and a tap steps it on to its next time.
+  turn it off. The sleep timer is there as well, and a tap steps it on to its next time. Say it
+  on the TV shows a few words in the corner of the TV, over whatever is on.
 - **Layout** shows, hides and reorders rows, makes and names groups of apps and orders the apps
   in each, pins and orders the apps at the front of Your apps,
   unpins things from the Stage, shows or hides each source of Continue watching, and brings back

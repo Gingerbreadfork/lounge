@@ -830,7 +830,8 @@ msgid "Nothing is hidden. Hold a tile on What's on, or OK on the TV, and choose 
 msgstr "Nichts ist ausgeblendet. Halte unter „Was läuft“ eine Kachel oder auf dem Fernseher OK gedrückt und wähle „Ausblenden“."
 
 #. a button that puts a hidden thing back on the home screen
-#: src/pages/Layout.svelte
+#. a button that shows the words just typed as a pop-up on the TV
+#: src/pages/Layout.svelte src/pages/Remote.svelte
 msgid "Show"
 msgstr "Einblenden"
 
@@ -1489,6 +1490,10 @@ msgid "Install"
 msgstr "Installieren"
 
 #: src/pages/Remote.svelte
+msgid "Shown on the TV"
+msgstr "Auf dem Fernseher gezeigt"
+
+#: src/pages/Remote.svelte
 msgid "Sent to Lounge on the TV"
 msgstr "An Lounge auf dem Fernseher gesendet"
 
@@ -1618,3 +1623,15 @@ msgstr "Fernseher durchsuchen"
 #: src/pages/Remote.svelte
 msgid "Paste a link to open it on the TV."
 msgstr "Füge einen Link ein, um ihn auf dem Fernseher zu öffnen."
+
+#: src/pages/Remote.svelte
+msgid "Say it on the TV"
+msgstr "Auf dem Fernseher sagen"
+
+#: src/pages/Remote.svelte
+msgid "A few words to show on the TV"
+msgstr "Ein paar Worte für den Fernseher"
+
+#: src/pages/Remote.svelte
+msgid "It shows in the corner of the TV for a few seconds, over whatever is on."
+msgstr "Es erscheint einige Sekunden lang in der Ecke des Fernsehers, über allem, was gerade läuft."

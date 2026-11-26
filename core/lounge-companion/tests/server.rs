@@ -438,6 +438,23 @@ fn the_home_shows_a_pop_up_with_its_own_key_and_nothing_else() {
 }
 
 #[test]
+fn the_phone_says_a_few_words_on_the_tv() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let phone = pair(&companion, &host);
+    let say = |token: &str, body: &str| {
+        exchange(port, &format!("POST /api/message HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()))
+    };
+    assert_eq!(status(&say("guess", r#"{"text":"Hello"}"#)), 401);
+    // A message is a pop-up of its words alone, on one line, and nothing is not a message.
+    assert_eq!(status(&say(&phone, r#"{"text":" Dinner\nis ready now "}"#)), 204);
+    assert!(SHOWN.lock().unwrap().iter().any(|a| a.title == "Dinner is ready now" && a.message.is_none() && a.image.is_none()));
+    assert_eq!(status(&say(&phone, r#"{"text":"  "}"#)), 400);
+}
+
+#[test]
 fn the_phone_lists_the_tv_s_controls_and_runs_one() {
     let dir = tempfile::tempdir().unwrap();
     let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();

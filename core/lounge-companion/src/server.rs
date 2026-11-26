@@ -277,6 +277,7 @@ fn routes(app: Shared) -> Router {
         .route("/api/backup", get(backup))
         .route("/api/restore", post(restore).layer(DefaultBodyLimit::max(BACKUP_LIMIT)))
         .route("/api/art", get(art))
+        .route("/api/message", post(message).layer(DefaultBodyLimit::max(ALERT_LIMIT)))
         .route("/api/alerts", get(alerts))
         .route("/api/alerts/key", post(new_alert_key).delete(clear_alert_key))
         .route("/api/alerts/test", post(test_alert))
@@ -781,6 +782,20 @@ async fn alert(State(app): State<Shared>, headers: HeaderMap, Json(b): Json<Aler
     }
     let Some(alert) = crate::Alert::tidy(&b.title, b.message.as_deref(), b.image.as_deref(), b.seconds) else {
         return Err(bad(t!("A pop-up needs a title to show.")));
+    };
+    on_core(&app, move |a| a.alert(alert)).await?.map_err(refused(mark!("The TV couldn't show that pop-up. Try again.")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct MessageBody {
+    text: String,
+}
+
+/// A few words from the phone, shown on the TV as a pop-up.
+async fn message(State(app): State<Shared>, Json(b): Json<MessageBody>) -> Result<StatusCode, ApiError> {
+    let Some(alert) = crate::Alert::tidy(&b.text, None, None, None) else {
+        return Err(bad(t!("Write something to show on the TV first.")));
     };
     on_core(&app, move |a| a.alert(alert)).await?.map_err(refused(mark!("The TV couldn't show that pop-up. Try again.")))?;
     Ok(StatusCode::NO_CONTENT)
