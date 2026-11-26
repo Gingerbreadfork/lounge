@@ -287,6 +287,22 @@ fun HomeScreen(
     val noNetwork = rememberOffline()
     fun offline() = networkSettings != null && noNetwork.value
 
+    // A remote or controller running low is said once, the next time Lounge comes to the front.
+    // One is said at a time, the lowest first, and only while Lounge is there to say it.
+    val toldLow = remember { HashSet<String>() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        fun inFront() = homeOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        scope.launch {
+            // A remote reconnects on the press that brought Lounge forward, and reports a moment after.
+            delay(ACCESSORY_SETTLE_MS)
+            if (!inFront()) return@launch
+            val lowest = withContext(Dispatchers.IO) { accessoryBatteries(context) }.firstOrNull { it.low && it.address !in toldLow } ?: return@launch
+            if (!inFront()) return@launch
+            toldLow += lowest.address
+            say(R.string.home_screen_accessory_low, lowest.name, context.getString(R.string.updates_percent, lowest.percent))
+        }
+    }
+
     // The top bar names a Bluetooth device while the sound goes to it and not into the room.
     val sound = rememberSoundOutput()
     fun soundThrough(): String? = sound.value?.takeIf { it.wireless }?.label(context.resources)
@@ -1224,6 +1240,9 @@ private fun Modifier.tallerBy(extra: Int): Modifier = layout { measurable, const
     val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
     layout(placeable.width, constraints.maxHeight) { placeable.place(0, 0) }
 }
+
+/** How long after coming forward the accessories' batteries are read. */
+private const val ACCESSORY_SETTLE_MS = 6_000L
 
 /** Everything below [top]: the part of the rows' layer the lowered Stage does not cover. */
 private data class TopInsetShape(val top: Float) : androidx.compose.ui.graphics.Shape {

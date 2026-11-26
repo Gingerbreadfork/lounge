@@ -39,4 +39,5 @@
     <string name="home_screen_removed_from_group">Aus „%1$s“ entfernt</string>
     <string name="home_screen_group_deleted">„%1$s“ gelöscht</string>
     <string name="home_screen_cant_listen">Der Fernseher konnte nicht zuhören. Versuch es noch einmal.</string>
+    <string name="home_screen_accessory_low">Der Akku von %1$s ist fast leer: %2$s.</string>
 </resources>

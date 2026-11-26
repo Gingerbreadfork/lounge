@@ -39,6 +39,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -440,6 +442,10 @@ fun QuickSettingsSheet(
     val networkSettings = remember { networkSettingsIntent(context) }
     val soundSettings = remember { soundSettingsIntent(context) }
     var accessories by remember { mutableStateOf(accessoryScreen(context)) }
+    // What each paired device says of its battery, read again on coming back and once Nearby devices is allowed.
+    var batteriesRead by remember { mutableIntStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { batteriesRead++ }
+    val batteries by produceState(emptyList<AccessoryBattery>(), batteriesRead) { value = withContext(Dispatchers.IO) { accessoryBatteries(context) } }
     val accessoryScope = rememberCoroutineScope()
     var leavingForSettings by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     // Says what to look for and leaves it on screen a moment, since the TV's settings cover it.
@@ -461,6 +467,7 @@ fun QuickSettingsSheet(
     val askNearby = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val now = accessoryScreen(context)
         accessories = now
+        batteriesRead++
         val screen = now?.open.takeIf { granted }
         if (screen != null) runCatching { context.startActivity(screen) } else findInTvSettings(now?.settings)
     }
@@ -683,6 +690,21 @@ fun QuickSettingsSheet(
                 icon = LoungeIcons.Bluetooth,
                 title = stringResource(R.string.sheets_accessories_title),
                 subtitle = stringResource(if (screen.open == null && screen.locked != null) R.string.sheets_accessories_subtitle_ask else R.string.sheets_accessories_subtitle),
+                lines = if (batteries.isEmpty()) {
+                    null
+                } else {
+                    {
+                        batteries.forEach { battery ->
+                            Text(
+                                stringResource(R.string.sheets_accessories_battery, battery.name, stringResource(R.string.updates_percent, battery.percent)),
+                                style = LoungeTheme.typography.caption,
+                                color = if (battery.low) colors.ember else colors.dust,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                },
                 onClick = {
                     when {
                         screen.open != null -> runCatching { context.startActivity(screen.open) }

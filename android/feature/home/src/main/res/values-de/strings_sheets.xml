@@ -84,6 +84,7 @@
     <string name="sheets_accessories_title">Fernbedienungen und Zubehör</string>
     <string name="sheets_accessories_subtitle">Controller, Kopfhörer oder Fernbedienung koppeln</string>
     <string name="sheets_accessories_subtitle_ask">Braucht „Geräte in der Nähe“, um den Kopplungsbildschirm des Fernsehers zu öffnen. OK fragt danach.</string>
+    <string name="sheets_accessories_battery">%1$s, %2$s</string>
     <string name="sheets_accessories_in_settings">Dieser Fernseher koppelt Geräte in seinen eigenen Einstellungen. Such dort nach Fernbedienungen und Zubehör.</string>
     <string name="sheets_tv_settings_title">Einstellungen des Fernsehers</string>
     <string name="sheets_tv_settings_subtitle">Bild, Ton, Konten und die übrigen Einstellungen des Fernsehers</string>

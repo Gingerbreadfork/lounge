@@ -88,6 +88,7 @@
     <string name="sheets_accessories_title">Telecomandi e accessori</string>
     <string name="sheets_accessories_subtitle">Associa un controller, delle cuffie o un telecomando</string>
     <string name="sheets_accessories_subtitle_ask">Serve Dispositivi nelle vicinanze per aprire la schermata di associazione della TV. OK lo chiede.</string>
+    <string name="sheets_accessories_battery">%1$s, %2$s</string>
     <string name="sheets_accessories_in_settings">Questa TV associa i dispositivi dalle sue impostazioni. Cerca lì telecomandi e accessori.</string>
     <string name="sheets_tv_settings_title">Impostazioni della TV</string>
     <string name="sheets_tv_settings_subtitle">Immagine, audio, account e il resto delle impostazioni della TV</string>

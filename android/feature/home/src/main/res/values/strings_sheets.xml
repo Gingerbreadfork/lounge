@@ -111,6 +111,8 @@
     <string name="sheets_accessories_subtitle">Pair a controller, headphones or a remote</string>
     <!-- Under the row on a TV that keeps its pairing screen to apps allowed Nearby devices, which is Android's own name for the permission. -->
     <string name="sheets_accessories_subtitle_ask">Needs Nearby devices to open the TV\'s pairing screen. OK asks.</string>
+    <!-- A line under the row for each paired device that reports its battery. %1$s is the device's name and %2$s its charge, such as 80%. -->
+    <string name="sheets_accessories_battery">%1$s, %2$s</string>
     <string name="sheets_accessories_in_settings">This TV pairs things in its own settings. Look for remotes and accessories there.</string>
     <string name="sheets_tv_settings_title">TV settings</string>
     <string name="sheets_tv_settings_subtitle">Picture, sound, accounts and the rest of the TV\'s own settings</string>

@@ -88,6 +88,7 @@
     <string name="sheets_accessories_title">Télécommandes et accessoires</string>
     <string name="sheets_accessories_subtitle">Associer une manette, un casque ou une télécommande</string>
     <string name="sheets_accessories_subtitle_ask">Nécessite Appareils à proximité pour ouvrir l’écran d’association de la TV. OK le demande.</string>
+    <string name="sheets_accessories_battery">%1$s, %2$s</string>
     <string name="sheets_accessories_in_settings">Cette TV associe les appareils depuis ses propres paramètres. Cherchez-y les télécommandes et accessoires.</string>
     <string name="sheets_tv_settings_title">Paramètres de la TV</string>
     <string name="sheets_tv_settings_subtitle">Image, son, comptes et le reste des paramètres de la TV</string>
