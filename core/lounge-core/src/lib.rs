@@ -749,6 +749,8 @@ pub enum LayoutCommand {
     MoveRow { row_id: String, to_index: u32 },
     /// How many recently opened apps follow the pins in Your apps; zero keeps the row to pins.
     SetRecentApps { count: u32 },
+    /// Whether the home keeps to apps alone.
+    SetAppsOnly { on: bool },
     /// Starts a group of apps, a row of its own, with `package` in it if one is given.
     CreateGroup { name: String, package: Option<String> },
     RenameGroup { group_id: String, name: String },
@@ -1154,6 +1156,12 @@ impl Core {
         engine::wait_for_graph(&self.inner);
         let state = self.inner.state.lock();
         engine::group_infos(&state)
+    }
+
+    /// Whether the home keeps to apps alone.
+    pub fn apps_only(&self) -> bool {
+        self.count();
+        self.inner.state.lock().graph.layout.apps_only
     }
 
     /// How many recently opened apps follow the pins in Your apps.

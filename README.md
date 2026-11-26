@@ -110,6 +110,8 @@ one, and holding OK picks it up to move. Empty rows stay off the screen. The sam
 every app and plugin that Continue watching draws on, with how many titles each brings. All of
 them are shown unless you hide one.
 
+Settings, Apps only strips the home back to your apps, with everything else still a search away.
+
 You can also make rows of your own. Hold OK on any app, choose Add to a group and name it, such
 as Kids or Sport. A group is a row like any other, to move or hide, and Settings, App groups
 renames one, changes its apps or deletes it.

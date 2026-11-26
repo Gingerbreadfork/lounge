@@ -118,6 +118,9 @@ class CoreClient(val core: Core) : SnapshotListener {
     /** How many recently opened apps follow the pins in Your apps. */
     fun recentApps(): UInt = core.recentApps()
 
+    /** Whether the home keeps to apps alone. */
+    fun appsOnly(): Boolean = core.appsOnly()
+
     /** Every row the home could show, in order; waits for the core to load, so call it off the main thread. */
     fun homeRows(): List<RowInfo> = core.homeRows()
 

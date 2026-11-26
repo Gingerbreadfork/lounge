@@ -16,6 +16,8 @@
         <item quantity="one">%1$d recente</item>
         <item quantity="other">%1$d recente</item>
     </plurals>
+    <string name="sheets_apps_only_title">Alleen apps</string>
+    <string name="sheets_apps_only_subtitle">Laat alleen je apps op het startscherm staan. Zoeken vindt de rest nog steeds.</string>
     <string name="sheets_phone_apps_title">Telefoon-apps in Alle apps</string>
     <string name="sheets_phone_apps_subtitle">Apps voor telefoons, die niet altijd goed werken met een afstandsbediening</string>
     <string name="sheets_channels_title">Kanalen van apps</string>

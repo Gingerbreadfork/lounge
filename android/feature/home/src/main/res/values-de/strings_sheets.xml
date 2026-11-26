@@ -16,6 +16,8 @@
         <item quantity="one">%1$d zuletzt geöffnete</item>
         <item quantity="other">%1$d zuletzt geöffnete</item>
     </plurals>
+    <string name="sheets_apps_only_title">Nur Apps</string>
+    <string name="sheets_apps_only_subtitle">Zeigt auf dem Startbildschirm nur deine Apps. Die Suche findet weiterhin alles andere.</string>
     <string name="sheets_phone_apps_title">Handy-Apps in „Alle Apps“</string>
     <string name="sheets_phone_apps_subtitle">Apps für Handys, mit der Fernbedienung oft schwer zu bedienen</string>
     <string name="sheets_channels_title">Kanäle aus Apps</string>

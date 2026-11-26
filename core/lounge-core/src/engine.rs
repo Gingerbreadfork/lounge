@@ -352,14 +352,15 @@ pub(crate) fn build(state: &State, config: &CoreConfig, utc_offset_minutes: i32)
             build_row(state, &index, &row_id, now, config)
         };
         if let Some(row) = built {
-            if row_shown(state, &row_id) {
+            // A home of apps alone keeps the other rows within reach of search, as a hidden row is.
+            if row_shown(state, &row_id) && (!graph.layout.apps_only || app_row(&row_id)) {
                 rows.push(row);
             } else {
                 hidden_rows.push(row);
             }
         }
     }
-    let suggested = plugin_suggestions(state);
+    let suggested = if graph.layout.apps_only { Vec::new() } else { plugin_suggestions(state) };
     if !suggested.is_empty() {
         // Under Continue watching, which is where what they bring would show.
         let at = rows.iter().position(|r| r.id == "continue" || r.id == NOTICE_TV_LISTINGS).map_or(0, |i| i + 1);
@@ -496,6 +497,11 @@ fn build_row(state: &State, index: &BuildIndex, row_id: &str, now: i64, config: 
         tiles: items.iter().map(|it| provided(tile_for(graph, it, kind), graph, index, it)).collect(),
         note: None,
     })
+}
+
+/// Whether a row holds apps or the TV's own inputs, which is all a home of apps alone shows.
+fn app_row(row_id: &str) -> bool {
+    matches!(row_id, "apps" | "games" | "tvcontrols") || row_id.starts_with("group:")
 }
 
 /// A group of apps as a row, in the group's order. A group with no app to show has no row.
@@ -1650,6 +1656,25 @@ mod tests {
         assert_eq!(item_ref(&g, "plugin:tv.lounge.plex:deck:41").title, "A title that is no longer listed");
         assert_eq!(item_ref(&g, "app:com.example.removed").title, "com.example.removed");
         assert_eq!(item_ref(&g, "app:org.jellyfin.androidtv").title, "Jellyfin");
+    }
+
+    #[test]
+    fn a_home_of_apps_alone_shows_only_apps_and_search_still_reaches_the_rest() {
+        let mut g = Graph::default();
+        let mut used = Item::app("tv.a", "Main", "Alpha");
+        used.last_used_ms = Some(now_ms() - 60_000);
+        g.replace_source("apps", vec![used, Item::app("tv.b", "Main", "Beta")]);
+        g.replace_source("tvprovider", (1..=9).map(|i| resume(&format!("r{i}"), if i % 2 == 0 { "tv.a" } else { "tv.b" }, i)).collect());
+        g.create_group("Kids", Some("tv.b"));
+        let mut s = state(g, Vec::new());
+        let shown = |s: &State| build(s, &config(), 0);
+        assert!(shown(&s).rows.iter().any(|r| r.id == "continue"));
+        s.graph.layout.apps_only = true;
+        let snap = shown(&s);
+        assert_eq!(snap.rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["apps", "group:g1"]);
+        assert!(snap.hidden_rows.iter().any(|r| r.id == "continue"));
+        assert!(snap.stage.strip.iter().all(|t| t.id.starts_with("app:")), "{:?}", snap.stage.strip.iter().map(|t| &t.id).collect::<Vec<_>>());
+        assert!(!snap.stage.strip.is_empty());
     }
 
     #[test]

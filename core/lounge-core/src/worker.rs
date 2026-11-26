@@ -1329,6 +1329,7 @@ fn apply_command(inner: &Inner, cmd: LayoutCommand) -> Result<(), lounge_store::
             state.graph.set_row_order(order);
         }
         LayoutCommand::SetRecentApps { count } => state.graph.layout.recent_apps = count.min(60),
+        LayoutCommand::SetAppsOnly { on } => state.graph.layout.apps_only = on,
         LayoutCommand::CreateGroup { name, package } => state.graph.create_group(&name, package.as_deref()),
         LayoutCommand::RenameGroup { group_id, name } => state.graph.rename_group(&group_id, &name),
         LayoutCommand::DeleteGroup { group_id } => state.graph.delete_group(&group_id),

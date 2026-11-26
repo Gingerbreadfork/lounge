@@ -18,6 +18,8 @@
         <item quantity="many">%1$d récentes</item>
         <item quantity="other">%1$d récentes</item>
     </plurals>
+    <string name="sheets_apps_only_title">Applis seulement</string>
+    <string name="sheets_apps_only_subtitle">Ne laisse que vos applis sur l’écran d’accueil. La recherche trouve toujours le reste.</string>
     <string name="sheets_phone_apps_title">Applis mobiles dans Toutes les applis</string>
     <string name="sheets_phone_apps_subtitle">Conçues pour téléphone, parfois peu pratiques à la télécommande</string>
     <string name="sheets_channels_title">Chaînes des applis</string>

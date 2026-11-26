@@ -18,6 +18,8 @@
         <item quantity="many">%1$d recenti</item>
         <item quantity="other">%1$d recenti</item>
     </plurals>
+    <string name="sheets_apps_only_title">Solo app</string>
+    <string name="sheets_apps_only_subtitle">Lascia solo le tue app nella schermata Home. La ricerca trova ancora il resto.</string>
     <string name="sheets_phone_apps_title">App per telefoni in Tutte le app</string>
     <string name="sheets_phone_apps_subtitle">App per telefoni: col telecomando potrebbero funzionare male</string>
     <string name="sheets_channels_title">Canali delle app</string>

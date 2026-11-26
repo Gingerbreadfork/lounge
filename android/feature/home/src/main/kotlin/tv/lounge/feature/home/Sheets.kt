@@ -393,6 +393,9 @@ fun QuickSettingsSheet(
     groupsSummary: String,
     /** Where the TV's sound comes out now, as the home already knows it. */
     soundOutput: () -> SoundOutput? = { null },
+    /** Whether the home keeps to apps alone. */
+    appsOnly: Boolean? = false,
+    onSetAppsOnly: (Boolean) -> Unit = {},
     /** How many recently opened apps follow the pins in Your apps. */
     recentApps: Int,
     onSetRecentApps: (Int) -> Unit,
@@ -505,6 +508,16 @@ fun QuickSettingsSheet(
             value = if (recentApps == 0) stringResource(R.string.sheets_your_apps_pinned_only) else pluralStringResource(R.plurals.sheets_your_apps_recent, recentApps, recentApps),
             onClick = { sounds0?.tick(); onSetRecentApps(steps[(at + 1) % steps.size]) },
             onCycle = { by -> sounds0?.tick(); onSetRecentApps(steps[(at + by).mod(steps.size)]) },
+        )
+        SheetRow(
+            icon = LoungeIcons.Apps,
+            title = stringResource(R.string.sheets_apps_only_title),
+            subtitle = stringResource(R.string.sheets_apps_only_subtitle),
+            // Nothing is said, and a press does nothing, until the core has answered.
+            value = appsOnly?.let { if (it) on else off }.orEmpty(),
+            accent = if (appsOnly == true) colors.signal else colors.dust,
+            onClick = { appsOnly?.let { sounds0?.tick(); onSetAppsOnly(!it) } },
+            onCycle = { appsOnly?.let { sounds0?.tick(); onSetAppsOnly(!it) } },
         )
         SheetRow(
             icon = SettingsGlyphs.PhoneApps,

@@ -18,6 +18,8 @@
         <item quantity="many">%1$d recentes</item>
         <item quantity="other">%1$d recentes</item>
     </plurals>
+    <string name="sheets_apps_only_title">Somente apps</string>
+    <string name="sheets_apps_only_subtitle">Deixa só seus apps na tela inicial. A pesquisa ainda encontra o resto.</string>
     <string name="sheets_phone_apps_title">Apps de celular em Todos os apps</string>
     <string name="sheets_phone_apps_subtitle">Feitos para celular, podem funcionar mal com o controle remoto</string>
     <string name="sheets_channels_title">Canais de apps</string>

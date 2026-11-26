@@ -291,6 +291,10 @@ pub struct Layout {
     /// watched then. One watched again since is no longer marked.
     #[serde(default)]
     pub watched: HashMap<String, i64>,
+    /// Whether the home keeps to apps: no Continue watching, live TV or plugin rows, and a
+    /// Stage of apps alone.
+    #[serde(default)]
+    pub apps_only: bool,
 }
 
 /// A row of apps the person put together and named.
@@ -344,6 +348,7 @@ impl Default for Layout {
             muted_providers: HashSet::new(),
             groups: Vec::new(),
             watched: HashMap::new(),
+            apps_only: false,
         }
     }
 }
@@ -868,8 +873,8 @@ impl Graph {
                 break;
             }
             if let Some(it) = self.get(id) {
-                // A control has nothing to show on the Stage.
-                if !self.is_hidden(&it.id) && !self.is_watched(it) && !it.is_control() {
+                // A control has nothing to show on the Stage, and a home of apps alone shows only apps there.
+                if !self.is_hidden(&it.id) && !self.is_watched(it) && !it.is_control() && (!self.layout.apps_only || it.kind == ItemKind::App) {
                     out.push(it);
                 }
             }
@@ -877,7 +882,8 @@ impl Graph {
         let share = cap.saturating_sub(out.len()).div_ceil(2);
         let mut taken: HashMap<&str, usize> = HashMap::new();
         let mut passed_over: Vec<&Item> = Vec::new();
-        for it in self.continue_watching() {
+        let to_continue = if self.layout.apps_only { Vec::new() } else { self.continue_watching() };
+        for it in to_continue {
             if out.len() >= cap {
                 break;
             }

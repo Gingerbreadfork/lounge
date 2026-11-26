@@ -1407,8 +1407,15 @@ private fun SheetContent(
             val enabledChannels by produceState(0) { value = withContext(Dispatchers.IO) { core.availableChannels().count { it.enabled } } }
             val enabledPlugins by produceState(0) { value = withContext(Dispatchers.IO) { core.plugins().count { it.enabled } } }
             var recentApps by remember { mutableStateOf(-1) }
+            var appsOnly by remember { mutableStateOf<Boolean?>(null) }
             // Read again with each snapshot, so a change made on the phone shows here too.
-            LaunchedEffect(Unit) { core.snapshots.collect { recentApps = withContext(Dispatchers.IO) { core.recentApps().toInt() } } }
+            LaunchedEffect(Unit) {
+                core.snapshots.collect {
+                    val (recent, only) = withContext(Dispatchers.IO) { core.recentApps().toInt() to core.appsOnly() }
+                    recentApps = recent
+                    appsOnly = only
+                }
+            }
             // Only rows the person hid count.
             val groupCount by produceState<Int?>(null) { value = withContext(Dispatchers.IO) { core.appGroups().size } }
             val rowsHidden by produceState<Int?>(null) { value = withContext(Dispatchers.IO) { core.homeRows().count { !it.shown && it.chosen } } }
@@ -1435,6 +1442,8 @@ private fun SheetContent(
                 onRows = { open(Overlay.Rows) },
                 onGroups = { open(Overlay.AppGroups()) },
                 soundOutput = soundOutput,
+                appsOnly = appsOnly,
+                onSetAppsOnly = { on -> appsOnly = on; core.command(LayoutCommand.SetAppsOnly(on)) },
                 groupsSummary = when (val count = groupCount) {
                     null -> ""
                     0 -> stringResource(R.string.sheets_groups_none)

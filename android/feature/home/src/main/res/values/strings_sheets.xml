@@ -21,6 +21,9 @@
         <item quantity="other">%1$d recent</item>
     </plurals>
     <!-- All apps is the screen that lists every app. -->
+    <!-- A switch that takes everything but apps off the home screen. -->
+    <string name="sheets_apps_only_title">Apps only</string>
+    <string name="sheets_apps_only_subtitle">Leaves just your apps on the home screen. Search still finds the rest.</string>
     <string name="sheets_phone_apps_title">Phone apps in All apps</string>
     <string name="sheets_phone_apps_subtitle">Apps made for phones, which may not work well with a remote</string>
     <!-- Channels are rows that other apps on the TV publish. -->
