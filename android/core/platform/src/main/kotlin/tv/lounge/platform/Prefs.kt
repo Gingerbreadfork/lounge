@@ -68,6 +68,8 @@ class Prefs(private val context: Context) {
         val notifications: Boolean = true,
         /** The tag of the language chosen over the TV's own, or null to follow the TV. */
         val language: String? = null,
+        /** How many more times the home says that holding OK on a tile opens its options. */
+        val holdHintsLeft: Int = HOLD_HINTS,
         /** False only for the placeholder used before the store has been read. */
         val loaded: Boolean = false,
     )
@@ -86,6 +88,7 @@ class Prefs(private val context: Context) {
             allAppsSort = p[ALL_APPS_SORT] ?: SORT_AZ,
             notifications = notificationsShown(p[NOTIFICATIONS], p[ONBOARDING_DONE] ?: false),
             language = p[LANGUAGE],
+            holdHintsLeft = p[HOLD_HINTS_LEFT] ?: HOLD_HINTS,
             loaded = true,
         )
     }
@@ -175,6 +178,15 @@ class Prefs(private val context: Context) {
     suspend fun setPreviousScreensaverEnabled(value: String?) {
         context.dataStore.edit { if (value == null) it.remove(PREVIOUS_SCREENSAVER_ENABLED) else it[PREVIOUS_SCREENSAVER_ENABLED] = value }
     }
+    /** One fewer hint about holding OK is owed, or none once the person has done it. */
+    suspend fun useHoldHint(learned: Boolean = false) {
+        try {
+            context.dataStore.edit { it[HOLD_HINTS_LEFT] = if (learned) 0 else ((it[HOLD_HINTS_LEFT] ?: HOLD_HINTS) - 1).coerceAtLeast(0) }
+        } catch (e: IOException) {
+            android.util.Log.w("Lounge", "the hint about holding OK was not counted", e)
+        }
+    }
+
     suspend fun setCompanionEnabled(on: Boolean) { context.dataStore.edit { it[COMPANION_ENABLED] = on } }
 
     /** The APK update time the bundled plugins were last installed from; they re-install after an update. */
@@ -238,6 +250,8 @@ class Prefs(private val context: Context) {
 
     companion object {
         const val STILL_BACKDROP = "still"
+        /** How many times the home says that holding OK opens a tile's options. */
+        const val HOLD_HINTS = 3
         const val SORT_AZ = "az"
         const val SORT_OPENED = "opened"
         const val SORT_INSTALLED = "installed"
@@ -266,5 +280,6 @@ class Prefs(private val context: Context) {
         private val NOTIFICATIONS = booleanPreferencesKey("notifications")
         private val NOTIFICATIONS_HIDDEN = stringSetPreferencesKey("notifications_hidden")
         private val NOTIFICATIONS_SEEN_AT = longPreferencesKey("notifications_seen_at")
+        private val HOLD_HINTS_LEFT = intPreferencesKey("hold_hints_left")
     }
 }

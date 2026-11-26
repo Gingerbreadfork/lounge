@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="rows_controller_connected">Controller verbunden</string>
+    <string name="rows_hold_hint">OK gedrückt halten für mehr</string>
 </resources>

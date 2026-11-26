@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="rows_controller_connected">Controle de jogo conectado</string>
+    <string name="rows_hold_hint">Mantenha OK pressionado para ver mais</string>
 </resources>

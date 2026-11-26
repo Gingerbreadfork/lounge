@@ -2,4 +2,6 @@
 <resources>
     <!-- What a screen reader says for the controller picture beside the Games row's title. -->
     <string name="rows_controller_connected">Controller connected</string>
+    <!-- Beside a row's title the first few times the home is used: holding the remote's OK on a tile opens its options. -->
+    <string name="rows_hold_hint">Hold OK for more</string>
 </resources>

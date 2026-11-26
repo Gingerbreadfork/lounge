@@ -122,6 +122,8 @@ fun ContentRow(
     heldTileId: () -> String? = { null },
     heldRowId: () -> String? = { null },
     shown: () -> Boolean = { true },
+    /** A word to the person beside the header, such as what holding OK does. Read while composing the header alone. */
+    hint: () -> String? = { null },
 ) {
     val colors = LoungeTheme.colors
     val motion = LoungeTheme.motion
@@ -173,6 +175,7 @@ fun ContentRow(
             }
             // Beside the header, so the row's height and the focus line stay as they are.
             row.note?.let { Text(it, style = LoungeTheme.typography.meta, color = colors.dust, maxLines = 1, modifier = Modifier.alignByBaseline()) }
+            RowHint(hint, Modifier.alignByBaseline())
         }
         CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec(safeXPx)) {
             LazyRow(
@@ -284,3 +287,10 @@ private fun isController(device: InputDevice): Boolean =
     !device.isVirtual &&
         (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD &&
         (device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+
+/** The hint beside a row's header, in its own scope so its coming and going recomposes nothing else. */
+@Composable
+private fun RowHint(hint: () -> String?, modifier: Modifier) {
+    val words = hint() ?: return
+    Text(words, style = LoungeTheme.typography.meta, color = LoungeTheme.colors.houselight, maxLines = 1, modifier = modifier)
+}

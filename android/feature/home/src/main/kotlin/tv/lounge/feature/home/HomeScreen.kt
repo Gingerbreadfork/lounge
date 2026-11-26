@@ -287,6 +287,30 @@ fun HomeScreen(
     val noNetwork = rememberOffline()
     fun offline() = networkSettings != null && noNetwork.value
 
+    // The first few times the home is used, a row says that holding OK opens a tile's options: once
+    // each time Lounge starts, when focus has rested on a tile that has some.
+    val holdHint = stringResource(R.string.rows_hold_hint)
+    val hintedRow = remember { mutableStateOf<String?>(null) }
+    val hintsLeft = rememberUpdatedState(uiPrefs.holdHintsLeft)
+    val rowsNow = rememberUpdatedState(snapshot.rows)
+    LaunchedEffect(Unit) {
+        var said = false
+        snapshotFlow { Triple(state.region, state.focusedRowId, state.focusedTileIndex) }.collectLatest { (region, rowId, index) ->
+            hintedRow.value = null
+            if (said || region != FocusRegion.Rows || rowId == null) return@collectLatest
+            delay(HOLD_HINT_REST_MS)
+            // An app opened from the tile leaves focus where it was, with nobody looking at the row.
+            if (!homeOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@collectLatest
+            val tile = rowsNow.value.firstOrNull { it.id == rowId }?.tiles?.getOrNull(index)
+            if (hintsLeft.value <= 0 || state.overlay != Overlay.None || tile == null || !hasMenu(tile) || tile.id.startsWith("notice:")) return@collectLatest
+            said = true
+            hintedRow.value = rowId
+            prefs.useHoldHint()
+            delay(HOLD_HINT_SHOWN_MS)
+            hintedRow.value = null
+        }
+    }
+
     // A remote or controller running low is said once, the next time Lounge comes to the front.
     // One is said at a time, the lowest first, and only while Lounge is there to say it.
     val toldLow = remember { HashSet<String>() }
@@ -516,6 +540,9 @@ fun HomeScreen(
 
     fun openMenu(tile: Tile, rowId: String, anchor: Rect, returnFocus: FocusRequester) {
         if (!hasMenu(tile)) return
+        // Someone who has held OK needs no more telling.
+        hintedRow.value = null
+        if (uiPrefs.holdHintsLeft > 0) scope.launch { prefs.useHoldHint(learned = true) }
         val resolved = if (anchor != Rect.Zero) anchor else if (light.center.isSpecified) {
             Rect(light.center.x - 100f, light.center.y - 60f, light.center.x + 100f, light.center.y + 60f)
         } else {
@@ -806,6 +833,7 @@ fun HomeScreen(
                             heldTileId = { heldHomeMenu()?.tile?.id },
                             heldRowId = { heldHomeMenu()?.rowId },
                             shown = { shown.value },
+                            hint = { holdHint.takeIf { hintedRow.value == row.id } },
                         )
                     }
                 }
@@ -1240,6 +1268,10 @@ private fun Modifier.tallerBy(extra: Int): Modifier = layout { measurable, const
     val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
     layout(placeable.width, constraints.maxHeight) { placeable.place(0, 0) }
 }
+
+/** How long focus rests on a tile before the hint about holding OK, and how long the hint stays. */
+private const val HOLD_HINT_REST_MS = 2_500L
+private const val HOLD_HINT_SHOWN_MS = 8_000L
 
 /** How long after coming forward the accessories' batteries are read. */
 private const val ACCESSORY_SETTLE_MS = 6_000L
