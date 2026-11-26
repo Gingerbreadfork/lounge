@@ -33,6 +33,12 @@ export type PanelRow = {
 export type Panel = { title: string; subtitle?: string | null; footnote?: string | null; rows: PanelRow[] };
 /** One of the TV's power or input controls; `group` is the label it sits under. */
 export type TvControl = { id: string; title: string; value?: string | null; group?: string | null; glyph: string };
+/** One of the TV's settings in the TV's own words. A `switch` is set to "true" or "false". */
+export type TvSetting = { key: string; title: string; about?: string | null; value: string; switch?: boolean; choices: { value: string; label: string }[] };
+export type TvSettings = { groups: { title: string; settings: TvSetting[] }[] };
+export type TvNotification = { key: string; app: string; title: string; text: string; postedAt: number; dismissible: boolean };
+/** `on` is false while the TV is not reading notifications at all. */
+export type TvNotifications = { on: boolean; list: TvNotification[] };
 /** With a `note` there is nothing to press, and the note says how to set that up. */
 export type TvControls = { note?: string | null; controls: TvControl[] };
 export type Row = { id: string; title: string; kind: string; size: string; badge?: string | null; note?: string | null; tiles: Tile[] };
@@ -225,6 +231,11 @@ export const api = {
   diagnostics: () => call<Diagnostics>('GET', '/api/diagnostics'),
   devices: () => call<Device[]>('GET', '/api/devices'),
   revokeDevice: (id: string) => call<void>('DELETE', `/api/devices/${encodeURIComponent(id)}`),
+  settings: () => call<TvSettings>('GET', '/api/settings'),
+  setSetting: (key: string, value: string) => call<void>('PUT', '/api/settings', { key, value }),
+  notifications: () => call<TvNotifications>('GET', '/api/notifications'),
+  /** Dismisses one notification on the TV, or with no key every one that can be. */
+  dismissNotification: (key?: string) => call<void>('POST', '/api/notifications/dismiss', key === undefined ? {} : { key }),
   /** Shows a few words on the TV as a pop-up. */
   message: (text: string) => call<void>('POST', '/api/message', { text }),
   /** Whether a key for pop-ups from the home has been made. */

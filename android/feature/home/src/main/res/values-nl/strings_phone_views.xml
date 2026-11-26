@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="phone_views_no_setting">De tv heeft die instelling niet.</string>
+    <string name="phone_views_no_notification">De tv toont die melding niet meer.</string>
+</resources>

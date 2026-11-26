@@ -169,6 +169,7 @@ class AndroidPlatform(private val context: Context) : Platform {
             command == "allapps" -> _commands.tryEmit(UiCommand.OpenAllApps)
             command.startsWith("plugin:") -> _commands.tryEmit(UiCommand.OpenPlugin(command.removePrefix("plugin:")))
             command.startsWith("search:") -> _commands.tryEmit(UiCommand.Search(command.removePrefix("search:")))
+            command.startsWith("setting:") || command.startsWith("notification:") -> phoneCommand(command)
             command.startsWith("alert:") -> {
                 val said = runCatching { org.json.JSONObject(command.removePrefix("alert:")) }.getOrNull() ?: throw PlatformException.Failed("Unknown control: alert")
                 fun text(name: String) = said.optString(name).takeIf { it.isNotBlank() && !said.isNull(name) }
@@ -183,6 +184,14 @@ class AndroidPlatform(private val context: Context) : Platform {
             else -> throw PlatformException.Failed("Unknown control: $command")
         }
     }
+
+    /** Set by the shell: its settings or its notifications as JSON for a paired phone. */
+    @Volatile var phoneViews: (String) -> String = { throw PlatformException.Failed("Unknown view: $it") }
+
+    /** Set by the shell: changes a setting or dismisses a notification for a paired phone, or throws a sentence. */
+    @Volatile var phoneCommand: (String) -> Unit = { throw PlatformException.Failed("Unknown control: $it") }
+
+    override fun phoneView(what: String): String = phoneViews(what)
 
     /** Set by the shell: shows a pop-up, or throws a sentence saying why it cannot. */
     @Volatile var showAlert: (HomeAlert) -> Unit = { throw PlatformException.Failed("Unknown control: alert") }

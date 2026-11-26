@@ -226,6 +226,11 @@ pub trait CompanionActions: Send + Sync {
     fn device_info(&self) -> DeviceInfo;
     /// Shows a pop-up on the TV, over whatever is on screen where the TV allows that.
     fn alert(&self, alert: Alert) -> Result<(), String>;
+    /// What the TV's own app alone knows, as JSON in the TV's language: "settings" or "notifications".
+    fn phone_view(&self, what: &str) -> Result<String, String>;
+    /// Has the TV's own app do something for the phone: "setting:<key>=<value>",
+    /// "notification:dismiss:<key>" or "notification:dismiss_all".
+    fn phone_command(&self, command: &str) -> Result<(), String>;
     /// The current `HomeSnapshot` as JSON.
     fn snapshot_json(&self) -> String;
     /// Does what a tile's action says, and gives back anything the press has to say.

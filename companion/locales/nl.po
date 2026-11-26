@@ -26,7 +26,7 @@ msgid "Plugins"
 msgstr "Plug-ins"
 
 #. the last tab, for backups, paired phones, diagnostics and about
-#: src/App.svelte src/pages/More.svelte
+#: src/App.svelte src/pages/More.svelte src/pages/Settings.svelte
 msgid "More"
 msgstr "Meer"
 
@@ -63,6 +63,54 @@ msgstr "{title} staat op de tv"
 #: src/lib/LiveView.svelte
 msgid "On the TV"
 msgstr "Op de tv tonen"
+
+#: src/lib/Notifications.svelte
+msgid "Dismissed on the TV"
+msgstr "Gewist op de tv"
+
+#: src/lib/Notifications.svelte
+msgid "Notifications"
+msgstr "Meldingen"
+
+#: src/lib/Notifications.svelte
+msgid "What apps on the TV want to tell you."
+msgstr "Wat apps op de tv je willen vertellen."
+
+#: src/lib/Notifications.svelte
+msgid "The TV isn't showing notifications. Turn them on in Settings on the TV."
+msgstr "De tv toont geen meldingen. Zet ze aan in Instellingen op de tv."
+
+#: src/lib/Notifications.svelte
+msgid "Nothing on the TV to read."
+msgstr "Niets te lezen op de tv."
+
+#. over a notification: the app it is from and how long ago, such as "Plex, 3 minutes ago"
+#: src/lib/Notifications.svelte
+msgid "{app}, {when}"
+msgstr "{app}, {when}"
+
+#. a button that removes one notification from the TV; {title} is the notification's title
+#: src/lib/Notifications.svelte
+msgid "Dismiss {title}"
+msgstr "{title} wissen"
+
+#: src/lib/Notifications.svelte
+msgid "Dismiss all"
+msgstr "Alles wissen"
+
+#. in the notifications sheet; "this" is the sheet and "them" are the TV's notifications
+#. in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls
+#. on the TV settings page; "this" is the page and "them" are the TV's settings
+#: src/lib/Notifications.svelte src/lib/TvControls.svelte src/pages/Settings.svelte
+msgid "The TV isn't answering. Check it is on, then open this again."
+msgstr "De tv reageert niet. Controleer of hij aanstaat en open dit dan opnieuw."
+
+#. in the notifications sheet; "this" is the sheet and "them" are the TV's notifications
+#. in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls
+#. on the TV settings page; "this" is the page and "them" are the TV's settings
+#: src/lib/Notifications.svelte src/lib/TvControls.svelte src/pages/Settings.svelte
+msgid "Reading them from the TV…"
+msgstr "Ophalen van de tv…"
 
 #. a button that goes back to the panel this one was opened from
 #: src/lib/PluginPanel.svelte
@@ -189,16 +237,6 @@ msgstr "Volume en afspelen staan op de afstandsbediening en werken ook zonder."
 #: src/lib/TvControls.svelte
 msgid "Lounge asks the TV through its HDMI cable; the TV decides what it does."
 msgstr "Lounge vraagt het de tv via de HDMI-kabel; de tv bepaalt wat die ermee doet."
-
-#. in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls
-#: src/lib/TvControls.svelte
-msgid "The TV isn't answering. Check it is on, then open this again."
-msgstr "De tv reageert niet. Controleer of hij aanstaat en open dit dan opnieuw."
-
-#. in the TV controls sheet; "this" is the sheet and "them" are the TV's power and input controls
-#: src/lib/TvControls.svelte
-msgid "Reading them from the TV…"
-msgstr "Ophalen van de tv…"
 
 #: src/lib/api.ts
 msgid "Lounge on the TV isn't answering. Check the TV is on and this phone is on the same Wi-Fi."
@@ -417,7 +455,7 @@ msgstr[1] "{n} dagen geleden"
 msgid "All apps"
 msgstr "Alle apps"
 
-#: src/pages/Apps.svelte src/pages/Home.svelte src/pages/More.svelte src/pages/Plugins.svelte src/pages/Remote.svelte
+#: src/pages/Apps.svelte src/pages/Home.svelte src/pages/More.svelte src/pages/Plugins.svelte src/pages/Remote.svelte src/pages/Settings.svelte
 msgid "Your TV"
 msgstr "Je tv"
 
@@ -473,6 +511,16 @@ msgstr "vastgemaakt"
 #: src/pages/Home.svelte
 msgid "What's on"
 msgstr "Nu te zien"
+
+#: src/pages/Home.svelte
+msgid "{n} notification on the TV"
+msgid_plural "{n} notifications on the TV"
+msgstr[0] "{n} melding op de tv"
+msgstr[1] "{n} meldingen op de tv"
+
+#: src/pages/Home.svelte
+msgid "Notifications on the TV"
+msgstr "Meldingen op de tv"
 
 #. above a link another app shared with Lounge, which can then be opened on the TV
 #: src/pages/Home.svelte
@@ -978,6 +1026,14 @@ msgstr "Versie van het startscherm"
 msgid "Device tier"
 msgstr "Apparaatklasse"
 
+#: src/pages/More.svelte src/pages/Settings.svelte
+msgid "TV settings"
+msgstr "Tv-instellingen"
+
+#: src/pages/More.svelte
+msgid "The theme, the sizes and the switches from Settings on the TV"
+msgstr "Het thema, de groottes en de schakelaars uit Instellingen op de tv"
+
 #: src/pages/More.svelte
 msgid "Back up"
 msgstr "Back-up"
@@ -1218,7 +1274,7 @@ msgstr "Nieuwe code aanvragen…"
 msgid "{plugin} removed"
 msgstr "{plugin} verwijderd"
 
-#: src/pages/Plugins.svelte
+#: src/pages/Plugins.svelte src/pages/Settings.svelte
 msgid "Saved"
 msgstr "Opgeslagen"
 
@@ -1635,3 +1691,7 @@ msgstr "Een paar woorden om op de tv te tonen"
 #: src/pages/Remote.svelte
 msgid "It shows in the corner of the TV for a few seconds, over whatever is on."
 msgstr "Het verschijnt een paar seconden in de hoek van de tv, boven wat er te zien is."
+
+#: src/pages/Settings.svelte
+msgid "Rows, groups of apps and what is hidden are under Layout."
+msgstr "Rijen, groepen apps en wat verborgen is, staan onder Indeling."

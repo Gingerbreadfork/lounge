@@ -166,6 +166,30 @@ msgid "The TV couldn't show that pop-up. Try again."
 msgstr "La TV no pudo mostrar ese aviso. Vuelve a intentarlo."
 
 #: lounge-companion/src/server.rs
+msgid "The TV couldn't list its settings. Try again."
+msgstr "La TV no pudo mostrar sus ajustes. Vuelve a intentarlo."
+
+#: lounge-companion/src/server.rs
+msgid "The TV doesn't have that setting."
+msgstr "La TV no tiene ese ajuste."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't change that setting. Try again."
+msgstr "La TV no pudo cambiar ese ajuste. Vuelve a intentarlo."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't list its notifications. Try again."
+msgstr "La TV no pudo mostrar sus notificaciones. Vuelve a intentarlo."
+
+#: lounge-companion/src/server.rs
+msgid "The TV doesn't have that notification."
+msgstr "La TV no tiene esa notificación."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't dismiss that. Try again."
+msgstr "La TV no pudo descartarlo. Vuelve a intentarlo."
+
+#: lounge-companion/src/server.rs
 msgid "Write something to show on the TV first."
 msgstr "Escribe primero algo que mostrar en la TV."
 

@@ -245,6 +245,14 @@ struct BackupPlugin {
 }
 
 impl CompanionActions for CoreActions {
+    fn phone_view(&self, what: &str) -> Result<String, String> {
+        self.inner()?.platform.phone_view(what.to_string()).map_err(|e| e.to_string())
+    }
+
+    fn phone_command(&self, command: &str) -> Result<(), String> {
+        self.inner()?.platform.control(command.to_string()).map_err(|e| e.to_string())
+    }
+
     fn alert(&self, alert: lounge_companion::Alert) -> Result<(), String> {
         let inner = self.inner()?;
         let said = serde_json::to_string(&alert).map_err(|e| e.to_string())?;
@@ -678,6 +686,7 @@ mod tests {
         fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), crate::PlatformError> { Ok(()) }
         fn tv_controls(&self) -> Result<crate::TvControls, crate::PlatformError> { Ok(crate::TvControls::default()) }
         fn run_tv_control(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn phone_view(&self, _: String) -> Result<String, crate::PlatformError> { Ok("{}".into()) }
     }
 
     /// Remembers the keys and controls it is sent, in order.
@@ -706,6 +715,7 @@ mod tests {
         fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), crate::PlatformError> { Ok(()) }
         fn tv_controls(&self) -> Result<crate::TvControls, crate::PlatformError> { Ok(crate::TvControls::default()) }
         fn run_tv_control(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn phone_view(&self, _: String) -> Result<String, crate::PlatformError> { Ok("{}".into()) }
     }
 
     #[test]
@@ -767,6 +777,7 @@ mod tests {
         }
         fn tv_controls(&self) -> Result<crate::TvControls, crate::PlatformError> { Ok(crate::TvControls::default()) }
         fn run_tv_control(&self, _: String) -> Result<(), crate::PlatformError> { Ok(()) }
+        fn phone_view(&self, _: String) -> Result<String, crate::PlatformError> { Ok("{}".into()) }
     }
 
     #[test]

@@ -62,6 +62,7 @@ impl Platform for Recorder {
     }
     fn tv_controls(&self) -> Result<lounge_core::TvControls, PlatformError> { Ok(lounge_core::TvControls::default()) }
     fn run_tv_control(&self, _: String) -> Result<(), PlatformError> { Ok(()) }
+    fn phone_view(&self, _: String) -> Result<String, PlatformError> { Ok("{}".into()) }
 }
 
 struct Snapshots(Mutex<Option<HomeSnapshot>>);

@@ -226,7 +226,8 @@ the TV shows a fresh one as soon as it is used.
   on with what it was showing; "On the TV" puts the camera on the big screen. All apps lists
   every app on the TV to open from the phone. With another app in front, Android lets Lounge open
   things only as the TV's home screen; where it is not, the phone says so and asks you to open
-  Lounge on the TV first.
+  Lounge on the TV first. The bell lists what apps on the TV have posted, as the TV's own panel
+  does, and dismisses them there.
 - **Remote** has a d-pad, Back, Home, Menu and the media keys, a field that types into Lounge's
   search and other fields, and a place to paste a link that opens on the TV. Home, the volume and
   the media keys work whatever is on screen. The d-pad, OK, Back and Menu reach another app only
@@ -240,7 +241,8 @@ the TV shows a fresh one as soon as it is used.
   unpins things from the Stage, shows or hides each source of Continue watching, and brings back
   anything you hid.
 - **Plugins** sets up the installed plugins and installs new ones from a file or a link.
-- **More** backs up your layout, your plugins' settings and the TV's own settings, such as the
+- **More** opens TV settings: the theme, the background, the sizes and the switches from
+  Settings on the TV, in the TV's own words. It backs up your layout, your plugins' settings and the TV's own settings, such as the
   theme, the background and whether notifications show, to one file and restores it, asking first
   before a restore replaces anything. Passwords and sign-ins stay out of the file. It also lists
   the paired phones with when each was last seen, shows the TV's diagnostics, and has the ways

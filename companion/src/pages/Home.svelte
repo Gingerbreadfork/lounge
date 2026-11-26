@@ -2,13 +2,26 @@
   import { api, art, light, lit, tag, type Tile } from '../lib/api';
   import { hold } from '../lib/hold';
   import Icon, { drawn } from '../lib/Icon.svelte';
-  import { t } from '../lib/lang.svelte';
-  import { act, app, connectionLabel, dismissShare, go, openShare, press } from '../lib/state.svelte';
+  import { t, tn } from '../lib/lang.svelte';
+  import Notifications from '../lib/Notifications.svelte';
+  import { act, app, connectionLabel, dismissShare, go, openShare, press, quiet } from '../lib/state.svelte';
   import TileSheet from '../lib/TileSheet.svelte';
 
   let snapshot = $derived(app.state?.snapshot ?? null);
   let spotlight = $derived(snapshot?.stage.spotlights[0] ?? null);
   let np = $derived(snapshot?.nowPlaying ?? null);
+  /** Whether the TV's notifications are open, and how many it has to read. */
+  let noticesOpen = $state(false);
+  let noticeCount = $state(0);
+  $effect(() => {
+    const count = async () => {
+      const n = await quiet(() => api.notifications());
+      if (n) noticeCount = n.on ? n.list.length : 0;
+    };
+    count();
+    const timer = setInterval(count, 20000);
+    return () => clearInterval(timer);
+  });
   /** The tile whose menu is open, and the home row it was held in. */
   let sheet = $state<{ tile: Tile; rowId: string | null; rowTitle: string | null } | null>(null);
   // The hint goes once a tile has been held; the gesture is then known.
@@ -69,8 +82,16 @@
       <p class="meta">{app.state?.device.name ?? t('Your TV')}</p>
       <h1>{t("What's on")}</h1>
     </div>
-    <span class="pill" class:on={app.connected}>{connectionLabel()}</span>
+    <div class="head-end">
+      <span class="pill" class:on={app.connected}>{connectionLabel()}</span>
+      <button class="bell" onclick={() => (noticesOpen = true)} aria-label={noticeCount ? tn(noticeCount, '{n} notification on the TV', '{n} notifications on the TV') : t('Notifications on the TV')}>
+        <Icon name="bell" size={24} />
+        {#if noticeCount}<span class="count" aria-hidden="true">{noticeCount}</span>{/if}
+      </button>
+    </div>
   </header>
+
+  {#if noticesOpen}<Notifications onclose={() => (noticesOpen = false)} onchange={(n) => (noticeCount = n)} />{/if}
 
   {#if app.error && !app.away}
     <p class="empty">{app.error}</p>
@@ -200,6 +221,10 @@
 {/if}
 
 <style>
+  .head-end { display: flex; align-items: center; gap: 12px; }
+  .bell { position: relative; width: 48px; height: 48px; border-radius: 50%; background: var(--curtain); color: var(--limelight); display: grid; place-items: center; flex: none; box-shadow: inset 0 0 0 1px var(--curtain-edge); }
+  .bell:active { transform: scale(0.95); background: var(--curtain-edge); }
+  .count { position: absolute; top: -2px; right: -2px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--light); color: var(--on-light); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
   .all { display: inline-flex; align-items: center; gap: 2px; color: var(--dust); font-size: 14px; font-weight: 600; min-height: 32px; margin-left: auto; }
   .list-row .grow { display: flex; flex-direction: column; gap: 1px; }
   .list-row { color: var(--limelight); }

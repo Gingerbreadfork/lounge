@@ -3,7 +3,8 @@
   import Confirm from '../lib/Confirm.svelte';
   import { aboutLinks, coins, copyText, paypal, spaced, type Coin } from '../lib/giving';
   import { t, tr } from '../lib/lang.svelte';
-  import { act, app, done, quiet, toast, unpair } from '../lib/state.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import { act, app, done, go, quiet, toast, unpair } from '../lib/state.svelte';
   import { ago, decimal, span } from '../lib/words';
 
   let diag = $state<Diagnostics | null>(null);
@@ -147,6 +148,16 @@
 
 <main class="page">
   <header class="page-head"><div><p class="meta">{app.state?.device.name ?? t('Your TV')}</p><h1>{t('More')}</h1></div></header>
+
+  <section class="section">
+    <button class="list-row" onclick={() => go('more', 'settings')}>
+      <span class="grow">
+        <span class="title">{t('TV settings')}</span>
+        <span class="caption">{t('The theme, the sizes and the switches from Settings on the TV')}</span>
+      </span>
+      <Icon name="chevron" size={22} />
+    </button>
+  </section>
 
   <section class="section">
     <div class="section-head"><h3>{t('Back up')}</h3></div>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sent back to a paired phone that asked the TV for something it does not have. -->
+    <string name="phone_views_no_setting">The TV doesn\'t have that setting.</string>
+    <string name="phone_views_no_notification">The TV no longer shows that notification.</string>
+</resources>

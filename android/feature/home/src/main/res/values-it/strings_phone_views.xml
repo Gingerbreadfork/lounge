@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="phone_views_no_setting">La TV non ha questa impostazione.</string>
+    <string name="phone_views_no_notification">La TV non mostra più questa notifica.</string>
+</resources>

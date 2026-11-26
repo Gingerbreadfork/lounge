@@ -316,6 +316,21 @@ class Prefs(private val context: Context) {
 
     companion object {
         const val STILL_BACKDROP = "still"
+
+        // The names a backup, and a paired phone, know these settings by.
+        const val KEY_THEME = "theme"
+        const val KEY_BACKDROP = "backdrop"
+        const val KEY_SOUNDS = "sounds"
+        const val KEY_LITE_MODE = "lite_mode"
+        const val KEY_REDUCED_MOTION = "reduced_motion"
+        const val KEY_SHOW_MOBILE_APPS = "show_mobile_apps"
+        const val KEY_NOTIFICATIONS = "notifications"
+        const val KEY_HOLD_HINTS = "hold_hints"
+        const val KEY_SHOW_STAGE = "show_stage"
+        const val KEY_SHOW_CLOCK = "show_clock"
+        const val KEY_HOLD_TIME = "hold_time"
+        const val KEY_TEXT_SIZE = "text_size"
+        const val KEY_LARGE_TILES = "large_tiles"
         /** How many times the home says that holding OK opens a tile's options. */
         const val HOLD_HINTS = 3
         const val SORT_AZ = "az"
@@ -328,31 +343,31 @@ class Prefs(private val context: Context) {
         private const val MAX_STYLE_ID = 200
         private const val MAX_HIDDEN_APPS = 200
         private val PACKAGE_NAME = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)*")
-        private val THEME = stringPreferencesKey("theme")
+        private val THEME = stringPreferencesKey(KEY_THEME)
         private val LANGUAGE = stringPreferencesKey("language")
-        private val SOUNDS = booleanPreferencesKey("sounds")
-        private val LITE_MODE = booleanPreferencesKey("lite_mode")
+        private val SOUNDS = booleanPreferencesKey(KEY_SOUNDS)
+        private val LITE_MODE = booleanPreferencesKey(KEY_LITE_MODE)
         private val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         private val ONBOARDING_STEP = intPreferencesKey("onboarding_step")
-        private val REDUCED_MOTION = booleanPreferencesKey("reduced_motion")
-        private val SHOW_MOBILE_APPS = booleanPreferencesKey("show_mobile_apps")
+        private val REDUCED_MOTION = booleanPreferencesKey(KEY_REDUCED_MOTION)
+        private val SHOW_MOBILE_APPS = booleanPreferencesKey(KEY_SHOW_MOBILE_APPS)
         private val BUNDLED_PLUGINS_STAMP = longPreferencesKey("bundled_plugins_stamp")
         private val COMPANION_ENABLED = booleanPreferencesKey("companion_enabled")
         private val PREVIOUS_SCREENSAVER = stringPreferencesKey("previous_screensaver")
         private val PREVIOUS_SCREENSAVER_ENABLED = stringPreferencesKey("previous_screensaver_enabled")
         private val AMBIENT_STYLE = stringPreferencesKey("ambient_style")
-        private val BACKDROP = stringPreferencesKey("backdrop")
+        private val BACKDROP = stringPreferencesKey(KEY_BACKDROP)
         private val ALL_APPS_SORT = stringPreferencesKey("all_apps_sort")
-        private val NOTIFICATIONS = booleanPreferencesKey("notifications")
+        private val NOTIFICATIONS = booleanPreferencesKey(KEY_NOTIFICATIONS)
         private val NOTIFICATIONS_HIDDEN = stringSetPreferencesKey("notifications_hidden")
         private val NOTIFICATIONS_SEEN_AT = longPreferencesKey("notifications_seen_at")
         private val HOLD_HINTS_LEFT = intPreferencesKey("hold_hints_left")
-        private val HOLD_HINTS_ON = booleanPreferencesKey("hold_hints")
-        private val SHOW_STAGE = booleanPreferencesKey("show_stage")
-        private val SHOW_CLOCK = booleanPreferencesKey("show_clock")
-        private val HOLD_TIME = stringPreferencesKey("hold_time")
-        private val TEXT_SIZE = stringPreferencesKey("text_size")
-        private val LARGE_TILES = booleanPreferencesKey("large_tiles")
+        private val HOLD_HINTS_ON = booleanPreferencesKey(KEY_HOLD_HINTS)
+        private val SHOW_STAGE = booleanPreferencesKey(KEY_SHOW_STAGE)
+        private val SHOW_CLOCK = booleanPreferencesKey(KEY_SHOW_CLOCK)
+        private val HOLD_TIME = stringPreferencesKey(KEY_HOLD_TIME)
+        private val TEXT_SIZE = stringPreferencesKey(KEY_TEXT_SIZE)
+        private val LARGE_TILES = booleanPreferencesKey(KEY_LARGE_TILES)
         private val START_ACTION = stringPreferencesKey("start_action")
         private val START_TITLE = stringPreferencesKey("start_title")
 

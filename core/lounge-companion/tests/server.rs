@@ -9,10 +9,24 @@ use std::time::{Duration, Instant};
 
 struct Fake;
 
+/// What the fake TV's own app was asked to do for the phone.
+static ASKED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
 /// The pop-ups the fake TV was asked to show.
 static SHOWN: std::sync::Mutex<Vec<Alert>> = std::sync::Mutex::new(Vec::new());
 
 impl CompanionActions for Fake {
+    fn phone_view(&self, what: &str) -> Result<String, String> {
+        match what {
+            "settings" => Ok(r#"{"groups":[]}"#.into()),
+            "notifications" => Ok(r#"{"on":true,"list":[]}"#.into()),
+            _ => Err("unknown".into()),
+        }
+    }
+    fn phone_command(&self, command: &str) -> Result<(), String> {
+        ASKED.lock().unwrap().push(command.to_string());
+        if command == "setting:theme=Neon" { Err("The TV doesn't have that theme.".into()) } else { Ok(()) }
+    }
     /// A title of `behind` is refused the way a TV that may not draw over other apps refuses.
     fn alert(&self, alert: Alert) -> Result<(), String> {
         if alert.title == "behind" {
@@ -435,6 +449,30 @@ fn the_home_shows_a_pop_up_with_its_own_key_and_nothing_else() {
     assert_eq!(status(&call("POST", "/api/alerts/test", &phone, "")), 204);
     assert_eq!(status(&call("DELETE", "/api/alerts/key", &phone, "")), 204);
     assert_eq!(status(&call("POST", "/api/alert", &key, ring)), 401);
+}
+
+#[test]
+fn the_phone_changes_a_setting_and_dismisses_a_notification() {
+    let dir = tempfile::tempdir().unwrap();
+    let companion = Companion::start(0, dir.path(), Arc::new(Fake)).unwrap();
+    let port = companion.port;
+    let host = format!("127.0.0.1:{port}");
+    let phone = pair(&companion, &host);
+    let call = |method: &str, path: &str, token: &str, body: &str| {
+        exchange(port, &format!("{method} {path} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()))
+    };
+    // None of it is open to a caller that is not a paired phone.
+    assert_eq!(status(&call("GET", "/api/settings", "guess", "")), 401);
+    assert_eq!(json_body(&call("GET", "/api/settings", &phone, ""))["groups"], serde_json::json!([]));
+    assert_eq!(json_body(&call("GET", "/api/notifications", &phone, ""))["on"], true);
+    assert_eq!(status(&call("PUT", "/api/settings", &phone, r#"{"key":"show_clock","value":"false"}"#)), 204);
+    assert_eq!(status(&call("POST", "/api/notifications/dismiss", &phone, r#"{"key":"0|tv.app|7|null|10"}"#)), 204);
+    assert_eq!(status(&call("POST", "/api/notifications/dismiss", &phone, "{}")), 204);
+    assert_eq!(*ASKED.lock().unwrap(), vec!["setting:show_clock=false", "notification:dismiss:0|tv.app|7|null|10", "notification:dismiss_all"]);
+    // A name that is not a setting's is refused here, and the TV's own refusal is passed on.
+    assert_eq!(status(&call("PUT", "/api/settings", &phone, r#"{"key":"x=y","value":"1"}"#)), 400);
+    let refused = call("PUT", "/api/settings", &phone, r#"{"key":"theme","value":"Neon"}"#);
+    assert_eq!((status(&refused), json_body(&refused)["error"].as_str()), (400, Some("The TV doesn't have that theme.")));
 }
 
 #[test]

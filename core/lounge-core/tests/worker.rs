@@ -28,6 +28,7 @@ impl Platform for Quiet {
     fn restore_preferences(&self, _: std::collections::HashMap<String, String>) -> Result<(), PlatformError> { Ok(()) }
     fn tv_controls(&self) -> Result<lounge_core::TvControls, PlatformError> { Ok(lounge_core::TvControls::default()) }
     fn run_tv_control(&self, _: String) -> Result<(), PlatformError> { Ok(()) }
+    fn phone_view(&self, _: String) -> Result<String, PlatformError> { Ok("{}".into()) }
 }
 
 /// Panics on the first snapshot the worker delivers and keeps the ones after it.

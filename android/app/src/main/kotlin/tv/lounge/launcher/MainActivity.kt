@@ -226,6 +226,28 @@ class MainActivity : ComponentActivity() {
         val phoneTv = tv.lounge.feature.home.PhoneTvControls(power, applicationContext)
         platform.listTvControls = { kotlinx.coroutines.runBlocking { phoneTv.list() } }
         platform.pressTvControl = { id -> kotlinx.coroutines.runBlocking { phoneTv.run(id) } }
+        // Its settings and notifications too, in the TV's own words.
+        val phoneSettings = tv.lounge.feature.home.PhoneSettings(applicationContext, prefs, core)
+        val phoneNotices = tv.lounge.feature.home.PhoneNotifications(applicationContext, prefs, NotificationFeed)
+        platform.phoneViews = { what ->
+            kotlinx.coroutines.runBlocking {
+                when (what) {
+                    "settings" -> phoneSettings.json()
+                    "notifications" -> phoneNotices.json()
+                    else -> throw tv.lounge.core.PlatformException.Failed("Unknown view: $what")
+                }
+            }
+        }
+        platform.phoneCommand = { command ->
+            kotlinx.coroutines.runBlocking {
+                when {
+                    command.startsWith("setting:") -> command.removePrefix("setting:").let { phoneSettings.set(it.substringBefore('='), it.substringAfter('=', "")) }
+                    command == "notification:dismiss_all" -> phoneNotices.dismiss(null)
+                    command.startsWith("notification:dismiss:") -> phoneNotices.dismiss(command.removePrefix("notification:dismiss:"))
+                    else -> throw tv.lounge.core.PlatformException.Failed("Unknown control: $command")
+                }
+            }
+        }
         lifecycleScope.launch {
             platform.commands.collect { cmd ->
                 when (cmd) {

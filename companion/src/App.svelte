@@ -11,6 +11,7 @@
   import Layout from './pages/Layout.svelte';
   import Plugins from './pages/Plugins.svelte';
   import More from './pages/More.svelte';
+  import Settings from './pages/Settings.svelte';
   import Pair from './pages/Pair.svelte';
 
   const tabs = [
@@ -53,6 +54,7 @@
   {:else if app.route.page === 'remote'}<Remote />
   {:else if app.route.page === 'layout'}<Layout />
   {:else if app.route.page === 'plugins'}<Plugins id={app.route.id} />
+  {:else if app.route.id === 'settings'}<Settings />
   {:else}<More />{/if}
 
   {#if app.panel}

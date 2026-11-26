@@ -166,6 +166,30 @@ msgid "The TV couldn't show that pop-up. Try again."
 msgstr "De tv kon die pop-up niet tonen. Probeer het opnieuw."
 
 #: lounge-companion/src/server.rs
+msgid "The TV couldn't list its settings. Try again."
+msgstr "De tv kon zijn instellingen niet tonen. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV doesn't have that setting."
+msgstr "De tv heeft die instelling niet."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't change that setting. Try again."
+msgstr "De tv kon die instelling niet wijzigen. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't list its notifications. Try again."
+msgstr "De tv kon zijn meldingen niet tonen. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
+msgid "The TV doesn't have that notification."
+msgstr "De tv heeft die melding niet."
+
+#: lounge-companion/src/server.rs
+msgid "The TV couldn't dismiss that. Try again."
+msgstr "De tv kon dat niet wissen. Probeer het opnieuw."
+
+#: lounge-companion/src/server.rs
 msgid "Write something to show on the TV first."
 msgstr "Schrijf eerst iets om op de tv te tonen."
 

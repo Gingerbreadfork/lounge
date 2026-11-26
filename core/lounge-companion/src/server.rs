@@ -40,6 +40,10 @@ struct App {
 const SESSION_COOKIE: &str = "lounge_session";
 /// The live socket's close code for a phone the TV has forgotten; the page unpairs on it.
 const CLOSE_UNPAIRED: u16 = 4401;
+/// A notification's key carries its app's own tag, which may be long.
+const NOTIFICATION_KEY_LIMIT: usize = 4096;
+/// A setting's value is a word or a style's id.
+const SETTING_VALUE_LIMIT: usize = 200;
 /// An alert is a line or two of text and an address.
 const ALERT_LIMIT: usize = 8 * 1024;
 /// Request bodies are small JSON except on the two upload routes.
@@ -277,6 +281,9 @@ fn routes(app: Shared) -> Router {
         .route("/api/backup", get(backup))
         .route("/api/restore", post(restore).layer(DefaultBodyLimit::max(BACKUP_LIMIT)))
         .route("/api/art", get(art))
+        .route("/api/settings", get(settings).put(set_setting))
+        .route("/api/notifications", get(notifications))
+        .route("/api/notifications/dismiss", post(dismiss_notification))
         .route("/api/message", post(message).layer(DefaultBodyLimit::max(ALERT_LIMIT)))
         .route("/api/alerts", get(alerts))
         .route("/api/alerts/key", post(new_alert_key).delete(clear_alert_key))
@@ -784,6 +791,49 @@ async fn alert(State(app): State<Shared>, headers: HeaderMap, Json(b): Json<Aler
         return Err(bad(t!("A pop-up needs a title to show.")));
     };
     on_core(&app, move |a| a.alert(alert)).await?.map_err(refused(mark!("The TV couldn't show that pop-up. Try again.")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The TV's settings as it words them, in groups, each with what it can be set to.
+async fn settings(State(app): State<Shared>) -> Result<Response, ApiError> {
+    Ok(json_raw(on_core(&app, |a| a.phone_view("settings")).await?.map_err(refused(mark!("The TV couldn't list its settings. Try again.")))?))
+}
+
+#[derive(Deserialize)]
+struct TvSettingBody {
+    key: String,
+    value: String,
+}
+
+async fn set_setting(State(app): State<Shared>, Json(b): Json<TvSettingBody>) -> Result<StatusCode, ApiError> {
+    // A setting's name is a word, and its value one short line.
+    let named = !b.key.is_empty() && b.key.len() <= 40 && b.key.bytes().all(|c| c.is_ascii_lowercase() || c == b'_');
+    if !named || b.value.len() > SETTING_VALUE_LIMIT || b.value.chars().any(char::is_control) {
+        return Err(bad(t!("The TV doesn't have that setting.")));
+    }
+    on_core(&app, move |a| a.phone_command(&format!("setting:{}={}", b.key, b.value))).await?.map_err(refused(mark!("The TV couldn't change that setting. Try again.")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// What apps on the TV have posted, as the TV shows them.
+async fn notifications(State(app): State<Shared>) -> Result<Response, ApiError> {
+    Ok(json_raw(on_core(&app, |a| a.phone_view("notifications")).await?.map_err(refused(mark!("The TV couldn't list its notifications. Try again.")))?))
+}
+
+#[derive(Deserialize)]
+struct DismissBody {
+    /// The notification to dismiss, or none for all that can be.
+    #[serde(default)]
+    key: Option<String>,
+}
+
+async fn dismiss_notification(State(app): State<Shared>, Json(b): Json<DismissBody>) -> Result<StatusCode, ApiError> {
+    let command = match b.key {
+        Some(key) if key.len() <= NOTIFICATION_KEY_LIMIT && !key.chars().any(char::is_control) => format!("notification:dismiss:{key}"),
+        Some(_) => return Err(bad(t!("The TV doesn't have that notification."))),
+        None => "notification:dismiss_all".to_string(),
+    };
+    on_core(&app, move |a| a.phone_command(&command)).await?.map_err(refused(mark!("The TV couldn't dismiss that. Try again.")))?;
     Ok(StatusCode::NO_CONTENT)
 }
 

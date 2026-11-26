@@ -850,6 +850,8 @@ pub trait Platform: Send + Sync {
     fn tv_controls(&self) -> Result<TvControls, PlatformError>;
     /// Runs one of those controls by its id. The error is a sentence saying what to check.
     fn run_tv_control(&self, id: String) -> Result<(), PlatformError>;
+    /// What only the shell knows, as JSON for the phone to show: "settings" or "notifications".
+    fn phone_view(&self, what: String) -> Result<String, PlatformError>;
 }
 
 #[uniffi::export(with_foreign)]
