@@ -143,16 +143,11 @@ fun HomeScreen(
     val toasts = remember { ToastController() }
     val light = LocalLightState.current
     val motion = LoungeTheme.motion
-    val theme = uiPrefs.theme
-    val sounds = uiPrefs.sounds
-    val lite = uiPrefs.liteMode
-    val reduced = uiPrefs.reducedMotion
-    val showMobile = uiPrefs.showMobileApps
     val liveBackdrops = LoungeTheme.visuals.shaderWallpaper && !motion.reducedMotion
     var isDefaultHome by remember { mutableStateOf(isDefaultHome(context)) }
     val uiSounds = LoungeTheme.sounds
     // The sounds arrive after the first frame, so the setting is applied again when they do.
-    LaunchedEffect(sounds, uiSounds) { uiSounds?.enabled = sounds }
+    LaunchedEffect(uiPrefs.sounds, uiSounds) { uiSounds?.enabled = uiPrefs.sounds }
 
     var composedOnce by remember { mutableStateOf(false) }
     SideEffect {
@@ -319,63 +314,10 @@ fun HomeScreen(
     val holdHint = stringResource(R.string.rows_hold_hint)
     val hintedRow = remember { mutableStateOf<String?>(null) }
     val hintsOn = rememberUpdatedState(uiPrefs.holdHints)
-    val hintsLeft = rememberUpdatedState(if (uiPrefs.holdHints) uiPrefs.holdHintsLeft else 0)
-    val rowsNow = rememberUpdatedState(snapshot.rows)
-    LaunchedEffect(Unit) {
-        var said = false
-        snapshotFlow { Triple(state.region, state.focusedRowId, state.focusedTileIndex) }.collectLatest { (region, rowId, index) ->
-            hintedRow.value = null
-            if (said || region != FocusRegion.Rows || rowId == null) return@collectLatest
-            delay(HOLD_HINT_REST_MS)
-            // An app opened from the tile leaves focus where it was, with nobody looking at the row.
-            if (!homeOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@collectLatest
-            val tile = rowsNow.value.firstOrNull { it.id == rowId }?.tiles?.getOrNull(index)
-            if (hintsLeft.value <= 0 || state.overlay != Overlay.None || tile == null || !hasMenu(tile) || tile.id.startsWith("notice:")) return@collectLatest
-            said = true
-            hintedRow.value = rowId
-            prefs.useHoldHint()
-            delay(HOLD_HINT_SHOWN_MS)
-            hintedRow.value = null
-        }
-    }
-
-    // What the person chose opens by itself when the TV starts or wakes with Lounge in front.
-    val prefsNow = rememberUpdatedState(uiPrefs)
-    val revisionNow = rememberUpdatedState(snapshot.revision)
-    val snapshotNow = rememberUpdatedState(snapshot)
-    LaunchedEffect(Unit) {
-        var startedAt = 0L
-        context.applicationContext.starts().collectLatest {
-            // A TV just switched on is still reading its settings and its apps.
-            withTimeoutOrNull(START_LOADS_MS) { snapshotFlow { prefsNow.value.loaded && revisionNow.value > 0uL }.first { it } } ?: return@collectLatest
-            // Waking behind another app, the TV stays on that app, and a later press of Home opens only Lounge.
-            withTimeoutOrNull(START_IN_FRONT_MS) { homeOwner.lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) } } ?: return@collectLatest
-            val ui = prefsNow.value
-            val action = ui.startAction ?: return@collectLatest
-            // One start is one opening, and something the TV no longer has is passed over without a word.
-            val now = android.os.SystemClock.elapsedRealtime()
-            if (!ui.onboardingDone || state.overlay != Overlay.None || now - startedAt < START_ONCE_MS || !canStartWith(snapshotNow.value, action)) return@collectLatest
-            startedAt = now
-            perform(action, ui.startTitle.orEmpty())
-        }
-    }
+    HoldHint(state, uiPrefs, snapshot.rows, prefs, hintedRow)
+    StartsWith(uiPrefs, snapshot, overlayOpen = { state.overlay != Overlay.None }, perform = { action, title -> perform(action, title) })
     SideEffect { holdTimeMs = uiPrefs.holdTime.ms }
-
-    // A remote or controller running low is said once, the next time Lounge comes to the front.
-    // One is said at a time, the lowest first, and only while Lounge is there to say it.
-    val toldLow = remember { HashSet<String>() }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        fun inFront() = homeOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-        scope.launch {
-            // A remote reconnects on the press that brought Lounge forward, and reports a moment after.
-            delay(ACCESSORY_SETTLE_MS)
-            if (!inFront()) return@launch
-            val lowest = withContext(Dispatchers.IO) { accessoryBatteries(context) }.firstOrNull { it.low && it.address !in toldLow } ?: return@launch
-            if (!inFront()) return@launch
-            toldLow += lowest.address
-            say(R.string.home_screen_accessory_low, lowest.name, context.getString(R.string.updates_percent, lowest.percent))
-        }
-    }
+    LowBatteryWord { say(it) }
 
     // The top bar names a Bluetooth device while the sound goes to it and not into the room.
     val sound = rememberSoundOutput()
@@ -787,24 +729,7 @@ fun HomeScreen(
                 }
             },
     ) {
-        // A live scene behind the room when one is chosen and this TV can draw it; the still
-        // field otherwise, and again when a scene proves too heavy.
-        // Read off the main thread; the still field shows until the scene is known.
-        val chosenStyle by produceState<ShaderStyle?>(null, uiPrefs.backdrop, liveBackdrops) {
-            value = if (!liveBackdrops || uiPrefs.backdrop == Prefs.STILL_BACKDROP) null else withContext(Dispatchers.IO) { ShaderStyles.find(context, core, uiPrefs.backdrop) }
-        }
-        val liveStyle = chosenStyle
-        var liveFailed by remember(uiPrefs.backdrop) { mutableStateOf(false) }
-        if (liveStyle != null && !liveFailed && android.os.Build.VERSION.SDK_INT >= 33) {
-            LiveBackdrop(liveStyle, light, onUnusable = { why ->
-                android.util.Log.w("Lounge", "background: ${liveStyle.id} falls back to the still field: $why")
-                liveFailed = true
-                // A compile error's own text is for the log, not the screen (DESIGN.md §8).
-                say(if ("too heavy" in why) R.string.home_screen_background_too_heavy else R.string.home_screen_background_not_drawn, liveStyle.nameIn(context.resources))
-            })
-        } else {
-            LightField(light)
-        }
+        HomeBackdrop(core, uiPrefs.backdrop, liveBackdrops) { say(it) }
 
         Column(Modifier.fillMaxSize()) {
             TopBar(
@@ -988,11 +913,11 @@ fun HomeScreen(
                         power = power,
                         updates = updates,
                         powerStatus = powerStatus,
-                        theme = theme,
-                        sounds = sounds,
-                        lite = lite,
-                        reduced = reduced,
-                        showMobile = showMobile,
+                        theme = uiPrefs.theme,
+                        sounds = uiPrefs.sounds,
+                        lite = uiPrefs.liteMode,
+                        reduced = uiPrefs.reducedMotion,
+                        showMobile = uiPrefs.showMobileApps,
                         isDefaultHome = isDefaultHome,
                         onHomeChanged = { isDefaultHome = isDefaultHome(context) },
                         say = ::say,
@@ -1336,6 +1261,111 @@ private fun Modifier.tallerBy(extra: Int): Modifier = layout { measurable, const
     val height = constraints.maxHeight + extra
     val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
     layout(placeable.width, constraints.maxHeight) { placeable.place(0, 0) }
+}
+
+/**
+ * What is behind the room: the live scene [backdrop] names when one is chosen and this TV can
+ * draw it, and the still field otherwise and again when a scene proves too heavy.
+ */
+@Composable
+private fun HomeBackdrop(core: CoreClient, backdrop: String, live: Boolean, say: (String) -> Unit) {
+    val context = LocalContext.current
+    val light = LocalLightState.current
+    // Read off the main thread; the still field shows until the scene is known.
+    val chosenStyle by produceState<ShaderStyle?>(null, backdrop, live) {
+        value = if (!live || backdrop == Prefs.STILL_BACKDROP) null else withContext(Dispatchers.IO) { ShaderStyles.find(context, core, backdrop) }
+    }
+    val liveStyle = chosenStyle
+    var liveFailed by remember(backdrop) { mutableStateOf(false) }
+    if (liveStyle != null && !liveFailed && android.os.Build.VERSION.SDK_INT >= 33) {
+        LiveBackdrop(liveStyle, light, onUnusable = { why ->
+            android.util.Log.w("Lounge", "background: ${liveStyle.id} falls back to the still field: $why")
+            liveFailed = true
+            // A compile error's own text is for the log, not the screen (DESIGN.md §8).
+            say(context.getString(if ("too heavy" in why) R.string.home_screen_background_too_heavy else R.string.home_screen_background_not_drawn, liveStyle.nameIn(context.resources)))
+        })
+    } else {
+        LightField(light)
+    }
+}
+
+/**
+ * Says once each time Lounge starts, while hints are owed, that holding OK does more: [hintedRow]
+ * names the row to say it beside, once focus has rested on a tile there that has a menu.
+ */
+@Composable
+private fun HoldHint(state: HomeState, uiPrefs: Prefs.UiPrefs, rows: List<tv.lounge.core.Row>, prefs: Prefs, hintedRow: androidx.compose.runtime.MutableState<String?>) {
+    val homeOwner = LocalLifecycleOwner.current
+    val hintsLeft = rememberUpdatedState(if (uiPrefs.holdHints) uiPrefs.holdHintsLeft else 0)
+    val rowsNow = rememberUpdatedState(rows)
+    LaunchedEffect(Unit) {
+        var said = false
+        snapshotFlow { Triple(state.region, state.focusedRowId, state.focusedTileIndex) }.collectLatest { (region, rowId, index) ->
+            hintedRow.value = null
+            if (said || region != FocusRegion.Rows || rowId == null) return@collectLatest
+            delay(HOLD_HINT_REST_MS)
+            // An app opened from the tile leaves focus where it was, with nobody looking at the row.
+            if (!homeOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@collectLatest
+            val tile = rowsNow.value.firstOrNull { it.id == rowId }?.tiles?.getOrNull(index)
+            if (hintsLeft.value <= 0 || state.overlay != Overlay.None || tile == null || !hasMenu(tile) || tile.id.startsWith("notice:")) return@collectLatest
+            said = true
+            hintedRow.value = rowId
+            prefs.useHoldHint()
+            delay(HOLD_HINT_SHOWN_MS)
+            hintedRow.value = null
+        }
+    }
+}
+
+/** Opens what the person chose when the TV starts or wakes with Lounge in front and nothing open over it. */
+@Composable
+private fun StartsWith(uiPrefs: Prefs.UiPrefs, snapshot: HomeSnapshot, overlayOpen: () -> Boolean, perform: (action: String, title: String) -> Unit) {
+    val context = LocalContext.current
+    val homeOwner = LocalLifecycleOwner.current
+    val prefsNow = rememberUpdatedState(uiPrefs)
+    val snapshotNow = rememberUpdatedState(snapshot)
+    val performNow = rememberUpdatedState(perform)
+    LaunchedEffect(Unit) {
+        var startedAt = 0L
+        context.applicationContext.starts().collectLatest {
+            // A TV just switched on is still reading its settings and its apps.
+            withTimeoutOrNull(START_LOADS_MS) { snapshotFlow { prefsNow.value.loaded && snapshotNow.value.revision > 0uL }.first { it } } ?: return@collectLatest
+            // Waking behind another app, the TV stays on that app, and a later press of Home opens only Lounge.
+            withTimeoutOrNull(START_IN_FRONT_MS) { homeOwner.lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) } } ?: return@collectLatest
+            val ui = prefsNow.value
+            val action = ui.startAction ?: return@collectLatest
+            // One start is one opening, and something the TV no longer has is passed over without a word.
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (!ui.onboardingDone || overlayOpen() || now - startedAt < START_ONCE_MS || !canStartWith(snapshotNow.value, action)) return@collectLatest
+            startedAt = now
+            performNow.value(action, ui.startTitle.orEmpty())
+        }
+    }
+}
+
+/**
+ * Says once that a remote or controller is running low, the next time Lounge comes to the front.
+ * One is said at a time, the lowest first, and only while Lounge is there to say it.
+ */
+@Composable
+private fun LowBatteryWord(say: (String) -> Unit) {
+    val context = LocalContext.current
+    val homeOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    val sayNow = rememberUpdatedState(say)
+    val toldLow = remember { HashSet<String>() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        fun inFront() = homeOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        scope.launch {
+            // A remote reconnects on the press that brought Lounge forward, and reports a moment after.
+            delay(ACCESSORY_SETTLE_MS)
+            if (!inFront()) return@launch
+            val lowest = withContext(Dispatchers.IO) { accessoryBatteries(context) }.firstOrNull { it.low && it.address !in toldLow } ?: return@launch
+            if (!inFront()) return@launch
+            toldLow += lowest.address
+            sayNow.value(context.getString(R.string.home_screen_accessory_low, lowest.name, context.getString(R.string.updates_percent, lowest.percent)))
+        }
+    }
 }
 
 /** How long a TV just switched on may take to load before what it starts with is given up, and how long Lounge has to come to the front. */

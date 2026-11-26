@@ -117,3 +117,12 @@ dependencies {
     ksp(libs.hilt.compiler)
     debugImplementation(libs.compose.ui.tooling)
 }
+
+// Fails an assemble whose APK holds a function with more registers than a device will verify.
+listOf("debug", "release", "profile").forEach { variant ->
+    val check = tasks.register<Exec>("check${variant.replaceFirstChar { it.uppercase() }}DexRegisters") {
+        val apk = layout.buildDirectory.file("outputs/apk/$variant/app-$variant.apk")
+        commandLine("python3", rootProject.file("../tools/dex_registers.py").path, apk.get().asFile.path)
+    }
+    tasks.matching { it.name == "assemble${variant.replaceFirstChar { it.uppercase() }}" }.configureEach { finalizedBy(check) }
+}
