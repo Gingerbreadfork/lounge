@@ -859,7 +859,7 @@ fun HomeScreen(
                             openSheet(next)
                         },
                         forget = { gone -> state.sheetTrail.removeAll { it == gone } },
-                        back = { from -> backFrom(from) },
+                        back = { from -> if (state.overlay == from) backFrom(from) },
                         notices = notices,
                         notifications = notifications,
                         notificationIndex = { state.notificationIndex },

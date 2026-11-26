@@ -106,24 +106,29 @@ fun GroupsSheet(
             }
         }
         Spacer(Modifier.height(8.dp))
-        if (!full) SettingField(
-            setting = nameSetting("new-group-$made", stringResource(R.string.groups_new_label), null),
-            focusRequester = field,
-            alsoFocus = null,
-            onCommit = { name ->
-                if (!name.isNullOrBlank()) {
-                    onCreate(name)
-                    made++
-                }
-            },
-            onToggle = {},
-            hint = stringResource(R.string.groups_new_hint),
-        )
+        // Focus in the field is no longer on a group, so a group that goes then does not take it.
+        if (!full) Column(Modifier.onFocusChanged { if (it.hasFocus) focusedGroup = null }) {
+            SettingField(
+                setting = nameSetting("new-group-$made", stringResource(R.string.groups_new_label), null),
+                focusRequester = field,
+                alsoFocus = null,
+                onCommit = { name ->
+                    if (!name.isNullOrBlank()) {
+                        onCreate(name)
+                        made++
+                    }
+                },
+                onToggle = {},
+                hint = stringResource(R.string.groups_new_hint),
+            )
+        }
     }
     SheetFootnote(stringResource(R.string.groups_footnote))
     // The list can arrive after the sheet's own request for focus has given up. With no group
     // to land on, focus starts in the field.
     LaunchedEffect(groups != null) { if (groups != null) (if (groups.isEmpty()) field else firstFocus).requestWhenReady() }
+    // The field leaves when the last group it may name is made, and focus goes to the list.
+    LaunchedEffect(full) { if (full) firstFocus.requestWhenReady() }
     // A group deleted while it had focus hands focus to what is left.
     LaunchedEffect(groups?.map { it.id }) {
         val gone = focusedGroup?.takeIf { id -> groups?.none { it.id == id } == true } ?: return@LaunchedEffect

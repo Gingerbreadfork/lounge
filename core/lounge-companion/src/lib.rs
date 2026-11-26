@@ -142,9 +142,12 @@ pub struct LayoutPatch {
     pub recent_apps: Option<u32>,
     pub muted_providers: Option<Vec<String>>,
     pub dismissed_notices: Option<Vec<String>>,
-    /// Groups to make or change, each by id. A group not named here is left as it is, so a
-    /// page that has not heard of one cannot delete it.
+    /// Groups to change, each by id. A group not named here is left as it is, and one that
+    /// is no longer there is not made again, so a page that is behind neither deletes a group
+    /// nor brings one back.
     pub groups: Option<Vec<GroupRef>>,
+    /// Groups to make.
+    pub new_groups: Option<Vec<GroupRef>>,
     /// Groups to delete, by id.
     pub deleted_groups: Option<Vec<String>>,
 }

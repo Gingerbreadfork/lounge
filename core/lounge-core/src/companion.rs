@@ -396,16 +396,18 @@ impl CompanionActions for CoreActions {
             if let Some(dismissed) = patch.dismissed_notices {
                 layout.dismissed_notices = dismissed.into_iter().collect();
             }
+            for g in patch.new_groups.unwrap_or_default() {
+                if !layout.groups.iter().any(|known| known.id == g.id) {
+                    layout.groups.push(lounge_graph::AppGroup { id: g.id, name: g.name, apps: g.apps });
+                }
+            }
             for g in patch.groups.unwrap_or_default() {
-                match layout.groups.iter_mut().find(|known| known.id == g.id) {
-                    Some(known) => {
-                        // A name that would not be kept leaves the group its old one.
-                        if !lounge_graph::AppGroup::tidy_name(&g.name).is_empty() {
-                            known.name = g.name;
-                        }
-                        known.apps = g.apps;
+                if let Some(known) = layout.groups.iter_mut().find(|known| known.id == g.id) {
+                    // A name that would not be kept leaves the group its old one.
+                    if !lounge_graph::AppGroup::tidy_name(&g.name).is_empty() {
+                        known.name = g.name;
                     }
-                    None => layout.groups.push(lounge_graph::AppGroup { id: g.id, name: g.name, apps: g.apps }),
+                    known.apps = g.apps;
                 }
             }
             if let Some(gone) = patch.deleted_groups {
@@ -1232,7 +1234,8 @@ mod tests {
             let patch = LayoutPatch { groups: Some(groups), deleted_groups: Some(gone.into_iter().map(String::from).collect()), ..LayoutPatch::default() };
             actions.set_layout(patch).unwrap().groups
         };
-        assert_eq!(send(vec![group("p1", "Sport", &["tv.a"])], vec![]), vec![group("p1", "Sport", &["tv.a"])]);
+        let made = LayoutPatch { new_groups: Some(vec![group("p1", "Sport", &["tv.a"])]), ..LayoutPatch::default() };
+        assert_eq!(actions.set_layout(made).unwrap().groups, vec![group("p1", "Sport", &["tv.a"])]);
         // One made on the TV since the phone last read the layout.
         core.inner.state.lock().graph.create_group("Kids", None);
         let after = send(vec![group("p1", " ", &["tv.a", "tv.b"])], vec![]);
@@ -1241,6 +1244,8 @@ mod tests {
         assert!(actions.layout().available_rows.iter().any(|r| r.id == "group:p1" && r.title == "Sport"));
         assert_eq!(send(vec![], vec!["p1"]), vec![group("g1", "Kids", &[])]);
         assert!(!actions.layout().row_order.contains(&"group:p1".to_string()));
+        // A page that is behind changes a group deleted on the TV, and it stays deleted.
+        assert_eq!(send(vec![group("p1", "Sport", &["tv.b"])], vec![]), vec![group("g1", "Kids", &[])]);
     }
 
     #[test]

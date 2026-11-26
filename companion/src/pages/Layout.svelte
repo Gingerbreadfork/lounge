@@ -168,7 +168,7 @@
     edit(made);
     layout = { ...layout, groups: [...layout.groups, made] };
     // Translators: {group} is the name of a group of apps just made; its apps are chosen next
-    save({ groups: [made] }, t('{group} made. Now choose its apps.', { group: name }));
+    save({ newGroups: [made] }, t('{group} made. Now choose its apps.', { group: name }));
   }
   function edit(group: GroupRef) {
     openGroup = openGroup === group.id ? null : group.id;

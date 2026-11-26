@@ -73,8 +73,8 @@ export type Layout = {
   /** The groups of apps the person made. */
   groups: GroupRef[];
 };
-/** A change to the layout. `groups` holds only the groups made or changed, and `deletedGroups` the ids of those deleted. */
-export type LayoutPatch = Partial<Layout> & { deletedGroups?: string[] };
+/** A change to the layout. `groups` holds only the groups changed, `newGroups` those made and `deletedGroups` the ids of those deleted. */
+export type LayoutPatch = Partial<Layout> & { newGroups?: GroupRef[]; deletedGroups?: string[] };
 export type PluginSetting = { key: string; label: string; kind: string; required: boolean; help?: string | null; defaultValue?: string | null; value?: string | null; hasValue: boolean };
 /** A step a plugin waits on the person for, such as a sign-in. */
 export type PluginAsk = { say: string; link?: string | null; linkText?: string | null; code?: string | null; after?: string | null; newCode?: boolean; watched?: boolean };
