@@ -111,6 +111,7 @@ fun SearchScreen(
     val query = field.text
     val fieldFocus = remember { FocusRequester() }
     val speakFocus = remember { FocusRequester() }
+    val clearFocus = remember { FocusRequester() }
     val openedSpoken = remember { pendingSpoken && pendingQuery != null && onVoice != null }
     // Set by a spoken query until focus has reached its first result.
     var landOnResults by remember { mutableStateOf(false) }
@@ -239,7 +240,9 @@ fun SearchScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .focusRequester(fieldFocus)
-                                        .focusProperties { if (onVoice != null) right = speakFocus }
+                                        .focusProperties {
+                                            if (query.isNotEmpty()) right = clearFocus else if (onVoice != null) right = speakFocus
+                                        }
                                         .onFocusChanged {
                                             fieldFocused = it.isFocused
                                             if (it.isFocused) {
@@ -250,6 +253,22 @@ fun SearchScreen(
                                         .semantics { contentDescription = fieldName },
                                 )
                             }
+                            // Empties the field in one press and goes back to it.
+                            if (query.isNotEmpty()) {
+                                LoungeButton(
+                                    label = stringResource(R.string.search_screen_clear),
+                                    onClick = {
+                                        setQuery("")
+                                        scope.launch { fieldFocus.requestWhenReady() }
+                                    },
+                                    kind = ButtonKind.Secondary,
+                                    focusRequester = clearFocus,
+                                    modifier = Modifier.focusProperties {
+                                        left = fieldFocus
+                                        if (onVoice != null) right = speakFocus
+                                    },
+                                )
+                            }
                             if (onVoice != null) {
                                 LoungeButton(
                                     label = stringResource(DesignR.string.common_speak),
@@ -257,7 +276,7 @@ fun SearchScreen(
                                     kind = ButtonKind.Secondary,
                                     icon = LoungeIcons.Mic,
                                     focusRequester = speakFocus,
-                                    modifier = Modifier.focusProperties { left = fieldFocus },
+                                    modifier = Modifier.focusProperties { left = if (query.isNotEmpty()) clearFocus else fieldFocus },
                                 )
                             }
                         }

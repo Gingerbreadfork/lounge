@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="search_screen_field">Fernseher durchsuchen</string>
+    <string name="search_screen_clear">Leeren</string>
     <string name="search_screen_hint_empty">Tippe mit der Fernbedienung. Die Ergebnisse ändern sich beim Tippen.</string>
     <string name="search_screen_hint_empty_voice">Tippe mit der Fernbedienung oder wähle „Sprechen“ und sag es. Die Ergebnisse ändern sich beim Tippen.</string>
     <string name="search_screen_no_match">Noch passt nichts zu „%1$s“.</string>

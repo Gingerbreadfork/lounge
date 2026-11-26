@@ -2,6 +2,8 @@
 <resources>
     <!-- The search field, before anything is typed in it. -->
     <string name="search_screen_field">Search your TV</string>
+    <!-- The button beside the field that empties it. -->
+    <string name="search_screen_clear">Clear</string>
 
     <!-- The line under the search field. -->
     <string name="search_screen_hint_empty">Type with the remote. Results update as you type.</string>
